@@ -31,7 +31,7 @@ st.markdown("""
     font-size: 12px;
     margin-top: 4px;
 }
-.rakuten-btn {
+.ispeed-btn {
     display: block;
     text-align: center;
     background: #bf0000;
@@ -42,6 +42,14 @@ st.markdown("""
     font-weight: bold;
     margin-top: 10px;
     font-size: 13px;
+}
+.web-sub-link {
+    display: block;
+    text-align: center;
+    color: #64748b !important;
+    text-decoration: underline;
+    font-size: 11px;
+    margin-top: 6px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -136,17 +144,22 @@ def fetch_and_analyze(code, name):
         avg_gap = round(((sub['Next_Open'] - sub['Close']) / sub['Close'] * 100).mean(), 2)
 
         clean_code = code.replace(".T", "")
+        
+        # iSPEEDアプリを起動するURLスキーム
+        ispeed_url = "jp.co.rakuten-sec.iSPEED://"
+        
         if ".T" in code:
-            url = f"https://www.rakuten-sec.co.jp/smartphone/market/info/pagecontent.html?ric={clean_code}.T"
+            web_url = f"https://www.rakuten-sec.co.jp/smartphone/market/info/pagecontent.html?ric={clean_code}.T"
             price = f"{latest['Close']:,.0f}円"
         else:
-            url = f"https://www.rakuten-sec.co.jp/web/market/search/us_search/quote.html?ric={clean_code}.O"
+            web_url = f"https://www.rakuten-sec.co.jp/web/market/search/us_search/quote.html?ric={clean_code}.O"
             price = f"${latest['Close']:,.2f}"
 
         return {
             "code": clean_code, "name": name, "price": price,
             "diff": round(latest['Day_Return'], 2), "signal": signal,
-            "prob": prob, "count": f"{wins}/{total}回", "gap": avg_gap, "url": url
+            "prob": prob, "count": f"{wins}/{total}回", "gap": avg_gap,
+            "ispeed_url": ispeed_url, "web_url": web_url
         }
     except Exception:
         return None
@@ -164,14 +177,14 @@ for tab, (genre, stocks) in zip(tabs, STOCK_LIST.items()):
                 res = fetch_and_analyze(s["code"], s["name"])
                 if res:
                     results.append(res)
-        
+
         results.sort(key=lambda x: x["prob"], reverse=True)
-        
+
         for r in results:
             diff_color = "#dc2626" if r["diff"] > 0 else "#2563eb"
             diff_sign = "+" if r["diff"] > 0 else ""
             gap_sign = "+" if r["gap"] > 0 else ""
-            
+
             st.markdown(f"""
             <div class="stock-card">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -188,6 +201,9 @@ for tab, (genre, stocks) in zip(tabs, STOCK_LIST.items()):
                     </div>
                 </div>
                 <div class="signal-tag">{r['signal']}</div>
-                <a class="rakuten-btn" href="{r['url']}" target="_blank">楽天証券（スマホ版）で確認 ▶</a>
+                <a class="ispeed-btn" href="{r['ispeed_url']}">🚀 iSPEEDアプリを起動 ({r['code']}) ▶</a>
+                <a class="web-sub-link" href="{r['web_url']}" target="_blank">ブラウザ版(楽天証券)で銘柄ページを開く場合はこちら</a>
             </div>
             """, unsafe_allow_html=True)
+
+ 
