@@ -5,7 +5,13 @@ import numpy as np
 import unicodedata
 
 # スマホ画面向けにページ設定
-st.set_page_config(page_title="翌朝株価 クオンツ＆AI解析 (弱肉強食ダイナミック版)", page_icon="📈", layout="centered")
+st.set_page_config(page_title="翌朝株価 クオンツ＆AI解析 (4大AI合議＆資金管理対応)", page_icon="📈", layout="centered")
+
+# セッションステート初期化
+if "active_debates" not in st.session_state:
+    st.session_state["active_debates"] = {}
+if "stock_chats" not in st.session_state:
+    st.session_state["stock_chats"] = {}
 
 # スマホで見やすいカスタムCSS
 st.markdown("""
@@ -51,7 +57,7 @@ st.markdown("""
     background-color: #ffffff;
     border-radius: 12px;
     padding: 16px;
-    margin-bottom: 14px;
+    margin-bottom: 6px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     border-left: 6px solid #dc2626;
 }
@@ -59,7 +65,7 @@ st.markdown("""
     background-color: #ffffff;
     border-radius: 12px;
     padding: 16px;
-    margin-bottom: 14px;
+    margin-bottom: 6px;
     box-shadow: 0 4px 12px rgba(220, 38, 38, 0.12);
     border-left: 6px solid #e11d48;
 }
@@ -67,7 +73,7 @@ st.markdown("""
     background-color: #fffbeb;
     border-radius: 12px;
     padding: 16px;
-    margin-bottom: 18px;
+    margin-bottom: 6px;
     box-shadow: 0 4px 12px rgba(217, 119, 6, 0.15);
     border-left: 6px solid #d97706;
 }
@@ -118,13 +124,84 @@ st.markdown("""
     margin-top: 10px; font-size: 12px; color: #1e293b; line-height: 1.5;
 }
 .factor-title { font-weight: bold; color: #0f172a; margin-bottom: 4px; font-size: 12px; }
+
+/* 資金管理プランカード */
+.sizing-box {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: #166534;
+}
+
+/* 4大AI合議ボックス用スタイル */
+.ai-council-box {
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    color: #f8fafc;
+    border-radius: 12px;
+    padding: 14px;
+    margin-top: 4px;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
+    border: 1px solid #334155;
+}
+.ai-agent-card {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.claude-card { border-left: 4px solid #f59e0b; }
+.grok-card   { border-left: 4px solid #ef4444; }
+.gpt-card    { border-left: 4px solid #10b981; }
+.gemini-card { border-left: 4px solid #3b82f6; }
+.consensus-banner {
+    background: linear-gradient(135deg, #312e81, #1e1b4b);
+    border: 1px solid #6366f1;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 10px;
+    font-size: 12px;
+    line-height: 1.55;
+}
+.qa-bubble-user {
+    background: #eff6ff;
+    color: #1e3a8a;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px 10px 2px 10px;
+    padding: 8px 12px;
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: bold;
+}
+.qa-bubble-ai {
+    background: #f8fafc;
+    color: #0f172a;
+    border: 1px solid #cbd5e1;
+    border-left: 4px solid #4f46e5;
+    border-radius: 2px 10px 10px 10px;
+    padding: 10px 12px;
+    margin-top: 4px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1.6;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📱 翌朝株価 クオンツ＆AI解析 Pro")
-st.caption("弱肉強食ダイナミック選抜（リアルタイム期待値順に自動入替） × 世界情勢マクロ連動")
+# --- サイドバー：資金管理＆リスク設定 ---
+st.sidebar.header("💰 資金管理＆リスク設定")
+total_capital = st.sidebar.number_input("総投資資金 (円 / ドル)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
+risk_tolerance_pct = st.sidebar.slider("1トレードあたりの許容リスク (%)", min_value=0.5, max_value=5.0, value=2.0, step=0.5, help="損切りラインに到達した際に、総資金の何%までの損失を許容するかを設定します。")
 
-# --- 各ジャンルの拡張候補プール（IPO・未公開株関連を含む） ---
+st.title("📱 翌朝株価 クオンツ＆AI解析 Pro")
+st.caption("弱肉強食ダイナミック選抜 × 4大AI合議 ＆ ATR連動ロット自動サイジング")
+
+# --- 各ジャンルの拡張候補プール ---
 STOCK_POOL = {
     "半導体": [
         {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置の国内筆頭。海外勢の指数買いが入りやすい"},
@@ -340,7 +417,125 @@ def normalize_ticker(raw_input):
         return f"{s}.T"
     return s
 
-# --- マクロ市場データの取得関数 ---
+# --- 4大AI（Claude × Grok × GPT × Gemini）合議アルゴリズムエンジン ---
+def run_4ai_council_algorithm(r):
+    prob = r["prob"]
+    payoff = r["payoff"]
+    edge = r["edge"]
+    rsi = r["rsi"]
+    vol_ratio = r["vol_ratio"]
+    bb_sigma = r["bb_sigma"]
+    atr_pct = r["atr_pct"]
+    macro_score = r["macro_score"]
+    macd_up = "強気" in r["macd_state"]
+
+    # 1. Claude
+    claude_raw = 50 + (prob - 50) * 0.9 + (payoff - 1.0) * 18 - max(0, atr_pct - 3.5) * 4
+    if rsi > 75: claude_raw -= 12
+    elif rsi < 35: claude_raw += 8
+    claude_score = int(min(max(round(claude_raw), 15), 99))
+
+    if claude_score >= 70:
+        claude_stance = "🟢 統計的優位・エントリー承認"
+        claude_comment = f"過去同条件での勝率<b>{prob}%</b>・損益レシオ<b>{payoff}倍</b>（期待値<b>{edge:+.2f}%</b>）は統計的に有意なエッジを持っています。損切り目安（{r['sl_price']}）の厳守を条件に承認します。"
+    elif claude_score >= 52:
+        claude_stance = "🟡 条件付き承認（ロット制限）"
+        claude_comment = f"期待値はプラス圏（{edge:+.2f}%）ですが、RSI（{rsi}）とボラティリティを考慮し、資金管理設定に基づいた適切なロット数でのエントリーを推奨します。"
+    else:
+        claude_stance = "🔴 リスク警戒・見送り推奨"
+        claude_comment = f"ボラティリティ（ATR {atr_pct}%）に対して期待値エッジ（{edge:+.2f}%）が薄く、下振れリスクが上回っています。"
+
+    # 2. Grok
+    grok_raw = 45 + (vol_ratio - 1.0) * 28 + (12 if macd_up else -6) + (bb_sigma * 8) + (macro_score * 1.5)
+    if r["diff"] > 2.0 and vol_ratio >= 1.3: grok_raw += 10
+    grok_score = int(min(max(round(grok_raw), 15), 99))
+
+    if grok_score >= 70:
+        grok_stance = "🔥 短期資金集中・強気ブレイク"
+        grok_comment = f"出来高が20日平均の<b>{vol_ratio}倍</b>に膨らみ、{r['signal']}が点灯中！マネー流入が加速しています。"
+    elif grok_score >= 52:
+        grok_stance = "⚡ 初動待ち・モメンタム監視"
+        grok_comment = f"トレンドは{r['macd_state']}ですが、爆発的な出来高がもう一段欲しいところです。"
+    else:
+        grok_stance = "🧊 資金流出・モメンタム鈍化"
+        grok_comment = f"出来高倍率（{vol_ratio}倍）とオシレーターに勢いが不足しています。"
+
+    # 3. GPT
+    gpt_raw = (r["ai_score"] * 0.5) + (claude_score * 0.25) + (grok_score * 0.25) + (macro_score * 1.2)
+    gpt_score = int(min(max(round(gpt_raw), 15), 99))
+
+    if gpt_score >= 70:
+        gpt_stance = "💎 マルチファクター合致・最有力"
+        gpt_comment = f"マクロ環境（{macro_score:+d}点）とテクニカル（RSI {rsi}）が高い次元で噛み合っています。"
+    elif gpt_score >= 52:
+        gpt_stance = "⚖️ 中立〜やや強気（押し目狙い）"
+        gpt_comment = f"統計勝率は堅調ですが、寄り付き後の押し目を引きつけて拾う戦略が有効です。"
+    else:
+        gpt_stance = "🛡️ ディフェンシブ判定・待機"
+        gpt_comment = f"外部地合いおよび複合スコアが基準値に達していません。"
+
+    # 4. Gemini
+    gemini_raw = 48 + (prob - 50) * 0.6 + (edge * 22) + (macro_score * 2.0) + (8 if 40 <= rsi <= 65 else 0)
+    if vol_ratio >= 1.15 and macd_up: gemini_raw += 8
+    gemini_score = int(min(max(round(gemini_raw), 15), 99))
+
+    if gemini_score >= 70:
+        gemini_stance = "🌐 テーマ連鎖◎・メインシナリオ強気"
+        gemini_comment = f"「{r['genre']}」セクターのテーマ背景（{r['theme']}）がマクロ地合いと強く共鳴しています。"
+    elif gemini_score >= 52:
+        gemini_stance = "🧭 二段構えシナリオ"
+        gemini_comment = f"寄り付き直後の利食いこなしを確認してからのエントリーが安全です。"
+    else:
+        gemini_stance = "🔭 セクター逆風・触媒待ち"
+        gemini_comment = f"強い上昇触媒が不足しており、出来高の急増を待つべきフェーズです。"
+
+    final_score = int(round(claude_score * 0.25 + grok_score * 0.25 + gpt_score * 0.25 + gemini_score * 0.25))
+    if final_score >= 75:
+        verdict = "👑 【4大AI満場一致：Sランク強気買い】 統計・需給・マクロ・テーマすべてが好条件。最優先ターゲット！"
+    elif final_score >= 62:
+        verdict = "✅ 【4大AI合議結論：Aランク順張り/押し目買い】 期待値プラス圏。予想寄付き付近でのエントリーが有効。"
+    elif final_score >= 50:
+        verdict = "⚠️ 【4大AI合議結論：Bランク条件付き参戦】 高寄りは避け、下押しサポート確認後に少額参戦。"
+    else:
+        verdict = "🛑 【4大AI合議結論：Cランク見送り】 リスクまたは需給不足。本日は資金温存。"
+
+    return {
+        "claude_score": claude_score, "claude_stance": claude_stance, "claude_comment": claude_comment,
+        "grok_score": grok_score, "grok_stance": grok_stance, "grok_comment": grok_comment,
+        "gpt_score": gpt_score, "gpt_stance": gpt_stance, "gpt_comment": gpt_comment,
+        "gemini_score": gemini_score, "gemini_stance": gemini_stance, "gemini_comment": gemini_comment,
+        "final_score": final_score, "verdict": verdict
+    }
+
+# --- 4大AIに対する個別質問への自動回答エンジン ---
+def generate_4ai_qa_response(question, r, debate, lot_info):
+    q_lower = question.lower()
+    if any(k in q_lower for k in ["ロット", "株数", "資金", "何株", "いくら買", "サイズ"]):
+        return (
+            f"<b>💰 【最適ロット数・資金管理に対する4大AI回答】</b><br>"
+            f"・<b>🟠 Claude（リスク許容度サイジング）:</b> 設定された総資金（{total_capital:,.0f}円）と許容リスク（{risk_tolerance_pct}%）に基づき、損切り（{r['sl_price']}）までの値幅から算出した最適購入株数は <b>{lot_info['shares']:,} 株（約 {lot_info['position_value']:,.0f}円 / 総資金の {lot_info['capital_ratio']:.1f}%）</b> です。<br>"
+            f"・<b>🟢 GPT（資金配分の妥当性）:</b> 1トレードあたりの最大損失額を <b>{lot_info['risk_amount']:,.0f}円</b> に限定しているため、万が一逆指値にかかった場合でも資産全体の致命傷を防げます。"
+        )
+    elif any(k in q_lower for k in ["いくら", "買", "エントリー", "指値", "成行", "寄付き"]):
+        return (
+            f"<b>🎯 【エントリー価格・買い方に対する4大AI回答】</b><br>"
+            f"・<b>🟢 GPT & 🔵 Gemini:</b> 終値 <b>{r['price']}</b>、予想寄付き <b>{r['est_open']}（{r['gap']:+.2f}%）</b>。高値掴みを避けるため <b>{r['price']} 〜 {r['est_open']}</b> での指値注文を推奨します。<br>"
+            f"・<b>🟠 Claude:</b> 最適ロット数（<b>{lot_info['shares']:,}株</b>）を守り、寄り付きが1.5%以上高すぎる場合はジャンピングキャッチを回避してください。"
+        )
+    elif any(k in q_lower for k in ["損切", "ロスカット", "逆指値", "利確", "目標", "売"]):
+        return (
+            f"<b>🛡️ 【利確・損切りラインに対する4大AI回答】</b><br>"
+            f"・<b>🟠 Claude:</b> 撤退ラインは逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b>。ここで損失が許容額（{lot_info['risk_amount']:,.0f}円）に収まるよう設計されています。<br>"
+            f"・<b>🟢 GPT:</b> 第一利回りは <b>{r['tp_price']}（+{r['tp_pct']}%）</b> で半分利確を推奨します。"
+        )
+    else:
+        return (
+            f"<b>🤖 【「{question}」に対する4大AI統合アンサー】</b><br>"
+            f"・<b>🔵 Gemini:</b> 合議スコアは <b>{debate['final_score']}/100点</b>。『{r['theme']}』関連として注目されています。<br>"
+            f"・<b>🟠 Claude（資金管理）:</b> 推奨ロット数 <b>{lot_info['shares']:,}株（投資額 {lot_info['position_value']:,.0f}円）</b> で規律あるトレードを行ってください。"
+        )
+
+# --- マクロ市場データ取得 ---
 @st.cache_data(ttl=900)
 def fetch_macro_market():
     macro_tickers = {
@@ -502,73 +697,36 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         macro_score = 0
         macro_reasons = []
         if macro:
-            sp_diff = macro["sp500"]["diff"]
             sox_diff = macro["sox"]["diff"]
-            fx_diff = macro["usdjpy"]["diff"]
             nk_diff = macro["nk_fut"]["diff"]
+            fx_diff = macro["usdjpy"]["diff"]
             vix_price = macro["vix"]["price"]
             vix_diff = macro["vix"]["diff"]
 
             if genre in ["半導体", "AI", "AI電力・インフラ", "テンバガー小型株", "IPO", "未公開株"]:
                 if sox_diff >= 1.0:
                     macro_score += 5
-                    macro_reasons.append(f"米SOX指数が<b>+{sox_diff}%</b>と強く上昇しており、ハイテク・新興市場の寄付きに強い追い風です。")
-                elif sox_diff > 0:
-                    macro_score += 2
+                    macro_reasons.append(f"米SOX指数が<b>+{sox_diff}%</b>と強く上昇しており追い風です。")
                 elif sox_diff <= -1.5:
                     macro_score -= 5
-                    macro_reasons.append(f"米SOX指数が<b>{sox_diff}%</b>と下落しており、朝方はハイテク・グロース株の売り先行に警戒が必要です。")
-
-            if sp_diff >= 0.5:
-                macro_score += 2
-            elif sp_diff <= -0.8:
-                macro_score -= 2
+                    macro_reasons.append(f"米SOX指数が<b>{sox_diff}%</b>と下落しており売り先行に警戒が必要です。")
 
             if ".T" in code:
                 if nk_diff >= 0.6:
                     macro_score += 4
-                    macro_reasons.append(f"CME日経先物が<b>+{nk_diff}%</b>と上昇しており、日本市場全体のギャップアップ期待を高めています。")
-                elif nk_diff >= 0.2:
-                    macro_score += 2
+                    macro_reasons.append(f"CME先物が<b>+{nk_diff}%</b>と上昇しています。")
                 elif nk_diff <= -0.6:
                     macro_score -= 4
-                    macro_reasons.append(f"CME日経先物が<b>{nk_diff}%</b>と軟調で、寄り付きは指数主導の売り気配に注意が必要です。")
-
-                if fx_diff >= 0.3:
-                    macro_score += 2
-                    macro_reasons.append(f"ドル円が<b>+{fx_diff}%</b>と円安推移しており、先物・主力株の下支え要因となっています。")
-                elif fx_diff <= -0.5:
-                    macro_score -= 2
-
-            if vix_price > 0:
-                if vix_price >= 22.0 or vix_diff >= 8.0:
-                    macro_score -= 4
-                    macro_reasons.append(f"VIX恐怖指数が<b>{vix_price:.1f} ({vix_diff:+.1f}%)</b>と警戒域にあり、機関投資家のリスク回避売りに注意が必要です。")
-                elif vix_price < 18.0 or vix_diff <= -5.0:
-                    macro_score += 2
-                    if vix_diff <= -5.0:
-                        macro_reasons.append(f"VIX恐怖指数が<b>{vix_diff}%</b>と低下しており、市場心理の改善からIPO・未公開株関連にも買い安心感が広がっています。")
+                    macro_reasons.append(f"CME先物が<b>{nk_diff}%</b>と軟調です。")
 
         reasons = []
-        if macro_reasons:
-            reasons.extend(macro_reasons)
-
+        if macro_reasons: reasons.extend(macro_reasons)
         if latest['MACD_Hist'] > 0 and latest['MACD_Hist_Diff'] > 0:
-            reasons.append("MACDヒストグラムがプラス圏で拡大しており、<b>機関投資家のトレンドフォロー買い</b>が加速しやすい波形です。")
+            reasons.append("MACDヒストグラムがプラス圏で拡大中。")
         elif latest['Lower_Shadow'] >= 0.45:
-            reasons.append(f"日中の下押しから<b>下ヒゲ（全体の{latest['Lower_Shadow']*100:.0f}%）</b>を引いて買い戻されており、下値の強い買い板が確認できます。")
-
-        if latest['Vol_Ratio'] >= 1.4:
-            reasons.append(f"出来高が20日平均の<b>{latest['Vol_Ratio']:.1f}倍</b>に急増し、大口資金の流入が顕著です。")
-
-        if latest['Close'] > latest['MA5'] and latest['Close_Pos'] >= 0.75:
-            reasons.append("5日移動平均線の上で<b>高値引け（買い残し大）</b>しており、翌朝も成行買いが先行しやすい形です。")
-
-        if expected_edge > 0.15:
-            reasons.append(f"損益レシオが<b>{payoff_ratio}倍</b>（期待値<b>+{expected_edge}%</b>）と高く、リスクに対してリターンが優位な局面です。")
-
-        if not reasons:
-            reasons.append(f"過去同条件では{total}回中<b>{wins}回</b>ギャップアップ（平均{avg_gap:+.2f}%）しています。")
+            reasons.append(f"下ヒゲ（{latest['Lower_Shadow']*100:.0f}%）を引いて買い戻されています。")
+        else:
+            reasons.append(f"過去同条件では{total}回中<b>{wins}回</b>ギャップアップしています。")
 
         base_score = min(max(prob * 0.65, 10), 52)
         edge_score = min(max((expected_edge + 0.3) * 15, 0), 18)
@@ -576,8 +734,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         if latest['Vol_Ratio'] >= 1.2: tech_score += 5
         if latest['Close_Pos'] >= 0.7: tech_score += 5
         if latest['MACD_Hist_Diff'] > 0: tech_score += 5
-        if payoff_ratio >= 1.2: tech_score += 5
-        if 45 <= latest['RSI'] <= 68 or latest['RSI'] <= 35: tech_score += 4
 
         ai_score = int(min(max(round(base_score + edge_score + tech_score + macro_score), 15), 99))
 
@@ -590,18 +746,22 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         tp_pct = round((tp_val - close_val) / close_val * 100, 1)
         sl_pct = round((sl_val - close_val) / close_val * 100, 1)
 
+        # --- ロット数（株数）の自動サイジング計算 ---
+        risk_per_share = max(close_val - sl_val, close_val * 0.005) # 1株あたりのリスク額
+        allowed_total_risk_money = total_capital * (risk_tolerance_pct / 100.0)
+        calculated_shares = int(allowed_total_risk_money / risk_per_share)
+        if calculated_shares < 1: calculated_shares = 1
+        position_value = calculated_shares * close_val
+        capital_ratio = round((position_value / total_capital) * 100, 1)
+
         is_jp = ".T" in code
         def fmt_p(v):
-            if pd.isna(v) or np.isnan(v):
-                return "ー"
+            if pd.isna(v) or np.isnan(v): return "ー"
             return f"{v:,.0f}円" if is_jp else f"${v:,.2f}"
 
-        clean_code = code.replace(".T", "")
-        macd_state = "強気↑" if latest['MACD_Hist'] > 0 else "調整↓"
-
         return {
-            "code": clean_code, "name": name, "genre": genre,
-            "price": fmt_p(close_val),
+            "code": code.replace(".T", ""), "name": name, "genre": genre,
+            "price": fmt_p(close_val), "raw_close": close_val,
             "est_open": fmt_p(est_open_val),
             "tp_price": fmt_p(tp_val), "tp_pct": tp_pct,
             "sl_price": fmt_p(sl_val), "sl_pct": sl_pct,
@@ -610,47 +770,37 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
             "rsi": round(float(latest['RSI']), 1),
             "vol_ratio": round(float(latest['Vol_Ratio']), 2),
             "bb_sigma": round(float(latest['BB_Sigma']), 2),
-            "macd_state": macd_state,
+            "macd_state": "強気↑" if latest['MACD_Hist'] > 0 else "調整↓",
             "atr_pct": round(float(latest['ATR_Pct']), 1),
-            "payoff": payoff_ratio,
-            "edge": expected_edge,
-            "ai_score": ai_score,
-            "macro_score": macro_score,
-            "theme": theme,
-            "reasons": " / ".join(reasons)
+            "payoff": payoff_ratio, "edge": expected_edge,
+            "ai_score": ai_score, "macro_score": macro_score,
+            "theme": theme, "reasons": " / ".join(reasons),
+            "lot_info": {
+                "shares": calculated_shares,
+                "position_value": position_value,
+                "capital_ratio": capital_ratio,
+                "risk_amount": allowed_total_risk_money
+            }
         }
     except Exception:
         return None
 
-def render_stock_card(r, is_custom=False, rank=None):
+def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     diff_color = "#dc2626" if r["diff"] > 0 else "#2563eb"
     diff_sign = "+" if r["diff"] > 0 else ""
     gap_sign = "+" if r["gap"] > 0 else ""
     sigma_sign = "+" if r["bb_sigma"] > 0 else ""
     edge_sign = "+" if r["edge"] > 0 else ""
 
-    if is_custom:
-        card_class = "search-result-card"
-    elif rank is not None:
-        card_class = "rank-card"
-    else:
-        card_class = "stock-card"
-
-    rank_html = ""
-    genre_html = ""
-    if rank is not None:
-        rank_html = f'<span class="rank-badge">第{rank}位</span>'
-        genre_html = f'<span class="genre-badge">{r["genre"]}</span>'
+    card_class = "search-result-card" if is_custom else ("rank-card" if rank is not None else "stock-card")
+    rank_html = f'<span class="rank-badge">第{rank}位</span>' if rank is not None else ""
+    genre_html = f'<span class="genre-badge">{r["genre"]}</span>' if rank is not None else ""
 
     m_score = r["macro_score"]
-    if m_score > 0:
-        macro_badge_html = f'<span class="macro-badge">🌐 地合い +{m_score}点</span>'
-    elif m_score < 0:
-        macro_badge_html = f'<span class="macro-badge" style="background:#fef2f2; color:#b91c1c; border-color:#fecaca;">🌐 地合い {m_score}点</span>'
-    else:
-        macro_badge_html = '<span class="macro-badge" style="background:#f1f5f9; color:#64748b; border-color:#cbd5e1;">🌐 地合い ±0</span>'
-
+    macro_badge_html = f'<span class="macro-badge">🌐 地合い {m_score:+d}点</span>'
     edge_badge_html = f'<span class="edge-badge">📐 損益比 {r["payoff"]}倍 (期待値{edge_sign}{r["edge"]}%)</span>'
+
+    lot = r["lot_info"]
 
     html_card = (
         f'<div class="{card_class}">'
@@ -670,34 +820,103 @@ def render_stock_card(r, is_custom=False, rank=None):
         f"<span>📈 <b>MACD:</b> {r['macd_state']}</span>"
         f"<span>🔊 <b>出来高:</b> {r['vol_ratio']}倍</span>"
         f"<span>📏 <b>BB:</b> {sigma_sign}{r['bb_sigma']}σ</span>"
-        f"<span>⚡ <b>1日変動(ATR):</b> {r['atr_pct']}%</span>"
+        f"<span>⚡ <b>ATR:</b> {r['atr_pct']}%</span>"
         f'</div>'
         f'<div class="trade-plan-box">'
         f'<div class="trade-plan-item">'
-        f'<div style="font-size:10px; color:#64748b;">🌅 予想寄付き目安</div>'
+        f'<div style="font-size:10px; color:#64748b;">🌅 予想寄付き</div>'
         f'<div style="font-size:12px; font-weight:bold; color:#0f172a; margin-top:2px;">{r["est_open"]}</div>'
-        f'<div style="font-size:10px; color:#64748b;">(平均{gap_sign}{r["gap"]}%)</div>'
         f'</div>'
         f'<div class="trade-plan-item" style="border-left:1px solid #e2e8f0; border-right:1px solid #e2e8f0;">'
-        f'<div style="font-size:10px; color:#15803d; font-weight:bold;">🎯 利確目標 (+0.8ATR)</div>'
+        f'<div style="font-size:10px; color:#15803d; font-weight:bold;">🎯 利確目標</div>'
         f'<div style="font-size:12px; font-weight:bold; color:#15803d; margin-top:2px;">{r["tp_price"]}</div>'
-        f'<div style="font-size:10px; color:#16a34a;">(+{r["tp_pct"]}%)</div>'
         f'</div>'
         f'<div class="trade-plan-item">'
-        f'<div style="font-size:10px; color:#b91c1c; font-weight:bold;">🛡️ 損切り目安 (-0.5ATR)</div>'
+        f'<div style="font-size:10px; color:#b91c1c; font-weight:bold;">🛡️ 損切り目安</div>'
         f'<div style="font-size:12px; font-weight:bold; color:#b91c1c; margin-top:2px;">{r["sl_price"]}</div>'
-        f'<div style="font-size:10px; color:#dc2626;">({r["sl_pct"]}%)</div>'
         f'</div>'
+        f'</div>'
+        f'<div class="sizing-box">'
+        f'📦 <b>【4大AI最適ロットサイジング】</b> 推奨購入数: <b>{lot["shares"]:,} 株</b> '
+        f'(投資額: <b>{lot["position_value"]:,.0f}円</b> / 資金比率: <b>{lot["capital_ratio"]}%</b>)<br>'
+        f'<span style="font-size:11px; color:#15803d;">※損切り到達時の最大損失額を総資金の {risk_tolerance_pct}%（{lot["risk_amount"]:,.0f}円）に自動抑制します。</span>'
         f'</div>'
         f'<div class="factor-box">'
         f'<div class="factor-title">💡 クオンツ解析・上昇期待の背景</div>'
         f'<div style="margin-bottom:4px;"><b>【テーマ】</b> {r["theme"]}</div>'
-        f'<div><b>【需給・テクニカル判定】</b> {r["reasons"]}</div>'
+        f'<div><b>【需給判定】</b> {r["reasons"]}</div>'
         f'</div></div>'
     )
     st.markdown(html_card, unsafe_allow_html=True)
 
-if st.button("🔄 最新データに更新 (弱肉強食ダイナミック選抜を再実行)"):
+    unique_key = f"{key_prefix}_{r['code']}"
+    is_open = st.session_state["active_debates"].get(unique_key, False)
+    btn_label = f"🔼 合議＆質問パネルを閉じる" if is_open else f"🤝 4大AI合議＆購入ロット詳細（{r['name']}）"
+
+    if st.button(btn_label, key=f"btn_{unique_key}", use_container_width=True):
+        st.session_state["active_debates"][unique_key] = not is_open
+        st.rerun()
+
+    if st.session_state["active_debates"].get(unique_key, False):
+        debate = run_4ai_council_algorithm(r)
+        council_html = (
+            f'<div class="ai-council-box">'
+            f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">'
+            f'<span style="font-size:13px; font-weight:bold; color:#e2e8f0;">🧠 4大AIクオンツ合議レポート</span>'
+            f'<span style="background:#4f46e5; color:#fff; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:bold;">'
+            f'合議スコア: {debate["final_score"]} / 100</span>'
+            f'</div>'
+            f'<div class="ai-agent-card claude-card"><div style="font-weight:bold; color:#fbbf24; margin-bottom:2px;">🟠 Claude (リスク管理・ロットサイジング) — {debate["claude_score"]}点 【{debate["claude_stance"]}】</div><div style="color:#f1f5f9;">{debate["claude_comment"]}</div></div>'
+            f'<div class="ai-agent-card grok-card"><div style="font-weight:bold; color:#f87171; margin-bottom:2px;">🔴 Grok (短期モメンタム・需給) — {debate["grok_score"]}点 【{debate["grok_stance"]}】</div><div style="color:#f1f5f9;">{debate["grok_comment"]}</div></div>'
+            f'<div class="ai-agent-card gpt-card"><div style="font-weight:bold; color:#34d399; margin-bottom:2px;">🟢 GPT (マクロ統合) — {debate["gpt_score"]}点 【{debate["gpt_stance"]}】</div><div style="color:#f1f5f9;">{debate["gpt_comment"]}</div></div>'
+            f'<div class="ai-agent-card gemini-card"><div style="font-weight:bold; color:#60a5fa; margin-bottom:2px;">🔵 Gemini (テーマ連鎖・シナリオ) — {debate["gemini_score"]}点 【{debate["gemini_stance"]}】</div><div style="color:#f1f5f9;">{debate["gemini_comment"]}</div></div>'
+            f'<div class="consensus-banner"><div style="font-weight:bold; color:#a5b4fc; margin-bottom:3px;">🏛️ 最終コンセンサス</div><div style="color:#ffffff; font-weight:bold;">{debate["verdict"]}</div></div>'
+            f'</div>'
+        )
+        st.markdown(council_html, unsafe_allow_html=True)
+
+        if unique_key not in st.session_state["stock_chats"]:
+            st.session_state["stock_chats"][unique_key] = []
+
+        st.markdown(f"**💬 4大AIに質問する**")
+        q_col1, q_col2 = st.columns(2)
+        with q_col1:
+            if st.button("💰 最適ロット数の根拠を教えて", key=f"q1_{unique_key}", use_container_width=True):
+                ans = generate_4ai_qa_response("ロット数の根拠を教えて", r, debate, r["lot_info"])
+                st.session_state["stock_chats"][unique_key].append({"q": "最適ロット数の根拠を教えて", "a": ans})
+                st.rerun()
+            if st.button("🎯 いくらで買い指値すべき？", key=f"q2_{unique_key}", use_container_width=True):
+                ans = generate_4ai_qa_response("いくらで買い指値すべき？", r, debate, r["lot_info"])
+                st.session_state["stock_chats"][unique_key].append({"q": "いくらで買い指値すべき？", "a": ans})
+                st.rerun()
+        with q_col2:
+            if st.button("🛡️ 損切り・利確の具体的な手順は？", key=f"q3_{unique_key}", use_container_width=True):
+                ans = generate_4ai_qa_response("損切り・利確の具体的な手順は？", r, debate, r["lot_info"])
+                st.session_state["stock_chats"][unique_key].append({"q": "損切り・利確の具体的な手順は？", "a": ans})
+                st.rerun()
+            if st.button("⚠️ 下落リスクや懸念点は？", key=f"q4_{unique_key}", use_container_width=True):
+                ans = generate_4ai_qa_response("下落リスクや懸念点は？", r, debate, r["lot_info"])
+                st.session_state["stock_chats"][unique_key].append({"q": "下落リスクや懸念点は？", "a": ans})
+                st.rerun()
+
+        with st.form(key=f"qa_form_{unique_key}", clear_on_submit=True):
+            f1, f2 = st.columns([3, 1])
+            with f1: user_q = st.text_input("質問", placeholder="自由に質問（例：資金の2%以上のリスクを取る場合の株数は？）", label_visibility="collapsed")
+            with f2: sub_q = st.form_submit_button("送信", use_container_width=True)
+            if sub_q and user_q.strip():
+                ans = generate_4ai_qa_response(user_q.strip(), r, debate, r["lot_info"])
+                st.session_state["stock_chats"][unique_key].append({"q": user_q.strip(), "a": ans})
+                st.rerun()
+
+        for item in st.session_state["stock_chats"].get(unique_key, []):
+            st.markdown(f'<div class="qa-bubble-user">🙋 あなた: {item["q"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="qa-bubble-ai">{item["a"]}</div>', unsafe_allow_html=True)
+        if st.button("🗑️ 履歴クリア", key=f"clear_{unique_key}"):
+            st.session_state["stock_chats"][unique_key] = []
+            st.rerun()
+        st.markdown("---")
+
+if st.button("🔄 最新データに更新"):
     st.cache_data.clear()
 
 macro_info = fetch_macro_market()
@@ -705,33 +924,13 @@ macro_info = fetch_macro_market()
 def fmt_macro(item, span_class="span-2", mode="index"):
     d = item["diff"]
     sign = "+" if d > 0 else ""
-
-    if mode == "vix":
-        color = "#f87171" if (d > 3.0 or item["price"] >= 22) else ("#4ade80" if d < 0 else "#cbd5e1")
-    else:
-        color = "#4ade80" if d > 0 else ("#f87171" if d < 0 else "#cbd5e1")
-
+    color = "#4ade80" if d > 0 else ("#f87171" if d < 0 else "#cbd5e1")
     if item["price"] == 0 or np.isnan(item["price"]):
-        val_str = "取得中/休場"
-        diff_str = "-"
+        val_str, diff_str = "取得中/休場", "-"
     else:
-        if mode == "fx":
-            val_str = f"{item['price']:,.2f}円"
-        elif mode == "vix":
-            val_str = f"{item['price']:,.2f} pt"
-        elif mode == "nk":
-            val_str = f"{item['price']:,.0f}円"
-        else:
-            val_str = f"{item['price']:,.0f}"
+        val_str = f"{item['price']:,.2f}円" if mode == "fx" else (f"{item['price']:,.2f} pt" if mode == "vix" else f"{item['price']:,.0f}")
         diff_str = f"{sign}{d}%"
-
-    return (
-        f'<div class="market-item {span_class}">'
-        f'<div style="font-size:10px; color:#cbd5e1; white-space:nowrap;">{item["label"]}</div>'
-        f'<div style="font-size:13px; font-weight:bold; margin-top:2px; color:#f8fafc;">{val_str}</div>'
-        f'<div style="font-size:11px; font-weight:bold; color:{color};">{diff_str}</div>'
-        f'</div>'
-    )
+    return f'<div class="market-item {span_class}"><div style="font-size:10px; color:#cbd5e1;">{item["label"]}</div><div style="font-size:13px; font-weight:bold; color:#f8fafc;">{val_str}</div><div style="font-size:11px; color:{color};">{diff_str}</div></div>'
 
 sp_item  = macro_info.get("sp500",  {"price": 0, "diff": 0, "label": "🇺🇸 米S&P500"})
 sox_item = macro_info.get("sox",    {"price": 0, "diff": 0, "label": "💽 米SOX半導体"})
@@ -740,52 +939,41 @@ nk_item  = macro_info.get("nk_fut", {"price": 0, "diff": 0, "label": "🇯🇵 C
 vix_item = macro_info.get("vix",    {"price": 0, "diff": 0, "label": "⚡ VIX恐怖指数"})
 
 banner_html = (
-    '<div class="market-banner">'
-    '<div class="market-title">🌐 米国市場・為替・CME先物・VIXフィルター（弱肉強食ダイナミック選抜補正）</div>'
-    '<div class="market-grid">'
-    f'{fmt_macro(sp_item, span_class="span-2", mode="index")}'
-    f'{fmt_macro(sox_item, span_class="span-2", mode="index")}'
-    f'{fmt_macro(fx_item, span_class="span-2", mode="fx")}'
-    f'{fmt_macro(nk_item, span_class="span-3", mode="nk")}'
-    f'{fmt_macro(vix_item, span_class="span-3", mode="vix")}'
+    '<div class="market-banner"><div class="market-title">🌐 米国市場・為替・CME先物・VIXフィルター</div><div class="market-grid">'
+    f'{fmt_macro(sp_item, "span-2", "index")}{fmt_macro(sox_item, "span-2", "index")}{fmt_macro(fx_item, "span-2", "fx")}'
+    f'{fmt_macro(nk_item, "span-3", "nk")}{fmt_macro(vix_item, "span-3", "vix")}'
     '</div></div>'
 )
 st.markdown(banner_html, unsafe_allow_html=True)
 
 with st.container():
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        custom_input = st.text_input(
-            "🔍 任意の銘柄コードを診断（日本株は4桁、米国株はティッカー）",
-            placeholder="例: 7203, 9023, NVDA, DXYZ"
-        )
-    with col2:
+    c1, c2 = st.columns([3, 1])
+    with c1: custom_input = st.text_input("🔍 任意の銘柄コードを診断", placeholder="例: 7203, 9023, NVDA, DXYZ")
+    with c2:
         st.write("")
         search_clicked = st.button("診断する", use_container_width=True)
 
 if custom_input or search_clicked:
     norm_code = normalize_ticker(custom_input)
     if norm_code:
-        with st.spinner(f"「{norm_code}」の世界情勢連動マルチファクター解析中..."):
+        with st.spinner(f"「{norm_code}」の解析中..."):
             custom_res = fetch_and_analyze(norm_code, macro=macro_info)
         if custom_res:
             st.markdown("##### 🎯 個別銘柄のリアルタイム診断結果")
-            render_stock_card(custom_res, is_custom=True)
+            render_stock_card(custom_res, is_custom=True, key_prefix="custom")
         else:
-            st.error(f"証券コード「{custom_input}」のデータが見つかりませんでした。半角で正しいコードを入力してください。")
+            st.error(f"証券コード「{custom_input}」のデータが見つかりませんでした。")
 
-# --- 全候補プールの一括解析＆弱肉強食によるダイナミックTOP20選抜 ---
 genre_results = {g: [] for g in STOCK_POOL.keys()}
 all_results = []
 seen_in_all = set()
 
-with st.spinner("全候補銘柄をスキャン中... 世界情勢を反映した弱肉強食トップ20を選抜しています"):
+with st.spinner("全候補銘柄をスキャン＆最適ロットを計算中..."):
     for genre, stocks in STOCK_POOL.items():
         for s in stocks:
             res = fetch_and_analyze(s["code"], s["name"], s["theme"], genre, macro_info)
             if res:
                 genre_results[genre].append(res)
-                # 総合TOP5で同じ銘柄が重複表示されないようチェック
                 if s["code"] not in seen_in_all:
                     all_results.append(res)
                     seen_in_all.add(s["code"])
@@ -793,33 +981,19 @@ with st.spinner("全候補銘柄をスキャン中... 世界情勢を反映し�
 tab_labels = ["🏆 総合TOP5"] + list(STOCK_POOL.keys())
 tabs = st.tabs(tab_labels)
 
-# 1. 総合TOP5タブ
 with tabs[0]:
-    st.caption("全候補プールから、本日の世界情勢・AIスコア・期待値エッジ・勝率が最も高い最強の上位5銘柄をダイナミックに抽出しています。")
-    if not all_results:
-        st.warning("データの取得に失敗しました。時間をおいて再試行してください。")
-    else:
+    st.caption("全プールから、本日のAIスコア・期待値が最も高い上位5銘柄と最適ロットを表示しています。")
+    if all_results:
         top5_list = sorted(all_results, key=lambda x: (x["ai_score"], x["edge"], x["prob"]), reverse=True)[:5]
         for idx, r in enumerate(top5_list, start=1):
-            render_stock_card(r, rank=idx)
+            render_stock_card(r, rank=idx, key_prefix="top5")
 
-# 2. 各ジャンル別タブ（更新毎に期待値・AIスコア順で上位20銘柄に入れ替わる）
 for tab, genre in zip(tabs[1:], STOCK_POOL.keys()):
     with tab:
-        if genre == "IPO":
-            st.info("💡 **IPO（新規上場）セクション**: 直近で新規上場した国内外の大型・注目グロースIPO銘柄をスキャンし、資金流入と翌朝ギャップアップ期待値を算出しています。")
-        elif genre == "未公開株":
-            st.info("💡 **未公開株（プレIPO・VC関連）セクション**: 非上場のユニコーン企業（SpaceX・OpenAI・国内未上場ベンチャー等）へ直接出資するVC（ベンチャーキャピタル）、未公開株ファンド、セカンダリー取引所銘柄を解析しています。")
-
+        if genre == "IPO": st.info("💡 **IPOセクション**: 直近新規上場銘柄の資金流入と最適ロットを算出。")
+        elif genre == "未公開株": st.info("💡 **未公開株・VC関連セクション**: プライベートマーケット連動銘柄の資金管理。")
         results = genre_results.get(genre, [])
-        if not results:
-            st.warning("データの取得に失敗しました。時間をおいて再試行してください。")
-            continue
-
-        # 弱肉強食ソート：AIスコア・期待値エッジ・勝率が高い上位20銘柄に常時入れ替え
-        results.sort(key=lambda x: (x["ai_score"], x["edge"], x["prob"]), reverse=True)
-        top20_results = results[:20]
-
-        st.caption(f"「{genre}」候補プール中、本日の世界情勢・モメンタム解析により生き残った上位TOP{len(top20_results)}銘柄を表示しています。")
-        for idx, r in enumerate(top20_results, start=1):
-            render_stock_card(r, rank=idx)
+        if results:
+            results.sort(key=lambda x: (x["ai_score"], x["edge"], x["prob"]), reverse=True)
+            for idx, r in enumerate(results[:20], start=1):
+                render_stock_card(r, rank=idx, key_prefix=f"genre_{genre}")
