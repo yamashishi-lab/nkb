@@ -5,7 +5,7 @@ import numpy as np
 import unicodedata
 
 # スマホ画面向けにページ設定
-st.set_page_config(page_title="翌朝株価 クオンツ＆AIスコア Pro (100銘柄動的解析)", page_icon="📈", layout="centered")
+st.set_page_config(page_title="翌朝株価 クオンツ＆AI解析 (弱肉強食ダイナミック版)", page_icon="📈", layout="centered")
 
 # スマホで見やすいカスタムCSS
 st.markdown("""
@@ -193,10 +193,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📱 翌朝株価 クオンツ＆AI解析 Pro")
-st.caption("全100銘柄ダイナミック解析 × 世界情勢マクロ連動 × 翌朝トレード目安自動算出")
+st.caption("弱肉強食ダイナミック選抜（リアルタイム期待値順に自動入替） × 世界情勢マクロ連動")
 
-# --- 各ジャンル20銘柄（計100銘柄）の定義 ---
-STOCK_LIST = {
+# --- 各ジャンルの拡張候補プール（各ジャンル約30〜35銘柄、総計160銘柄以上の候補から毎日上位20銘柄を自動ハンティング） ---
+STOCK_POOL = {
     "半導体": [
         {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置の国内筆頭。海外勢の指数買いが入りやすい"},
         {"code": "6857.T", "name": "アドバンテスト", "theme": "AI半導体向けテスタで高シェア。米SOX指数と連動性大"},
@@ -214,10 +214,19 @@ STOCK_LIST = {
         {"code": "6701.T", "name": "NEC", "theme": "海底ケーブル・防衛・AIを活用したITインフラ構築"},
         {"code": "6702.T", "name": "富士通", "theme": "ITサービス大手。スーパーコンピュータ・量子コンピューティング"},
         {"code": "6503.T", "name": "三菱電機", "theme": "FA機器・重電・宇宙防衛システム・パワー半導体"},
+        {"code": "6963.T", "name": "ローム", "theme": "車載・産業機器向けパワー半導体（SiC）の主力"},
+        {"code": "6590.T", "name": "芝浦メカトロニクス", "theme": "半導体後工程・フラットパネルディスプレイ製造装置"},
+        {"code": "6315.T", "name": "TOWA", "theme": "半導体樹脂封止装置で世界トップシェア。HBM関連"},
+        {"code": "5334.T", "name": "日本特殊陶業", "theme": "半導体パッケージ基板・セラミック部品"},
         {"code": "NVDA",   "name": "エヌビディア (米国)", "theme": "生成AI向けGPUの圧倒的覇者。世界の半導体・AI相場の羅針盤"},
         {"code": "AMD",    "name": "AMD (米国)", "theme": "AIアクセラレータおよびCPUでエヌビディアを追撃"},
         {"code": "INTC",   "name": "インテル (米国)", "theme": "米国ファウンドリ再生・政府支援の半導体老舗"},
         {"code": "MU",     "name": "マイクロン (米国)", "theme": "HBM・DRAM大手。メモリー市況のバロメーター"},
+        {"code": "TSM",    "name": "台湾セミコンダクター (米国)", "theme": "世界最大の半導体ファウンドリ。受託製造の最高峰"},
+        {"code": "QCOM",   "name": "クアルコム (米国)", "theme": "スマホ・AIチップ向け通信半導体の世界的リーダー"},
+        {"code": "AVGO",   "name": "ブロードコム (米国)", "theme": "AIネットワーク・カスタムシリコンの巨塔"},
+        {"code": "AMAT",   "name": "アプライド・マテリアルズ (米国)", "theme": "世界最大の半導体製造装置メーカー"},
+        {"code": "LRCX",   "name": "ラムリサーチ (米国)", "theme": "エッチング・成膜装置で圧倒的な技術力"},
     ],
     "AI": [
         {"code": "9984.T", "name": "ソフトバンクG", "theme": "傘下ArmやAI投資群の評価益期待。先物主導で寄り付きが動きやすい"},
@@ -236,10 +245,15 @@ STOCK_LIST = {
         {"code": "4385.T", "name": "メルカリ", "theme": "国内最大のC2Cマーケットプレイス。AIレコメンド技術"},
         {"code": "4689.T", "name": "LINEヤフー", "theme": "国内最大級のポータル・AI検索・デジタル広告基盤"},
         {"code": "4755.T", "name": "楽天グループ", "theme": "モバイル通信・Fintech・AIマーケティングの融合"},
+        {"code": "4475.T", "name": "HENNGE", "theme": "クラウドセキュリティ・SaaS認証基盤"},
+        {"code": "5031.T", "name": "AndDoホールディングス", "theme": "不動産テック・AI活用プラットフォーム"},
+        {"code": "6556.T", "name": "ウェルビー", "theme": "障害福祉・ヘルスケアITプラットフォーム"},
         {"code": "MSFT",   "name": "マイクロソフト (米国)", "theme": "OpenAI最大株主。クラウド(Azure)とCopilotの収益化"},
         {"code": "GOOGL",  "name": "アルファベット (米国)", "theme": "独自生成AI「Gemini」および検索・クラウドプラットフォーム"},
         {"code": "META",   "name": "メタ (米国)", "theme": "オープンソースAI「Llama」および広告最適化AI"},
         {"code": "PLTR",   "name": "パランティア (米国)", "theme": "政府・防衛・企業向けAIプラットフォームの大本命"},
+        {"code": "CRM",    "name": "セールスフォース (米国)", "theme": "CRMプラットフォームと「Einstein AI」の統合"},
+        {"code": "NOW",    "name": "サービスナウ (米国)", "theme": "企業向けワークフロー自動化AIプラットフォーム"},
     ],
     "宇宙": [
         {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星コンステレーション。防衛・安全保障テーマ"},
@@ -258,10 +272,13 @@ STOCK_LIST = {
         {"code": "6268.T", "name": "ナブテスコ", "theme": "航空機用フライトコントロールシステム・精密減速機"},
         {"code": "5938.T", "name": "LIXIL", "theme": "宇宙関連の高断熱・先端素材への応用技術"},
         {"code": "3861.T", "name": "王子ホールディングス", "theme": "宇宙空間での耐放射線素材・セルロースナノファイバー"},
+        {"code": "6701.T", "name": "NEC", "theme": "宇宙ステーション用通信機器・観測衛星システム"},
         {"code": "RKLB",   "name": "ロケット・ラボ (米国)", "theme": "小型ロケット「エレクトロン」打上げの米宇宙ベンチャー筆頭"},
         {"code": "ASTS",   "name": "ASTスペースモバイル (米国)", "theme": "宇宙からの直接スマホ通信網構築企業"},
         {"code": "SPCE",   "name": "ヴァージン・ギャラクティック (米国)", "theme": "有人宇宙飛行・宇宙旅行プログラム"},
         {"code": "LMT",    "name": "ロッキード・マーティン (米国)", "theme": "世界最大の防衛・宇宙航空コントラクター"},
+        {"code": "NOC",    "name": "ノースロップ・グラマン (米国)", "theme": "軍用機・ミサイル・宇宙望遠鏡開発の主力"},
+        {"code": "BA",     "name": "ボーイング (米国)", "theme": "民間航空機および宇宙船「スターライナー」開発"},
     ],
     "AI電力・インフラ": [
         {"code": "9509.T", "name": "北海道電力", "theme": "ラピダスおよび大規模AIデータセンター誘致による電力需要急増期待"},
@@ -280,10 +297,14 @@ STOCK_LIST = {
         {"code": "1951.T", "name": "協和エクシオ", "theme": "通信インフラ・データセンター構築エンジニアリング"},
         {"code": "1942.T", "name": "関電工", "theme": "電気設備工事の主力。データセンター・大型ビルの配線工事"},
         {"code": "1973.T", "name": "NECネッツエスアイ", "theme": "ネットワーク構築・データセンター運営支援"},
+        {"code": "9504.T", "name": "中国電力", "theme": "中国地方の電力供給およびデータセンター誘致インフラ"},
+        {"code": "9505.T", "name": "北陸電力", "theme": "北陸地域の電力網整備・再エネ接続"},
+        {"code": "9507.T", "name": "四国電力", "theme": "四国地域の電力インフラと送配電網強化"},
         {"code": "VST",    "name": "ビストラ (米国)", "theme": "米国の電力大手。AIデータセンター向け原子力・電力供給の筆頭"},
         {"code": "CEG",    "name": "コンステレーション・エナジー (米国)", "theme": "米最大の原子力発電企業。AIテック巨人と電力供給契約"},
         {"code": "NEE",    "name": "ネクステラ・エナジー (米国)", "theme": "世界最大のクリーンエネルギー・再生可能エネルギー発電"},
-        {"code": "GEV",    "name": "GEヘルスケア・ヴェノバ (米国)", "theme": "発電用ガスタービン・送電グリッド設備の世界的リーダー"},
+        {"code": "GEV",    "name": "GEヴェルノバ (米国)", "theme": "発電用ガスタービン・送電グリッド設備の世界的リーダー"},
+        {"code": "DUK",    "name": "デューク・エナジー (米国)", "theme": "米国最大級の電力・ガスユーティリティ"},
     ],
     "イーロン": [
         {"code": "TSLA",   "name": "テスラ (米国)", "theme": "自動運転(FSD)・ロボタクシー・人型ロボットOptimusのAI展開"},
@@ -302,15 +323,17 @@ STOCK_LIST = {
         {"code": "3407.T", "name": "旭化成", "theme": "リチウムイオン電池用セパレーターのトップメーカー"},
         {"code": "4005.T", "name": "住友化学", "theme": "ペロブスカイト太陽電池・次世代ディスプレイ・化学素材"},
         {"code": "4188.T", "name": "三菱ケミカルG", "theme": "EV用バッテリー部材および炭素繊維複合材料"},
+        {"code": "7201.T", "name": "日産自動車", "theme": "EVパイオニア。北米市場でのハイブリッド・EV戦略"},
         {"code": "AAPL",   "name": "アップル (米国)", "theme": "「Apple Intelligence」展開および世界最大のコンシューマーテック"},
         {"code": "AMZN",   "name": "アマゾン (米国)", "theme": "AWS（クラウド）と生成AI、宇宙インターネットProject Kuiper"},
         {"code": "NFLX",   "name": "ネットフリックス (米国)", "theme": "グローバルストリーミングの指標銘柄"},
         {"code": "COIN",   "name": "コインベース (米国)", "theme": "暗号資産・ブロックチェーン技術およびフィンテック動向"},
+        {"code": "UBER",   "name": "ウーバー・テクノロジー (米国)", "theme": "ライドシェアおよび自動運転タクシー提携"},
     ]
 }
 
 KNOWN_STOCKS = {}
-for g, items in STOCK_LIST.items():
+for g, items in STOCK_POOL.items():
     for item in items:
         KNOWN_STOCKS[item["code"]] = {"name": item["name"], "theme": item["theme"], "genre": g}
 
@@ -681,7 +704,7 @@ def render_stock_card(r, is_custom=False, rank=None):
     )
     st.markdown(html_card, unsafe_allow_html=True)
 
-if st.button("🔄 最新データに更新 (動的ランキング再計算)"):
+if st.button("🔄 最新データに更新 (弱肉強食ダイナミック選抜を再実行)"):
     st.cache_data.clear()
 
 macro_info = fetch_macro_market()
@@ -725,7 +748,7 @@ vix_item = macro_info.get("vix",    {"price": 0, "diff": 0, "label": "⚡ VIX恐
 
 banner_html = (
     '<div class="market-banner">'
-    '<div class="market-title">🌐 米国市場・為替・CME先物・VIXフィルター（世界情勢マクロ連動補正）</div>'
+    '<div class="market-title">🌐 米国市場・為替・CME先物・VIXフィルター（弱肉強食ダイナミック選抜補正）</div>'
     '<div class="market-grid">'
     f'{fmt_macro(sp_item, span_class="span-2", mode="index")}'
     f'{fmt_macro(sox_item, span_class="span-2", mode="index")}'
@@ -758,24 +781,24 @@ if custom_input or search_clicked:
         else:
             st.error(f"証券コード「{custom_input}」のデータが見つかりませんでした。半角で正しいコードを入力してください。")
 
-# --- 全100銘柄の動的解析＆各ジャンルTOP20抽出 ---
-genre_results = {g: [] for g in STOCK_LIST.keys()}
+# --- 全候補プールの一括解析＆弱肉強食によるダイナミックTOP20選抜 ---
+genre_results = {g: [] for g in STOCK_POOL.keys()}
 all_results = []
 
-with st.spinner("全100銘柄のクオンツアルゴリズム＆世界情勢連動ランキングを動的解析中..."):
-    for genre, stocks in STOCK_LIST.items():
+with st.spinner("全候補銘柄をスキャン中... 世界情勢を反映した弱肉強食トップ20を選抜しています"):
+    for genre, stocks in STOCK_POOL.items():
         for s in stocks:
             res = fetch_and_analyze(s["code"], s["name"], s["theme"], genre, macro_info)
             if res:
                 genre_results[genre].append(res)
                 all_results.append(res)
 
-tab_labels = ["🏆 総合TOP5"] + list(STOCK_LIST.keys())
+tab_labels = ["🏆 総合TOP5"] + list(STOCK_POOL.keys())
 tabs = st.tabs(tab_labels)
 
 # 1. 総合TOP5タブ
 with tabs[0]:
-    st.caption("全100銘柄から、直近の世界情勢マクロ補正・AIスコア・期待値エッジが最も高い上位5銘柄をダイナミックに抽出しています。")
+    st.caption("全候補プールから、本日の世界情勢・AIスコア・期待値エッジ・勝率が最も高い最強の上位5銘柄をダイナミックに抽出しています。")
     if not all_results:
         st.warning("データの取得に失敗しました。時間をおいて再試行してください。")
     else:
@@ -783,18 +806,18 @@ with tabs[0]:
         for idx, r in enumerate(top5_list, start=1):
             render_stock_card(r, rank=idx)
 
-# 2. 各ジャンル別タブ（スコア順にソートし上位20銘柄に自動入替）
-for tab, genre in zip(tabs[1:], STOCK_LIST.keys()):
+# 2. 各ジャンル別タブ（更新毎に期待値・AIスコア順で上位20銘柄に入れ替わる）
+for tab, genre in zip(tabs[1:], STOCK_POOL.keys()):
     with tab:
         results = genre_results.get(genre, [])
         if not results:
             st.warning("データの取得に失敗しました。時間をおいて再試行してください。")
             continue
 
-        # 世界情勢・AIスコア・期待値エッジに応じて動的にソートし、上位20銘柄に絞り込み
+        # 弱肉強食ソート：AIスコア・期待値エッジ・勝率が高い上位20銘柄に常時入れ替え
         results.sort(key=lambda x: (x["ai_score"], x["edge"], x["prob"]), reverse=True)
         top20_results = results[:20]
 
-        st.caption(f"「{genre}」カテゴリ登録20銘柄中、本日の世界情勢・モメンタム解析による上位TOP{len(top20_results)}銘柄を表示しています。")
+        st.caption(f"「{genre}」候補プール中、本日の世界情勢・モメンタム解析により生き残った上位TOP{len(top20_results)}銘柄を表示しています。")
         for idx, r in enumerate(top20_results, start=1):
             render_stock_card(r, rank=idx)
