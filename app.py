@@ -8,40 +8,6 @@ st.set_page_config(page_title="翌朝株価 クオンツ＆AI解析", page_icon=
 
 st.markdown("""
 <style>
-.market-banner {
-    background: linear-gradient(135deg, #0f172a, #1e293b);
-    color: #f8fafc;
-    border-radius: 12px;
-    padding: 12px 10px;
-    margin-bottom: 16px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
-    box-sizing: border-box;
-    width: 100%;
-}
-.market-title {
-    font-size: 11px;
-    font-weight: bold;
-    color: #94a3b8;
-    margin-bottom: 8px;
-    text-align: center;
-}
-.market-grid {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 6px;
-    width: 100%;
-    box-sizing: border-box;
-}
-.market-item {
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    padding: 7px 4px;
-    text-align: center;
-    box-sizing: border-box;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-}
-.span-2 { grid-column: span 2; }
-.span-3 { grid-column: span 3; }
 .stock-card {
     background-color: #ffffff;
     border-radius: 12px;
@@ -58,67 +24,131 @@ st.markdown("""
     box-shadow: 0 4px 12px rgba(220, 38, 38, 0.12);
     border-left: 6px solid #e11d48;
 }
-.search-result-card {
-    background-color: #fffbeb;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 18px;
-    box-shadow: 0 4px 12px rgba(217, 119, 6, 0.15);
-    border-left: 6px solid #d97706;
-}
 .prob-badge { font-size: 22px; font-weight: bold; color: #dc2626; }
 .rank-badge {
-    display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: #ffffff; padding: 3px 9px; border-radius: 20px; font-size: 12px;
+    display: inline-block; background: #f59e0b; color: #ffffff;
+    padding: 3px 9px; border-radius: 20px; font-size: 12px;
     font-weight: bold; margin-right: 4px; margin-bottom: 6px;
 }
 .score-badge {
-    display: inline-block; background: linear-gradient(135deg, #1e293b, #334155);
-    color: #f8fafc; padding: 3px 10px; border-radius: 20px; font-size: 12px;
+    display: inline-block; background: #1e293b; color: #f8fafc;
+    padding: 3px 10px; border-radius: 20px; font-size: 12px;
     font-weight: bold; margin-bottom: 6px;
 }
-.macro-badge {
-    display: inline-block; background: #eff6ff; color: #1d4ed8;
-    border: 1px solid #bfdbfe; padding: 2px 8px; border-radius: 20px;
-    font-size: 11px; font-weight: bold; margin-left: 4px;
-}
-.edge-badge {
-    display: inline-block; background: #f0fdf4; color: #15803d;
-    border: 1px solid #bbf7d0; padding: 2px 8px; border-radius: 20px;
-    font-size: 11px; font-weight: bold; margin-left: 4px;
-}
-.genre-badge {
-    display: inline-block; background: #f3e8ff; color: #6b21a8;
-    border: 1px solid #e9d5ff; padding: 2px 8px; border-radius: 6px;
-    font-size: 10px; font-weight: bold; margin-left: 6px; vertical-align: middle;
-}
-.signal-tag {
-    display: inline-block; background: #fef2f2; color: #991b1b;
-    border: 1px solid #fecaca; padding: 4px 8px; border-radius: 6px;
-    font-size: 12px; font-weight: bold; margin-top: 8px;
-}
-.metrics-row {
-    display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px;
-    font-size: 11px; color: #475569; background: #f8fafc; padding: 8px 10px;
-    border-radius: 6px; border: 1px solid #e2e8f0;
-}
-.trade-plan-box {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
-    margin-top: 8px; background: #f8fafc; padding: 8px 6px; border-radius: 8px;
-    border: 1px dashed #cbd5e1; text-align: center;
-}
-.trade-plan-item { min-width: 0; }
-.factor-box {
-    background: #f1f5f9; border-radius: 8px; padding: 10px 12px;
-    margin-top: 10px; font-size: 12px; color: #1e293b; line-height: 1.5;
-}
-.factor-title { font-weight: bold; color: #0f172a; margin-bottom: 4px; font-size: 12px; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("翌朝株価 クオンツ＆AI解析 Pro")
-st.caption("弱肉強食ダイナミック選抜 × 世界情勢マクロ連動")
+st.title("📱 翌朝株価 クオンツ＆AI解析 Pro")
+st.caption("リアルタイム期待値順に選抜・解析")
 
-# 銘柄プール定義
+# 銘柄プール
 STOCK_POOL = {
-    "半導体":
+    "半導体": [
+        {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置の国内筆頭"},
+        {"code": "6857.T", "name": "アドバンテスト", "theme": "AI半導体向けテスタ"},
+        {"code": "6920.T", "name": "レーザーテック", "theme": "EUVマスク検査"},
+        {"code": "NVDA", "name": "エヌビディア", "theme": "生成AI向けGPUの覇者"},
+        {"code": "AMD", "name": "AMD", "theme": "AIアクセラレータCPU"}
+    ],
+    "テンバガー小型株": [
+        {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星時価総額急拡大"},
+        {"code": "186A.T", "name": "アストロスケール", "theme": "宇宙ゴミ除去ニッチトップ"},
+        {"code": "9348.T", "name": "ispace", "theme": "民間月面輸送ベンチャー"},
+        {"code": "5243.T", "name": "ノート", "theme": "クリエイターエコノミー"},
+        {"code": "PLTR", "name": "パランティア", "theme": "AIプラットフォーム急成長"},
+        {"code": "IONQ", "name": "アイオンQ", "theme": "商用量子コンピューター開発"}
+    ]
+}
+
+KNOWN_STOCKS = {}
+for g, items in STOCK_POOL.items():
+    for item in items:
+        KNOWN_STOCKS[item["code"]] = {"name": item["name"], "theme": item["theme"], "genre": g}
+
+def normalize_ticker(raw):
+    s = unicodedata.normalize('NFKC', raw).strip().upper()
+    if not s: return ""
+    if "." in s or s.startswith("^") or "=" in s: return s
+    if len(s) == 4 and any(ch.isdigit() for ch in s): return f"{s}.T"
+    return s
+
+@st.cache_data(ttl=1800)
+def fetch_and_analyze(code, name=None, theme=None, genre="個別検索"):
+    try:
+        ticker = yf.Ticker(code)
+        df = ticker.history(period="6mo")
+        if df is None or df.empty or len(df) < 30: return None
+
+        df = df.dropna(subset=['Close', 'Open', 'High', 'Low', 'Volume'])
+        if len(df) < 30: return None
+
+        if code in KNOWN_STOCKS:
+            name = name or KNOWN_STOCKS[code]["name"]
+            theme = theme or KNOWN_STOCKS[code]["theme"]
+            genre = KNOWN_STOCKS[code]["genre"]
+        else:
+            name = name or code.replace(".T", "")
+            theme = theme or "カスタム指定銘柄"
+
+        df['Prev_Close'] = df['Close'].shift(1)
+        df['Day_Return'] = (df['Close'] - df['Prev_Close']) / df['Prev_Close'] * 100
+        df['MA5'] = df['Close'].rolling(5).mean()
+        df['Next_Open'] = df['Open'].shift(-1)
+        df['Gap_Pct'] = (df['Next_Open'] - df['Close']) / df['Close'] * 100
+        df['Morning_Up'] = df['Next_Open'] > df['Close']
+
+        latest = df.iloc[-1]
+        history = df.iloc[:-1].dropna(subset=['Next_Open'])
+
+        if len(history) == 0: return None
+
+        total = len(history)
+        wins = int(history['Morning_Up'].sum())
+        prob = round((wins / total) * 100, 1) if total > 0 else 50.0
+        avg_gap = round(float(history['Gap_Pct'].mean()), 2) if total > 0 else 0.0
+
+        ai_score = int(min(max(round(prob * 0.8), 20), 95))
+        close_val = float(latest['Close'])
+        est_open_val = close_val * (1.0 + (avg_gap / 100.0))
+        is_jp = ".T" in code
+        
+        def fmt_p(v):
+            return f"{v:,.0f}円" if is_jp else f"${v:,.2f}"
+
+        return {
+            "code": code.replace(".T", ""), "name": name, "genre": genre,
+            "price": fmt_p(close_val), "est_open": fmt_p(est_open_val),
+            "diff": round(float(latest['Day_Return']), 2),
+            "prob": prob, "count": f"{wins}/{total}回", "gap": avg_gap,
+            "ai_score": ai_score, "theme": theme
+        }
+    except Exception:
+        return None
+
+# 入力フォーム
+custom_input = st.text_input("🔍 銘柄コード診断（例: 7203, 5595, NVDA）")
+if custom_input:
+    norm = normalize_ticker(custom_input)
+    if norm:
+        with st.spinner("解析中..."):
+            res = fetch_and_analyze(norm)
+        if res:
+            st.success(f"{res['name']} ({res['code']}) - 翌朝上昇確率: {res['prob']}% (AIスコア: {res['ai_score']})")
+        else:
+            st.error("データが見つかりませんでした。")
+
+# タブ表示
+tabs = st.tabs(list(STOCK_POOL.keys()))
+for tab, genre in zip(tabs, STOCK_POOL.keys()):
+    with tab:
+        for s in STOCK_POOL[genre]:
+            res = fetch_and_analyze(s["code"], s["name"], s["theme"], genre)
+            if res:
+                st.markdown(f"""
+                <div class="stock-card">
+                    <span class="score-badge">AIスコア: {res['ai_score']}</span>
+                    <span style="font-size:16px; font-weight:bold;">{res['name']} ({res['code']})</span><br>
+                    終値: <b>{res['price']}</b> ({res['diff']:+.2f}%) | 翌朝上昇確率: <span class="prob-badge">{res['prob']}%</span><br>
+                    <small>テーマ: {res['theme']}</small>
+                </div>
+                """, unsafe_allow_html=True)
