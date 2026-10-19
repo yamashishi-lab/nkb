@@ -124,7 +124,7 @@ st.markdown("""
 st.title("📱 翌朝株価 クオンツ＆AI解析 Pro")
 st.caption("弱肉強食ダイナミック選抜（リアルタイム期待値順に自動入替） × 世界情勢マクロ連動")
 
-# --- 各ジャンルの拡張候補プール（テンバガー小型株を含む） ---
+# --- 各ジャンルの拡張候補プール（IPO・未公開株関連を含む） ---
 STOCK_POOL = {
     "半導体": [
         {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置の国内筆頭。海外勢の指数買いが入りやすい"},
@@ -170,12 +170,12 @@ STOCK_POOL = {
         {"code": "7342.T", "name": "ウェルスナビ", "theme": "ロボアドバイザーによる資産運用プラットフォーム"},
         {"code": "6182.T", "name": "メタリアル", "theme": "AI自動翻訳・生成AI活用サービス"},
         {"code": "3962.T", "name": "チェンジHD", "theme": "デジタル地方創生・行政DX推進コンサルティング"},
-        {"code": "4443.T", "name": "SANS", "theme": "名刺管理・営業DXプラットフォーム「Sansan」"},
+        {"code": "4443.T", "name": "Sansan", "theme": "名刺管理・営業DXプラットフォーム「Sansan」"},
         {"code": "4385.T", "name": "メルカリ", "theme": "国内最大のC2Cマーケットプレイス。AIレコメンド技術"},
         {"code": "4689.T", "name": "LINEヤフー", "theme": "国内最大級のポータル・AI検索・デジタル広告基盤"},
         {"code": "4755.T", "name": "楽天グループ", "theme": "モバイル通信・Fintech・AIマーケティングの融合"},
         {"code": "4475.T", "name": "HENNGE", "theme": "クラウドセキュリティ・SaaS認証基盤"},
-        {"code": "5031.T", "name": "AndDoホールディングス", "theme": "不動産テック・AI活用プラットフォーム"},
+        {"code": "5031.T", "name": "モイ", "theme": "ライブ配信プラットフォーム「ツイキャス」運営・AI音声認識"},
         {"code": "6556.T", "name": "ウェルビー", "theme": "障害福祉・ヘルスケアITプラットフォーム"},
         {"code": "MSFT", "name": "マイクロソフト (米国)", "theme": "OpenAI最大株主。クラウド(Azure)とCopilotの収益化"},
         {"code": "GOOGL", "name": "アルファベット (米国)", "theme": "独自生成AI「Gemini」および検索・クラウドプラットフォーム"},
@@ -193,7 +193,6 @@ STOCK_POOL = {
         {"code": "7012.T", "name": "川崎重工業", "theme": "防衛装備品・航空機エンジン・無人機システム"},
         {"code": "7013.T", "name": "IHI", "theme": "航空機用ジェットエンジン・防衛省向けミサイル・宇宙ロケット"},
         {"code": "6201.T", "name": "豊田自動織機", "theme": "トヨタグループのロケット・自動車用電動化技術"},
-        {"code": "6502.T", "name": "東芝", "theme": "社会インフラ・重電・宇宙防衛関連の電子システム"},
         {"code": "4272.T", "name": "日本化薬", "theme": "火薬類製造技術をベースにした防衛・宇宙用ロケット推進薬"},
         {"code": "6902.T", "name": "デンソー", "theme": "車載半導体・自動運転および航空宇宙向け高精度センサー"},
         {"code": "7267.T", "name": "ホンダ", "theme": "小型ジェット機開発の技術を応用した次世代宇宙ロケット事業"},
@@ -223,7 +222,7 @@ STOCK_POOL = {
         {"code": "9503.T", "name": "関西電力", "theme": "関西圏の電力インフラおよび次世代エネルギー開発"},
         {"code": "9506.T", "name": "東北電力", "theme": "東北地方の半導体・グリーンデータセンター集積地帯"},
         {"code": "1963.T", "name": "日揮ホールディングス", "theme": "プラントエンジニアリング大手。次世代エネルギー・水素プラント"},
-        {"code": "1951.T", "name": "協和エクシオ", "theme": "通信インフラ・データセンター構築エンジニアリング"},
+        {"code": "1951.T", "name": "エクシオグループ", "theme": "通信インフラ・データセンター構築エンジニアリング"},
         {"code": "1942.T", "name": "関電工", "theme": "電気設備工事の主力。データセンター・大型ビルの配線工事"},
         {"code": "1973.T", "name": "NECネッツエスアイ", "theme": "ネットワーク構築・データセンター運営支援"},
         {"code": "9504.T", "name": "中国電力", "theme": "中国地方の電力供給およびデータセンター誘致インフラ"},
@@ -279,6 +278,50 @@ STOCK_POOL = {
         {"code": "IONQ", "name": "アイオンQ (米国)", "theme": "商用量子コンピューター開発の最先端小型テクノロジー"},
         {"code": "SOUN", "name": "サウンドハウンドAI (米国)", "theme": "音声AI認識技術で急成長を遂げる小型AI関連の注目株"},
         {"code": "BBAI", "name": "ビッグベア.ai (米国)", "theme": "防衛・政府向けのAI予測アナリティクス企業"}
+    ],
+    "IPO": [
+        {"code": "9023.T", "name": "東京地下鉄 (東京メトロ)", "theme": "大型IPOの筆頭。高い配当利回りと安定収益で機関投資家・個人の資金が流入"},
+        {"code": "285A.T", "name": "キオクシアHD", "theme": "半導体メモリー大手の大型IPO。AIデータセンター向けNAND需要回復と連動"},
+        {"code": "216A.T", "name": "タイミー", "theme": "スキマバイト仲介の大型グロースIPO。人手不足解消のテーマ株として短期資金が集中"},
+        {"code": "186A.T", "name": "アストロスケールHD", "theme": "宇宙デブリ除去ベンチャーの注目IPO。防衛・宇宙テーマで出来高急増"},
+        {"code": "141A.T", "name": "トライアルHD", "theme": "スマートショッピングカート等のリテールAI活用で急成長する流通大型IPO"},
+        {"code": "166A.T", "name": "タスキHD", "theme": "不動産テック・IoTレジデンス開発の新規統合上場銘柄"},
+        {"code": "153A.T", "name": "カウリス", "theme": "金融機関向けクラウド型不正アクセス検知サービスのセキュリティIPO"},
+        {"code": "190A.T", "name": "Chordia Therapeutics", "theme": "がん領域の新薬開発を手掛けるバイオベンチャーIPO"},
+        {"code": "247A.T", "name": "Aiロボティクス", "theme": "AIマーケティングを活用したD2Cブランド展開のグロースIPO"},
+        {"code": "5253.T", "name": "カバー", "theme": "VTuber事務所「ホロライブ」運営。直近IPO群の中でも圧倒的な売買代金"},
+        {"code": "5838.T", "name": "楽天銀行", "theme": "日銀の金利政策に敏感に反応する大型ネット銀行IPO"},
+        {"code": "5845.T", "name": "全保連", "theme": "家賃債務保証の大手IPO。安定成長と高配当ニーズ"},
+        {"code": "9166.T", "name": "GENDA", "theme": "アミューズメント施設M&Aで急成長を続ける注目グロース株"},
+        {"code": "6228.T", "name": "ジェイ・イー・ティ", "theme": "半導体洗浄装置を手掛ける直近IPO。半導体相場と連動"},
+        {"code": "RDDT", "name": "レディット (米国IPO)", "theme": "米国大型SNSの注目IPO。OpenAI等へのAI学習データ提供で収益急拡大"},
+        {"code": "ARM", "name": "アーム・ホールディングス (米国IPO)", "theme": "ソフトバンクG傘下の半導体設計の要。エッジAI・スマホ向けで圧倒的シェア"},
+        {"code": "ALAB", "name": "アステラ・ラブズ (米国IPO)", "theme": "AIデータセンター向け高速接続半導体の大型IPO"},
+        {"code": "CART", "name": "インスタカート (米国IPO)", "theme": "北米最大の食品配送・リテールメディアプラットフォームIPO"},
+        {"code": "BIRK", "name": "ビルケンシュトック (米国IPO)", "theme": "世界的フットウェアブランドの大型IPO。欧米消費動向の指標"},
+        {"code": "KVYO", "name": "クラビヨ (米国IPO)", "theme": "EC向けマーケティング自動化SaaSの注目テックIPO"}
+    ],
+    "未公開株": [
+        {"code": "8595.T", "name": "ジャフコ グループ", "theme": "国内最大手の老舗VC。有望な国内未公開スタートアップへの投資・IPO輩出の筆頭"},
+        {"code": "8473.T", "name": "SBIホールディングス", "theme": "国内外の未公開フィンテック・半導体・Web3企業へ積極投資する巨大VC群を保有"},
+        {"code": "9984.T", "name": "ソフトバンクG (SVF)", "theme": "OpenAIやByteDanceなど世界の巨大未公開ユニコーン企業へ投資する実質的ファンド"},
+        {"code": "4751.T", "name": "サイバーエージェント", "theme": "藤田ファンド・CAキャピタルを通じ、国内外の有望な未公開ITベンチャーを多数保有"},
+        {"code": "3656.T", "name": "KLab / ベンチャー投資関連", "theme": "Web3・スマホゲーム領域および関連スタートアップへの出資展開"},
+        {"code": "2489.T", "name": "アドウェイズ", "theme": "広告テックおよび国内外の未上場スタートアップへのインキュベーション投資"},
+        {"code": "8425.T", "name": "みずほリース", "theme": "スタートアップ向けベンチャーデットや未公開企業支援のファイナンス展開"},
+        {"code": "8591.T", "name": "オリックス", "theme": "プライベートエクイティ（未公開株買収・事業承継投資）の国内トッププレイヤー"},
+        {"code": "8604.T", "name": "野村ホールディングス", "theme": "未公開株（プライベートマーケット）取引プラットフォームや大型IPO主幹事の筆頭"},
+        {"code": "8515.T", "name": "アイフル", "theme": "傘下AGキャピタルを通じた未公開ベンチャー企業への投資・育成"},
+        {"code": "7172.T", "name": "ジャパンインベストメントアドバイザー", "theme": "プライベートエクイティ投資や未上場企業のM&A・IPO支援を展開"},
+        {"code": "DXYZ", "name": "Destiny Tech100 (米国・未公開株ファンド)", "theme": "SpaceXやOpenAI、Stripe等の未公開ハイテク100社に間接投資できる上場ファンド"},
+        {"code": "FRGE", "name": "フォージ・グローバル (米国)", "theme": "未公開株（プレIPOのユニコーン企業株）の売買プラットフォームを運営する米国中核銘柄"},
+        {"code": "KKR", "name": "KKR (米国)", "theme": "世界の未公開株（プライベートエクイティ）買収・投資を手掛けるオルタナティブ投資の巨人"},
+        {"code": "BX", "name": "ブラックストーン (米国)", "theme": "世界最大の未公開株・プライベートアセット運用会社。データセンター投資も牽引"},
+        {"code": "APO", "name": "アポロ・グローバル (米国)", "theme": "未公開企業へのプライベートクレジット・PE投資で急成長する米金融大手"},
+        {"code": "CG", "name": "カーライル・グループ (米国)", "theme": "日本国内の未公開企業買収・再上場（IPO）案件も多数手掛ける世界的PEファンド"},
+        {"code": "ARKK", "name": "ARKイノベーションETF (米国)", "theme": "破壊的イノベーション企業およびプレIPO段階の先端テックトレンドと強く連動"},
+        {"code": "MAIN", "name": "メイン・ストリート・キャピタル (米国BDC)", "theme": "米国の未公開中堅企業（ミドルマーケット）へ出資・融資を行う高配当BDC銘柄"},
+        {"code": "ARCC", "name": "エイリス・キャピタル (米国BDC)", "theme": "米国最大のBDC銘柄。非上場・未公開企業の成長資金を供給するプライベートデット筆頭"}
     ]
 }
 
@@ -347,7 +390,7 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         if code in KNOWN_STOCKS:
             name = name or KNOWN_STOCKS[code]["name"]
             theme = theme or KNOWN_STOCKS[code]["theme"]
-            genre = KNOWN_STOCKS[code]["genre"]
+            genre = genre if genre != "個別検索" else KNOWN_STOCKS[code]["genre"]
         else:
             if not name or not theme:
                 try:
@@ -466,15 +509,15 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
             vix_price = macro["vix"]["price"]
             vix_diff = macro["vix"]["diff"]
 
-            if genre in ["半導体", "AI", "AI電力・インフラ", "テンバガー小型株"]:
+            if genre in ["半導体", "AI", "AI電力・インフラ", "テンバガー小型株", "IPO", "未公開株"]:
                 if sox_diff >= 1.0:
                     macro_score += 5
-                    macro_reasons.append(f"米SOX指数が<b>+{sox_diff}%</b>と強く上昇しており、ハイテク・半導体関連の寄付きに強い追い風です。")
+                    macro_reasons.append(f"米SOX指数が<b>+{sox_diff}%</b>と強く上昇しており、ハイテク・新興市場の寄付きに強い追い風です。")
                 elif sox_diff > 0:
                     macro_score += 2
                 elif sox_diff <= -1.5:
                     macro_score -= 5
-                    macro_reasons.append(f"米SOX指数が<b>{sox_diff}%</b>と下落しており、朝方はハイテク株の売り先行に警戒が必要です。")
+                    macro_reasons.append(f"米SOX指数が<b>{sox_diff}%</b>と下落しており、朝方はハイテク・グロース株の売り先行に警戒が必要です。")
 
             if sp_diff >= 0.5:
                 macro_score += 2
@@ -504,7 +547,7 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
                 elif vix_price < 18.0 or vix_diff <= -5.0:
                     macro_score += 2
                     if vix_diff <= -5.0:
-                        macro_reasons.append(f"VIX恐怖指数が<b>{vix_diff}%</b>と低下しており、市場心理の改善から買い安心感が広がっています。")
+                        macro_reasons.append(f"VIX恐怖指数が<b>{vix_diff}%</b>と低下しており、市場心理の改善からIPO・未公開株関連にも買い安心感が広がっています。")
 
         reasons = []
         if macro_reasons:
@@ -714,7 +757,7 @@ with st.container():
     with col1:
         custom_input = st.text_input(
             "🔍 任意の銘柄コードを診断（日本株は4桁、米国株はティッカー）",
-            placeholder="例: 7203, 8306, NVDA, AAPL"
+            placeholder="例: 7203, 9023, NVDA, DXYZ"
         )
     with col2:
         st.write("")
@@ -734,6 +777,7 @@ if custom_input or search_clicked:
 # --- 全候補プールの一括解析＆弱肉強食によるダイナミックTOP20選抜 ---
 genre_results = {g: [] for g in STOCK_POOL.keys()}
 all_results = []
+seen_in_all = set()
 
 with st.spinner("全候補銘柄をスキャン中... 世界情勢を反映した弱肉強食トップ20を選抜しています"):
     for genre, stocks in STOCK_POOL.items():
@@ -741,7 +785,10 @@ with st.spinner("全候補銘柄をスキャン中... 世界情勢を反映し�
             res = fetch_and_analyze(s["code"], s["name"], s["theme"], genre, macro_info)
             if res:
                 genre_results[genre].append(res)
-                all_results.append(res)
+                # 総合TOP5で同じ銘柄が重複表示されないようチェック
+                if s["code"] not in seen_in_all:
+                    all_results.append(res)
+                    seen_in_all.add(s["code"])
 
 tab_labels = ["🏆 総合TOP5"] + list(STOCK_POOL.keys())
 tabs = st.tabs(tab_labels)
@@ -759,6 +806,11 @@ with tabs[0]:
 # 2. 各ジャンル別タブ（更新毎に期待値・AIスコア順で上位20銘柄に入れ替わる）
 for tab, genre in zip(tabs[1:], STOCK_POOL.keys()):
     with tab:
+        if genre == "IPO":
+            st.info("💡 **IPO（新規上場）セクション**: 直近で新規上場した国内外の大型・注目グロースIPO銘柄をスキャンし、資金流入と翌朝ギャップアップ期待値を算出しています。")
+        elif genre == "未公開株":
+            st.info("💡 **未公開株（プレIPO・VC関連）セクション**: 非上場のユニコーン企業（SpaceX・OpenAI・国内未上場ベンチャー等）へ直接出資するVC（ベンチャーキャピタル）、未公開株ファンド、セカンダリー取引所銘柄を解析しています。")
+
         results = genre_results.get(genre, [])
         if not results:
             st.warning("データの取得に失敗しました。時間をおいて再試行してください。")
