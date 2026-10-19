@@ -7,7 +7,7 @@ import unicodedata
 # スマホ画面向けにページ設定
 st.set_page_config(page_title="翌朝株価 クオンツ＆AIスコア Pro", page_icon="📈", layout="centered")
 
-# スマホで見やすいカスタムCSS（6分割マクロバナー＆トレード目安ボックス搭載）
+# スマホで見やすいカスタムCSS
 st.markdown("""
 <style>
 .market-banner {
@@ -160,7 +160,6 @@ st.markdown("""
     border-radius: 6px;
     border: 1px solid #e2e8f0;
 }
-/* 翌朝トレード目安ライン（ATR自動算出）の3列グリッド */
 .trade-plan-box {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -249,7 +248,6 @@ def normalize_ticker(raw_input):
         return f"{s}.T"
     return s
 
-# --- 米国市場・為替・CME日経先物・VIXの取得関数 ---
 @st.cache_data(ttl=900)
 def fetch_macro_market():
     macro_tickers = {
@@ -265,17 +263,19 @@ def fetch_macro_market():
         for c in info["codes"]:
             try:
                 df_m = yf.Ticker(c).history(period="5d")
-                df_m = df_m.dropna(subset=['Close'])
-                if not df_m.empty and len(df_m) >= 2:
-                    latest_c = float(df_m['Close'].iloc[-1])
-                    prev_c = float(df_m['Close'].iloc[-2])
-                    diff_pct = round((latest_c - prev_c) / prev_c * 100, 2)
-                    lbl = info["label"]
-                    if key == "nk_fut" and c == "^N225":
-                        lbl = "🇯🇵 日経平均(現物)"
-                    macro_data[key] = {"price": latest_c, "diff": diff_pct, "label": lbl}
-                    fetched = True
-                    break
+                if df_m is not None and not df_m.empty:
+                    df_m = df_m.dropna(subset=['Close'])
+                    if len(df_m) >= 2:
+                        latest_c = float(df_m['Close'].iloc[-1])
+                        prev_c = float(df_m['Close'].iloc[-2])
+                        if not np.isnan(latest_c) and not np.isnan(prev_c) and prev_c != 0:
+                            diff_pct = round((latest_c - prev_c) / prev_c * 100, 2)
+                            lbl = info["label"]
+                            if key == "nk_fut" and c == "^N225":
+                                lbl = "🇯🇵 日経平均(現物)"
+                            macro_data[key] = {"price": latest_c, "diff": diff_pct, "label": lbl}
+                            fetched = True
+                            break
             except Exception:
                 continue
         if not fetched:
@@ -287,7 +287,11 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
     try:
         ticker_obj = yf.Ticker(code)
         df = ticker_obj.history(period="1y")
-        if df.empty or len(df) < 40:
+        if df is None or df.empty or len(df) < 40:
+            return None
+
+        df = df.dropna(subset=['Close', 'Open', 'High', 'Low', 'Volume'])
+        if len(df) < 40:
             return None
 
         if code in KNOWN_STOCKS:
@@ -305,15 +309,12 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
                         industry = info.get("industry", "")
                         if sector or industry:
                             theme = f"セクター: {sector} / 業種: {industry}（カスタム銘柄診断）"
-                            if "Technology" in sector or "Semiconductor" in industry:
-                                genre = "半導体"
                         else:
                             theme = "カスタム指定銘柄（過去1年の日足・需給データに基づく統計解析）"
                 except Exception:
                     name = name or code.replace(".T", "")
                     theme = theme or "カスタム指定銘柄（過去1年の日足・需給データに基づく統計解析）"
 
-        # 1. 基本移動平均・出来高
         df['Prev_Close'] = df['Close'].shift(1)
         df['Day_Return'] = (df['Close'] - df['Prev_Close']) / df['Prev_Close'] * 100
         df['MA5'] = df['Close'].rolling(5).mean()
@@ -321,18 +322,15 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         df['Vol_MA20'] = df['Volume'].rolling(20).mean().replace(0, np.nan)
         df['Vol_Ratio'] = (df['Volume'] / df['Vol_MA20']).fillna(1.0)
 
-        # 2. Wilder式RSI (14日)
         delta = df['Close'].diff()
         gain = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
         loss = (-delta.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
         rs = gain / loss.replace(0, np.nan)
         df['RSI'] = (100 - (100 / (1 + rs))).fillna(50.0)
 
-        # 3. ボリンジャーバンド (20日)
         df['BB_Std'] = df['Close'].rolling(20).std().replace(0, np.nan)
         df['BB_Sigma'] = ((df['Close'] - df['MA20']) / df['BB_Std']).fillna(0.0)
 
-        # 4. MACD (12, 26, 9) モメンタム解析
         ema12 = df['Close'].ewm(span=12, adjust=False).mean()
         ema26 = df['Close'].ewm(span=26, adjust=False).mean()
         df['MACD'] = ema12 - ema26
@@ -340,7 +338,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
         df['MACD_Hist_Diff'] = df['MACD_Hist'].diff()
 
-        # 5. ATR (Average True Range: 14日ボラティリティ)
         tr1 = df['High'] - df['Low']
         tr2 = (df['High'] - df['Prev_Close']).abs()
         tr3 = (df['Low'] - df['Prev_Close']).abs()
@@ -348,18 +345,15 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         df['ATR'] = df['TR'].rolling(14).mean().fillna(df['Close'] * 0.02)
         df['ATR_Pct'] = (df['ATR'] / df['Close'] * 100).fillna(2.0)
 
-        # 6. ローソク足プライスアクション（引け位置・下ヒゲ吸収率）
         high_low = (df['High'] - df['Low']).replace(0, np.nan)
         df['Close_Pos'] = ((df['Close'] - df['Low']) / high_low).fillna(0.5)
         body_bottom = df[['Open', 'Close']].min(axis=1)
         df['Lower_Shadow'] = ((body_bottom - df['Low']) / high_low).fillna(0.0)
 
-        # 翌朝ギャップ計測
         df['Next_Open'] = df['Open'].shift(-1)
         df['Gap_Pct'] = (df['Next_Open'] - df['Close']) / df['Close'] * 100
         df['Morning_Up'] = df['Next_Open'] > df['Close']
 
-        # マルチファクター・シグナル定義
         cond_squeeze_break = (df['Close'] > df['MA20']) & (df['MACD_Hist'] > 0) & (df['MACD_Hist_Diff'] > 0) & (df['Vol_Ratio'] >= 1.2)
         cond_pinbar_rev = (df['Lower_Shadow'] >= 0.45) & (df['Close_Pos'] >= 0.6) & (df['RSI'] < 50)
         cond_strong_close = (df['Close'] > df['MA5']) & (df['Close_Pos'] >= 0.75) & (df['Day_Return'] > 0)
@@ -405,7 +399,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         prob = round((wins / total) * 100, 1)
         avg_gap = round(float(sub['Gap_Pct'].mean()), 2)
 
-        # 7. ケリー基準ベースの期待値エッジ計算
         win_gaps = sub[sub['Morning_Up']]['Gap_Pct']
         loss_gaps = sub[~sub['Morning_Up']]['Gap_Pct']
         avg_win = float(win_gaps.mean()) if len(win_gaps) > 0 else 0.5
@@ -413,7 +406,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         payoff_ratio = round(avg_win / max(avg_loss, 0.1), 2)
         expected_edge = round((prob / 100 * avg_win) - ((100 - prob) / 100 * avg_loss), 2)
 
-        # 8. 5指標マクロ地合い補正
         macro_score = 0
         macro_reasons = []
         if macro:
@@ -464,7 +456,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
                     if vix_diff <= -5.0:
                         macro_reasons.append(f"VIX恐怖指数が<b>{vix_diff}%</b>と低下しており、市場心理の改善から買い安心感が広がっています。")
 
-        # 解説テキスト生成
         reasons = []
         if macro_reasons:
             reasons.extend(macro_reasons)
@@ -486,7 +477,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         if not reasons:
             reasons.append(f"過去同条件では{total}回中<b>{wins}回</b>ギャップアップ（平均{avg_gap:+.2f}%）しています。")
 
-        # 総合AIスコア算出
         base_score = min(max(prob * 0.65, 10), 52)
         edge_score = min(max((expected_edge + 0.3) * 15, 0), 18)
         tech_score = 0
@@ -498,18 +488,19 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
 
         ai_score = int(min(max(round(base_score + edge_score + tech_score + macro_score), 15), 99))
 
-        # 9. 【新規】ATRベースの翌朝トレード目安ライン算出（予想寄付き・利確目標・損切り目安）
         close_val = float(latest['Close'])
         atr_val = float(latest['ATR'])
         est_open_val = close_val * (1.0 + (avg_gap / 100.0))
-        tp_val = max(est_open_val, close_val) + (atr_val * 0.8)  # 利確目標: +0.8 ATR
-        sl_val = min(est_open_val, close_val) - (atr_val * 0.5)  # 損切り目安: -0.5 ATR
+        tp_val = max(est_open_val, close_val) + (atr_val * 0.8)
+        sl_val = min(est_open_val, close_val) - (atr_val * 0.5)
 
         tp_pct = round((tp_val - close_val) / close_val * 100, 1)
         sl_pct = round((sl_val - close_val) / close_val * 100, 1)
 
         is_jp = ".T" in code
         def fmt_p(v):
+            if pd.isna(v) or np.isnan(v):
+                return "ー"
             return f"{v:,.0f}円" if is_jp else f"${v:,.2f}"
 
         clean_code = code.replace(".T", "")
@@ -618,7 +609,6 @@ def render_stock_card(r, is_custom=False, rank=None):
 if st.button("🔄 最新データに更新"):
     st.cache_data.clear()
 
-# --- 画面上部: 5指標マクロダッシュボード ---
 macro_info = fetch_macro_market()
 
 def fmt_macro(item, span_class="span-2", mode="index"):
@@ -630,7 +620,7 @@ def fmt_macro(item, span_class="span-2", mode="index"):
     else:
         color = "#4ade80" if d > 0 else ("#f87171" if d < 0 else "#cbd5e1")
 
-    if item["price"] == 0:
+    if item["price"] == 0 or np.isnan(item["price"]):
         val_str = "取得中/休場"
         diff_str = "-"
     else:
@@ -671,7 +661,6 @@ banner_html = (
 )
 st.markdown(banner_html, unsafe_allow_html=True)
 
-# --- 任意の証券コード診断セクション ---
 with st.container():
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -694,7 +683,6 @@ if custom_input or search_clicked:
         else:
             st.error(f"証券コード「{custom_input}」のデータが見つかりませんでした。半角で正しいコードを入力してください。")
 
-# --- 全銘柄の一括解析（重複実行を防ぎ高速化） ---
 genre_results = {g: [] for g in STOCK_LIST.keys()}
 all_results = []
 
@@ -706,13 +694,11 @@ with st.spinner("全25銘柄のクオンツアルゴリズム＆総合ランキ�
                 genre_results[genre].append(res)
                 all_results.append(res)
 
-# --- タブ表示（先頭に「🏆 総合TOP5」を配置） ---
 tab_labels = ["🏆 総合TOP5"] + list(STOCK_LIST.keys())
 tabs = st.tabs(tab_labels)
 
-# 1. 総合TOP5タブ
 with tabs[0]:
-    st.caption("全ジャンル25銘柄から、AIスコア・期待値エッジ・翌朝勝率が最も高い上位5銘柄を自動抽出しています。")
+    st.caption("全ジャンル25銘柄から、AIスコア・期待値エッジ・翌朝上昇確率が最も高い上位5銘柄を自動抽出しています。")
     if not all_results:
         st.warning("データの取得に失敗しました。時間をおいて再試行してください。")
     else:
@@ -720,7 +706,6 @@ with tabs[0]:
         for idx, r in enumerate(top5_list, start=1):
             render_stock_card(r, rank=idx)
 
-# 2. 各ジャンル別タブ
 for tab, genre in zip(tabs[1:], STOCK_LIST.keys()):
     with tab:
         results = genre_results.get(genre, [])
