@@ -7,34 +7,38 @@ import unicodedata
 # スマホ画面向けにページ設定
 st.set_page_config(page_title="翌朝株価 統計＆AIスコア", page_icon="📈", layout="centered")
 
-# スマホで見やすいカスタムCSS
+# スマホで見やすいカスタムCSS（為替バナーの崩れ防止を強化）
 st.markdown("""
 <style>
 .market-banner {
     background: linear-gradient(135deg, #0f172a, #1e293b);
     color: #f8fafc;
     border-radius: 12px;
-    padding: 12px 14px;
+    padding: 12px 10px;
     margin-bottom: 16px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
 .market-title {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: bold;
     color: #94a3b8;
     margin-bottom: 8px;
+    text-align: center;
 }
 .market-grid {
     display: flex;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
+    width: 100%;
 }
 .market-item {
-    background: rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    padding: 8px 10px;
+    padding: 6px 4px;
     flex: 1;
+    min-width: 0;
     text-align: center;
+    overflow: hidden;
 }
 .stock-card {
     background-color: #ffffff;
@@ -159,25 +163,22 @@ STOCK_LIST = {
     ]
 }
 
-# 登録済み銘柄の辞書マップ（カスタム検索時に日本語名やテーマがあれば引き継ぐため）
 KNOWN_STOCKS = {}
 for g, items in STOCK_LIST.items():
     for item in items:
         KNOWN_STOCKS[item["code"]] = {"name": item["name"], "theme": item["theme"], "genre": g}
 
 def normalize_ticker(raw_input):
-    """入力された証券コードを正規化（全角→半角、日本株の.T自動付与）"""
     s = unicodedata.normalize('NFKC', raw_input).strip().upper()
     if not s:
         return ""
     if "." in s or s.startswith("^") or "=" in s:
         return s
-    # 数字が含まれる4桁コード（例: 7203, 186A）は日本株として .T を付与
     if len(s) == 4 and any(ch.isdigit() for ch in s):
         return f"{s}.T"
     return s
 
-# --- 米国市場・為替データの取得関数 ---
+# --- 米国市場・為替データの取得関数（堅牢性向上） ---
 @st.cache_data(ttl=900)
 def fetch_macro_market():
     macro_tickers = {
@@ -189,7 +190,7 @@ def fetch_macro_market():
     for key, info in macro_tickers.items():
         try:
             df_m = yf.Ticker(info["code"]).history(period="5d")
-            if len(df_m) >= 2:
+            if not df_m.empty and len(df_m) >= 2:
                 latest_c = float(df_m['Close'].iloc[-1])
                 prev_c = float(df_m['Close'].iloc[-2])
                 diff_pct = round((latest_c - prev_c) / prev_c * 100, 2)
@@ -208,7 +209,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         if df.empty or len(df) < 35:
             return None
 
-        # 登録リストにない任意銘柄の場合、銘柄名や業種テーマを自動取得
         if code in KNOWN_STOCKS:
             name = name or KNOWN_STOCKS[code]["name"]
             theme = theme or KNOWN_STOCKS[code]["theme"]
@@ -232,7 +232,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
                     name = name or code.replace(".T", "")
                     theme = theme or "カスタム指定銘柄（過去1年の日足・需給データに基づく統計解析）"
 
-        # --- 基本指標の計算 ---
         df['Prev_Close'] = df['Close'].shift(1)
         df['Day_Return'] = (df['Close'] - df['Prev_Close']) / df['Prev_Close'] * 100
         df['MA5'] = df['Close'].rolling(5).mean()
@@ -240,27 +239,22 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         df['Vol_MA20'] = df['Volume'].rolling(20).mean().replace(0, np.nan)
         df['Vol_Ratio'] = (df['Volume'] / df['Vol_MA20']).fillna(1.0)
 
-        # --- アルゴリズム1: RSI (14日・Wilder法 / TradingView・証券会社準拠) ---
         delta = df['Close'].diff()
         gain = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
         loss = (-delta.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
         rs = gain / loss.replace(0, np.nan)
         df['RSI'] = (100 - (100 / (1 + rs))).fillna(50.0)
 
-        # --- アルゴリズム2: ボリンジャーバンド (20日) ---
         df['BB_Std'] = df['Close'].rolling(20).std().replace(0, np.nan)
         df['BB_Sigma'] = ((df['Close'] - df['MA20']) / df['BB_Std']).fillna(0.0)
 
-        # --- アルゴリズム3: ローソク足の実体・陽線強度 ---
         high_low = (df['High'] - df['Low']).replace(0, np.nan)
         df['Close_Pos'] = ((df['Close'] - df['Low']) / high_low).fillna(0.5)
 
-        # 翌朝の始値とギャップ判定
         df['Next_Open'] = df['Open'].shift(-1)
         df['Gap_Pct'] = (df['Next_Open'] - df['Close']) / df['Close'] * 100
         df['Morning_Up'] = df['Next_Open'] > df['Close']
 
-        # --- シグナル条件の定義 ---
         cond_breakout = (df['Close'] > df['MA5']) & (df['Vol_Ratio'] >= 1.2) & (df['Day_Return'] > 0)
         cond_rebound = (df['RSI'] < 40) & (df['Day_Return'] <= -1.5)
         cond_strong_close = (df['Close'] > df['MA20']) & (df['Close_Pos'] >= 0.7) & (df['Day_Return'] > 0)
@@ -274,7 +268,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         if len(history) == 0:
             return None
 
-        # 最新日のシグナル判定と類似局面の抽出
         if cond_breakout.iloc[-1]:
             signal = "🔥 出来高伴うブレイクアウト"
             sub = history[cond_breakout.reindex(history.index, fill_value=False)]
@@ -303,7 +296,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         prob = round((wins / total) * 100, 1)
         avg_gap = round(float(sub['Gap_Pct'].mean()), 2)
 
-        # --- アルゴリズム4: 米国市場・為替フィルターによる補正計算 ---
         macro_score = 0
         macro_reasons = []
         if macro:
@@ -333,7 +325,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
                 elif fx_diff <= -0.5:
                     macro_score -= 2
 
-        # --- アルゴリズム5: 株価が上がりそうな要因の自動テキスト生成 ---
         reasons = []
         if macro_reasons:
             reasons.extend(macro_reasons)
@@ -359,9 +350,8 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
             reasons.append(f"Wilder式RSIは<b>{latest['RSI']:.0f}</b>と強い買いトレンドですが、短期的な高値警戒感もあるため寄り付き後の利確売りには注意が必要です。")
 
         if not reasons:
-            reasons.append(f"過去の同パターンでは{total}回中{wins}回ギャップアップしており、下値の堅さが意識されやすい局面です。")
+            reasons.append(f"過去の同パターンでは{total}回中<b>{wins}回</b>ギャップアップしており、下値の堅さが意識されやすい局面です。")
 
-        # --- アルゴリズム6: AI総合期待スコア (0〜99点) ---
         base_score = min(max(prob * 0.72, 10), 58)
         gap_score = min(max((avg_gap + 0.5) * 11, 0), 18)
         tech_score = 0
@@ -390,7 +380,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         return None
 
 def render_stock_card(r, is_custom=False):
-    """銘柄カードのHTML描画用共通関数"""
     diff_color = "#dc2626" if r["diff"] > 0 else "#2563eb"
     diff_sign = "+" if r["diff"] > 0 else ""
     gap_sign = "+" if r["gap"] > 0 else ""
@@ -450,22 +439,26 @@ def fmt_macro(item, is_fx=False):
     d = item["diff"]
     color = "#4ade80" if d > 0 else ("#f87171" if d < 0 else "#cbd5e1")
     sign = "+" if d > 0 else ""
-    val_str = f"{item['price']:,.1f}円" if is_fx else f"{item['price']:,.0f}"
+    val_str = f"{item['price']:,.2f}円" if is_fx else f"{item['price']:,.0f}"
     return f"""
     <div class="market-item">
-        <div style="font-size:11px; color:#cbd5e1;">{item['label']}</div>
-        <div style="font-size:13px; font-weight:bold; margin-top:2px;">{val_str}</div>
-        <div style="font-size:12px; font-weight:bold; color:{color};">{sign}{d}%</div>
+        <div style="font-size:10px; color:#cbd5e1; white-space:nowrap;">{item['label']}</div>
+        <div style="font-size:12px; font-weight:bold; margin-top:2px;">{val_str}</div>
+        <div style="font-size:11px; font-weight:bold; color:{color};">{sign}{d}%</div>
     </div>
     """
 
+sp_item = macro_info.get("sp500", {"price": 0, "diff": 0, "label": "米S&P500"})
+sox_item = macro_info.get("sox", {"price": 0, "diff": 0, "label": "米SOX半導体"})
+fx_item = macro_info.get("usdjpy", {"price": 0, "diff": 0, "label": "ドル円"})
+
 st.markdown(f"""
 <div class="market-banner">
-    <div class="market-title">🌐 米国市場・為替フィルター（翌朝の寄付き地合い補正に自動反映）</div>
+    <div class="market-title">🌐 米国市場・為替フィルター（翌朝の寄付き地合い補正）</div>
     <div class="market-grid">
-        {fmt_macro(macro_info['sp500'])}
-        {fmt_macro(macro_info['sox'])}
-        {fmt_macro(macro_info['usdjpy'], is_fx=True)}
+        {fmt_macro(sp_item)}
+        {fmt_macro(sox_item)}
+        {fmt_macro(fx_item, is_fx=True)}
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -475,11 +468,11 @@ with st.container():
     col1, col2 = st.columns([3, 1])
     with col1:
         custom_input = st.text_input(
-            "🔍 任意の銘柄コードを診断（日本株は4桁コード、米国株はティッカー）",
+            "🔍 任意の銘柄コードを診断（日本株は4桁、米国株はティッカー）",
             placeholder="例: 7203, 8306, NVDA, AAPL"
         )
     with col2:
-        st.write("")  # ラベル分の高さ調整
+        st.write("")
         search_clicked = st.button("診断する", use_container_width=True)
 
 if custom_input or search_clicked:
@@ -491,7 +484,7 @@ if custom_input or search_clicked:
             st.markdown("##### 🎯 個別銘柄のリアルタイム診断結果")
             render_stock_card(custom_res, is_custom=True)
         else:
-            st.error(f"証券コード「{custom_input}」のデータが見つかりませんでした。東証銘柄は4桁の半角数字（例: 7203）、米国株はティッカー（例: NVDA）を入力してください。")
+            st.error(f"証券コード「{custom_input}」のデータが見つかりませんでした。半角で正しいコードを入力してください。")
 
 # --- タブ別銘柄表示 ---
 tabs = st.tabs(list(STOCK_LIST.keys()))
@@ -509,7 +502,6 @@ for tab, (genre, stocks) in zip(tabs, STOCK_LIST.items()):
             st.warning("データの取得に失敗しました。時間をおいて再試行してください。")
             continue
 
-        # AI総合スコアが高い順（同点なら上昇確率順）にソート
         results.sort(key=lambda x: (x["ai_score"], x["prob"]), reverse=True)
 
         for r in results:
