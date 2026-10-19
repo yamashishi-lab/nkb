@@ -5,7 +5,7 @@ import numpy as np
 import unicodedata
 
 # スマホ画面向けにページ設定
-st.set_page_config(page_title="翌朝株価 クオンツ＆AI解析 (弱肉強食ダイナミック版)", page_icon="📈", layout="centered")
+st.set_page_config(page_title="翌朝株価 クオンツ＆AI解析 Pro", page_icon="📈", layout="centered")
 
 # スマホで見やすいカスタムCSS
 st.markdown("""
@@ -117,36 +117,4 @@ st.markdown("""
     background: #f1f5f9; border-radius: 8px; padding: 10px 12px;
     margin-top: 10px; font-size: 12px; color: #1e293b; line-height: 1.5;
 }
-.factor-title { font-weight: bold; color: #0f172a; margin-bottom: 4px; font-size: 12px; }
-</style>
-""", unsafe_allow_html=True)
-
-st.title("📱 翌朝株価 クオンツ＆AI解析 Pro")
-st.caption("弱肉強食ダイナミック選抜（高速軽量版） × 世界情勢マクロ連動")
-
-# --- 各ジャンルの厳選候補プール ---
-STOCK_POOL = {
-    "半導体": [
-        {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置の国内筆頭。海外勢の指数買いが入りやすい"},
-        {"code": "6857.T", "name": "アドバンテスト", "theme": "AI半導体向けテスタで高シェア。米SOX指数と連動性大"},
-        {"code": "6920.T", "name": "レーザーテック", "theme": "EUVマスク欠陥検査装置。ボラティリティが高く短期資金が集中"},
-        {"code": "6146.T", "name": "ディスコ", "theme": "HBM向け切断・研削装置で高収益"},
-        {"code": "6723.T", "name": "ルネサス", "theme": "車載・産業・データセンター向けパワー半導体を展開"},
-        {"code": "NVDA", "name": "エヌビディア (米国)", "theme": "生成AI向けGPUの圧倒的覇者。世界の半導体・AI相場の羅針盤"},
-        {"code": "AMD", "name": "AMD (米国)", "theme": "AIアクセラレータおよびCPUでエヌビディアを追撃"},
-        {"code": "TSM", "name": "台湾セミコンダクター (米国)", "theme": "世界最大の半導体ファウンドリ。受託製造の最高峰"}
-    ],
-    "AI": [
-        {"code": "9984.T", "name": "ソフトバンクG", "theme": "傘下ArmやAI投資群の評価益期待。先物主導で寄り付きが動きやすい"},
-        {"code": "3778.T", "name": "さくらネット", "theme": "政府クラウド・生成AI向けGPUクラウドの国策銘柄"},
-        {"code": "4180.T", "name": "Appier", "theme": "AIマーケティングSaaS。グロース市場の資金流入先"},
-        {"code": "MSFT", "name": "マイクロソフト (米国)", "theme": "OpenAI最大株主。クラウド(Azure)とCopilotの収益化"},
-        {"code": "PLTR", "name": "パランティア (米国)", "theme": "政府・防衛・企業向けAIプラットフォームの大本命"}
-    ],
-    "宇宙": [
-        {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星コンステレーション。防衛・安全保障テーマ"},
-        {"code": "9348.T", "name": "ispace", "theme": "月面開発・輸送プログラム。イベントドリブンで出来高が急増しやすい"},
-        {"code": "186A.T", "name": "アストロスケール", "theme": "スペースデブリ（宇宙ごみ）除去の世界的リーダー"},
-        {"code": "7011.T", "name": "三菱重工業", "theme": "H3ロケット打ち上げ及び防衛予算拡大の国策中核銘柄"}
-    ],
-    "テンバガー小型株
+.factor-title { font-weight: bold; color: #0f172a; margin-bottom: 4px; font-size:
