@@ -118,7 +118,7 @@ def process_url_admin_action():
                     "note": "メールリンクからワンクリック承認"
                 }
                 save_members_db(db)
-                subj = "【承認完了】翌朝株価クオンツ＆7大AI解析Pro 専用アクセスコードのお知らせ"
+                subj = "【承認完了】翌朝株価クオンツ＆7大AI解析 Pro 専用アクセスコードのお知らせ"
                 body = (
                     f"{db[target_email]['name']} 様\n\n"
                     f"「翌朝株価 クオンツ＆7大AI解析 Pro」のご利用申請が承認されました。\n"
@@ -891,7 +891,7 @@ def run_7ai_council_algorithm(r, m5=None):
         "verdict_html": (
             f'<div class="consensus-section"><b>① 🏦 機関クオンツ＆朝8:55気配判定：</b>{r["inst_status"]}。夜間理論気配 <b>{r["pts_est_price"]}</b>（特買い線 <b>{r["tokugai_line"]}</b>）を維持しているか確認。</div>'
             f'<div class="consensus-section"><b>② ⚡ 2段階エントリー：</b>推奨総数 <b>{r["lot_info"]["shares"]:,}株</b> のうち、寄付きで <b>{half_lot:,}株</b>、VWAP（<b>{vwap_ref}</b>）反発または20日高値（<b>{r["squeeze_trigger_price"]}</b>）突破で残り <b>{rem_lot:,}株</b> を投入。</div>'
-            f'<div class="consensus-section"><b>③ 🎯 利確＆絶対損切り：</b>利確目標 <b>{r["tp_price"]}（+{r["tp_pct"]}%）</b> ／ 逆指値 <b>{r["sl_price"]}（最大損失 {r["lot_info"]["risk_amount"]:,.0f}円）</b>。</div>'
+            f'<div class="consensus-section"><b>③ 🎯 利確＆絶対損切り：</b>利確目標 <b>{r["tp_price']}（+{r["tp_pct"]}%）</b> ／ 逆指値 <b>{r["sl_price']}（最大損失 {r["lot_info"]["risk_amount"]:,.0f}円）</b>。</div>'
         )
     }
 
