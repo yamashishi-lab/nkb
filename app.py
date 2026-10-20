@@ -23,8 +23,8 @@ SECRET_MASTER_KEY = "my_super_secret_quant_key_2026"  # ←好きな英数字に
 # 3. 許可する会員のメールアドレス一覧（ここに入っているアドレスだけがログイン可能）
 ALLOWED_MEMBERS = [
     ADMIN_EMAIL,                # 管理者（あなた自身）
-    "member1@gmail.com",        # 許可した会員1
-    "member2@yahoo.co.jp",      # 許可した会員2
+    "yamashita007722@gmail.com",        # 許可した会員1
+    "",      # 許可した会員2
 ]
 
 def generate_member_passcode(email: str) -> str:
