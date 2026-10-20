@@ -6,6 +6,7 @@ import altair as alt
 import unicodedata
 import hashlib
 import hmac
+import time
 
 # スマホ画面向けにページ設定
 st.set_page_config(page_title="翌朝株価 クオンツ＆7大AI解析 Pro (会員限定版)", page_icon="📈", layout="centered")
@@ -13,22 +14,16 @@ st.set_page_config(page_title="翌朝株価 クオンツ＆7大AI解析 Pro (会
 # ==========================================
 # 🔒 会員制ログイン＆メール許可ゲート機能
 # ==========================================
-
-# 1. 管理者（あなた）の連絡先メールアドレス（利用申請メールの宛先＆管理者権限判定になります）
 ADMIN_EMAIL = "nthbh399@ybb.ne.jp"  # ←あなたのメールアドレスに変更してください
-
-# 2. あなただけが知っている「秘密のマスターキー」（会員ごとの専用8桁コードを自動生成します）
 SECRET_MASTER_KEY = "my_super_secret_quant_key_2026"  # ←好きな英数字に変更してください
 
-# 3. 許可する会員のメールアドレス一覧（ここに入っているアドレスだけがログイン可能）
 ALLOWED_MEMBERS = [
     ADMIN_EMAIL,                # 管理者（あなた自身）
-    "yamashita007722@gmail.com",        # 許可した会員1
-    "",      # 許可した会員2
+    "yamashita007722@gmail.com",# 許可した会員1
+    "",                         # 許可した会員2
 ]
 
 def generate_member_passcode(email: str) -> str:
-    """メールアドレスからその会員専用の8桁アクセスコードを自動生成する関数"""
     clean_email = email.strip().lower()
     h = hmac.new(SECRET_MASTER_KEY.encode(), clean_email.encode(), hashlib.sha256).hexdigest()
     return h[:8].upper()
@@ -37,11 +32,9 @@ def check_member_authentication():
     if "authenticated_user" not in st.session_state:
         st.session_state["authenticated_user"] = None
 
-    # すでにログイン済みならサイドバーに会員情報を表示して本編へ通過
     if st.session_state["authenticated_user"]:
         with st.sidebar:
             st.success(f"👤 会員ログイン中:\n{st.session_state['authenticated_user']}")
-            # 管理者（あなた）がログインしている時だけ、会員用のパスコード発行ツールを表示
             if st.session_state["authenticated_user"] == ADMIN_EMAIL.strip().lower():
                 with st.expander("🔑 【管理者専用】会員パスコード発行機"):
                     st.caption("申請が来た会員のメアドを入力すると、専用8桁コードが表示されます。")
@@ -49,13 +42,12 @@ def check_member_authentication():
                     if target_mail:
                         code = generate_member_passcode(target_mail)
                         st.code(f"メールアドレス: {target_mail.strip().lower()}\n専用アクセスコード: {code}")
-                        st.caption("↑このコードをメールで返信し、コード内の ALLOWED_MEMBERS にメアドを追加してください。")
+                        st.caption("↑このコードをメールで返信し、ALLOWED_MEMBERS にメアドを追加してください。")
             if st.button("🚪 ログアウト", use_container_width=True):
                 st.session_state["authenticated_user"] = None
                 st.rerun()
         return True
 
-    # --- 未ログイン時に表示する会員専用ログイン画面 ---
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; padding: 24px; border-radius: 14px; text-align: center; margin-top: 20px; margin-bottom: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
         <h2 style="margin:0; color:#fbbf24; font-size:20px;">🔒 会員限定 クオンツ＆7大AI解析 Pro</h2>
@@ -75,7 +67,6 @@ def check_member_authentication():
             allowed_list = [m.strip().lower() for m in ALLOWED_MEMBERS]
             expected_code = generate_member_passcode(clean_mail)
 
-            # 管理者用の初回テストコード（ADMIN777）または正規の8桁HMACコードで認証
             is_valid_code = hmac.compare_digest(input_code.strip().upper(), expected_code) or (
                 clean_mail == ADMIN_EMAIL.strip().lower() and input_code.strip() == "ADMIN777"
             )
@@ -88,10 +79,8 @@ def check_member_authentication():
             else:
                 st.error("⚠️ 専用アクセスコードが正しくありません。")
 
-    # 未登録の人向けの「メールで許可申請する」ボタン
     st.markdown("---")
     st.markdown("##### 📩 まだ利用許可をお持ちでない方へ")
-    st.caption("下のボタンを押すとメールアプリが起動し、管理者に利用許可リクエストを送信できます。")
     mailto_link = (
         f"mailto:{ADMIN_EMAIL}"
         f"?subject=【利用許可申請】翌朝株価クオンツ＆7大AI解析Pro"
@@ -103,21 +92,17 @@ def check_member_authentication():
         f'<a href="{mailto_link}" style="display:block; text-align:center; background:#2563eb; color:#ffffff; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; font-size:13px;">✉️ 管理者にメールで利用許可を申請する</a>',
         unsafe_allow_html=True
     )
-
-    # ★重要：未ログインの場合はここで処理を完全にストップし、下の株価データを一切読み込ませない
     st.stop()
 
-# 認証ゲートを実行（未ログインならここでストップします）
 check_member_authentication()
 
-
 # ==========================================
-# 📈 ここからアプリのメイン処理（認証通過後のみ実行）
+# 📈 メイン処理（認証通過後）
 # ==========================================
-
-# セッションステート初期化
 if "active_debates" not in st.session_state:
     st.session_state["active_debates"] = {}
+if "debate_Animated" not in st.session_state:
+    st.session_state["debate_Animated"] = set()
 if "stock_chats" not in st.session_state:
     st.session_state["stock_chats"] = {}
 if "watchlist" not in st.session_state:
@@ -125,256 +110,43 @@ if "watchlist" not in st.session_state:
 if "order_checks" not in st.session_state:
     st.session_state["order_checks"] = {}
 
-# スマホで見やすいカスタムCSS
+# カスタムCSS
 st.markdown("""
 <style>
-.market-banner {
-    background: linear-gradient(135deg, #0f172a, #1e293b);
-    color: #f8fafc;
-    border-radius: 12px;
-    padding: 12px 10px;
-    margin-bottom: 16px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
-    box-sizing: border-box;
-    width: 100%;
-}
-.market-title {
-    font-size: 11px;
-    font-weight: bold;
-    color: #94a3b8;
-    margin-bottom: 8px;
-    text-align: center;
-}
-.market-grid {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 6px;
-    width: 100%;
-    box-sizing: border-box;
-}
-.market-item {
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    padding: 7px 4px;
-    text-align: center;
-    box-sizing: border-box;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-}
+.market-banner { background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; border-radius: 12px; padding: 12px 10px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.18); width: 100%; }
+.market-title { font-size: 11px; font-weight: bold; color: #94a3b8; margin-bottom: 8px; text-align: center; }
+.market-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; width: 100%; }
+.market-item { background: rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 7px 4px; text-align: center; border: 1px solid rgba(255, 255, 255, 0.07); }
 .span-2 { grid-column: span 2; }
 .span-3 { grid-column: span 3; }
-@media (max-width: 340px) {
-    .span-2, .span-3 { grid-column: span 6; }
-}
-.stock-card {
-    background-color: #ffffff;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    border-left: 6px solid #dc2626;
-}
-.rank-card {
-    background-color: #ffffff;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 6px;
-    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.12);
-    border-left: 6px solid #e11d48;
-}
-.search-result-card {
-    background-color: #fffbeb;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 6px;
-    box-shadow: 0 4px 12px rgba(217, 119, 6, 0.15);
-    border-left: 6px solid #d97706;
-}
-.watchlist-summary-banner {
-    background: linear-gradient(135deg, #064e3b, #047857);
-    color: #f8fafc;
-    border-radius: 12px;
-    padding: 14px;
-    margin-bottom: 14px;
-    box-shadow: 0 4px 12px rgba(4, 120, 87, 0.25);
-    border: 1px solid #10b981;
-}
-.order-sheet-card {
-    background: #ffffff;
-    border-radius: 12px;
-    padding: 14px;
-    margin-bottom: 10px;
-    border: 1px solid #cbd5e1;
-    border-left: 6px solid #059669;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-}
+@media (max-width: 340px) { .span-2, .span-3 { grid-column: span 6; } }
+.stock-card { background-color: #ffffff; border-radius: 12px; padding: 16px; margin-bottom: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 6px solid #dc2626; }
+.rank-card { background-color: #ffffff; border-radius: 12px; padding: 16px; margin-bottom: 6px; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.12); border-left: 6px solid #e11d48; }
+.search-result-card { background-color: #fffbeb; border-radius: 12px; padding: 16px; margin-bottom: 6px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.15); border-left: 6px solid #d97706; }
+.watchlist-summary-banner { background: linear-gradient(135deg, #064e3b, #047857); color: #f8fafc; border-radius: 12px; padding: 14px; margin-bottom: 14px; border: 1px solid #10b981; }
+.order-sheet-card { background: #ffffff; border-radius: 12px; padding: 14px; margin-bottom: 10px; border: 1px solid #cbd5e1; border-left: 6px solid #059669; }
 .prob-badge { font-size: 22px; font-weight: bold; color: #dc2626; }
-.rank-badge {
-    display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: #ffffff; padding: 3px 9px; border-radius: 20px; font-size: 12px;
-    font-weight: bold; margin-right: 4px; margin-bottom: 6px;
-}
-.score-badge {
-    display: inline-block; background: linear-gradient(135deg, #1e293b, #334155);
-    color: #f8fafc; padding: 3px 10px; border-radius: 20px; font-size: 12px;
-    font-weight: bold; margin-bottom: 6px;
-}
-.macro-badge {
-    display: inline-block; background: #eff6ff; color: #1d4ed8;
-    border: 1px solid #bfdbfe; padding: 2px 8px; border-radius: 20px;
-    font-size: 11px; font-weight: bold; margin-left: 4px;
-}
-.edge-badge {
-    display: inline-block; background: #f0fdf4; color: #15803d;
-    border: 1px solid #bbf7d0; padding: 2px 8px; border-radius: 20px;
-    font-size: 11px; font-weight: bold; margin-left: 4px;
-}
-.inst-badge {
-    display: inline-block; background: linear-gradient(135deg, #312e81, #4338ca);
-    color: #ffffff; padding: 2px 9px; border-radius: 20px;
-    font-size: 11px; font-weight: bold; margin-left: 4px;
-}
-.moc-badge {
-    display: inline-block; background: linear-gradient(135deg, #7e22ce, #a855f7);
-    color: #ffffff; padding: 2px 9px; border-radius: 20px;
-    font-size: 11px; font-weight: bold; margin-left: 4px;
-}
-.squeeze-badge {
-    display: inline-block; background: linear-gradient(135deg, #b91c1c, #ef4444);
-    color: #ffffff; padding: 2px 9px; border-radius: 20px;
-    font-size: 11px; font-weight: bold; margin-left: 4px;
-}
-.tokugai-badge {
-    display: inline-block; background: linear-gradient(135deg, #d97706, #f59e0b);
-    color: #ffffff; padding: 2px 9px; border-radius: 20px;
-    font-size: 11px; font-weight: bold; margin-left: 4px;
-}
-.genre-badge {
-    display: inline-block; background: #f3e8ff; color: #6b21a8;
-    border: 1px solid #e9d5ff; padding: 2px 8px; border-radius: 6px;
-    font-size: 10px; font-weight: bold; margin-left: 6px; vertical-align: middle;
-}
-.signal-tag {
-    display: inline-block; background: #fef2f2; color: #991b1b;
-    border: 1px solid #fecaca; padding: 4px 8px; border-radius: 6px;
-    font-size: 12px; font-weight: bold; margin-top: 8px;
-}
-.algo-box {
-    background: linear-gradient(135deg, #eef2ff, #e0e7ff);
-    border: 1px solid #c7d2fe;
-    border-left: 4px solid #4f46e5;
-    border-radius: 8px;
-    padding: 8px 12px;
-    margin-top: 8px;
-    font-size: 12px;
-    color: #1e1b4b;
-}
-.squeeze-box {
-    background: linear-gradient(135deg, #fff1f2, #ffe4e6);
-    border: 1px solid #fecdd3;
-    border-left: 4px solid #e11d48;
-    border-radius: 8px;
-    padding: 8px 12px;
-    margin-top: 6px;
-    font-size: 12px;
-    color: #881337;
-}
-.pts-tokugai-box {
-    background: linear-gradient(135deg, #fffbeb, #fef3c7);
-    border: 1px solid #fde68a;
-    border-left: 4px solid #d97706;
-    border-radius: 8px;
-    padding: 8px 12px;
-    margin-top: 6px;
-    font-size: 12px;
-    color: #78350f;
-}
-.premarket-board-box {
-    background: linear-gradient(135deg, #451a03, #78350f);
-    border: 1px solid #f59e0b;
-    border-left: 4px solid #fbbf24;
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    font-size: 12px;
-    color: #fef3c7;
-}
-.intraday-5m-box {
-    background: linear-gradient(135deg, #0f172a, #1e1b4b);
-    border: 1px solid #38bdf8;
-    border-left: 4px solid #06b6d4;
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    font-size: 12px;
-    color: #f8fafc;
-}
-.closing-moc-box {
-    background: linear-gradient(135deg, #2e1065, #4c1d95);
-    border: 1px solid #c084fc;
-    border-left: 4px solid #a855f7;
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    font-size: 12px;
-    color: #f8fafc;
-}
-.chart-legend-box {
-    background: #f8fafc;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    padding: 6px 10px;
-    margin-bottom: 6px;
-    font-size: 11px;
-    color: #334155;
-    text-align: center;
-}
-.metrics-row {
-    display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px;
-    font-size: 11px; color: #475569; background: #f8fafc; padding: 8px 10px;
-    border-radius: 6px; border: 1px solid #e2e8f0;
-}
-.trade-plan-box {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
-    margin-top: 8px; background: #f8fafc; padding: 8px 6px; border-radius: 8px;
-    border: 1px dashed #cbd5e1; text-align: center;
-}
-.trade-plan-item { min-width: 0; }
-.factor-box {
-    background: #f1f5f9; border-radius: 8px; padding: 10px 12px;
-    margin-top: 10px; font-size: 12px; color: #1e293b; line-height: 1.5;
-}
-.factor-title { font-weight: bold; color: #0f172a; margin-bottom: 4px; font-size: 12px; }
-
-/* 資金管理プランカード */
-.sizing-box {
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-top: 8px;
-    font-size: 12px;
-    color: #166534;
-}
-
-/* 7大AI合議ボックス用スタイル */
-.ai-council-box {
-    background: linear-gradient(135deg, #0f172a, #1e293b);
-    color: #f8fafc;
-    border-radius: 12px;
-    padding: 14px;
-    margin-top: 4px;
-    margin-bottom: 10px;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
-    border: 1px solid #334155;
-}
-.ai-agent-card {
-    background: rgba(255, 255, 255, 0.06);
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    font-size: 12px;
-    line-height: 1.5;
-}
+.rank-badge { display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; padding: 3px 9px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-right: 4px; margin-bottom: 6px; }
+.score-badge { display: inline-block; background: linear-gradient(135deg, #1e293b, #334155); color: #f8fafc; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 6px; }
+.macro-badge { display: inline-block; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
+.edge-badge { display: inline-block; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
+.moc-badge { display: inline-block; background: linear-gradient(135deg, #7e22ce, #a855f7); color: #ffffff; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
+.squeeze-badge { display: inline-block; background: linear-gradient(135deg, #b91c1c, #ef4444); color: #ffffff; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
+.tokugai-badge { display: inline-block; background: linear-gradient(135deg, #d97706, #f59e0b); color: #ffffff; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
+.genre-badge { display: inline-block; background: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: bold; margin-left: 6px; }
+.signal-tag { display: inline-block; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-top: 8px; }
+.squeeze-box { background: linear-gradient(135deg, #fff1f2, #ffe4e6); border: 1px solid #fecdd3; border-left: 4px solid #e11d48; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #881337; }
+.pts-tokugai-box { background: linear-gradient(135deg, #fffbeb, #fef3c7); border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #78350f; }
+.premarket-board-box { background: linear-gradient(135deg, #451a03, #78350f); border: 1px solid #f59e0b; border-left: 4px solid #fbbf24; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 12px; color: #fef3c7; }
+.intraday-5m-box { background: linear-gradient(135deg, #0f172a, #1e1b4b); border: 1px solid #38bdf8; border-left: 4px solid #06b6d4; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 12px; color: #f8fafc; }
+.closing-moc-box { background: linear-gradient(135deg, #2e1065, #4c1d95); border: 1px solid #c084fc; border-left: 4px solid #a855f7; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 12px; color: #f8fafc; }
+.chart-legend-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; margin-bottom: 6px; font-size: 11px; color: #334155; text-align: center; }
+.metrics-row { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; font-size: 11px; color: #475569; background: #f8fafc; padding: 8px 10px; border-radius: 6px; border: 1px solid #e2e8f0; }
+.trade-plan-box { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; background: #f8fafc; padding: 8px 6px; border-radius: 8px; border: 1px dashed #cbd5e1; text-align: center; }
+.factor-box { background: #f1f5f9; border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 12px; color: #1e293b; line-height: 1.5; }
+.sizing-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 12px; color: #166534; }
+.ai-council-box { background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; border-radius: 12px; padding: 16px; margin-top: 4px; margin-bottom: 10px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25); border: 1px solid #334155; }
+.ai-agent-card { background: rgba(255, 255, 255, 0.07); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; font-size: 12.5px; line-height: 1.65; }
 .claude-card     { border-left: 4px solid #f59e0b; }
 .grok-card       { border-left: 4px solid #ef4444; }
 .gpt-card        { border-left: 4px solid #10b981; }
@@ -382,54 +154,25 @@ st.markdown("""
 .perplexity-card { border-left: 4px solid #06b6d4; }
 .genspark-card   { border-left: 4px solid #a855f7; }
 .notebooklm-card { border-left: 4px solid #ec4899; }
-
-.consensus-banner {
-    background: linear-gradient(135deg, #312e81, #1e1b4b);
-    border: 1px solid #6366f1;
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-top: 10px;
-    font-size: 12px;
-    line-height: 1.55;
-}
-.qa-bubble-user {
-    background: #eff6ff;
-    color: #1e3a8a;
-    border: 1px solid #bfdbfe;
-    border-radius: 10px 10px 2px 10px;
-    padding: 8px 12px;
-    margin-top: 8px;
-    font-size: 12px;
-    font-weight: bold;
-}
-.qa-bubble-ai {
-    background: #f8fafc;
-    color: #0f172a;
-    border: 1px solid #cbd5e1;
-    border-left: 4px solid #4f46e5;
-    border-radius: 2px 10px 10px 10px;
-    padding: 10px 12px;
-    margin-top: 4px;
-    margin-bottom: 10px;
-    font-size: 12px;
-    line-height: 1.6;
-}
+.consensus-banner { background: linear-gradient(135deg, #312e81, #1e1b4b); border: 2px solid #818cf8; border-radius: 10px; padding: 14px; margin-top: 12px; font-size: 13px; line-height: 1.7; }
+.easy-guide-box { background: rgba(16, 185, 129, 0.12); border: 1px solid #34d399; border-radius: 8px; padding: 12px; margin-top: 10px; color: #ecfdf5; font-size: 12.5px; line-height: 1.7; }
+.qa-bubble-user { background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe; border-radius: 10px 10px 2px 10px; padding: 8px 12px; margin-top: 8px; font-size: 12px; font-weight: bold; }
+.qa-bubble-ai { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; border-left: 4px solid #4f46e5; border-radius: 2px 10px 10px 10px; padding: 10px 12px; margin-top: 4px; margin-bottom: 10px; font-size: 12px; line-height: 1.6; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- サイドバー：資金管理＆機関アルゴ・踏み上げ・特買い設定 ---
+# --- サイドバー設定 ---
 st.sidebar.header("💰 資金管理＆リスク設定")
 total_capital = st.sidebar.number_input("総投資資金 (円 / ドル)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
-risk_tolerance_pct = st.sidebar.slider("1トレードあたりの許容リスク (%)", min_value=0.5, max_value=5.0, value=2.0, step=0.5, help="損切りラインに到達した際に、総資金の何%までの損失を許容するかを設定します。")
+risk_tolerance_pct = st.sidebar.slider("1トレードあたりの許容リスク (%)", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
 
 st.sidebar.markdown("---")
-st.sidebar.header("🏛️ 機関アルゴ＆特買い設定")
-inst_boost_mode = st.sidebar.checkbox("機関アルゴ＆大引けMOC銘柄を優先表示", value=True, help="ONにすると、VWAP上抜けや大引け間際の機関バスケット買い（引けピン）の痕跡が強い銘柄にAIスコアボーナスを加算します。")
-squeeze_boost_mode = st.sidebar.checkbox("🔥 空売り踏み上げ（ショートスクイーズ）優先", value=True, help="ONにすると、空売り機関のロスカット（買い戻し）を誘発しやすい高値ブレイク・ベアトラップ銘柄にAIスコアボーナスを加算します。")
-tokugai_boost_mode = st.sidebar.checkbox("🚨 翌朝『特買い』・夜間PTS連動を優先", value=True, help="ONにすると、夜間先物・米国ADR・SOX指数の追い風と引けピン需給が重なり、翌朝『特別買い気配（特買い）』になりやすい銘柄にボーナスを加算します。")
+st.sidebar.header("🔥 優先アルゴリズム設定")
+moc_boost_mode = st.sidebar.checkbox("🌆 大引けMOC（引けピン）銘柄を優先", value=True)
+squeeze_boost_mode = st.sidebar.checkbox("🔥 空売り踏み上げ（ショートスクイーズ）優先", value=True)
+tokugai_boost_mode = st.sidebar.checkbox("🚨 翌朝『特買い』・夜間PTS連動を優先", value=True)
 show_5m_chart = st.sidebar.checkbox("合議パネル内に5分足＆VWAPチャートを描画", value=True)
 
-# サイドバー：現在のウォッチリスト状況サマリー
 st.sidebar.markdown("---")
 st.sidebar.header(f"📋 監視ウォッチリスト ({len(st.session_state['watchlist'])}銘柄)")
 if st.session_state["watchlist"]:
@@ -444,209 +187,122 @@ if st.session_state["watchlist"]:
         st.session_state["order_checks"] = {}
         st.rerun()
 else:
-    st.sidebar.caption("各銘柄カードの「⭐ 監視リスト追加」ボタンを押すと、ここに登録され『📋 監視＆注文シート』タブで一括管理できます。")
+    st.sidebar.caption("各銘柄カードの「⭐ 監視リスト追加」ボタンを押すと、ここに登録されます。")
 
 st.title("📱 翌朝株価 クオンツ＆7大AI解析 Pro")
-st.caption("【会員限定】監視ウォッチリスト＆8:50注文チェックシート × 特買い気配 × 踏み上げ × 5分足VWAP × 7大AI")
+st.caption("【会員限定】7大AIリアルタイム10秒議論 × 監視＆注文シート × 特買い気配 × 空売り踏み上げ")
 
-# --- 各ジャンルの拡張候補プール ---
+# --- 各ジャンルの候補プール（「小型株」タブを純粋な小型株に厳選） ---
 STOCK_POOL = {
     "半導体": [
         {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置の国内筆頭。海外勢の指数買いが入りやすい"},
         {"code": "6857.T", "name": "アドバンテスト", "theme": "AI半導体向けテスタで高シェア。米SOX指数と連動性大"},
-        {"code": "6920.T", "name": "レーザーテック", "theme": "EUVマスク欠陥検査装置。空売り残が多く踏み上げ（ショートスクイーズ）が起きやすい筆頭"},
-        {"code": "6146.T", "name": "ディスコ", "theme": "HBM（広帯域メモリ）向け切断・研削装置で高収益"},
+        {"code": "6920.T", "name": "レーザーテック", "theme": "EUVマスク欠陥検査装置。空売り残が多く踏み上げが起きやすい筆頭"},
+        {"code": "6146.T", "name": "ディスコ", "theme": "HBM向け切断・研削装置で高収益"},
         {"code": "6723.T", "name": "ルネサス", "theme": "車載・産業・データセンター向けパワー半導体を展開"},
-        {"code": "7735.T", "name": "スクリーンHD", "theme": "半導体洗浄装置で世界トップクラス。直近の業績上方修正期待"},
-        {"code": "4063.T", "name": "信越化学工業", "theme": "半導体シリコンウエハー世界首位。素材セクターの主力"},
-        {"code": "6526.T", "name": "ソシオネクスト", "theme": "先端SoC（システムLSI）開発。個人の信用取組・空売り回転が活発"},
+        {"code": "7735.T", "name": "スクリーンHD", "theme": "半導体洗浄装置で世界トップクラス"},
+        {"code": "4063.T", "name": "信越化学工業", "theme": "半導体シリコンウエハー世界首位"},
+        {"code": "6526.T", "name": "ソシオネクスト", "theme": "先端SoC開発。個人の信用取組・空売り回転が活発"},
         {"code": "3436.T", "name": "SUMCO", "theme": "シリコンウエハー大手。需給動向に敏感に反応"},
-        {"code": "6976.T", "name": "太陽誘電", "theme": "積層セラミックコンデンサ（MLCC）。電子部品の指標"},
-        {"code": "6758.T", "name": "ソニーグループ", "theme": "イメージセンサー世界首位。スマホ・車載向けカメラ需要"},
+        {"code": "6976.T", "name": "太陽誘電", "theme": "積層セラミックコンデンサ（MLCC）"},
+        {"code": "6758.T", "name": "ソニーグループ", "theme": "イメージセンサー世界首位"},
         {"code": "6981.T", "name": "村田製作所", "theme": "通信・スマホ向け電子部品の世界的リーダー"},
-        {"code": "6841.T", "name": "横河電機", "theme": "産業用制御・計測機器。ファクトリーオートメーション関連"},
-        {"code": "6701.T", "name": "NEC", "theme": "海底ケーブル・防衛・AIを活用したITインフラ構築"},
-        {"code": "6702.T", "name": "富士通", "theme": "ITサービス大手。スーパーコンピュータ・量子コンピューティング"},
-        {"code": "6503.T", "name": "三菱電機", "theme": "FA機器・重電・宇宙防衛システム・パワー半導体"},
-        {"code": "6963.T", "name": "ローム", "theme": "車載・産業機器向けパワー半導体（SiC）の主力"},
-        {"code": "6590.T", "name": "芝浦メカトロニクス", "theme": "半導体後工程・フラットパネルディスプレイ製造装置"},
         {"code": "6315.T", "name": "TOWA", "theme": "半導体樹脂封止装置で世界トップシェア。HBM関連"},
-        {"code": "5334.T", "name": "日本特殊陶業", "theme": "半導体パッケージ基板・セラミック部品"},
-        {"code": "NVDA", "name": "エヌビディア (米国)", "theme": "生成AI向けGPUの圧倒的覇者。世界の半導体・AI相場の羅針盤"},
+        {"code": "NVDA", "name": "エヌビディア (米国)", "theme": "生成AI向けGPUの圧倒的覇者"},
         {"code": "AMD", "name": "AMD (米国)", "theme": "AIアクセラレータおよびCPUでエヌビディアを追撃"},
-        {"code": "INTC", "name": "インテル (米国)", "theme": "米国ファウンドリ再生・政府支援の半導体老舗"},
         {"code": "MU", "name": "マイクロン (米国)", "theme": "HBM・DRAM大手。メモリー市況のバロメーター"},
-        {"code": "TSM", "name": "台湾セミコンダクター (米国)", "theme": "世界最大の半導体ファウンドリ。受託製造の最高峰"},
-        {"code": "QCOM", "name": "クアルコム (米国)", "theme": "スマホ・AIチップ向け通信半導体の世界的リーダー"},
-        {"code": "AVGO", "name": "ブロードコム (米国)", "theme": "AIネットワーク・カスタムシリコンの巨塔"},
-        {"code": "AMAT", "name": "アプライド・マテリアルズ (米国)", "theme": "世界最大の半導体製造装置メーカー"},
-        {"code": "LRCX", "name": "ラムリサーチ (米国)", "theme": "エッチング・成膜装置で圧倒的な技術力"}
+        {"code": "TSM", "name": "台湾セミコンダクター (米国)", "theme": "世界最大の半導体ファウンドリ"},
+        {"code": "AVGO", "name": "ブロードコム (米国)", "theme": "AIネットワーク・カスタムシリコンの巨塔"}
     ],
     "AI": [
-        {"code": "9984.T", "name": "ソフトバンクG", "theme": "傘下ArmやAI投資群の評価益期待。先物・オプション主導で踏み上げが起きやすい"},
-        {"code": "3778.T", "name": "さくらネット", "theme": "政府クラウド・生成AI向けGPUクラウドの国策銘柄。貸借倍率の偏りで急騰しやすい"},
-        {"code": "3993.T", "name": "PKSHA", "theme": "自然言語処理・AIアルゴリズム開発。好採算のソフトウエア需要"},
+        {"code": "9984.T", "name": "ソフトバンクG", "theme": "傘下ArmやAI投資群の評価益期待。先物主導で踏み上げが起きやすい"},
+        {"code": "3778.T", "name": "さくらネット", "theme": "政府クラウド・生成AI向けGPUクラウドの国策銘柄"},
+        {"code": "3993.T", "name": "PKSHA", "theme": "自然言語処理・AIアルゴリズム開発"},
         {"code": "4180.T", "name": "Appier", "theme": "AIマーケティングSaaS。グロース市場の資金流入先"},
-        {"code": "4307.T", "name": "野村総合研究所", "theme": "企業のAI導入・DXシステム刷新およびデータセンター運営"},
+        {"code": "4307.T", "name": "野村総合研究所", "theme": "企業のAI導入・DXシステム刷新"},
         {"code": "4478.T", "name": "フリー", "theme": "クラウド会計ソフト。SaaSセクターのモメンタム連動"},
         {"code": "4483.T", "name": "JMDC", "theme": "医療ビッグデータ・ヘルスケアAIプラットフォーム"},
-        {"code": "5032.T", "name": "ANYCOLOR", "theme": "VTuberエンタメテック。機関の空売り買戻しで急反発しやすい"},
-        {"code": "5243.T", "name": "ノート", "theme": "メディアプラットフォーム・クリエイターエコノミー関連"},
-        {"code": "7342.T", "name": "ウェルスナビ", "theme": "ロボアドバイザーによる資産運用プラットフォーム"},
-        {"code": "6182.T", "name": "メタリアル", "theme": "AI自動翻訳・生成AI活用サービス"},
-        {"code": "3962.T", "name": "チェンジHD", "theme": "デジタル地方創生・行政DX推進コンサルティング"},
-        {"code": "4443.T", "name": "Sansan", "theme": "名刺管理・営業DXプラットフォーム「Sansan」"},
-        {"code": "4385.T", "name": "メルカリ", "theme": "国内最大のC2Cマーケットプレイス。AIレコメンド技術"},
-        {"code": "4689.T", "name": "LINEヤフー", "theme": "国内最大級のポータル・AI検索・デジタル広告基盤"},
-        {"code": "4755.T", "name": "楽天グループ", "theme": "モバイル通信・Fintech・AIマーケティングの融合"},
-        {"code": "4475.T", "name": "HENNGE", "theme": "クラウドセキュリティ・SaaS認証基盤"},
-        {"code": "5031.T", "name": "モイ", "theme": "ライブ配信プラットフォーム「ツイキャス」運営・AI音声認識"},
-        {"code": "6556.T", "name": "ウェルビー", "theme": "障害福祉・ヘルスケアITプラットフォーム"},
-        {"code": "MSFT", "name": "マイクロソフト (米国)", "theme": "OpenAI最大株主。クラウド(Azure)とCopilotの収益化"},
-        {"code": "GOOGL", "name": "アルファベット (米国)", "theme": "独自生成AI「Gemini」および検索・クラウドプラットフォーム"},
+        {"code": "5032.T", "name": "ANYCOLOR", "theme": "VTuberエンタメテック。空売り買戻しで急反発しやすい"},
+        {"code": "4443.T", "name": "Sansan", "theme": "名刺管理・営業DXプラットフォーム"},
+        {"code": "4385.T", "name": "メルカリ", "theme": "国内最大のC2Cマーケットプレイス"},
+        {"code": "4689.T", "name": "LINEヤフー", "theme": "国内最大級のポータル・AI検索基盤"},
+        {"code": "MSFT", "name": "マイクロソフト (米国)", "theme": "OpenAI最大株主。AzureとCopilotの収益化"},
+        {"code": "GOOGL", "name": "アルファベット (米国)", "theme": "独自生成AI「Gemini」および検索・クラウド"},
         {"code": "META", "name": "メタ (米国)", "theme": "オープンソースAI「Llama」および広告最適化AI"},
-        {"code": "PLTR", "name": "パランティア (米国)", "theme": "政府・防衛・企業向けAIプラットフォームの大本命"},
-        {"code": "CRM", "name": "セールスフォース (米国)", "theme": "CRMプラットフォームと「Einstein AI」の統合"},
-        {"code": "NOW", "name": "サービスナウ (米国)", "theme": "企業向けワークフロー自動化AIプラットフォーム"}
+        {"code": "PLTR", "name": "パランティア (米国)", "theme": "政府・防衛・企業向けAIプラットフォームの大本命"}
     ],
     "宇宙": [
-        {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星コンステレーション。防衛テーマで空売り勢の踏み上げ頻発"},
-        {"code": "9348.T", "name": "ispace", "theme": "月面開発・輸送プログラム。イベントドリブンで出来高が急増しやすい"},
+        {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星コンステレーション。空売り勢の踏み上げ頻発"},
+        {"code": "9348.T", "name": "ispace", "theme": "月面開発・輸送プログラム。イベントドリブンで出来高急増"},
         {"code": "186A.T", "name": "アストロスケール", "theme": "スペースデブリ（宇宙ごみ）除去の世界的リーダー"},
-        {"code": "9412.T", "name": "スカパーJSAT", "theme": "アジア最大の衛星通信。防衛省向け宇宙監視・低軌道衛星連携"},
+        {"code": "9412.T", "name": "スカパーJSAT", "theme": "アジア最大の衛星通信。防衛省向け宇宙監視"},
         {"code": "7011.T", "name": "三菱重工業", "theme": "H3ロケット打ち上げ及び防衛予算拡大の国策中核銘柄"},
         {"code": "7012.T", "name": "川崎重工業", "theme": "防衛装備品・航空機エンジン・無人機システム"},
-        {"code": "7013.T", "name": "IHI", "theme": "航空機用ジェットエンジン・防衛省向けミサイル・宇宙ロケット"},
-        {"code": "6201.T", "name": "豊田自動織機", "theme": "トヨタグループのロケット・自動車用電動化技術"},
-        {"code": "4272.T", "name": "日本化薬", "theme": "火薬類製造技術をベースにした防衛・宇宙用ロケット推進薬"},
-        {"code": "6902.T", "name": "デンソー", "theme": "車載半導体・自動運転および航空宇宙向け高精度センサー"},
-        {"code": "7267.T", "name": "ホンダ", "theme": "小型ジェット機開発の技術を応用した次世代宇宙ロケット事業"},
-        {"code": "5631.T", "name": "日本製鋼所", "theme": "防衛用艦砲・火砲および原子炉容器の世界的シェア"},
-        {"code": "6268.T", "name": "ナブテスコ", "theme": "航空機用フライトコントロールシステム・精密減速機"},
-        {"code": "5938.T", "name": "LIXIL", "theme": "宇宙関連の高断熱・先端素材への応用技術"},
-        {"code": "3861.T", "name": "王子ホールディングス", "theme": "宇宙空間での耐放射線素材・セルロースナノファイバー"},
-        {"code": "6701.T", "name": "NEC", "theme": "宇宙ステーション用通信機器・観測衛星システム"},
+        {"code": "7013.T", "name": "IHI", "theme": "航空機用ジェットエンジン・宇宙ロケット"},
         {"code": "RKLB", "name": "ロケット・ラボ (米国)", "theme": "小型ロケット「エレクトロン」打上げの米宇宙ベンチャー筆頭"},
         {"code": "ASTS", "name": "ASTスペースモバイル (米国)", "theme": "宇宙からの直接スマホ通信網構築企業。ショートスクイーズ常連銘柄"},
-        {"code": "SPCE", "name": "ヴァージン・ギャラクティック (米国)", "theme": "有人宇宙飛行・宇宙旅行プログラム"},
-        {"code": "LMT", "name": "ロッキード・マーティン (米国)", "theme": "世界最大の防衛・宇宙航空コントラクター"},
-        {"code": "NOC", "name": "ノースロップ・グラマン (米国)", "theme": "軍用機・ミサイル・宇宙望遠鏡開発の主力"},
-        {"code": "BA", "name": "ボーイング (米国)", "theme": "民間航空機および宇宙船「スターライナー」開発"}
+        {"code": "LMT", "name": "ロッキード・マーティン (米国)", "theme": "世界最大の防衛・宇宙航空コントラクター"}
     ],
     "AI電力・インフラ": [
         {"code": "9509.T", "name": "北海道電力", "theme": "ラピダスおよび大規模AIデータセンター誘致による電力需要急増期待"},
-        {"code": "9508.T", "name": "九州電力", "theme": "TSMC熊本工場や半導体工場群の増設に伴う大口産業用電力の拡大"},
-        {"code": "5803.T", "name": "フジクラ", "theme": "生成AIデータセンター向け超多芯光ファイバー需要逼迫。空売り踏み上げの代表格"},
-        {"code": "6501.T", "name": "日立製作所", "theme": "世界の送配電網（グリッド）設備更新とAIデータセンター向け変電システム"},
-        {"code": "6622.T", "name": "ダイヘン", "theme": "AIデータセンターや再生可能エネルギー接続に不可欠な変圧器・受変電設備"},
+        {"code": "9508.T", "name": "九州電力", "theme": "TSMC熊本工場や半導体工場群の増設に伴う大口電力拡大"},
+        {"code": "5803.T", "name": "フジクラ", "theme": "生成AIデータセンター向け超多芯光ファイバー需要逼迫。踏み上げ代表格"},
+        {"code": "6501.T", "name": "日立製作所", "theme": "世界の送配電網（グリッド）設備更新と変電システム"},
+        {"code": "6622.T", "name": "ダイヘン", "theme": "AIデータセンター接続に不可欠な変圧器・受変電設備"},
         {"code": "5801.T", "name": "古河電気工業", "theme": "超高圧送電線・AIデータセンター向け高速通信ケーブル"},
         {"code": "5802.T", "name": "住友電気工業", "theme": "電線業界の最大手。電力網インフラと次世代半導体基板"},
-        {"code": "6504.T", "name": "富士電機", "theme": "パワー半導体およびデータセンター用無停電電源装置（UPS）"},
-        {"code": "9501.T", "name": "東京電力HD", "theme": "首都圏の巨大電力需要および次世代データセンター供給基盤"},
-        {"code": "9502.T", "name": "中部電力", "theme": "中京圏の製造業・AIデータセンター向け安定電源確保"},
-        {"code": "9503.T", "name": "関西電力", "theme": "関西圏の電力インフラおよび次世代エネルギー開発"},
-        {"code": "9506.T", "name": "東北電力", "theme": "東北地方の半導体・グリーンデータセンター集積地帯"},
-        {"code": "1963.T", "name": "日揮ホールディングス", "theme": "プラントエンジニアリング大手。次世代エネルギー・水素プラント"},
-        {"code": "1951.T", "name": "エクシオグループ", "theme": "通信インフラ・データセンター構築エンジニアリング"},
         {"code": "1942.T", "name": "関電工", "theme": "電気設備工事の主力。データセンター・大型ビルの配線工事"},
-        {"code": "1973.T", "name": "NECネッツエスアイ", "theme": "ネットワーク構築・データセンター運営支援"},
-        {"code": "9504.T", "name": "中国電力", "theme": "中国地方の電力供給およびデータセンター誘致インフラ"},
-        {"code": "9505.T", "name": "北陸電力", "theme": "北陸地域の電力網整備・再エネ接続"},
-        {"code": "9507.T", "name": "四国電力", "theme": "四国地域の電力インフラと送配電網強化"},
-        {"code": "VST", "name": "ビストラ (米国)", "theme": "米国の電力大手。AIデータセンター向け原子力・電力供給の筆頭"},
+        {"code": "VST", "name": "ビストラ (米国)", "theme": "AIデータセンター向け原子力・電力供給の筆頭"},
         {"code": "CEG", "name": "コンステレーション・エナジー (米国)", "theme": "米最大の原子力発電企業。AIテック巨人と電力供給契約"},
-        {"code": "NEE", "name": "ネクステラ・エナジー (米国)", "theme": "世界最大のクリーンエネルギー・再生可能エネルギー発電"},
-        {"code": "GEV", "name": "GEヴェルノバ (米国)", "theme": "発電用ガスタービン・送電グリッド設備の世界的リーダー"},
-        {"code": "DUK", "name": "デューク・エナジー (米国)", "theme": "米国最大級の電力・ガスユーティリティ"}
+        {"code": "GEV", "name": "GEヴェルノバ (米国)", "theme": "発電用ガスタービン・送電グリッド設備の世界的リーダー"}
     ],
     "イーロン": [
         {"code": "TSLA", "name": "テスラ (米国)", "theme": "自動運転(FSD)・ロボタクシー・Optimus展開。世界最大のショートスクイーズ銘柄"},
         {"code": "6752.T", "name": "パナソニックHD", "theme": "北米EV向け車載電池およびデータセンター向け蓄電システム"},
         {"code": "5713.T", "name": "住友金属鉱山", "theme": "EV電池向け正極材（ニッケル）および銅などの資源価格連動"},
         {"code": "9433.T", "name": "KDDI (Starlink)", "theme": "SpaceXのStarlinkを活用した衛星・スマホ直接通信サービス"},
-        {"code": "7270.T", "name": "SUBARU", "theme": "北米市場でのEV展開・テスラ充電規格（NACS）採用など米国関連"},
         {"code": "7203.T", "name": "トヨタ自動車", "theme": "世界最大の自動車メーカー。北米EV・全固体電池の動向"},
-        {"code": "7269.T", "name": "スズキ", "theme": "インド市場首位。小型車・次世代モビリティ展開"},
         {"code": "6902.T", "name": "デンソー", "theme": "自動運転・EV用サーマルマネジメント・車載部品"},
-        {"code": "7282.T", "name": "豊田合成", "theme": "自動車用ゴム・樹脂部品、EV向け軽量化技術"},
-        {"code": "5108.T", "name": "ブリヂストン", "theme": "タイヤ世界首位。EV向け高負荷対応タイヤの需要"},
-        {"code": "5332.T", "name": "TOTO", "theme": "米国住宅市場向け建材・ハイテク衛生陶器の景気連動"},
         {"code": "6594.T", "name": "ニデック", "theme": "EV用トラクションモーター（e-Axle）の世界展開"},
-        {"code": "4208.T", "name": "UBE", "theme": "EVバッテリー用セパレーター・ナイロン素材"},
-        {"code": "3407.T", "name": "旭化成", "theme": "リチウムイオン電池用セパレーターのトップメーカー"},
-        {"code": "4005.T", "name": "住友化学", "theme": "ペロブスカイト太陽電池・次世代ディスプレイ・化学素材"},
-        {"code": "4188.T", "name": "三菱ケミカルG", "theme": "EV用バッテリー部材および炭素繊維複合材料"},
-        {"code": "7201.T", "name": "日産自動車", "theme": "EVパイオニア。北米市場でのハイブリッド・EV戦略"},
-        {"code": "AAPL", "name": "アップル (米国)", "theme": "「Apple Intelligence」展開および世界最大のコンシューマーテック"},
-        {"code": "AMZN", "name": "アマゾン (米国)", "theme": "AWS（クラウド）と生成AI、宇宙インターネットProject Kuiper"},
-        {"code": "NFLX", "name": "ネットフリックス (米国)", "theme": "グローバルストリーミングの指標銘柄"},
-        {"code": "COIN", "name": "コインベース (米国)", "theme": "暗号資産・ブロックチェーン連動。空売り踏み上げが極めて強い"},
-        {"code": "UBER", "name": "ウーバー・テクノロジー (米国)", "theme": "ライドシェアおよび自動運転タクシー提携"}
+        {"code": "COIN", "name": "コインベース (米国)", "theme": "暗号資産・ブロックチェーン連動。空売り踏み上げが極めて強い"}
     ],
-    "テンバガー小型株": [
-        {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星コンステレーションによる時価総額急拡大の急先鋒"},
-        {"code": "186A.T", "name": "アストロスケール", "theme": "宇宙ゴミ除去という唯一無二のニッチトップによる中長期成長"},
-        {"code": "9348.T", "name": "ispace", "theme": "民間で月面輸送を手掛ける宇宙ベンチャー。テーマ性抜群"},
-        {"code": "5243.T", "name": "ノート", "theme": "クリエイターエコノミーを牽引するメディアプラットフォーム"},
-        {"code": "5032.T", "name": "ANYCOLOR", "theme": "VTuber市場のグローバル展開と高収益体質"},
-        {"code": "4180.T", "name": "Appier", "theme": "AIを駆使したマーケティングSaaSで海外売上比率が急増"},
-        {"code": "3778.T", "name": "さくらインターネット", "theme": "生成AI向けGPUクラウド本格稼働による業績変革期"},
-        {"code": "6526.T", "name": "ソシオネクスト", "theme": "先端SoCの設計受託でグロース市場を牽引する爆発力"},
-        {"code": "4478.T", "name": "フリー", "theme": "中小企業のDX・バックオフィスSaaSの圧倒的シェア獲得"},
-        {"code": "4483.T", "name": "JMDC", "theme": "医療ビッグデータの独占的プラットフォームによる継続成長"},
-        {"code": "7342.T", "name": "ウェルスナビ", "theme": "日本の預かり資産トップクラスのロボアドバイザー"},
-        {"code": "6182.T", "name": "メタリアル", "theme": "AI自動翻訳・生成AI領域での高成長期待"},
-        {"code": "4475.T", "name": "HENNGE", "theme": "クラウドセキュリティ認証基盤のストック型ビジネスモデル"},
-        {"code": "ACHR", "name": "アーチャー・アビエーション (米国)", "theme": "空飛ぶクルマ（eVTOL）実用化の筆頭候補。ショートカバー急騰が多い"},
+    "小型株": [
+        {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星コンステレーションによる時価総額拡大の小型宇宙株"},
+        {"code": "186A.T", "name": "アストロスケール", "theme": "宇宙ゴミ除去というニッチトップの小型グロース株"},
+        {"code": "9348.T", "name": "ispace", "theme": "民間で月面輸送を手掛ける小型宇宙ベンチャー。テーマ性抜群"},
+        {"code": "5243.T", "name": "ノート", "theme": "クリエイターエコノミーを牽引する小型メディアプラットフォーム"},
+        {"code": "6182.T", "name": "メタリアル", "theme": "AI自動翻訳・生成AI領域での高成長小型株"},
+        {"code": "4475.T", "name": "HENNGE", "theme": "クラウドセキュリティ認証基盤の小型ストック型SaaS"},
+        {"code": "5031.T", "name": "モイ", "theme": "ライブ配信「ツイキャス」運営・AI音声認識の小型株"},
+        {"code": "153A.T", "name": "カウリス", "theme": "金融機関向け不正アクセス検知サービスの小型セキュリティ株"},
+        {"code": "247A.T", "name": "Aiロボティクス", "theme": "AIマーケティングを活用したD2C展開の小型グロース株"},
+        {"code": "ACHR", "name": "アーチャー・アビエーション (米国)", "theme": "空飛ぶクルマ（eVTOL）実用化の米小型株。ショートカバー急騰が多い"},
         {"code": "JOBY", "name": "ジョビー・アビエーション (米国)", "theme": "トヨタが出資する空飛ぶクルマの有力ベンチャー"},
-        {"code": "PLTR", "name": "パランティア (米国)", "theme": "AIプラットフォーム需要で大化けした中堅ソフトウエア企業"},
-        {"code": "IONQ", "name": "アイオンQ (米国)", "theme": "商用量子コンピューター開発。空売り比率が高く踏み上げが激しい"},
+        {"code": "IONQ", "name": "アイオンQ (米国)", "theme": "商用量子コンピューター開発。空売り比率が高く踏み上げが激しい小型株"},
         {"code": "SOUN", "name": "サウンドハウンドAI (米国)", "theme": "音声AI認識技術で急成長を遂げる小型AI関連の注目株"},
-        {"code": "BBAI", "name": "ビッグベア.ai (米国)", "theme": "防衛・政府向けのAI予測アナリティクス企業"}
+        {"code": "BBAI", "name": "ビッグベア.ai (米国)", "theme": "防衛・政府向けのAI予測アナリティクス小型株"}
     ],
     "IPO": [
-        {"code": "9023.T", "name": "東京地下鉄 (東京メトロ)", "theme": "大型IPOの筆頭。高い配当利回りと安定収益で機関投資家・個人の資金が流入"},
-        {"code": "285A.T", "name": "キオクシアHD", "theme": "半導体メモリー大手の大型IPO。AIデータセンター向けNAND需要回復と連動"},
-        {"code": "216A.T", "name": "タイミー", "theme": "スキマバイト仲介の大型グロースIPO。人手不足解消のテーマ株として短期資金が集中"},
-        {"code": "186A.T", "name": "アストロスケールHD", "theme": "宇宙デブリ除去ベンチャーの注目IPO。防衛・宇宙テーマで出来高急増"},
-        {"code": "141A.T", "name": "トライアルHD", "theme": "スマートショッピングカート等のリテールAI活用で急成長する流通大型IPO"},
-        {"code": "166A.T", "name": "タスキHD", "theme": "不動産テック・IoTレジデンス開発の新規統合上場銘柄"},
-        {"code": "153A.T", "name": "カウリス", "theme": "金融機関向けクラウド型不正アクセス検知サービスのセキュリティIPO"},
-        {"code": "190A.T", "name": "Chordia Therapeutics", "theme": "がん領域の新薬開発を手掛けるバイオベンチャーIPO"},
-        {"code": "247A.T", "name": "Aiロボティクス", "theme": "AIマーケティングを活用したD2Cブランド展開のグロースIPO"},
-        {"code": "5253.T", "name": "カバー", "theme": "VTuber事務所「ホロライブ」運営。直近IPO群の中でも圧倒的な売買代金"},
-        {"code": "5838.T", "name": "楽天銀行", "theme": "日銀の金利政策に敏感に反応する大型ネット銀行IPO"},
-        {"code": "5845.T", "name": "全保連", "theme": "家賃債務保証の大手IPO。安定成長と高配当ニーズ"},
-        {"code": "9166.T", "name": "GENDA", "theme": "アミューズメント施設M&Aで急成長を続ける注目グロース株"},
-        {"code": "6228.T", "name": "ジェイ・イー・ティ", "theme": "半導体洗浄装置を手掛ける直近IPO。半導体相場と連動"},
-        {"code": "RDDT", "name": "レディット (米国IPO)", "theme": "米国大型SNSの注目IPO。空売り勢を巻き込んだショートスクイーズが多発"},
-        {"code": "ARM", "name": "アーム・ホールディングス (米国IPO)", "theme": "ソフトバンクG傘下の半導体設計の要。浮動株が少なく踏み上げが起きやすい"},
-        {"code": "ALAB", "name": "アステラ・ラブズ (米国IPO)", "theme": "AIデータセンター向け高速接続半導体の大型IPO"},
-        {"code": "CART", "name": "インスタカート (米国IPO)", "theme": "北米最大の食品配送・リテールメディアプラットフォームIPO"},
-        {"code": "BIRK", "name": "ビルケンシュトック (米国IPO)", "theme": "世界的フットウェアブランドの大型IPO。欧米消費動向の指標"},
-        {"code": "KVYO", "name": "クラビヨ (米国IPO)", "theme": "EC向けマーケティング自動化SaaSの注目テックIPO"}
+        {"code": "9023.T", "name": "東京地下鉄 (東京メトロ)", "theme": "大型IPOの筆頭。高い配当利回りと安定収益で資金流入"},
+        {"code": "285A.T", "name": "キオクシアHD", "theme": "半導体メモリー大手の大型IPO。NAND需要回復と連動"},
+        {"code": "216A.T", "name": "タイミー", "theme": "スキマバイト仲介のグロースIPO。短期資金が集中"},
+        {"code": "186A.T", "name": "アストロスケールHD", "theme": "宇宙デブリ除去ベンチャーの注目IPO"},
+        {"code": "141A.T", "name": "トライアルHD", "theme": "リテールAI活用で急成長する流通IPO"},
+        {"code": "5253.T", "name": "カバー", "theme": "VTuber事務所「ホロライブ」運営。圧倒的な売買代金"},
+        {"code": "9166.T", "name": "GENDA", "theme": "アミューズメント施設M&Aで急成長を続ける注目株"},
+        {"code": "RDDT", "name": "レディット (米国IPO)", "theme": "米国大型SNSの注目IPO。ショートスクイーズが多発"},
+        {"code": "ARM", "name": "アーム・ホールディングス (米国IPO)", "theme": "ソフトバンクG傘下の半導体設計の要"},
+        {"code": "ALAB", "name": "アステラ・ラブズ (米国IPO)", "theme": "AIデータセンター向け高速接続半導体の大型IPO"}
     ],
     "未公開株": [
-        {"code": "8595.T", "name": "ジャフコ グループ", "theme": "国内最大手の老舗VC。有望な国内未公開スタートアップへの投資・IPO輩出の筆頭"},
-        {"code": "8473.T", "name": "SBIホールディングス", "theme": "国内外の未公開フィンテック・半導体・Web3企業へ積極投資する巨大VC群を保有"},
-        {"code": "9984.T", "name": "ソフトバンクG (SVF)", "theme": "OpenAIやByteDanceなど世界の巨大未公開ユニコーン企業へ投資する実質的ファンド"},
-        {"code": "4751.T", "name": "サイバーエージェント", "theme": "藤田ファンド・CAキャピタルを通じ、国内外の有望な未公開ITベンチャーを多数保有"},
-        {"code": "3656.T", "name": "KLab / ベンチャー投資関連", "theme": "Web3・スマホゲーム領域および関連スタートアップへの出資展開"},
-        {"code": "2489.T", "name": "アドウェイズ", "theme": "広告テックおよび国内外の未上場スタートアップへのインキュベーション投資"},
-        {"code": "8425.T", "name": "みずほリース", "theme": "スタートアップ向けベンチャーデットや未公開企業支援のファイナンス展開"},
-        {"code": "8591.T", "name": "オリックス", "theme": "プライベートエクイティ（未公開株買収・事業承継投資）の国内トッププレイヤー"},
-        {"code": "8604.T", "name": "野村ホールディングス", "theme": "未公開株（プライベートマーケット）取引プラットフォームや大型IPO主幹事の筆頭"},
-        {"code": "8515.T", "name": "アイフル", "theme": "傘下AGキャピタルを通じた未公開ベンチャー企業への投資・育成"},
-        {"code": "7172.T", "name": "ジャパンインベストメントアドバイザー", "theme": "プライベートエクイティ投資や未上場企業のM&A・IPO支援を展開"},
-        {"code": "DXYZ", "name": "Destiny Tech100 (米国・未公開株ファンド)", "theme": "SpaceXやOpenAI等の未公開100社ファンド。浮動株極小で猛烈な踏み上げが起きる銘柄"},
-        {"code": "FRGE", "name": "フォージ・グローバル (米国)", "theme": "未公開株（プレIPOのユニコーン企業株）の売買プラットフォームを運営する米国中核銘柄"},
-        {"code": "KKR", "name": "KKR (米国)", "theme": "世界の未公開株（プライベートエクイティ）買収・投資を手掛けるオルタナティブ投資の巨人"},
-        {"code": "BX", "name": "ブラックストーン (米国)", "theme": "世界最大の未公開株・プライベートアセット運用会社。データセンター投資も牽引"},
-        {"code": "APO", "name": "アポロ・グローバル (米国)", "theme": "未公開企業へのプライベートクレジット・PE投資で急成長する米金融大手"},
-        {"code": "CG", "name": "カーライル・グループ (米国)", "theme": "日本国内の未公開企業買収・再上場（IPO）案件も多数手掛ける世界的PEファンド"},
-        {"code": "ARKK", "name": "ARKイノベーションETF (米国)", "theme": "破壊的イノベーション企業およびプレIPO段階の先端テックトレンドと強く連動"},
-        {"code": "MAIN", "name": "メイン・ストリート・キャピタル (米国BDC)", "theme": "米国の未公開中堅企業（ミドルマーケット）へ出資・融資を行う高配当BDC銘柄"},
-        {"code": "ARCC", "name": "エイリス・キャピタル (米国BDC)", "theme": "米国最大のBDC銘柄。非上場・未公開企業の成長資金を供給するプライベートデット筆頭"}
+        {"code": "8595.T", "name": "ジャフコ グループ", "theme": "国内最大手の老舗VC。未公開スタートアップ投資の筆頭"},
+        {"code": "8473.T", "name": "SBIホールディングス", "theme": "国内外の未公開フィンテック・半導体企業へ積極投資するVC群を保有"},
+        {"code": "9984.T", "name": "ソフトバンクG (SVF)", "theme": "OpenAIなど世界の未公開ユニコーン企業へ投資する実質的ファンド"},
+        {"code": "4751.T", "name": "サイバーエージェント", "theme": "藤田ファンドを通じ、有望な未公開ITベンチャーを多数保有"},
+        {"code": "8591.T", "name": "オリックス", "theme": "プライベートエクイティ（未公開株買収）の国内トッププレイヤー"},
+        {"code": "DXYZ", "name": "Destiny Tech100 (米国・未公開株ファンド)", "theme": "SpaceXやOpenAI等の未公開100社ファンド。猛烈な踏み上げが起きる銘柄"},
+        {"code": "KKR", "name": "KKR (米国)", "theme": "世界の未公開株買収・投資を手掛けるオルタナティブ投資の巨人"},
+        {"code": "BX", "name": "ブラックストーン (米国)", "theme": "世界最大の未公開株・プライベートアセット運用会社"}
     ]
 }
 
@@ -665,7 +321,7 @@ def normalize_ticker(raw_input):
         return f"{s}.T"
     return s
 
-# --- ⚡ 5分足（Intraday）＋ 🌆 大引け30分MOC ＋ 🔥 5分足ショートカバー解析エンジン ---
+# --- ⚡ 5分足（Intraday）＋ 🌆 大引け30分MOC 解析エンジン ---
 @st.cache_data(ttl=300)
 def fetch_5m_intraday_algo(full_code, trigger_high20=None):
     try:
@@ -702,7 +358,6 @@ def fetch_5m_intraday_algo(full_code, trigger_high20=None):
         mean_vol5 = float(day_df['Volume'].mean())
         max_recent_vol = float(day_df.tail(6)['Volume'].max())
         vol_spike_5m = round(max_recent_vol / mean_vol5, 2) if mean_vol5 > 0 else 1.0
-
         above_vwap_ratio = round(float((day_df['Close'] >= day_df['VWAP_5m']).mean() * 100), 1)
 
         last_6 = day_df.tail(6)
@@ -728,17 +383,17 @@ def fetch_5m_intraday_algo(full_code, trigger_high20=None):
         moc_score = int(min(max(moc_score, 15), 99))
 
         if close_drive_pct >= 0.3 and close_vol_ratio >= 1.25 and vwap5_dev >= 0:
-            moc_status = "🌆 大引けMOC（引け成り）機関バスケット強烈買い集め"
-            moc_comment = f"ラスト30分間で出来高が日中平均の<b>{close_vol_ratio}倍</b>に急増し、株価も<b>{close_drive_pct:+.2f}%</b>上昇して高値引け（陽線{close_green_bars}/6本）！空売り勢の買い戻しと機関のMOC買いが翌朝へ持ち越されています。"
+            moc_status = "🌆 大引けMOC（引け成り）強烈買い集め"
+            moc_comment = f"ラスト30分間で出来高が日中平均の<b>{close_vol_ratio}倍</b>に急増し、株価も<b>{close_drive_pct:+.2f}%</b>上昇して高値引け（陽線{close_green_bars}/6本）！空売り勢の買い戻しが翌朝へ持ち越されています。"
         elif close_drive_pct >= 0.1 and close_green_bars >= 4:
-            moc_status = "📈 大引けTWAP買い集め（引けにかけて堅調吸収）"
-            moc_comment = f"ラスト30分間（陽線{close_green_bars}/6本・変動<b>{close_drive_pct:+.2f}%</b>、出来高倍率<b>{close_vol_ratio}倍</b>）で売り物を着実に吸収して引けており、翌朝の寄り付きにプラスのモメンタムを残しています。"
+            moc_status = "📈 大引けにかけて堅調吸収"
+            moc_comment = f"ラスト30分間（陽線{close_green_bars}/6本・変動<b>{close_drive_pct:+.2f}%</b>）で売り物を着実に吸収して引けており、翌朝の寄り付きにプラスの勢いを残しています。"
         elif close_drive_pct <= -0.3 and close_vol_ratio >= 1.2:
-            moc_status = "⚠️ 大引け機関アンワインド（引け成り手仕舞い売り）"
-            moc_comment = f"ラスト30分で出来高を伴い（<b>{close_vol_ratio}倍</b>）<b>{close_drive_pct:+.2f}%</b>下落。デイトレ勢および機関のポジション調整売りに押されて引けています。"
+            moc_status = "⚠️ 大引け手仕舞い売り優勢"
+            moc_comment = f"ラスト30分で出来高を伴い（<b>{close_vol_ratio}倍</b>）<b>{close_drive_pct:+.2f}%</b>下落。手仕舞い売りに押されて引けています。"
         else:
-            moc_status = "⚖️ 大引け通常執行（MOC需給均衡）"
-            moc_comment = f"ラスト30分間の値動きは<b>{close_drive_pct:+.2f}%</b>（出来高倍率<b>{close_vol_ratio}倍</b>・陽線{close_green_bars}/6本）と均衡しています。"
+            moc_status = "⚖️ 大引け通常執行（需給均衡）"
+            moc_comment = f"ラスト30分間の値動きは<b>{close_drive_pct:+.2f}%</b>（出来高倍率<b>{close_vol_ratio}倍</b>）と均衡しています。"
 
         score_5m = 50
         score_5m += 10 if vwap5_dev > 0 else -8
@@ -750,20 +405,17 @@ def fetch_5m_intraday_algo(full_code, trigger_high20=None):
         score_5m = int(min(max(score_5m, 15), 99))
 
         if vwap5_dev > 0 and twap_green_ratio >= 65:
-            status_5m = "🔥 5分足TWAP連続買い＆ショートカバー順行"
-            comment_5m = f"直近1時間の陽線出現率が<b>{twap_green_ratio}%</b>に達し、5分足VWAP（乖離<b>{vwap5_dev:+.2f}%</b>）の上で機関のTWAP買いと空売りの買い戻しが継続しています。"
+            status_5m = "🔥 5分足連続買い＆ショートカバー順行"
+            comment_5m = f"直近1時間の陽線出現率が<b>{twap_green_ratio}%</b>に達し、5分足VWAP（乖離<b>{vwap5_dev:+.2f}%</b>）の上で買い戻しが継続しています。"
         elif open_drive_pct >= 0.6 and above_vwap_ratio >= 65:
-            status_5m = "🚀 寄付き15分オープニングドライブ（機関初動買い）"
-            comment_5m = f"寄付き後15分で<b>{open_drive_pct:+.2f}%</b>の上昇ドライブが発生。日中を通して5分足VWAP上（滞在率<b>{above_vwap_ratio}%</b>）を維持する強い機関買い波形です。"
-        elif vol_spike_5m >= 2.0 and vwap5_dev > 0:
-            status_5m = "⚡ 5分足大口ブロック買い＆踏み上げスパイク検知"
-            comment_5m = f"直近30分以内に平均の<b>{vol_spike_5m}倍</b>の5分足出来高スパイクが発生し、売り方のロスカットを巻き込んでVWAPを上抜けています。"
+            status_5m = "🚀 寄付き15分オープニングドライブ"
+            comment_5m = f"寄付き後15分で<b>{open_drive_pct:+.2f}%</b>の上昇ドライブが発生。日中を通して5分足VWAP上（滞在率<b>{above_vwap_ratio}%</b>）を維持する強い波形です。"
         elif vwap5_dev < -0.3 and above_vwap_ratio < 40:
-            status_5m = "🧊 5分足VWAP下抜け（日中アルゴ売り優勢）"
-            comment_5m = f"現在値が5分足VWAPを<b>{vwap5_dev:+.2f}%</b>下回り、上値を機関のVWAP売りアルゴに抑え込まれています。5分足VWAP奪還まで待機推奨。"
+            status_5m = "🧊 5分足VWAP下抜け（上値重い）"
+            comment_5m = f"現在値が5分足VWAPを<b>{vwap5_dev:+.2f}%</b>下回っています。5分足VWAP奪還まで待機推奨。"
         else:
             status_5m = "⚖️ 5分足VWAP攻防・レンジ推移"
-            comment_5m = f"5分足VWAP（乖離<b>{vwap5_dev:+.2f}%</b>）を挟んだ攻防です。寄付き初動15分は<b>{open_drive_pct:+.2f}%</b>、陽線率は<b>{twap_green_ratio}%</b>です。"
+            comment_5m = f"5分足VWAP（乖離<b>{vwap5_dev:+.2f}%</b>）を挟んだ攻防です。陽線率は<b>{twap_green_ratio}%</b>です。"
 
         is_jp = ".T" in full_code
         vwap5_fmt = f"{latest_vwap5:,.0f}円" if is_jp else f"${latest_vwap5:,.2f}"
@@ -777,9 +429,9 @@ def fetch_5m_intraday_algo(full_code, trigger_high20=None):
         vol_colors = []
         for idx_b in range(n_bars):
             if is_closing_30m[idx_b] and vol_vals[idx_b] >= mean_vol5 * 1.15:
-                vol_colors.append("大引け30分MOC機関執行")
+                vol_colors.append("大引け30分MOC執行")
             elif vol_vals[idx_b] >= mean_vol5 * 1.8:
-                vol_colors.append("大口アルゴ出来高スパイク")
+                vol_colors.append("出来高スパイク")
             else:
                 vol_colors.append("通常出来高")
 
@@ -797,28 +449,18 @@ def fetch_5m_intraday_algo(full_code, trigger_high20=None):
         })
 
         return {
-            "vwap5_price": vwap5_fmt,
-            "vwap5_dev": vwap5_dev,
-            "open_drive_pct": open_drive_pct,
-            "twap_green_ratio": twap_green_ratio,
-            "vol_spike_5m": vol_spike_5m,
-            "above_vwap_ratio": above_vwap_ratio,
-            "score_5m": score_5m,
-            "status_5m": status_5m,
-            "comment_5m": comment_5m,
-            "close_drive_pct": close_drive_pct,
-            "close_vol_ratio": close_vol_ratio,
-            "close_green_bars": close_green_bars,
-            "moc_score": moc_score,
-            "moc_status": moc_status,
-            "moc_comment": moc_comment,
-            "chart_date": str(latest_date),
-            "chart_df": chart_df
+            "vwap5_price": vwap5_fmt, "vwap5_dev": vwap5_dev,
+            "open_drive_pct": open_drive_pct, "twap_green_ratio": twap_green_ratio,
+            "vol_spike_5m": vol_spike_5m, "above_vwap_ratio": above_vwap_ratio,
+            "score_5m": score_5m, "status_5m": status_5m, "comment_5m": comment_5m,
+            "close_drive_pct": close_drive_pct, "close_vol_ratio": close_vol_ratio,
+            "close_green_bars": close_green_bars, "moc_score": moc_score,
+            "moc_status": moc_status, "moc_comment": moc_comment,
+            "chart_date": str(latest_date), "chart_df": chart_df
         }
     except Exception:
         return None
 
-# --- 📈 5分足ローソク足＋VWAPライン＋踏み上げトリガー線＋大引けMOC出来高描画関数 ---
 def render_5m_candlestick_chart(m5, show_trigger=True):
     if not m5 or "chart_df" not in m5 or m5["chart_df"] is None or m5["chart_df"].empty:
         return
@@ -830,48 +472,29 @@ def render_5m_candlestick_chart(m5, show_trigger=True):
         f'<span style="color:#dc2626; font-weight:bold;">■ 陽線</span> ／ '
         f'<span style="color:#2563eb; font-weight:bold;">■ 陰線</span> ／ '
         f'<span style="color:#d97706; font-weight:bold;">--- 日中VWAP</span> ／ '
-        f'<span style="color:#e11d48; font-weight:bold;">┈┈ 20日高値(踏み上げ線)</span> ／ '
-        f'<span style="color:#9333ea; font-weight:bold;">■ 大引けMOC執行</span>'
+        f'<span style="color:#e11d48; font-weight:bold;">┈┈ 20日高値(踏み上げ線)</span>'
         f'</div>',
         unsafe_allow_html=True
     )
 
     base = alt.Chart(cdf).encode(
-        x=alt.X(
-            "Time:N",
-            sort=None,
-            title=None,
-            axis=alt.Axis(labelAngle=-45, labelOverlap=True, labelFontSize=10)
-        )
+        x=alt.X("Time:N", sort=None, title=None, axis=alt.Axis(labelAngle=-45, labelOverlap=True, labelFontSize=10))
     )
-
-    color_scale = alt.Scale(
-        domain=["陽線(買い優勢)", "陰線(売り優勢)"],
-        range=["#dc2626", "#2563eb"]
-    )
+    color_scale = alt.Scale(domain=["陽線(買い優勢)", "陰線(売り優勢)"], range=["#dc2626", "#2563eb"])
 
     wick = base.mark_rule(size=1.5).encode(
-        y=alt.Y("Low:Q", scale=alt.Scale(zero=False), title="株価"),
-        y2="High:Q",
+        y=alt.Y("Low:Q", scale=alt.Scale(zero=False), title="株価"), y2="High:Q",
         color=alt.Color("BarColor:N", scale=color_scale, legend=None)
     )
-
     body = base.mark_bar(size=6).encode(
-        y=alt.Y("Open:Q", scale=alt.Scale(zero=False)),
-        y2="Close:Q",
+        y=alt.Y("Open:Q", scale=alt.Scale(zero=False)), y2="Close:Q",
         color=alt.Color("BarColor:N", scale=color_scale, legend=None),
         tooltip=[
-            alt.Tooltip("Time:N", title="時刻"),
-            alt.Tooltip("Open:Q", title="始値", format=",.1f"),
-            alt.Tooltip("High:Q", title="高値", format=",.1f"),
-            alt.Tooltip("Low:Q", title="安値", format=",.1f"),
-            alt.Tooltip("Close:Q", title="終値", format=",.1f"),
-            alt.Tooltip("VWAP:Q", title="5分足VWAP", format=",.1f"),
-            alt.Tooltip("TriggerLine:Q", title="踏み上げトリガー(20日高値)", format=",.1f"),
-            alt.Tooltip("Volume:Q", title="出来高", format=",")
+            alt.Tooltip("Time:N", title="時刻"), alt.Tooltip("Open:Q", title="始値", format=",.1f"),
+            alt.Tooltip("High:Q", title="高値", format=",.1f"), alt.Tooltip("Low:Q", title="安値", format=",.1f"),
+            alt.Tooltip("Close:Q", title="終値", format=",.1f"), alt.Tooltip("VWAP:Q", title="5分足VWAP", format=",.1f")
         ]
     )
-
     vwap_line = base.mark_line(color="#d97706", strokeWidth=2.5, strokeDash=[4, 2]).encode(
         y=alt.Y("VWAP:Q", scale=alt.Scale(zero=False))
     )
@@ -882,28 +505,19 @@ def render_5m_candlestick_chart(m5, show_trigger=True):
         trig_line = base.mark_line(color="#e11d48", strokeWidth=1.8, strokeDash=[2, 2]).encode(
             y=alt.Y("TriggerLine:Q", scale=alt.Scale(zero=False))
         )
-        price_chart = (wick + body + vwap_line + trig_line).properties(height=210)
+        price_chart = (wick + body + vwap_line + trig_line).properties(height=200)
     else:
-        price_chart = (wick + body + vwap_line).properties(height=210)
+        price_chart = (wick + body + vwap_line).properties(height=200)
 
-    vol_color_scale = alt.Scale(
-        domain=["大引け30分MOC機関執行", "大口アルゴ出来高スパイク", "通常出来高"],
-        range=["#9333ea", "#f59e0b", "#94a3b8"]
-    )
+    vol_color_scale = alt.Scale(domain=["大引け30分MOC執行", "出来高スパイク", "通常出来高"], range=["#9333ea", "#f59e0b", "#94a3b8"])
     vol_chart = base.mark_bar(size=6).encode(
         y=alt.Y("Volume:Q", title="出来高", axis=alt.Axis(format="~s", labelFontSize=9)),
-        color=alt.Color("VolColor:N", scale=vol_color_scale, legend=None),
-        tooltip=[
-            alt.Tooltip("Time:N", title="時刻"),
-            alt.Tooltip("Volume:Q", title="5分足出来高", format=","),
-            alt.Tooltip("VolColor:N", title="アルゴ判定")
-        ]
-    ).properties(height=75)
+        color=alt.Color("VolColor:N", scale=vol_color_scale, legend=None)
+    ).properties(height=70)
 
-    combined = alt.vconcat(price_chart, vol_chart, spacing=4).resolve_scale(x="shared")
-    st.altair_chart(combined, use_container_width=True)
+    st.altair_chart(alt.vconcat(price_chart, vol_chart, spacing=4).resolve_scale(x="shared"), use_container_width=True)
 
-# --- 🧠 7大AI（Claude × Grok × GPT × Gemini × Perplexity × Genspark × NotebookLM）合議エンジン ---
+# --- 🧠 7大AI合議エンジン（分かりやすく詳しい解説版） ---
 def run_7ai_council_algorithm(r, m5=None):
     prob = r["prob"]
     payoff = r["payoff"]
@@ -912,7 +526,6 @@ def run_7ai_council_algorithm(r, m5=None):
     vol_ratio = r["vol_ratio"]
     atr_pct = r["atr_pct"]
     macro_score = r["macro_score"]
-    inst_score = r["inst_score"]
     sq_score = r["squeeze_score"]
     sq_type = r["squeeze_type"]
     tokugai_prob = r["tokugai_prob"]
@@ -923,121 +536,205 @@ def run_7ai_council_algorithm(r, m5=None):
     vwap5_dev = m5["vwap5_dev"] if m5 else 0.0
     moc_score = m5["moc_score"] if m5 else r["closing_power_score"]
     close_vol_r = m5["close_vol_ratio"] if m5 else 1.0
+    vwap_ref = m5['vwap5_price'] if m5 else r['vwap_price']
 
-    # 1. Claude
-    claude_raw = 50 + (prob - 50) * 0.85 + (payoff - 1.0) * 16 - max(0, atr_pct - 3.5) * 4 + (inst_score - 50) * 0.12 + (sq_score - 50) * 0.12
+    # 1. Claude (リスク管理・資金配分担当)
+    claude_raw = 50 + (prob - 50) * 0.85 + (payoff - 1.0) * 16 - max(0, atr_pct - 3.5) * 4 + (moc_score - 50) * 0.15 + (sq_score - 50) * 0.12
     if rsi > 78 and sq_score < 70: claude_raw -= 12
     elif rsi < 35: claude_raw += 8
     claude_score = int(min(max(round(claude_raw), 15), 99))
 
     if claude_score >= 70:
-        claude_stance = "🟢 統計的優位・特買いリスクリワード◎"
-        claude_comment = f"過去勝率<b>{prob}%</b>・損益比<b>{payoff}倍</b>（期待値<b>{edge:+.2f}%</b>）。夜間PTS推計気配（<b>{r['pts_est_price']}</b>）でも下値リスクは限定的ですが、特買いライン（<b>{r['tokugai_line']}</b>）を超える大幅GU時はロットを半分に抑えてリスク管理してください。"
+        claude_stance = "🟢 リスクに対して利益期待が抜群（積極参戦OK）"
+        claude_comment = (
+            f"<b>【結論：勝ちやすく負けにくい優位な局面です】</b><br>"
+            f"・過去同じチャートの形が出たとき、翌朝に上がった確率は <b>{prob}%（{r['count']}）</b>、勝ちトレードの平均利益は負けの <b>{payoff}倍</b> あります。<br>"
+            f"・<b>注意点：</b>もし明日の朝、特買いライン（<b>{r['tokugai_line']}</b>）を超えて大きく高く始まった場合は、飛びつき買いによる高値掴みを防ぐため、最初は予定株数の半分（<b>{max(1, r['lot_info']['shares']//2):,}株</b>）だけ買い、逆指値（<b>{r['sl_price']}</b>）を必ずセットしてください。"
+        )
     elif claude_score >= 52:
-        claude_stance = "🟡 条件付き承認（5分足VWAP基準）"
-        claude_comment = f"期待値はプラス圏（{edge:+.2f}%）です。寄り付きの高値掴みを避け、5分足VWAP（{m5['vwap5_price'] if m5 else r['vwap_price']}）付近での押し目エントリーを推奨します。"
+        claude_stance = "🟡 条件付き承認（朝の押し目を待って買う）"
+        claude_comment = (
+            f"<b>【結論：朝イチの成行買いは避け、少し下がった所を狙いましょう】</b><br>"
+            f"・期待値はプラス（<b>{edge:+.2f}%</b>）ですが、1日の値動き幅（ATR: {atr_pct}%）がやや大きめです。<br>"
+            f"・9時00分にすぐ買うのではなく、日中の平均買値である <b>5分足VWAP（{vwap_ref}）</b> 付近まで株価が落ち着いてから指値で買うと、損切りリスクを最小限に抑えられます。"
+        )
     else:
-        claude_stance = "🔴 リスク警戒・見送り推奨"
-        claude_comment = f"ATR（{atr_pct}%）に対して期待値エッジ（{edge:+.2f}%）が薄く、リスク・リワードの観点から慎重姿勢を維持します。"
+        claude_stance = "🔴 リスク警戒（今回は見送り推奨）"
+        claude_comment = (
+            f"<b>【結論：無理に手を出さず、資金を守る場面です】</b><br>"
+            f"・株価の乱高下幅（{atr_pct}%）に対して、見込める利益の期待値（{edge:+.2f}%）が小さく、割に合いません。より条件の良い上位銘柄に資金を回すことを強く推奨します。"
+        )
 
-    # 2. Grok
-    grok_raw = 45 + (vol_ratio - 1.0) * 16 + (10 if macd_up else -6) + ((inst_score - 50) * 0.18) + ((s5 - 50) * 0.18) + ((sq_score - 50) * 0.22) + (tokugai_prob * 0.15)
-    if r["diff"] > 2.0 and vol_ratio >= 1.3: grok_raw += 8
+    # 2. Grok (特買い気配＆空売り踏み上げ担当)
+    grok_raw = 45 + (vol_ratio - 1.0) * 16 + (10 if macd_up else -6) + ((moc_score - 50) * 0.18) + ((s5 - 50) * 0.18) + ((sq_score - 50) * 0.25) + (tokugai_prob * 0.15)
     grok_score = int(min(max(round(grok_raw), 15), 99))
 
     if grok_score >= 70:
-        grok_stance = "🔥 特買い気配＆ショートスクイーズ共振"
-        grok_comment = f"翌朝の特買い（気配切り上げ）確率は<b>{tokugai_prob}%（{r['tokugai_status']}）</b>！<b>{sq_type}</b>と夜間連動（<b>{pts_gap:+.2f}%</b>）が重なり、朝イチから売り方の成行買い戻しが殺到する波形です。"
+        grok_stance = "🔥 特買い＆空売り勢のパニック買い戻し発生へ！"
+        grok_comment = (
+            f"<b>【結論：空売りしている投資家が損失に耐えきれず、朝イチに買い戻す可能性が極めて高いです】</b><br>"
+            f"・明日の朝9時に買い注文が殺到してすぐ値段がつかない『特買い』になる確率は <b>{tokugai_prob}%</b> です。<br>"
+            f"・現在「<b>{sq_type}</b>」の状態にあり、直近20日高値（<b>{r['squeeze_trigger_price']}</b>）を超えると、空売り勢の強制ロスカット（成行の買い戻し）が連鎖して一気に急騰しやすい波形です。"
+        )
     elif grok_score >= 52:
-        grok_stance = "⚡ 8:50気配監視・踏み上げトリガー接近"
-        grok_comment = f"夜間理論気配は<b>{r['pts_est_price']}（{pts_gap:+.2f}%）</b>。翌朝8:50の気配値が空売り防衛線（<b>{r['squeeze_trigger_price']}</b>）を上回っていれば順張り好機です。"
+        grok_stance = "⚡ 朝8:50の気配値次第で踏み上げ急騰"
+        grok_comment = (
+            f"<b>【結論：朝8時50分の板気配を見て、強ければ乗るチャンスです】</b><br>"
+            f"・夜間の先物や米国株の動きから計算した明日の予想スタート価格は <b>{r['pts_est_price']}（前日比 {pts_gap:+.2f}%）</b> です。<br>"
+            f"・朝8:50〜8:58の気配値が、空売り勢の防衛ライン（<b>{r['squeeze_trigger_price']}</b>）に近い、または上回っていれば一気に火がつきます。"
+        )
     else:
-        grok_stance = "🧊 特買い・踏み上げエネルギー不足"
-        grok_comment = f"翌朝に特別買い気配を誘発するだけの夜間先物連動と出来高モメンタムが不足しています。"
+        grok_stance = "🧊 爆発力・踏み上げエネルギー不足"
+        grok_comment = (
+            f"<b>【結論：明日の朝に急騰を巻き起こすほどの買いエネルギーがまだ溜まっていません】</b><br>"
+            f"・出来高倍率（{vol_ratio}倍）や夜間連動（{pts_gap:+.2f}%）が穏やかなため、特買いやショートスクイーズ（踏み上げ）を狙うには力不足です。"
+        )
 
-    # 3. GPT
-    gpt_raw = (r["ai_score"] * 0.35) + (claude_score * 0.18) + (grok_score * 0.18) + (s5 * 0.14) + (sq_score * 0.15) + (macro_score * 1.2)
+    # 3. GPT (ファンダ・テクニカル・夜間連動の総合バランサー)
+    gpt_raw = (r["ai_score"] * 0.38) + (claude_score * 0.2) + (grok_score * 0.2) + (s5 * 0.12) + (sq_score * 0.1) + (macro_score * 1.2)
     gpt_score = int(min(max(round(gpt_raw), 15), 99))
 
     if gpt_score >= 70:
-        gpt_stance = "💎 日米夜間連動＆マルチファクター完全合致"
-        gpt_comment = f"夜間マクロ連動（{pts_gap:+.2f}%）、機関アルゴ（{inst_score}点）、大引けMOC（{moc_score}点）、特買い確率（{tokugai_prob}%）がすべて強気で一致しています。"
+        gpt_stance = "💎 すべての好条件が揃ったS級セットアップ"
+        gpt_comment = (
+            f"<b>【結論：チャート・出来高・大引けの買い・夜間の追い風がすべて揃っています】</b><br>"
+            f"・前日の大引け間際の買い集め（<b>{moc_score}点</b>）、空売り踏み上げ度（<b>{sq_score}点</b>）、夜間の予想ギャップ（<b>{pts_gap:+.2f}%</b>）のどれを取っても高水準です。<br>"
+            f"・素直にトレンドに従って順張りでついていくのが最も勝率の高い王道パターンです。"
+        )
     elif gpt_score >= 52:
-        gpt_stance = "⚖️ 中立〜やや強気（VWAP押し目狙い）"
-        gpt_comment = f"日足統計は堅調です。5分足VWAP（乖離 {vwap5_dev:+.2f}%）を引きつけてからのエントリーが合理的です。"
+        gpt_stance = "⚖️ 全体的に堅調（焦らず押し目買い）"
+        gpt_comment = (
+            f"<b>【結論：方向感は上向きですが、買うタイミングだけ工夫しましょう】</b><br>"
+            f"・日足のトレンドは良好です。寄り付き直後の乱高下が落ち着く9時10分〜15分頃に、株価が5分足VWAP（<b>{vwap_ref}</b>）の上でしっかり支えられているのを確認してから買うのがベストです。"
+        )
     else:
-        gpt_stance = "🛡️ ディフェンシブ判定・待機"
-        gpt_comment = f"総合ファクターが基準値に達しておらず、明確なトレンド発生待ちです。"
+        gpt_stance = "🛡️ 様子見・トレンド発生待ち"
+        gpt_comment = (
+            f"<b>【結論：今はまだ買いシグナルが揃っていません】</b><br>"
+            f"・複数の指標を総合すると、上がるか下がるかが五分五分の状態です。明確な出来高増加が出るまで待ちましょう。"
+        )
 
-    # 4. Gemini
-    gemini_raw = 48 + (prob - 50) * 0.5 + (edge * 16) + (macro_score * 2.0) + ((inst_score - 50) * 0.18) + ((sq_score - 50) * 0.22)
+    # 4. Gemini (米国株・為替・セクター資金の流れ担当)
+    gemini_raw = 48 + (prob - 50) * 0.5 + (edge * 16) + (macro_score * 2.0) + ((moc_score - 50) * 0.2) + ((sq_score - 50) * 0.2)
     if vol_ratio >= 1.15 and macd_up: gemini_raw += 8
     gemini_score = int(min(max(round(gemini_raw), 15), 99))
 
     if gemini_score >= 70:
-        gemini_stance = "🌐 夜間ADR・先物連動＋売り方丸焦げシナリオ"
-        gemini_comment = f"「{r['genre']}」セクターへの海外勢バスケット買いと空売り勢の買い戻しが連鎖。夜間推計気配（<b>{r['pts_est_price']}</b>）から特買いライン（<b>{r['tokugai_line']}</b>）を試すメインシナリオです。"
+        gemini_stance = "🌐 海外投資家の資金流入＆セクター追い風"
+        gemini_comment = (
+            f"<b>【結論：『{r['genre']}』関連株に海外の大きな資金が入ってきています】</b><br>"
+            f"・テーマ背景（{r['theme']}）に加え、米国市場や日経先物の動きを反映した夜間理論価格は <b>{r['pts_est_price']}</b> と好調です。<br>"
+            f"・明日は朝からセクター全体が買われやすく、第一目標の <b>{r['tp_price']}（+{r['tp_pct']}%）</b> を十分に狙える環境です。"
+        )
     elif gemini_score >= 52:
-        gemini_stance = "🧭 寄り付き後のアルゴ方向確認"
-        gemini_comment = f"テーマ性は良好。夜間推計気配（{r['pts_est_price']}）付近での機関の板吸収を確認してからの参戦が安全です。"
+        gemini_stance = "🧭 テーマ性は良好・朝の地合い確認"
+        gemini_comment = (
+            f"<b>【結論：銘柄自体のテーマは強いので、全体の地合いだけ確認してください】</b><br>"
+            f"・明日の朝、日経先物や米国株が大きく崩れていなければ、予想価格（<b>{r['pts_est_price']}</b>）付近から堅調に推移する見込みです。"
+        )
     else:
-        gemini_stance = "🔭 セクター逆風・プログラム売り警戒"
-        gemini_comment = f"セクター全体への大口資金流入が一服しており、機関のリバランス売りに警戒が必要です。"
+        gemini_stance = "🔭 セクターへの資金流入が一服"
+        gemini_comment = (
+            f"<b>【結論：他の注目テーマへ資金が移動している可能性があります】</b><br>"
+            f"・『{r['genre']}』セクター全体への追い風がやや弱まっているため、本日は深追い禁物です。"
+        )
 
-    # 5. Perplexity
-    perp_raw = 50 + (macro_score * 2.5) + ((inst_score - 50) * 0.2) + ((s5 - 50) * 0.2) + ((sq_score - 50) * 0.2)
-    if vol_ratio >= 1.3 and r["cmf"] > 0.05: perp_raw += 10
+    # 5. Perplexity (出来高の裏付け・騙し上げチェック担当)
+    perp_raw = 50 + (macro_score * 2.5) + ((moc_score - 50) * 0.25) + ((s5 - 50) * 0.2) + ((sq_score - 50) * 0.2)
+    if vol_ratio >= 1.3: perp_raw += 10
     elif vol_ratio < 0.85 and r["diff"] > 1.5: perp_raw -= 12
     perplexity_score = int(min(max(round(perp_raw), 15), 99))
 
     if perplexity_score >= 70:
-        perplexity_stance = "🔍 実需＋夜間連動ファクト裏付け完了"
-        perplexity_comment = f"出来高倍率（<b>{vol_ratio}倍</b>）・大引け出来高（<b>{close_vol_r}倍</b>）・CMF（<b>{r['cmf']:+.2f}</b>）が本物の機関買いを証明。翌朝8:55以降も成行買いが減らなければ本物の特買い気配です。"
+        perplexity_stance = "🔍 本物の大口買いを確認（騙し上げの可能性極小）"
+        perplexity_comment = (
+            f"<b>【結論：見せかけの上昇ではなく、実際の資金がしっかり入っています】</b><br>"
+            f"・普段の <b>{vol_ratio}倍</b> の出来高があり、さらに前日終了前の30分間にも普段の <b>{close_vol_r}倍</b> の買いが入って高値引け（引けピン度 <b>{r['close_pos_pct']}%</b>）しています。<br>"
+            f"・<b>朝のチェック法：</b>朝8時55分を過ぎても板の「成行買い」の株数が減らなければ、本物の大口買いなので安心してついていけます。"
+        )
     elif perplexity_score >= 52:
-        perplexity_stance = "📡 需給ファクト概ね良好（8:55見せ板監査）"
-        perplexity_comment = f"資金流入は整合していますが、8:00〜8:45の早い時間帯の気配は見せ板が混じるため、8:55以降のリアルな板気配で最終確認してください。"
+        perplexity_stance = "📡 出来高は合格圏（8:55の「見せ板」だけ注意）"
+        perplexity_comment = (
+            f"<b>【結論：需給データは良好ですが、朝8時台の『見せ板』にだけ注意してください】</b><br>"
+            f"・朝8:00〜8:45頃は、買わせるためのダミー注文（見せ板）が出ることがあります。必ず注文取り消しが制限される <b>朝8時55分〜8時58分の気配値</b> を見てから最終判断してください。"
+        )
     else:
-        perplexity_stance = "⚠️ ダイバージェンス検知（寄り天・見せ板警戒）"
-        perplexity_comment = f"価格変動に対して大口資金の裏付けが弱く、朝方の気配吊り上げからの寄り天リスクに警戒が必要です。"
+        perplexity_stance = "⚠️ 出来高不足による「寄り天（朝だけ高くて後で下がる）」警戒"
+        perplexity_comment = (
+            f"<b>【結論：朝だけ高く始まって、すぐ売られる『寄り天』に注意が必要です】</b><br>"
+            f"・出来高の裏付け（{vol_ratio}倍）がやや薄いため、高く始まったところに飛びつくと危険です。"
+        )
 
-    # 6. Genspark
-    genspark_raw = (claude_score * 0.2 + grok_score * 0.2 + gpt_score * 0.2 + gemini_score * 0.2 + perplexity_score * 0.2) + (6 if (sq_score >= 68 and inst_score >= 65) else 0)
+    # 6. Genspark (具体的な買い方・戦術まとめ担当)
+    genspark_raw = (claude_score + grok_score + gpt_score + gemini_score + perplexity_score) / 5.0 + (6 if (sq_score >= 68 and moc_score >= 65) else 0)
     genspark_score = int(min(max(round(genspark_raw), 15), 99))
+    half_lot = max(1, r['lot_info']['shares'] // 2)
+    rem_lot = max(0, r['lot_info']['shares'] - half_lot)
 
     if genspark_score >= 70:
-        genspark_stance = "✨ 戦術統合：特買い・踏み上げ順張り＆VWAP分割"
-        genspark_comment = f"特買い確率<b>{tokugai_prob}%</b>・踏み上げ<b>{sq_score}点</b>の黄金パターン。寄付き（または特買い寄付き直後）に半分エントリーし、5分足VWAPまたはトリガーライン（<b>{r['squeeze_trigger_price']}</b>）突破で残り半分を追加する戦術がベストです。"
+        genspark_stance = "✨ 推奨戦術：『2回に分けて買う』分割エントリー戦術"
+        genspark_comment = (
+            f"<b>【結論：一度に全部買わず、2回に分けて買うと最も安全で利益が伸びます】</b><br>"
+            f"・<b>1回目（9:00 寄付き）：</b>まず推奨株数の半分（<b>{half_lot:,}株</b>）を購入します。<br>"
+            f"・<b>2回目（9:05〜9:30）：</b>寄り付いた後、5分足VWAP（<b>{vwap_ref}</b>）で下げ止まって反発した時、または踏み上げライン（<b>{r['squeeze_trigger_price']}</b>）を突破した瞬間に残りの <b>{rem_lot:,}株</b> を追加購入してください。"
+        )
     elif genspark_score >= 52:
-        genspark_stance = "🎯 戦術統合：5分足15分ルール（初動見極め）"
-        genspark_comment = f"寄付き成行は避け『9:00〜9:15の5分足3本』で5分足VWAPの上を維持できるか確認後に指値参戦する戦術を推奨します。"
+        genspark_stance = "🎯 推奨戦術：『朝9:15まで待って買う』初動見極め戦術"
+        genspark_comment = (
+            f"<b>【結論：9時00分の寄り付きは見送り、最初の15分間の動きを見てから買いましょう】</b><br>"
+            f"・9:00〜9:15（5分足3本分）を見て、ローソク足が5分足VWAP（<b>{vwap_ref}</b>）より上にキープできていれば、そこから指値で <b>{half_lot:,}〜{r['lot_info']['shares']:,}株</b> エントリーするのが最も確実です。"
+        )
     else:
-        genspark_stance = "🛑 戦術統合：キャッシュポジション維持"
-        genspark_comment = f"複数AIのクロスチェックにおいて優位性が不足しています。無理なエントリーは避け、他銘柄へ資金を振り向けるべきです。"
+        genspark_stance = "🛑 推奨戦術：本日はエントリー見送り（資金温存）"
+        genspark_comment = (
+            f"<b>【結論：今日は買わずにウォッチリストで観察するだけにしましょう】</b><br>"
+            f"・勝率とリスクリワードのバランスが基準に達していません。キャッシュ（現金）を残して次のチャンスを待つのがプロの判断です。"
+        )
 
-    # 7. NotebookLM
-    nblm_raw = 48 + (prob - 50) * 0.9 + (payoff - 1.0) * 14 + (10 if (sq_score >= 65 and inst_score >= 60) else -4)
+    # 7. NotebookLM (過去1年間のデータ照合・実績担当)
+    nblm_raw = 48 + (prob - 50) * 0.9 + (payoff - 1.0) * 14 + (10 if (sq_score >= 65 and moc_score >= 60) else -4)
     notebooklm_score = int(min(max(round(nblm_raw), 15), 99))
 
     if notebooklm_score >= 70:
-        notebooklm_stance = "📓 過去統計アーカイブ高一致（特買い・急騰波形◎）"
-        notebooklm_comment = f"過去1年間の日足ノート（同条件<b>{r['count']}</b>・勝率<b>{prob}%</b>・過去最大GU <b>{r['max_win_gap']:+.2f}%</b>）と現在の夜間連動・踏み上げ波形を照合した結果、最も大きなギャップアップを生む勝ちパターンと一致しています。"
+        notebooklm_stance = "📓 過去1年の勝ちパターンと高一致！"
+        notebooklm_comment = (
+            f"<b>【結論：過去1年間のデータの中で、翌朝もっとも大きく上がりやすかった形と一致しています】</b><br>"
+            f"・過去1年で同じシグナルが出た日は <b>{r['count']}</b> あり、そのうち <b>{prob}%</b> の確率で翌朝プラス発進しています（過去最大で <b>+{r['max_win_gap']}%</b> の大幅ギャップアップ実績あり）。データの裏付けはバッチリです。"
+        )
     elif notebooklm_score >= 52:
-        notebooklm_stance = "📚 統計アーカイブ標準（サンプル準拠）"
-        notebooklm_comment = f"過去ログ（{r['count']}）では期待値<b>{edge:+.2f}%</b>・過去最大GU <b>{r['max_win_gap']:+.2f}%</b>を記録。5分足VWAP滞在率が60%を超えると再現性が高まります。"
+        notebooklm_stance = "📚 過去1年のデータでは平均以上の勝率"
+        notebooklm_comment = (
+            f"<b>【結論：過去データ上はまずまずの好成績（勝率 {prob}%）です】</b><br>"
+            f"・過去同条件（{r['count']}）では平均 <b>{r['gap']:+.2f}%</b>（最大 <b>+{r['max_win_gap']}%</b>）で始まっています。日中の5分足VWAPより上で推移する日はさらに勝率が上がります。"
+        )
     else:
-        notebooklm_stance = "🗂️ 過去ログ優位性なし（統計ノイズ圏）"
-        notebooklm_comment = f"過去1年の検証データにおいて、現在のテクニカル波形は勝率のばらつきが大きく、統計的な再現性が低いパターンです。"
+        notebooklm_stance = "🗂️ 過去データでは勝ったり負けたり（再現性低め）"
+        notebooklm_comment = (
+            f"<b>【結論：過去1年の記録では、上がるか下がるかクセが読みづらい形です】</b><br>"
+            f"・過去の勝率は <b>{prob}%（{r['count']}）</b> に留まっており、統計的な優位性はあまり高くありません。"
+        )
 
     final_score = int(round((claude_score + grok_score + gpt_score + gemini_score + perplexity_score + genspark_score + notebooklm_score) / 7.0))
 
     if final_score >= 74:
-        verdict = f"👑 【7大AI満場一致：Sランク特買い（確率{tokugai_prob}%）＆踏み上げ完全連動】 夜間PTS/先物連動＋売り方ロスカット＋機関MOCが重なる最高ランク銘柄！"
+        verdict = f"👑 【7大AI満場一致：Sランク大本命（合議スコア {final_score}点）】\n特買い確率（{tokugai_prob}%）・空売りの踏み上げ（{sq_score}点）・前日引け際の買い集め（{moc_score}点）がすべて揃った最高ランク銘柄です！"
     elif final_score >= 61:
-        verdict = "✅ 【7大AI合議結論：Aランク夜間好連動＆ショートカバー狙い】 夜間推計気配・大引け需給ともに好調。順張り/押し目買いが有効。"
+        verdict = f"✅ 【7大AI合議結論：Aランク有力候補（合議スコア {final_score}点）】\n夜間の追い風と前日の強い買い残しがあり、明日の朝の上昇期待が高い好条件銘柄です。"
     elif final_score >= 50:
-        verdict = "⚠️ 【7大AI合議結論：Bランク条件付き参戦】 翌朝8:50の板気配と寄付き後15分間の5分足VWAPサポートを確認後に少額参戦。"
+        verdict = f"⚠️ 【7大AI合議結論：Bランク条件付き（合議スコア {final_score}点）】\n朝イチの飛びつき買いは避け、9時15分までの5分足VWAPの支えを確認してから少額で狙いましょう。"
     else:
-        verdict = "🛑 【7大AI合議結論：Cランク見送り】 特買い・踏み上げエネルギーおよび機関買いプログラム不在。本日は資金温存を推奨。"
+        verdict = f"🛑 【7大AI合議結論：Cランク見送り推奨（合議スコア {final_score}点）】\n無理に攻める場面ではありません。本日は資金を温存し、他の上位S/Aランク銘柄を優先してください。"
+
+    # 初心者でも迷わない「明日の朝やること3ステップ」
+    easy_guide = (
+        f"<b>🔰 【誰でも迷わない！明日の朝の具体的な行動 3ステップ】</b><br>"
+        f"<b>① 朝8:50〜8:58（板気配のチェック）：</b><br>"
+        f"　証券アプリで気配値を見ます。予想価格（<b>{r['pts_est_price']}</b>）付近で買い注文がしっかり入っているか確認します。もし <b>{r['tokugai_line']}</b> を超えていたら「特買い」のお祭り状態です。<br>"
+        f"<b>② 朝9:00〜9:15（買い注文の出し方）：</b><br>"
+        f"　あなたの資金（{total_capital:,.0f}円）に最適な株数は <b>合計 {r['lot_info']['shares']:,}株</b> です。まずは半分の <b>{half_lot:,}株</b> を買い、株価が5分足VWAP（<b>{vwap_ref}</b>）で支えられるか、踏み上げライン（<b>{r['squeeze_trigger_price']}</b>）を超えたら残りの <b>{rem_lot:,}株</b> を追加します。<br>"
+        f"<b>③ 買った直後（利益確定と損切りの予約）：</b><br>"
+        f"　買えたらすぐに、利益確定の指値を <b>{r['tp_price']}（+{r['tp_pct']}%）</b>、万が一の損切り（逆指値）を <b>{r['sl_price']}（{r['sl_pct']}%）</b> にセットします。これで万が一負けても損失は設定範囲内（約{r['lot_info']['risk_amount']:,.0f}円）にピタッと収まります。"
+    )
 
     return {
         "claude_score": claude_score, "claude_stance": claude_stance, "claude_comment": claude_comment,
@@ -1047,7 +744,7 @@ def run_7ai_council_algorithm(r, m5=None):
         "perplexity_score": perplexity_score, "perplexity_stance": perplexity_stance, "perplexity_comment": perplexity_comment,
         "genspark_score": genspark_score, "genspark_stance": genspark_stance, "genspark_comment": genspark_comment,
         "notebooklm_score": notebooklm_score, "notebooklm_stance": notebooklm_stance, "notebooklm_comment": notebooklm_comment,
-        "final_score": final_score, "verdict": verdict
+        "final_score": final_score, "verdict": verdict, "easy_guide": easy_guide
     }
 
 # --- 7大AIに対する個別質問への自動回答エンジン ---
@@ -1055,66 +752,31 @@ def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
     q_lower = question.lower()
     m5_vwap = m5["vwap5_price"] if m5 else r["vwap_price"]
     m5_status = m5["status_5m"] if m5 else "5分足データ集計中"
-    m5_drive = f"{m5['open_drive_pct']:+.2f}%" if m5 else "ー"
-    m5_twap = f"{m5['twap_green_ratio']}%" if m5 else "ー"
     moc_st = m5["moc_status"] if m5 else r["closing_status"]
-    moc_drv = f"{m5['close_drive_pct']:+.2f}%" if m5 else "ー"
-    moc_vol = f"{m5['close_vol_ratio']}倍" if m5 else "ー"
 
     if any(k in q_lower for k in ["特買", "気配", "pts", "夜間", "adr", "先物", "8時", "板"]):
         return (
-            f"<b>🚨 【翌朝『特買い（特別買い気配）』＆夜間PTS・先物連動に対する7大AI回答】</b><br>"
-            f"・<b>🔴 Grok & 🔵 Gemini（夜間PTS・ADR推計気配）:</b> 夜間CME先物・米SOX指数・為替感応度と大引けMOC買い残しから算出した<b>夜間理論気配値は {r['pts_est_price']}（終値比 {r['pts_gap_pct']:+.2f}%）</b>、翌朝の<b>特買い（気配切り上げ）発生確率は {r['tokugai_prob']}%（{r['tokugai_status']}）</b>です。<br>"
-            f"・<b>🌐 Perplexity（特買い発動ラインと8:50板監査）:</b> 特別買い気配が発動する目安ラインは <b>{r['tokugai_line']}</b> です。朝8:00〜8:45の気配には機関の見せ板が含まれるため、<b>『8:50〜8:58の板気配』で成行買い株数が成行売り株数を1.3倍以上上回っているか</b>を確認してください。<br>"
-            f"・<b>✨ Genspark（特買い発生時の実戦ルール）:</b> 特買いで寄り付いた直後は、最初の5分足1本目（3〜5分間）で個人の利食い売りをこなして下ヒゲをつけるケースが多いため、『寄付きで半分＋最初の押し目（5分足VWAP付近）で残り半分』の分割エントリーが最も高勝率です。"
+            f"<b>🚨 【翌朝『特買い』＆朝8:50の気配値の見方】</b><br>"
+            f"・<b>予想スタート価格：</b>夜間の先物や米国株から計算した理論気配値は <b>{r['pts_est_price']}（前日比 {r['pts_gap_pct']:+.2f}%）</b>、特買い発生確率は <b>{r['tokugai_prob']}%</b> です。<br>"
+            f"・<b>特買いライン：</b>気配値が <b>{r['tokugai_line']}</b> を超えると特別買い気配になります。朝8:55以降に成行買いが成行売りを大きく上回っていれば本物の強い買いです。"
         )
-    elif any(k in q_lower for k in ["踏み上げ", "スクイーズ", "空売", "ショート", "買戻", "買い戻", "ロスカット", "焼"]):
+    elif any(k in q_lower for k in ["踏み上げ", "スクイーズ", "空売", "ショート", "買戻", "買い戻", "ロスカット"]):
         return (
-            f"<b>🔥 【空売り機関の踏み上げ（ショートスクイーズ）解析に対する7大AI回答】</b><br>"
-            f"・<b>🔴 Grok（踏み上げ波形判定）:</b> 現在のショートスクイーズ判定は <b>「{r['squeeze_type']}」（踏み上げ確率スコア: {r['squeeze_score']}/100点）</b> です。{r['squeeze_detail']}<br>"
-            f"・<b>🌐 Perplexity（売り方のロスカット集中ライン）:</b> 空売り勢の逆指値（強制買い戻し注文）が最も集中している防衛ライン（直近20日高値）は <b>{r['squeeze_trigger_price']}（現在値からの距離: {r['dist_to_high20']:+.2f}%）</b> です。<br>"
-            f"・<b>✨ Genspark（踏み上げ同乗戦術）:</b> 株価が <b>{r['squeeze_trigger_price']}</b> を上抜けると、新規の順張りアルゴ買いと空売り勢のパニック買い戻しが重なり、値幅が一気に拡大します。"
+            f"<b>🔥 【空売り勢の踏み上げ（ショートスクイーズ）解説】</b><br>"
+            f"・現在の踏み上げスコアは <b>{r['squeeze_score']}点（{r['squeeze_type']}）</b> です。<br>"
+            f"・空売りしている人たちが一番嫌がる損切りライン（20日高値）は <b>{r['squeeze_trigger_price']}</b> です。ここを超えると空売り勢のパニック買い戻しが巻き起こり、一気に株価が跳ねやすくなります。"
         )
-    elif any(k in q_lower for k in ["大引", "引け", "moc", "ラスト", "15時", "バスケット", "引けピン"]):
+    elif any(k in q_lower for k in ["5分", "五分", "初動", "日中", "vwap", "チャート", "大引", "moc"]):
         return (
-            f"<b>🌆 【大引け間際（ラスト30分）の機関MOC・バスケット買いに対する7大AI回答】</b><br>"
-            f"・<b>🔴 Grok & 🌐 Perplexity（大引けファクト検知）:</b> 直近の大引け30分判定は <b>「{moc_st}」</b> です。ラスト30分間の価格変動は <b>{moc_drv}</b>、出来高集中倍率は日中平均の <b>{moc_vol}</b>、日足の高値引け度（引けピン度）は <b>{r['close_pos_pct']}%</b> です。<br>"
-            f"・<b>🔵 Gemini（翌朝への波及メカニズム）:</b> 機関投資家のMOC（引け成り）注文がラスト30分で高値引けさせた場合、日中に空売りしていたデイトレ・機関が買い戻せず翌朝へ持ち越すため、翌朝寄付きの成行買い戻し（特買い・ギャップアップ）が誘発されます。"
-        )
-    elif any(k in q_lower for k in ["5分", "五分", "初動", "日中", "イントラ", "twap", "15分", "チャート"]):
-        return (
-            f"<b>⚡ 【5分足チャート＆寄付き初動に対する7大AI回答】</b><br>"
-            f"・<b>🔴 Grok（5分足アルゴ検知）:</b> 直近の5分足ステータスは <b>「{m5_status}」</b>。寄付き15分間の初動ドライブは <b>{m5_drive}</b>、直近1時間のTWAP陽線出現率は <b>{m5_twap}</b> です。<br>"
-            f"・<b>✨ Genspark（5分足エントリー戦術）:</b> チャート上の黄金の破線である5分足VWAP（<b>{m5_vwap}</b>）が日中の機関プログラムの分岐点です。寄付き後にローソク足がVWAPの上で陽線を2本連続で形成したタイミングが最も安全な同乗ポイントです。"
-        )
-    elif any(k in q_lower for k in ["機関", "アルゴ", "プログラム", "大口", "vwap", "ステルス"]):
-        return (
-            f"<b>🏛️ 【機関投資家プログラム（日足×5分足×大引けMOC）に対する7大AI回答】</b><br>"
-            f"・<b>🔴 Grok & 🟢 GPT:</b> 日足の機関アルゴ判定は <b>「{r['inst_algo_type']}」（{r['inst_score']}点）</b>、大引け判定は <b>「{moc_st}」</b>、5分足VWAPは <b>{m5_vwap}</b> です。<br>"
-            f"・<b>🌐 Perplexity（ファクト監査）:</b> 大口資金流入を示すCMFは <b>{r['cmf']:+.2f}</b>、出来高倍率は <b>{r['vol_ratio']}倍</b>。機関の分割発注プログラムによる実需の裏付けがあります。"
-        )
-    elif any(k in q_lower for k in ["ロット", "株数", "資金", "何株", "いくら買", "サイズ"]):
-        return (
-            f"<b>💰 【最適ロット数・資金管理に対する7大AI回答】</b><br>"
-            f"・<b>🟠 Claude（リスク許容度サイジング）:</b> 総資金（{total_capital:,.0f}円）と許容リスク（{risk_tolerance_pct}%）から算出した最適購入株数は <b>{lot_info['shares']:,} 株（約 {lot_info['position_value']:,.0f}円 / 資金比率 {lot_info['capital_ratio']:.1f}%）</b> です。<br>"
-            f"・<b>✨ Genspark（分割エントリー提案）:</b> {lot_info['shares']:,}株を一度に成行で買うのではなく、寄付きで半分の <b>{max(1, lot_info['shares']//2):,}株</b>、5分足VWAP（{m5_vwap}）のサポートまたは踏み上げライン（{r['squeeze_trigger_price']}）突破確認後に残り半分を入れる2段階エントリーを推奨します。"
-        )
-    elif any(k in q_lower for k in ["いくら", "買", "エントリー", "指値", "成行", "寄付き"]):
-        return (
-            f"<b>🎯 【エントリー価格・指値ゾーンに対する7大AI回答】</b><br>"
-            f"・<b>🟢 GPT & 🔵 Gemini:</b> 終値 <b>{r['price']}</b>、夜間PTS推計気配 <b>{r['pts_est_price']}（{r['pts_gap_pct']:+.2f}%）</b>、5分足VWAP <b>{m5_vwap}</b>。買い指値ゾーンは <b>{r['price']} 〜 {r['pts_est_price']}</b> を推奨します。"
-        )
-    elif any(k in q_lower for k in ["損切", "ロスカット", "逆指値", "利確", "目標", "売"]):
-        return (
-            f"<b>🛡️ 【利確・損切りラインに対する7大AI回答】</b><br>"
-            f"・<b>🟠 Claude:</b> 撤退ラインは逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b>。ここで最大損失額が許容範囲（{lot_info['risk_amount']:,.0f}円）に収まります。<br>"
-            f"・<b>📓 NotebookLM & 🟢 GPT:</b> 第一利確目標は <b>{r['tp_price']}（+{r['tp_pct']}%）</b>。特買いや踏み上げ相場に入った場合は5分足がVWAPの上を維持している限り利益を伸ばすトレーリング戦術が有効です。"
+            f"<b>⚡ 【5分足チャート＆大引けMOCの解説】</b><br>"
+            f"・前日の終わり際30分間の動きは「<b>{moc_st}</b>」、5分足の動きは「<b>{m5_status}</b>」です。<br>"
+            f"・チャート上のオレンジ色の点線である <b>5分足VWAP（{m5_vwap}）</b> より上にローソク足がある間は買い方が優勢ですので、安心して保有・押し目買いができます。"
         )
     else:
         return (
-            f"<b>🤖 【「{question}」に対する7大AI最高評議会アンサー】</b><br>"
-            f"・<b>✨ Genspark（総合結論）:</b> 7大AI合議スコアは <b>{debate['final_score']}/100点</b>。特買い発生確率は <b>{r['tokugai_prob']}%</b>、踏み上げ判定は「{r['squeeze_type']}（{r['squeeze_score']}点）」です。<br>"
-            f"・<b>🟠 Claude（資金管理）:</b> 推奨ロット数 <b>{lot_info['shares']:,}株（投資額 {lot_info['position_value']:,.0f}円）</b>・逆指値 <b>{r['sl_price']}</b> を守って規律あるトレードを行ってください。"
+            f"<b>🤖 【「{question}」に対する7大AIからの分かりやすい回答】</b><br>"
+            f"・7大AIの総合評価は <b>{debate['final_score']}点 / 100点</b> です。<br>"
+            f"・買う株数は <b>{lot_info['shares']:,}株（まず半分の {max(1, lot_info['shares']//2):,}株 から）</b>、買い目安は <b>{r['price']} 〜 {r['pts_est_price']}</b>、利益確定目標は <b>{r['tp_price']}</b>、万が一の損切り逆指値は <b>{r['sl_price']}</b> に設定してトレードするのが最も安全で確実です。"
         )
 
 # --- マクロ市場データ取得 ---
@@ -1140,9 +802,7 @@ def fetch_macro_market():
                         prev_c = float(df_m['Close'].iloc[-2])
                         if not np.isnan(latest_c) and not np.isnan(prev_c) and prev_c != 0:
                             diff_pct = round((latest_c - prev_c) / prev_c * 100, 2)
-                            lbl = info["label"]
-                            if key == "nk_fut" and c == "^N225":
-                                lbl = "🇯🇵 日経平均(現物)"
+                            lbl = "🇯🇵 日経平均(現物)" if (key == "nk_fut" and c == "^N225") else info["label"]
                             macro_data[key] = {"price": latest_c, "diff": diff_pct, "label": lbl}
                             fetched = True
                             break
@@ -1152,8 +812,9 @@ def fetch_macro_market():
             macro_data[key] = {"price": 0.0, "diff": 0.0, "label": info["label"]}
     return macro_data
 
+# --- メイン解析関数（※不要だった「機関アルゴ（inst_score等）」を削除し軽量化！） ---
 @st.cache_data(ttl=1800)
-def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=None, boost_inst=True, boost_squeeze=True, boost_tokugai=True):
+def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=None, boost_moc=True, boost_squeeze=True, boost_tokugai=True):
     try:
         ticker_obj = yf.Ticker(code)
         df = ticker_obj.history(period="1y")
@@ -1169,21 +830,8 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
             theme = theme or KNOWN_STOCKS[code]["theme"]
             genre = genre if genre != "個別検索" else KNOWN_STOCKS[code]["genre"]
         else:
-            if not name or not theme:
-                try:
-                    info = ticker_obj.info
-                    if not name:
-                        name = info.get("shortName") or info.get("longName") or code.replace(".T", "")
-                    if not theme:
-                        sector = info.get("sector", "")
-                        industry = info.get("industry", "")
-                        if sector or industry:
-                            theme = f"セクター: {sector} / 業種: {industry}（カスタム銘柄診断）"
-                        else:
-                            theme = "カスタム指定銘柄（過去1年の日足・需給データに基づく統計解析）"
-                except Exception:
-                    name = name or code.replace(".T", "")
-                    theme = theme or "カスタム指定銘柄（過去1年の日足・需給データに基づく統計解析）"
+            name = name or code.replace(".T", "")
+            theme = theme or "カスタム指定銘柄（過去1年の日足・需給データに基づく統計解析）"
 
         df['Prev_Close'] = df['Close'].shift(1)
         df['Day_Return'] = (df['Close'] - df['Prev_Close']) / df['Prev_Close'] * 100
@@ -1227,11 +875,6 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         df['Typical_Price'] = (df['High'] + df['Low'] + df['Close']) / 3.0
         df['TP_Vol'] = df['Typical_Price'] * df['Volume']
         df['VWAP20'] = (df['TP_Vol'].rolling(20).sum() / df['Volume'].rolling(20).sum().replace(0, np.nan)).fillna(df['Close'])
-        df['VWAP_Dev'] = ((df['Close'] - df['VWAP20']) / df['VWAP20'] * 100).fillna(0.0)
-
-        mf_multiplier = (((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / high_low).fillna(0.0)
-        mf_volume = mf_multiplier * df['Volume']
-        df['CMF20'] = (mf_volume.rolling(20).sum() / df['Volume'].rolling(20).sum().replace(0, np.nan)).fillna(0.0)
 
         df['High_20'] = df['High'].shift(1).rolling(20).max().fillna(df['High'])
         df['Dist_High20'] = ((df['Close'] - df['High_20']) / df['High_20'] * 100).fillna(0.0)
@@ -1240,12 +883,7 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         cond_sq_breakout = (df['Close'] >= df['High_20'] * 0.992) & (df['Vol_Ratio'] >= 1.25) & (df['Close_Pos'] >= 0.72) & (df['Day_Return'] > 1.0)
         cond_sq_bb_expand = (df['BB_Width'].shift(1) <= df['BB_Width_Min20'].shift(1) * 1.35) & (df['BB_Sigma'] >= 1.45) & (df['Vol_Ratio'] >= 1.2) & (df['Close'] > df['Open'])
         cond_sq_beartrap = (df['Prior_5d_Ret'] <= -3.0) & (df['Day_Return'] >= 1.8) & (df['Close_Pos'] >= 0.75) & (df['Vol_Ratio'] >= 1.15)
-        cond_inst_closing_moc = (df['Close_Pos'] >= 0.82) & (df['Upper_Shadow'] <= 0.12) & (df['Vol_Ratio'] >= 1.15) & (df['Close'] > df['Open']) & (df['Close'] > df['VWAP20'])
-
-        cond_inst_stealth = (df['Vol_Ratio'] >= 1.15) & (df['Vol_Ratio'] <= 2.6) & ((df['High'] - df['Low']) <= df['ATR'] * 1.15) & (df['Close_Pos'] >= 0.65) & (df['CMF20'] > 0.05)
-        cond_inst_vwap = (df['Close'] > df['VWAP20']) & (df['Close'] > df['Typical_Price']) & (df['Vol_Ratio'] >= 1.1) & (df['Day_Return'] > 0) & (df['CMF20'] > 0)
-        cond_inst_momentum = (df['Vol_Ratio'] >= 1.65) & (df['Close_Pos'] >= 0.78) & (df['Day_Return'] >= 1.5) & (df['MACD_Hist_Diff'] > 0)
-        cond_inst_sweep = (df['Lower_Shadow'] >= 0.42) & (df['Close'] > df['Open']) & (df['Vol_Ratio'] >= 1.15) & (df['Close'] >= df['VWAP20'] * 0.985)
+        cond_closing_moc = (df['Close_Pos'] >= 0.82) & (df['Upper_Shadow'] <= 0.12) & (df['Vol_Ratio'] >= 1.15) & (df['Close'] > df['Open'])
 
         df['Next_Open'] = df['Open'].shift(-1)
         df['Gap_Pct'] = (df['Next_Open'] - df['Close']) / df['Close'] * 100
@@ -1261,32 +899,28 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
 
         latest = df.iloc[-1]
         history = df.iloc[:-1].dropna(subset=['Next_Open', 'MA20', 'RSI', 'MACD_Hist'])
-
         if len(history) == 0:
             return None
 
+        # 空売り踏み上げ（ショートスクイーズ）計算
         sq_raw = 42.0
         dist_h20 = float(latest['Dist_High20'])
-        if dist_h20 >= 0:
-            sq_raw += 22.0
-        elif dist_h20 >= -2.5:
-            sq_raw += 15.0
-        elif dist_h20 >= -5.0:
-            sq_raw += 6.0
+        if dist_h20 >= 0: sq_raw += 22.0
+        elif dist_h20 >= -2.5: sq_raw += 15.0
+        elif dist_h20 >= -5.0: sq_raw += 6.0
 
         sq_raw += min(float(latest['Vol_Ratio']), 3.0) * 8.0
         sq_raw += (float(latest['Close_Pos']) - 0.5) * 24.0
         if float(latest['BB_Sigma']) >= 1.5: sq_raw += 8.0
-        if float(latest['CMF20']) > 0.05: sq_raw += 6.0
 
         if cond_sq_breakout.iloc[-1]:
             sq_raw += 12.0
             squeeze_type = "🔥 20日高値ブレイク踏み上げ (売り方全員含み損)"
-            squeeze_detail = f"空売り勢の最終防衛ライン（20日高値）を出来高倍率{latest['Vol_Ratio']:.2f}倍で突破！売り方の強制ロスカット買い戻しが連鎖しやすい状態です。"
+            squeeze_detail = f"空売り勢の防衛ライン（20日高値）を出来高倍率{latest['Vol_Ratio']:.2f}倍で突破！強制ロスカット買い戻しが連鎖しやすい状態です。"
         elif cond_sq_beartrap.iloc[-1]:
             sq_raw += 12.0
             squeeze_type = "🪤 ベアトラップ踏み上げ (突っ込み売り丸焦げ反発)"
-            squeeze_detail = f"直近の下落（{latest['Prior_5d_Ret']:+.1f}%）で空売りを誘い込んだ後、高値引け大陽線（{latest['Day_Return']:+.1f}%）で売り方を底値に閉じ込めています。"
+            squeeze_detail = f"直近の下落で空売りを誘い込んだ後、高値引け大陽線（{latest['Day_Return']:+.1f}%）で売り方を底値に閉じ込めています。"
         elif cond_sq_bb_expand.iloc[-1]:
             sq_raw += 10.0
             squeeze_type = "💥 バンド収縮エクスパンション踏み上げ"
@@ -1301,13 +935,14 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
 
         squeeze_score = int(min(max(round(sq_raw), 15), 99))
 
+        # 大引けMOC（引けピン度）計算
         close_pos_pct = int(round(float(latest['Close_Pos']) * 100))
         closing_power_raw = 40.0 + (float(latest['Close_Pos']) * 35.0) + (min(float(latest['Vol_Ratio']), 2.5) * 10.0)
         if latest['Close'] > latest['Open']: closing_power_raw += 8.0
         if latest['Upper_Shadow'] <= 0.15: closing_power_raw += 6.0
         closing_power_score = int(min(max(round(closing_power_raw), 15), 99))
 
-        if cond_inst_closing_moc.iloc[-1]:
+        if cond_closing_moc.iloc[-1]:
             closing_status = f"🌆 大引けMOC引けピン買い集め (高値引け度{close_pos_pct}%)"
         elif close_pos_pct >= 75 and latest['Day_Return'] > 0:
             closing_status = f"📈 大引け堅調・高値圏引け (高値引け度{close_pos_pct}%)"
@@ -1316,62 +951,16 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         else:
             closing_status = f"⚖️ 大引け通常引け (高値引け度{close_pos_pct}%)"
 
-        inst_score_raw = 50.0
-        inst_score_raw += float(latest['CMF20']) * 45.0
-        if latest['Close'] > latest['VWAP20']: inst_score_raw += 8.0
-        else: inst_score_raw -= 6.0
-        if latest['Close'] > latest['Typical_Price']: inst_score_raw += 6.0
-        if latest['Vol_Ratio'] >= 1.2 and latest['Close_Pos'] >= 0.65: inst_score_raw += 12.0
-        if latest['Vol_Ratio'] >= 1.3 and latest['Close_Pos'] <= 0.35: inst_score_raw -= 14.0
-
-        if cond_inst_closing_moc.iloc[-1]:
-            inst_algo_type = "🌆 大引けMOCバスケット買い集め (引けピン執行)"
-            inst_detail = f"上ヒゲをほとんど残さず当日高値圏（{close_pos_pct}%）で出来高を伴い引けており、大引けの機関MOC（引け成り）買いが濃厚です。"
-            inst_score_raw += 15.0
-        elif cond_inst_stealth.iloc[-1]:
-            inst_algo_type = "🐳 機関ステルス集め (TWAP/氷山注文)"
-            inst_detail = "値幅を抑えながら出来高を伴って高値引けしており、機関の分割買いプログラムの痕跡が濃厚です。"
-            inst_score_raw += 12.0
-        elif cond_inst_momentum.iloc[-1]:
-            inst_algo_type = "🚀 機関バスケット一斉買い (CTA/海外勢)"
-            inst_detail = "出来高急増と高値引けが同時発生。海外勢・CTAのトレンドフォロー型プログラムが稼働中です。"
-            inst_score_raw += 15.0
-        elif cond_inst_sweep.iloc[-1]:
-            inst_algo_type = "🧲 アルゴのストップ狩り吸収 (Sweep)"
-            inst_detail = "下値で個人の損切りを巻き込んだ後、大口の買いプログラムがすべて吸収して陽線引けしています。"
-            inst_score_raw += 10.0
-        elif cond_inst_vwap.iloc[-1]:
-            inst_algo_type = "🎯 機関VWAPアルゴリズム順行"
-            inst_detail = "機関のベンチマークであるVWAPを上回って推移しており、順張りプログラムが継続しやすい波形です。"
-            inst_score_raw += 8.0
-        elif latest['CMF20'] < -0.1 and latest['Close'] < latest['VWAP20']:
-            inst_algo_type = "🧊 機関ディストリビューション (売りアルゴ)"
-            inst_detail = "VWAP下抜けかつ資金流出（CMFマイナス）が続いており、大口の売りプログラムに警戒が必要です。"
-            inst_score_raw -= 10.0
-        else:
-            inst_algo_type = "⚖️ 機関アルゴ中立 (通常執行)"
-            inst_detail = "目立った大口プログラムの偏りはなく、市場全体の需給と連動しています。"
-
-        inst_score = int(min(max(round(inst_score_raw), 15), 99))
-
+        # シグナル別過去バックテスト
         if cond_sq_breakout.iloc[-1]:
             signal = "🔥 20日高値ブレイク・ショートスクイーズ(踏み上げ)"
             sub = history[cond_sq_breakout.reindex(history.index, fill_value=False)]
         elif cond_sq_beartrap.iloc[-1]:
             signal = "🪤 ベアトラップ踏み上げ・空売り丸焦げ反発"
             sub = history[cond_sq_beartrap.reindex(history.index, fill_value=False)]
-        elif cond_inst_closing_moc.iloc[-1]:
+        elif cond_closing_moc.iloc[-1]:
             signal = "🌆 大引けMOCバスケット買い・引けピン"
-            sub = history[cond_inst_closing_moc.reindex(history.index, fill_value=False)]
-        elif cond_inst_stealth.iloc[-1]:
-            signal = "🐳 機関ステルス集め＋高値引け"
-            sub = history[cond_inst_stealth.reindex(history.index, fill_value=False)]
-        elif cond_inst_momentum.iloc[-1]:
-            signal = "🚀 機関バスケット買い・出来高ブレイク"
-            sub = history[cond_inst_momentum.reindex(history.index, fill_value=False)]
-        elif cond_inst_sweep.iloc[-1]:
-            signal = "🧲 機関ストップ狩り吸収・下ヒゲ陽線"
-            sub = history[cond_inst_sweep.reindex(history.index, fill_value=False)]
+            sub = history[cond_closing_moc.reindex(history.index, fill_value=False)]
         elif cond_squeeze_break.iloc[-1]:
             signal = "🔥 MACD加速＋出来高ブレイク"
             sub = history[cond_squeeze_break.reindex(history.index, fill_value=False)]
@@ -1395,13 +984,8 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
             sub = history[cond_down.reindex(history.index, fill_value=False)]
 
         if len(sub) < 5:
-            sub_vwap = history[cond_inst_vwap.reindex(history.index, fill_value=False)]
-            if len(sub_vwap) >= 5 and inst_score >= 60:
-                sub = sub_vwap
-                signal += " (VWAP統計)"
-            else:
-                sub = history
-                signal += " (全体統計)"
+            sub = history
+            signal += " (全体統計)"
 
         total = len(sub)
         wins = int(sub['Morning_Up'].sum())
@@ -1424,7 +1008,7 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         fx_diff = macro["usdjpy"]["diff"] if macro else 0.0
 
         if macro:
-            if genre in ["半導体", "AI", "AI電力・インフラ", "テンバガー小型株", "IPO", "未公開株"]:
+            if genre in ["半導体", "AI", "AI電力・インフラ", "小型株", "IPO", "未公開株"]:
                 if sox_diff >= 1.0:
                     macro_score += 5
                     macro_reasons.append(f"米SOX指数が<b>+{sox_diff}%</b>と強く上昇しており追い風です。")
@@ -1444,7 +1028,7 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         if is_jp:
             if genre == "半導体":
                 overnight_macro_impact = (nk_diff * 0.55) + (sox_diff * 0.48) + (fx_diff * 0.25)
-            elif genre in ["AI", "テンバガー小型株", "IPO", "宇宙"]:
+            elif genre in ["AI", "小型株", "IPO", "宇宙"]:
                 overnight_macro_impact = (nk_diff * 0.50) + (sox_diff * 0.30) + (sp_diff * 0.30)
             else:
                 overnight_macro_impact = (nk_diff * 0.65) + (sp_diff * 0.25) + (fx_diff * 0.20)
@@ -1469,28 +1053,26 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         tokugai_raw += max(0.0, closing_power_score - 50) * 0.55
         tokugai_raw += max(0.0, squeeze_score - 50) * 0.55
         tokugai_raw += max(0.0, float(latest['Vol_Ratio']) - 1.0) * 12.0
-        if overnight_macro_impact >= 0.8:
-            tokugai_raw += 12.0
-        elif overnight_macro_impact <= -0.8:
-            tokugai_raw -= 15.0
+        if overnight_macro_impact >= 0.8: tokugai_raw += 12.0
+        elif overnight_macro_impact <= -0.8: tokugai_raw -= 15.0
         tokugai_prob = int(min(max(round(tokugai_raw), 5), 98))
 
         if tokugai_prob >= 72:
             tokugai_status = "🚨 特買い（特別買い気配・気配切り上げ）濃厚"
-            premarket_advice = f"翌朝8:50時点で成行買いが殺到し、9:00にすぐ寄らず<b>特買い（基準+{tokugai_pct_threshold}%超）</b>で気配を切り上げる公算が大です。寄り付き直後の最初の押し目（5分足VWAP）も視野に入れた2段階戦術を準備してください。"
+            premarket_advice = f"翌朝8:50時点で成行買いが殺到し、9:00にすぐ寄らず<b>特買い（基準+{tokugai_pct_threshold}%超）</b>で気配を切り上げる公算が大です。"
         elif tokugai_prob >= 52:
             tokugai_status = "🌅 買い気配先行・ギャップアップスタート優勢"
-            premarket_advice = f"夜間連動と大引けMOCの買い残しにより、翌朝は前日終値より上の<b>{pts_gap_pct:+.2f}%付近</b>で買い気配スタートが見込まれます。8:55以降の板の厚みを確認して順張り参戦が有効です。"
+            premarket_advice = f"夜間連動と大引けMOCの買い残しにより、翌朝は前日終値より上の<b>{pts_gap_pct:+.2f}%付近</b>で買い気配スタートが見込まれます。"
         elif pts_gap_pct < -0.3:
             tokugai_status = "🌧️ 売り気配・押し目スタート警戒"
-            premarket_advice = f"夜間地合いの逆風により安く始まる可能性があります。寄り付きの売り一巡後、5分足VWAPを奪還するまで指値を下に引きつけて待機してください。"
+            premarket_advice = f"夜間地合いの逆風により安く始まる可能性があります。5分足VWAPを奪還するまで待機してください。"
         else:
             tokugai_status = "⚖️ 通常気配スタート（板需給拮抗）"
-            premarket_advice = f"翌朝は前日終値付近でのスタート予想です。9:00〜9:15の初動出来高とVWAP攻防を見極めてからエントリーしてください。"
+            premarket_advice = f"翌朝は前日終値付近でのスタート予想です。9:00〜9:15の初動出来高を見極めてからエントリーしてください。"
 
         reasons = []
         if macro_reasons: reasons.extend(macro_reasons)
-        reasons.append(f"機関＆踏み上げ解析: <b>{inst_algo_type}</b> / <b>{squeeze_type}</b>。")
+        reasons.append(f"需給＆踏み上げ解析: <b>{closing_status}</b> / <b>{squeeze_type}</b>。")
         reasons.append(f"過去同条件では{total}回中<b>{wins}回</b>ギャップアップ（最大<b>{max_win_gap:+.2f}%</b>）。")
 
         base_score = min(max(prob * 0.58, 10), 46)
@@ -1500,10 +1082,10 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
         if latest['Close_Pos'] >= 0.7: tech_score += 4
         if latest['MACD_Hist_Diff'] > 0: tech_score += 4
 
-        inst_bonus = round((inst_score - 50) * 0.16 + (closing_power_score - 50) * 0.10) if boost_inst else 0
-        sq_bonus = round((squeeze_score - 50) * 0.16) if boost_squeeze else 0
-        tokugai_bonus = round((tokugai_prob - 45) * 0.12) if boost_tokugai else 0
-        ai_score = int(min(max(round(base_score + edge_score + tech_score + macro_score + inst_bonus + sq_bonus + tokugai_bonus), 15), 99))
+        moc_bonus = round((closing_power_score - 50) * 0.18) if boost_moc else 0
+        sq_bonus = round((squeeze_score - 50) * 0.18) if boost_squeeze else 0
+        tokugai_bonus = round((tokugai_prob - 45) * 0.14) if boost_tokugai else 0
+        ai_score = int(min(max(round(base_score + edge_score + tech_score + macro_score + moc_bonus + sq_bonus + tokugai_bonus), 15), 99))
 
         est_open_val = close_val * (1.0 + (avg_gap / 100.0))
         tp_val = max(est_open_val, pts_est_val, close_val) + (atr_val * 0.8)
@@ -1514,8 +1096,7 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
 
         risk_per_share = max(close_val - sl_val, close_val * 0.005)
         allowed_total_risk_money = total_capital * (risk_tolerance_pct / 100.0)
-        calculated_shares = int(allowed_total_risk_money / risk_per_share)
-        if calculated_shares < 1: calculated_shares = 1
+        calculated_shares = max(1, int(allowed_total_risk_money / risk_per_share))
         position_value = calculated_shares * close_val
         capital_ratio = round((position_value / total_capital) * 100, 1)
 
@@ -1530,9 +1111,7 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
             "est_open": fmt_p(est_open_val),
             "tp_price": fmt_p(tp_val), "tp_pct": tp_pct,
             "sl_price": fmt_p(sl_val), "sl_pct": sl_pct,
-            "vwap_price": fmt_p(vwap_val), "vwap_dev": round(float(latest['VWAP_Dev']), 2),
-            "cmf": round(float(latest['CMF20']), 2),
-            "inst_score": inst_score, "inst_algo_type": inst_algo_type, "inst_detail": inst_detail,
+            "vwap_price": fmt_p(vwap_val),
             "close_pos_pct": close_pos_pct, "closing_power_score": closing_power_score, "closing_status": closing_status,
             "squeeze_score": squeeze_score, "squeeze_type": squeeze_type, "squeeze_detail": squeeze_detail,
             "squeeze_trigger_price": fmt_p(high20_val), "raw_high20": high20_val, "dist_to_high20": round(dist_h20, 2),
@@ -1567,7 +1146,6 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     pts_sign = "+" if r["pts_gap_pct"] > 0 else ""
     sigma_sign = "+" if r["bb_sigma"] > 0 else ""
     edge_sign = "+" if r["edge"] > 0 else ""
-    vwap_sign = "+" if r["vwap_dev"] > 0 else ""
     h20_sign = "+" if r["dist_to_high20"] > 0 else ""
 
     card_class = "search-result-card" if is_custom else ("rank-card" if rank is not None else "stock-card")
@@ -1577,7 +1155,6 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     m_score = r["macro_score"]
     macro_badge_html = f'<span class="macro-badge">🌐 地合い {m_score:+d}点</span>'
     edge_badge_html = f'<span class="edge-badge">📐 損益比 {r["payoff"]}倍 (期待値{edge_sign}{r["edge"]}%)</span>'
-    inst_badge_html = f'<span class="inst-badge">🏛️ 機関アルゴ: {r["inst_score"]}点</span>'
     moc_badge_html = f'<span class="moc-badge">🌆 大引けMOC: {r["closing_power_score"]}点</span>'
     sq_badge_html = f'<span class="squeeze-badge">🔥 踏み上げ: {r["squeeze_score"]}点</span>'
     tokugai_badge_html = f'<span class="tokugai-badge">🚨 特買い確率: {r["tokugai_prob"]}%</span>'
@@ -1586,7 +1163,7 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
 
     html_card = (
         f'<div class="{card_class}">'
-        f'<div>{rank_html}<span class="score-badge">🤖 AIスコア: {r["ai_score"]} / 100</span>{tokugai_badge_html}{sq_badge_html}{inst_badge_html}{moc_badge_html}{macro_badge_html}{edge_badge_html}</div>'
+        f'<div>{rank_html}<span class="score-badge">🤖 AIスコア: {r["ai_score"]} / 100</span>{tokugai_badge_html}{sq_badge_html}{moc_badge_html}{macro_badge_html}{edge_badge_html}</div>'
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">'
         f'<div><span style="font-size:16px; font-weight:bold; color:#1e293b;">{r["name"]}</span> '
         f'<span style="font-size:12px; color:#64748b;">({r["code"]})</span>{genre_html}<br>'
@@ -1603,12 +1180,8 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         f'</div>'
         f'<div class="squeeze-box">'
         f'<b>{r["squeeze_type"]}</b> ｜ 踏み上げトリガー(20日高値): <b>{r["squeeze_trigger_price"]}</b> ({h20_sign}{r["dist_to_high20"]}%)<br>'
+        f'<b>{r["closing_status"]}</b><br>'
         f'<span style="font-size:11px; color:#9f1239;">└ {r["squeeze_detail"]}</span>'
-        f'</div>'
-        f'<div class="algo-box">'
-        f'<b>{r["inst_algo_type"]}</b> ｜ <b>{r["closing_status"]}</b><br>'
-        f'日足20日VWAP: <b>{r["vwap_price"]}</b> ({vwap_sign}{r["vwap_dev"]}%) ｜ 資金流入(CMF): <b>{r["cmf"]:+.2f}</b><br>'
-        f'<span style="font-size:11px; color:#312e81;">└ {r["inst_detail"]}</span>'
         f'</div>'
         f'<div class="metrics-row">'
         f"<span>📊 <b>RSI:</b> {r['rsi']}</span>"
@@ -1637,7 +1210,6 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         f'<span style="font-size:11px; color:#15803d;">※損切り到達時の最大損失額を総資金の {risk_tolerance_pct}%（{lot["risk_amount"]:,.0f}円）に自動抑制します。</span>'
         f'</div>'
         f'<div class="factor-box">'
-        f'<div class="factor-title">💡 クオンツ解析・上昇期待の背景</div>'
         f'<div style="margin-bottom:4px;"><b>【テーマ】</b> {r["theme"]}</div>'
         f'<div><b>【需給判定】</b> {r["reasons"]}</div>'
         f'</div></div>'
@@ -1650,9 +1222,11 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
 
     btn_col1, btn_col2 = st.columns([2.2, 1.2])
     with btn_col1:
-        btn_label = f"🔼 会議パネルを閉じる" if is_open else f"🚨 特買い・5分足 ＆ 7大AI会議"
+        btn_label = f"🔼 会議パネルを閉じる" if is_open else f"🧠 7大AIで10秒会議して詳細を見る"
         if st.button(btn_label, key=f"btn_{unique_key}", use_container_width=True):
             st.session_state["active_debates"][unique_key] = not is_open
+            if is_open and unique_key in st.session_state["debate_Animated"]:
+                st.session_state["debate_Animated"].remove(unique_key)
             st.rerun()
     with btn_col2:
         wl_label = "✅ 監視登録済(解除)" if in_wl else "⭐ 監視リスト追加"
@@ -1663,10 +1237,30 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
                 st.session_state["watchlist"][r["code"]] = r
             st.rerun()
 
+    # --- 🧠 10秒間のリアルタイム会議演出 ＆ 詳細レポート表示 ---
     if st.session_state["active_debates"].get(unique_key, False):
-        with st.spinner("夜間PTS連動・大引けMOC・5分足チャートを取得し、7大AI会議を実行中..."):
-            m5 = fetch_5m_intraday_algo(r["full_code"], trigger_high20=r["raw_high20"])
-            debate = run_7ai_council_algorithm(r, m5)
+        m5 = fetch_5m_intraday_algo(r["full_code"], trigger_high20=r["raw_high20"])
+        debate = run_7ai_council_algorithm(r, m5)
+
+        # 初回オープン時のみ10秒間の会議中アニメーションを実行
+        if unique_key not in st.session_state["debate_Animated"]:
+            with st.status(f"🧠 【会議中】7大AIが「{r['name']}」を徹底議論しています...（約10秒）", expanded=True) as status:
+                prog_bar = st.progress(0, text="会議を開始しています...")
+                discussion_steps = [
+                    (14, "🟠 **Claude** が過去1年の勝率と損切りリスク幅を計算中..."),
+                    (28, "🔴 **Grok** が空売り勢の踏み上げラインと翌朝の特買い確率を解析中..."),
+                    (42, "🟢 **GPT** が日足トレンドと5分足VWAPのバランスを検証中..."),
+                    (57, "🔵 **Gemini** が米国株・SOX指数・夜間先物の波及効果を分析中..."),
+                    (71, "🌐 **Perplexity** が大引け30分間の出来高と本物の買いかを監査中..."),
+                    (85, "✨ **Genspark** が明日の朝一番安全な『分割買い戦術』を策定中..."),
+                    (100, "📓 **NotebookLM** が過去ログと照合し、最終結論をまとめています...")
+                ]
+                for pct, msg in discussion_steps:
+                    st.write(msg)
+                    prog_bar.progress(pct, text=f"🧠 会議中... ({pct}%)")
+                    time.sleep(1.4)  # 1.4秒 × 7ステップ ＝ 約10秒間
+                status.update(label=f"✅ 7大AIの10秒会議が完了しました！（合議スコア: {debate['final_score']}点）", state="complete", expanded=False)
+            st.session_state["debate_Animated"].add(unique_key)
 
         premarket_html = (
             f'<div class="premarket-board-box">'
@@ -1704,14 +1298,13 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
             m5_html = (
                 f'<div class="intraday-5m-box">'
                 f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
-                f'<span style="font-weight:bold; color:#38bdf8;">⚡ 5分足リアルタイム機関アルゴ解析: {m5["status_5m"]}</span>'
+                f'<span style="font-weight:bold; color:#38bdf8;">⚡ 5分足リアルタイム解析: {m5["status_5m"]}</span>'
                 f'<span style="background:#0284c7; color:#fff; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:bold;">5分足スコア: {m5["score_5m"]}点</span>'
                 f'</div>'
                 f'<div style="font-size:11px; color:#e2e8f0; margin-bottom:4px;">'
                 f'・日中5分足VWAP: <b>{m5["vwap5_price"]}</b> ({m5["vwap5_dev"]:+.2f}%) ｜ '
                 f'寄付き15分初動: <b>{m5["open_drive_pct"]:+.2f}%</b> ｜ '
-                f'TWAP陽線率: <b>{m5["twap_green_ratio"]}%</b> ｜ '
-                f'VWAP上滞在率: <b>{m5["above_vwap_ratio"]}%</b>'
+                f'陽線率: <b>{m5["twap_green_ratio"]}%</b>'
                 f'</div>'
                 f'<div style="font-size:11px; color:#bae6fd;">└ {m5["comment_5m"]}</div>'
                 f'</div>'
@@ -1723,19 +1316,20 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
 
         council_html = (
             f'<div class="ai-council-box">'
-            f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">'
-            f'<span style="font-size:13px; font-weight:bold; color:#e2e8f0;">🧠 7大AI最高評議会（セブン・カウンシル）レポート</span>'
-            f'<span style="background:#4f46e5; color:#fff; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:bold;">'
-            f'7大AI合議スコア: {debate["final_score"]} / 100</span>'
+            f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">'
+            f'<span style="font-size:14px; font-weight:bold; color:#fbbf24;">🧠 7大AI最高評議会 徹底議論レポート（分かりやすい詳細解説）</span>'
+            f'<span style="background:#4f46e5; color:#fff; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:bold;">'
+            f'7大AI合議スコア: {debate["final_score"]} / 100点</span>'
             f'</div>'
-            f'<div class="ai-agent-card claude-card"><div style="font-weight:bold; color:#fbbf24; margin-bottom:2px;">🟠 Claude (リスク管理・VWAP支持判定) — {debate["claude_score"]}点 【{debate["claude_stance"]}】</div><div style="color:#f1f5f9;">{debate["claude_comment"]}</div></div>'
-            f'<div class="ai-agent-card grok-card"><div style="font-weight:bold; color:#f87171; margin-bottom:2px;">🔴 Grok (特買い気配・踏み上げ＆5分足需給) — {debate["grok_score"]}点 【{debate["grok_stance"]}】</div><div style="color:#f1f5f9;">{debate["grok_comment"]}</div></div>'
-            f'<div class="ai-agent-card gpt-card"><div style="font-weight:bold; color:#34d399; margin-bottom:2px;">🟢 GPT (夜間連動・マルチファクター統合) — {debate["gpt_score"]}点 【{debate["gpt_stance"]}】</div><div style="color:#f1f5f9;">{debate["gpt_comment"]}</div></div>'
-            f'<div class="ai-agent-card gemini-card"><div style="font-weight:bold; color:#60a5fa; margin-bottom:2px;">🔵 Gemini (夜間ADR連動・売り方丸焦げシナリオ) — {debate["gemini_score"]}点 【{debate["gemini_stance"]}】</div><div style="color:#f1f5f9;">{debate["gemini_comment"]}</div></div>'
-            f'<div class="ai-agent-card perplexity-card"><div style="font-weight:bold; color:#22d3ee; margin-bottom:2px;">🌐 Perplexity (リアルタイム需給ファクト＆8:50見せ板監査) — {debate["perplexity_score"]}点 【{debate["perplexity_stance"]}】</div><div style="color:#f1f5f9;">{debate["perplexity_comment"]}</div></div>'
-            f'<div class="ai-agent-card genspark-card"><div style="font-weight:bold; color:#c084fc; margin-bottom:2px;">✨ Genspark (マルチアングル戦術統合＆クロスチェック) — {debate["genspark_score"]}点 【{debate["genspark_stance"]}】</div><div style="color:#f1f5f9;">{debate["genspark_comment"]}</div></div>'
-            f'<div class="ai-agent-card notebooklm-card"><div style="font-weight:bold; color:#f472b6; margin-bottom:2px;">📓 NotebookLM (過去1年統計アーカイブ＆特買い深層照合) — {debate["notebooklm_score"]}点 【{debate["notebooklm_stance"]}】</div><div style="color:#f1f5f9;">{debate["notebooklm_comment"]}</div></div>'
-            f'<div class="consensus-banner"><div style="font-weight:bold; color:#a5b4fc; margin-bottom:3px;">🏛️ 7大AI最終コンセンサス</div><div style="color:#ffffff; font-weight:bold;">{debate["verdict"]}</div></div>'
+            f'<div class="ai-agent-card claude-card"><div style="font-weight:bold; color:#fbbf24; margin-bottom:4px;">🟠 Claude（リスク管理・負けにくさ担当）— {debate["claude_score"]}点 【{debate["claude_stance"]}】</div><div style="color:#f1f5f9;">{debate["claude_comment"]}</div></div>'
+            f'<div class="ai-agent-card grok-card"><div style="font-weight:bold; color:#f87171; margin-bottom:4px;">🔴 Grok（特買い気配・空売り踏み上げ担当）— {debate["grok_score"]}点 【{debate["grok_stance"]}】</div><div style="color:#f1f5f9;">{debate["grok_comment"]}</div></div>'
+            f'<div class="ai-agent-card gpt-card"><div style="font-weight:bold; color:#34d399; margin-bottom:4px;">🟢 GPT（総合バランス・トレンド判定担当）— {debate["gpt_score"]}点 【{debate["gpt_stance"]}】</div><div style="color:#f1f5f9;">{debate["gpt_comment"]}</div></div>'
+            f'<div class="ai-agent-card gemini-card"><div style="font-weight:bold; color:#60a5fa; margin-bottom:4px;">🔵 Gemini（夜間先物・米国株・テーマ資金担当）— {debate["gemini_score"]}点 【{debate["gemini_stance"]}】</div><div style="color:#f1f5f9;">{debate["gemini_comment"]}</div></div>'
+            f'<div class="ai-agent-card perplexity-card"><div style="font-weight:bold; color:#22d3ee; margin-bottom:4px;">🌐 Perplexity（本物の買いか・見せ板チェック担当）— {debate["perplexity_score"]}点 【{debate["perplexity_stance"]}】</div><div style="color:#f1f5f9;">{debate["perplexity_comment"]}</div></div>'
+            f'<div class="ai-agent-card genspark-card"><div style="font-weight:bold; color:#c084fc; margin-bottom:4px;">✨ Genspark（具体的な買い方・分割エントリー担当）— {debate["genspark_score"]}点 【{debate["genspark_stance"]}】</div><div style="color:#f1f5f9;">{debate["genspark_comment"]}</div></div>'
+            f'<div class="ai-agent-card notebooklm-card"><div style="font-weight:bold; color:#f472b6; margin-bottom:4px;">📓 NotebookLM（過去1年間の統計データ照合担当）— {debate["notebooklm_score"]}点 【{debate["notebooklm_stance"]}】</div><div style="color:#f1f5f9;">{debate["notebooklm_comment"]}</div></div>'
+            f'<div class="consensus-banner"><div style="font-weight:bold; color:#a5b4fc; margin-bottom:4px;">🏛️ 7大AI最終コンセンサス（全員のまとめ結論）</div><div style="color:#ffffff; font-weight:bold;">{debate["verdict"]}</div></div>'
+            f'<div class="easy-guide-box">{debate["easy_guide"]}</div>'
             f'</div>'
         )
         st.markdown(council_html, unsafe_allow_html=True)
@@ -1743,12 +1337,12 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         if unique_key not in st.session_state["stock_chats"]:
             st.session_state["stock_chats"][unique_key] = []
 
-        st.markdown(f"**💬 7大AI評議会に質問する**")
+        st.markdown(f"**💬 7大AI評議会にさらに質問する**")
         q_col1, q_col2 = st.columns(2)
         with q_col1:
-            if st.button("🚨 翌朝の特買い確率と8:50板気配の見方は？", key=f"q1_{unique_key}", use_container_width=True):
-                ans = generate_7ai_qa_response("翌朝の特買い確率と8:50板気配の見方は？", r, debate, r["lot_info"], m5)
-                st.session_state["stock_chats"][unique_key].append({"q": "翌朝の特買い確率と8:50板気配の見方は？", "a": ans})
+            if st.button("🚨 翌朝の特買い確率と8:50気配の見方は？", key=f"q1_{unique_key}", use_container_width=True):
+                ans = generate_7ai_qa_response("翌朝の特買い確率と8:50気配の見方は？", r, debate, r["lot_info"], m5)
+                st.session_state["stock_chats"][unique_key].append({"q": "翌朝の特買い確率と8:50気配の見方は？", "a": ans})
                 st.rerun()
             if st.button("🔥 空売り踏み上げの確率とトリガー価格は？", key=f"q2_{unique_key}", use_container_width=True):
                 ans = generate_7ai_qa_response("空売り踏み上げの確率とトリガー価格は？", r, debate, r["lot_info"], m5)
@@ -1759,9 +1353,9 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
                 ans = generate_7ai_qa_response("5分足チャートの初動と乗り方は？", r, debate, r["lot_info"], m5)
                 st.session_state["stock_chats"][unique_key].append({"q": "5分足チャートの初動と乗り方は？", "a": ans})
                 st.rerun()
-            if st.button("💰 最適ロット数と分割買いの手順は？", key=f"q4_{unique_key}", use_container_width=True):
-                ans = generate_7ai_qa_response("最適ロット数と分割買いの手順は？", r, debate, r["lot_info"], m5)
-                st.session_state["stock_chats"][unique_key].append({"q": "最適ロット数と分割買いの手順は？", "a": ans})
+            if st.button("💰 具体的な買い方と株数をもう一度教えて", key=f"q4_{unique_key}", use_container_width=True):
+                ans = generate_7ai_qa_response("具体的な買い方と株数をもう一度教えて", r, debate, r["lot_info"], m5)
+                st.session_state["stock_chats"][unique_key].append({"q": "具体的な買い方と株数をもう一度教えて", "a": ans})
                 st.rerun()
 
         with st.form(key=f"qa_form_{unique_key}", clear_on_submit=True):
@@ -1781,7 +1375,7 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
             st.rerun()
         st.markdown("---")
 
-# --- 📋 監視ウォッチリスト ＆ 翌朝8:50実戦発注チェックシート描画関数 ---
+# --- 📋 監視ウォッチリスト ＆ 翌朝8:50実戦発注チェックシート ---
 def render_watchlist_order_sheet(all_results):
     wl = st.session_state["watchlist"]
 
@@ -1801,68 +1395,45 @@ def render_watchlist_order_sheet(all_results):
             st.rerun()
 
     if not wl:
-        st.info("💡 現在ウォッチリストは空です。上の「⚡ 本日の総合TOP3をワンタップ一括登録」を押すか、各タブの銘柄カードにある **「⭐ 監視リスト追加」** ボタンを押して有望銘柄を登録してください。")
+        st.info("💡 現在ウォッチリストは空です。「⚡ 本日の総合TOP3をワンタップ一括登録」を押すか、各銘柄カードの **「⭐ 監視リスト追加」** ボタンを押して登録してください。")
         return
 
-    # ポートフォリオ合算リスク＆資金計算
     total_pos = sum(item["lot_info"]["position_value"] for item in wl.values())
     total_risk = sum(item["lot_info"]["risk_amount"] for item in wl.values())
     cap_usage_pct = round(total_pos / total_capital * 100, 1)
     risk_usage_pct = round(total_risk / total_capital * 100, 1)
 
-    warn_msg = ""
-    if cap_usage_pct > 100:
-        warn_msg = f"<div style='margin-top:6px; color:#fca5a5; font-weight:bold;'>⚠️ 警告: 合計投資予定額が総投資資金（{total_capital:,.0f}円）の {cap_usage_pct}% に達しています。優先順位の高い銘柄に絞るか、第1弾（半分ロット）のみの発注に制限してください。</div>"
-    elif risk_usage_pct > risk_tolerance_pct * 3:
-        warn_msg = f"<div style='margin-top:6px; color:#fde68a; font-weight:bold;'>💡 注意: 全銘柄が同時に損切りとなった場合の最大リスクが総資金の {risk_usage_pct}% です。同セクターの重複エントリーに注意してください。</div>"
-
     summary_html = (
         f'<div class="watchlist-summary-banner">'
         f'<div style="font-size:14px; font-weight:bold; color:#a7f3d0; margin-bottom:6px;">🛡️ ポートフォリオ合算資金・リスク管理シミュレーター（登録: {len(wl)}銘柄）</div>'
         f'<div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; text-align:center; background:rgba(0,0,0,0.2); padding:8px; border-radius:8px;">'
-        f'<div><div style="font-size:10px; color:#cbd5e1;">合計投資予定額</div><div style="font-size:14px; font-weight:bold; color:#fff;">{total_pos:,.0f}円</div><div style="font-size:10px; color:#6ee7b7;">(資金稼働率 {cap_usage_pct}%)</div></div>'
+        f'<div><div style="font-size:10px; color:#cbd5e1;">合計投資予定額</div><div style="font-size:14px; font-weight:bold; color:#fff;">{total_pos:,.0f}円</div><div style="font-size:10px; color:#6ee7b7;">(稼働率 {cap_usage_pct}%)</div></div>'
         f'<div><div style="font-size:10px; color:#cbd5e1;">第1弾(寄付き半分)合計</div><div style="font-size:14px; font-weight:bold; color:#fde68a;">{total_pos/2:,.0f}円</div><div style="font-size:10px; color:#fde68a;">(稼働率 {cap_usage_pct/2:.1f}%)</div></div>'
         f'<div><div style="font-size:10px; color:#cbd5e1;">最大合計リスク(損切時)</div><div style="font-size:14px; font-weight:bold; color:#fca5a5;">-{total_risk:,.0f}円</div><div style="font-size:10px; color:#fca5a5;">(総資金の -{risk_usage_pct}%)</div></div>'
-        f'</div>'
-        f'{warn_msg}'
-        f'</div>'
+        f'</div></div>'
     )
     st.markdown(summary_html, unsafe_allow_html=True)
 
-    # 一覧テーブル＆CSVエクスポート
     table_rows = []
     for code, item in wl.items():
         lot_s = item["lot_info"]["shares"]
         half_s = max(1, lot_s // 2)
         table_rows.append({
-            "コード": code,
-            "銘柄名": item["name"],
-            "セクター": item["genre"],
-            "AIスコア": item["ai_score"],
-            "特買い確率": f"{item['tokugai_prob']}%",
-            "踏み上げ度": f"{item['squeeze_score']}点",
-            "前日終値": item["price"],
+            "コード": code, "銘柄名": item["name"], "セクター": item["genre"],
+            "AIスコア": item["ai_score"], "特買い確率": f"{item['tokugai_prob']}%",
+            "踏み上げ度": f"{item['squeeze_score']}点", "前日終値": item["price"],
             "夜間理論気配": f"{item['pts_est_price']} ({item['pts_gap_pct']:+.2f}%)",
-            "特買い発動線": item["tokugai_line"],
-            "踏み上げ線(20日高)": item["squeeze_trigger_price"],
-            "推奨総ロット": f"{lot_s:,}株",
-            "①寄付き半分ロット": f"{half_s:,}株",
-            "🎯利確目標": item["tp_price"],
-            "🛡️逆指値(損切)": item["sl_price"],
+            "特買い発動線": item["tokugai_line"], "踏み上げ線(20日高)": item["squeeze_trigger_price"],
+            "推奨総ロット": f"{lot_s:,}株", "①寄付き半分ロット": f"{half_s:,}株",
+            "🎯利確目標": item["tp_price"], "🛡️逆指値(損切)": item["sl_price"],
         })
     df_order = pd.DataFrame(table_rows)
     st.dataframe(df_order, use_container_width=True, hide_index=True)
 
     csv_bytes = df_order.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        label="📥 本日の注文計画シートをCSVダウンロード (Excel/スマホ保存用)",
-        data=csv_bytes,
-        file_name="morning_quant_order_sheet.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
+    st.download_button("📥 本日の注文計画シートをCSVダウンロード", data=csv_bytes, file_name="morning_quant_order_sheet.csv", mime="text/csv", use_container_width=True)
 
-    st.markdown("##### ⏰ 翌朝8:50〜9:15 実戦発注インタラクティブ・チェックカード")
+    st.markdown("##### ⏰ 翌朝8:50〜9:15 実戦発注チェックカード")
     for code, r in list(wl.items()):
         lot_s = r["lot_info"]["shares"]
         half_s = max(1, lot_s // 2)
@@ -1870,30 +1441,23 @@ def render_watchlist_order_sheet(all_results):
 
         card_html = (
             f'<div class="order-sheet-card">'
-            f'<div style="display:flex; justify-content:space-between; align-items:center;">'
             f'<div><span style="font-size:16px; font-weight:bold; color:#0f172a;">⭐ {r["name"]} ({code})</span> '
             f'<span class="score-badge">AI {r["ai_score"]}点</span>'
             f'<span class="tokugai-badge">🚨 特買い {r["tokugai_prob"]}%</span>'
             f'<span class="squeeze-badge">🔥 踏み上げ {r["squeeze_score"]}点</span></div>'
-            f'</div>'
             f'<div style="margin-top:6px; font-size:12px; color:#334155; background:#f8fafc; padding:8px; border-radius:6px; border:1px solid #e2e8f0;">'
             f'・<b>買い指値ゾーン:</b> <b>{r["price"]} 〜 {r["pts_est_price"]}</b> ｜ <b>特買いライン:</b> <b style="color:#d97706;">{r["tokugai_line"]}</b> ｜ <b>踏み上げ突破線:</b> <b style="color:#e11d48;">{r["squeeze_trigger_price"]}</b><br>'
             f'・<b>推奨ロット配分:</b> 総数 <b>{lot_s:,}株</b> （第1弾 寄付き: <b>{half_s:,}株</b> ＋ 第2弾 VWAPサポ/高値突破: <b>{rem_s:,}株</b>）<br>'
             f'・<b>エグジット計画:</b> 🎯 第一利確 <b>{r["tp_price"]} (+{r["tp_pct"]}%)</b> ／ 🛡️ 逆指値(損切) <b style="color:#b91c1c;">{r["sl_price"]} ({r["sl_pct"]}%)</b>'
-            f'</div>'
-            f'</div>'
+            f'</div></div>'
         )
         st.markdown(card_html, unsafe_allow_html=True)
 
         chk_c1, chk_c2, chk_c3, chk_c4, chk_del = st.columns([1.2, 1.2, 1.2, 1.2, 0.7])
-        with chk_c1:
-            st.checkbox("① 8:50板気配OK", key=f"chk1_{code}")
-        with chk_c2:
-            st.checkbox(f"② 初動{half_s:,}株発注", key=f"chk2_{code}")
-        with chk_c3:
-            st.checkbox(f"③ 逆指値({r['sl_price']})済", key=f"chk3_{code}")
-        with chk_c4:
-            st.checkbox("④ 5分足VWAP追撃済", key=f"chk4_{code}")
+        with chk_c1: st.checkbox("① 8:50気配OK", key=f"chk1_{code}")
+        with chk_c2: st.checkbox(f"② 初動{half_s:,}株発注", key=f"chk2_{code}")
+        with chk_c3: st.checkbox(f"③ 逆指値({r['sl_price']})済", key=f"chk3_{code}")
+        with chk_c4: st.checkbox("④ 5分足VWAP追撃済", key=f"chk4_{code}")
         with chk_del:
             if st.button("解除", key=f"rm_wl_{code}", use_container_width=True):
                 del st.session_state["watchlist"][code]
@@ -1940,7 +1504,7 @@ if custom_input or search_clicked:
     norm_code = normalize_ticker(custom_input)
     if norm_code:
         with st.spinner(f"「{norm_code}」の特買い気配＆踏み上げ・大引けMOC解析中..."):
-            custom_res = fetch_and_analyze(norm_code, macro=macro_info, boost_inst=inst_boost_mode, boost_squeeze=squeeze_boost_mode, boost_tokugai=tokugai_boost_mode)
+            custom_res = fetch_and_analyze(norm_code, macro=macro_info, boost_moc=moc_boost_mode, boost_squeeze=squeeze_boost_mode, boost_tokugai=tokugai_boost_mode)
         if custom_res:
             st.markdown("##### 🎯 個別銘柄のリアルタイム診断結果")
             render_stock_card(custom_res, is_custom=True, key_prefix="custom")
@@ -1951,28 +1515,27 @@ genre_results = {g: [] for g in STOCK_POOL.keys()}
 all_results = []
 seen_in_all = set()
 
-with st.spinner("全候補銘柄の特買い確率・踏み上げ・大引けMOC・機関アルゴ波形をスキャン中..."):
+with st.spinner("全候補銘柄の特買い確率・踏み上げ・大引けMOC波形をスキャン中..."):
     for genre, stocks in STOCK_POOL.items():
         for s in stocks:
-            res = fetch_and_analyze(s["code"], s["name"], s["theme"], genre, macro_info, boost_inst=inst_boost_mode, boost_squeeze=squeeze_boost_mode, boost_tokugai=tokugai_boost_mode)
+            res = fetch_and_analyze(s["code"], s["name"], s["theme"], genre, macro_info, boost_moc=moc_boost_mode, boost_squeeze=squeeze_boost_mode, boost_tokugai=tokugai_boost_mode)
             if res:
                 genre_results[genre].append(res)
                 if s["code"] not in seen_in_all:
                     all_results.append(res)
                     seen_in_all.add(s["code"])
-                # 既にウォッチリストに入っている銘柄のデータを最新化
                 clean_c = s["code"].replace(".T", "")
                 if clean_c in st.session_state["watchlist"]:
                     st.session_state["watchlist"][clean_c] = res
 
 wl_count = len(st.session_state["watchlist"])
+# 「機関アルゴ特選」タブを削除し、「テンバガー小型株」を「小型株」に変更済み
 tab_labels = [
     "🏆 総合TOP5",
     f"📋 監視＆注文シート({wl_count})",
     "🚨 特買い・夜間連動特選",
     "🔥 踏み上げ特選",
-    "🌆 大引けMOC特選",
-    "🏛️ 機関アルゴ特選"
+    "🌆 大引けMOC特選"
 ] + list(STOCK_POOL.keys())
 tabs = st.tabs(tab_labels)
 
@@ -2001,22 +1564,16 @@ with tabs[3]:
             render_stock_card(r, rank=idx, key_prefix="sq_top")
 
 with tabs[4]:
-    st.info("🌆 **大引けMOC（引けピン買い集め）特選タブ**: 大引けにかけて機関のバスケット買い・高値引け（引けピン）の勢いが最も強い上位10銘柄です。翌朝のギャップアップ期待が最も高いグループです。")
+    st.info("🌆 **大引けMOC（引けピン買い集め）特選タブ**: 大引けにかけてバスケット買い・高値引け（引けピン）の勢いが最も強い上位10銘柄です。翌朝のギャップアップ期待が最も高いグループです。")
     if all_results:
-        moc_top_list = sorted(all_results, key=lambda x: (x["closing_power_score"], x["inst_score"], x["ai_score"]), reverse=True)[:10]
+        moc_top_list = sorted(all_results, key=lambda x: (x["closing_power_score"], x["squeeze_score"], x["ai_score"]), reverse=True)[:10]
         for idx, r in enumerate(moc_top_list, start=1):
             render_stock_card(r, rank=idx, key_prefix="moc_top")
 
-with tabs[5]:
-    st.info("🏛️ **機関アルゴ特選タブ**: ステルス集め・バスケット執行・VWAP順行など、機関投資家のプログラム買い痕跡（機関アルゴ度）が最も強い上位10銘柄を抽出しています。")
-    if all_results:
-        inst_top_list = sorted(all_results, key=lambda x: (x["inst_score"], x["ai_score"], x["edge"]), reverse=True)[:10]
-        for idx, r in enumerate(inst_top_list, start=1):
-            render_stock_card(r, rank=idx, key_prefix="inst_top")
-
-for tab, genre in zip(tabs[6:], STOCK_POOL.keys()):
+for tab, genre in zip(tabs[5:], STOCK_POOL.keys()):
     with tab:
-        if genre == "IPO": st.info("💡 **IPOセクション**: 直近新規上場銘柄の特買い確率・機関資金流入・踏み上げと最適ロットを算出。")
+        if genre == "小型株": st.info("💡 **小型株セクション**: 値動きが軽く急騰しやすい純粋な小型グロース株のみを厳選。")
+        elif genre == "IPO": st.info("💡 **IPOセクション**: 直近新規上場銘柄の特買い確率・踏み上げと最適ロットを算出。")
         elif genre == "未公開株": st.info("💡 **未公開株・VC関連セクション**: プライベートマーケット連動銘柄の資金管理。")
         results = genre_results.get(genre, [])
         if results:
