@@ -17,9 +17,6 @@ from datetime import datetime
 # スマホ画面向けにページ設定
 st.set_page_config(page_title="翌朝株価 クオンツ＆7大AI解析 Pro (会員限定版)", page_icon="📈", layout="centered")
 
-# Fragmentデコレータ（部分更新用）の取得
-fragment_decorator = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
-
 # ==========================================
 # 🔒 会員データベース一括管理 ＆ ワンクリック承認・自動メール送信システム
 # ==========================================
@@ -66,7 +63,6 @@ def save_members_db(db: dict):
         pass
 
 def send_auto_email(to_email: str, subject: str, body: str) -> tuple:
-    """SMTP設定があれば自動メール送信、なければFalseを返す"""
     smtp_user = st.session_state.get("smtp_user", "").strip()
     smtp_pass = st.session_state.get("smtp_pass", "").strip()
     smtp_server = st.session_state.get("smtp_server", "smtp.mail.yahoo.co.jp").strip()
@@ -93,7 +89,6 @@ def send_auto_email(to_email: str, subject: str, body: str) -> tuple:
         return False, str(e)
 
 def process_url_admin_action():
-    """メール内のワンクリック承認/却下リンク（URLパラメータ）を自動処理"""
     q_params = st.query_params
     action = q_params.get("admin_action", "")
     target_email = q_params.get("email", "").strip().lower()
@@ -150,59 +145,6 @@ def process_url_admin_action():
 
 process_url_admin_action()
 
-def render_admin_member_manager():
-    """管理者専用の会員一括管理コンソール"""
-    db = load_members_db()
-    pending_list = [v for v in db.values() if v.get("status") == "pending"]
-
-    with st.sidebar:
-        st.markdown("---")
-        st.subheader(f"👑 管理者メニュー (承認待:{len(pending_list)}件)")
-
-        if pending_list:
-            st.warning(f"🔔 新規の会員登録申請が {len(pending_list)} 件届いています！")
-            for p in pending_list:
-                p_mail = p["email"]
-                p_name = p.get("name", "未入力")
-                p_code = generate_member_passcode(p_mail)
-                st.markdown(f"**📩 {p_name}** (`{p_mail}`)")
-                c_ap, c_rj = st.columns(2)
-                with c_ap:
-                    if st.button("✅ 承認", key=f"side_ap_{p_mail}", use_container_width=True):
-                        db[p_mail]["status"] = "approved"
-                        db[p_mail]["passcode"] = p_code
-                        db[p_mail]["approved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        save_members_db(db)
-                        subj = "【承認完了】翌朝株価クオンツ＆7大AI解析Pro 専用アクセスコード"
-                        body = f"{p_name} 様\n\n会員登録が承認されました。\n\n■登録メール: {p_mail}\n■専用アクセスコード: {p_code}\n"
-                        ok, _ = send_auto_email(p_mail, subj, body)
-                        st.session_state["last_approved_mailto"] = {
-                            "email": p_mail, "code": p_code, "auto_sent": ok,
-                            "url": f"mailto:{p_mail}?subject={urllib.parse.quote(subj)}&body={urllib.parse.quote(body)}"
-                        }
-                        st.rerun()
-                with c_rj:
-                    if st.button("❌ 却下", key=f"side_rj_{p_mail}", use_container_width=True):
-                        db[p_mail]["status"] = "rejected"
-                        save_members_db(db)
-                        st.rerun()
-
-        if "last_approved_mailto" in st.session_state:
-            la = st.session_state["last_approved_mailto"]
-            if la["auto_sent"]:
-                st.success(f"📨 {la['email']} へパスコード（{la['code']}）を自動送信しました！")
-            else:
-                st.success(f"✅ {la['email']} を承認しました！（コード: `{la['code']}`）")
-                st.markdown(f'<a href="{la["url"]}" style="display:block;text-align:center;background:#16a34a;color:#fff;padding:8px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:12px;">✉️ 相手にパスコード通知メールを送る</a>', unsafe_allow_html=True)
-
-        with st.expander("⚙️ 自動メール送信(SMTP)＆URL設定"):
-            st.caption("設定すると、承認ボタンを押した瞬間に相手へパスコードが全自動メール送信されます。")
-            st.text_input("アプリの公開URL (メール内承認リンク用)", value=st.session_state.get("app_base_url", "http://localhost:8501"), key="app_base_url")
-            st.text_input("送信元メールアドレス (Yahoo/Gmail等)", value=st.session_state.get("smtp_user", ADMIN_EMAIL), key="smtp_user")
-            st.text_input("SMTPアプリパスワード", type="password", key="smtp_pass", help="YahooメールやGmailのアプリパスワードを入力")
-            st.text_input("SMTPサーバー", value=st.session_state.get("smtp_server", "smtp.mail.yahoo.co.jp"), key="smtp_server")
-            st.number_input("SMTPポート (SSL=465 / TLS=587)", value=int(st.session_state.get("smtp_port", 465)), key="smtp_port")
-
 def check_member_authentication():
     db = load_members_db()
     if "authenticated_user" not in st.session_state:
@@ -215,8 +157,6 @@ def check_member_authentication():
             if st.button("🚪 ログアウト", use_container_width=True):
                 st.session_state["authenticated_user"] = None
                 st.rerun()
-        if curr_user == ADMIN_EMAIL.strip().lower():
-            render_admin_member_manager()
         return True
 
     st.markdown("""
@@ -365,6 +305,23 @@ squeeze_boost_mode = st.sidebar.checkbox("💥 空売り踏み上げ（20日高�
 tokugai_boost_mode = st.sidebar.checkbox("🚨 翌朝『特買い』・夜間PTS連動を優先", value=True)
 show_5m_chart = st.sidebar.checkbox("合議パネル内に5分足＆VWAPチャートを描画", value=True)
 
+is_admin_user = (st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower())
+
+# 管理者の場合はサイドバーに承認待ち数を即座に表示
+if is_admin_user:
+    db_chk = load_members_db()
+    pend_cnt = len([v for v in db_chk.values() if v.get("status") == "pending"])
+    st.sidebar.markdown("---")
+    st.sidebar.subheader(f"👑 管理者メニュー (承認待:{pend_cnt}件)")
+    if pend_cnt > 0:
+        st.sidebar.warning(f"🔔 新規会員申請が {pend_cnt} 件あります。メイン画面の「👑 管理者・会員一括管理」タブで承認してください。")
+    with st.sidebar.expander("⚙️ SMTP＆自動メール設定"):
+        st.text_input("公開URL", value=st.session_state.get("app_base_url", "http://localhost:8501"), key="app_base_url")
+        st.text_input("送信元メール", value=st.session_state.get("smtp_user", ADMIN_EMAIL), key="smtp_user")
+        st.text_input("SMTPパスワード", type="password", key="smtp_pass")
+        st.text_input("SMTPサーバー", value=st.session_state.get("smtp_server", "smtp.mail.yahoo.co.jp"), key="smtp_server")
+        st.number_input("ポート", value=int(st.session_state.get("smtp_port", 465)), key="smtp_port")
+
 st.sidebar.markdown("---")
 st.sidebar.header(f"📋 監視ウォッチリスト ({len(st.session_state['watchlist'])}銘柄)")
 if st.session_state["watchlist"]:
@@ -377,87 +334,87 @@ if st.session_state["watchlist"]:
 st.title("📱 翌朝株価 クオンツ＆7大AI解析 Pro")
 st.caption("【機関投資家VPINクオンツ搭載】7大AI動的ロール合議 × 5ch需給 × 会員一括管理")
 
-# --- 🦁 国内外の主力・テーマ母集団プール ---
+# --- 🦁 母集団プール定義 ---
 STOCK_POOL = {
     "半導体": [
-        {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置の国内筆頭。機関の指数バスケット買い中心"},
-        {"code": "6857.T", "name": "アドバンテスト", "theme": "AI半導体テスタ世界首位級。SOX指数連動"},
-        {"code": "6920.T", "name": "レーザーテック", "theme": "EUV検査装置。デイトレ売買代金・空売り踏み上げ筆頭"},
-        {"code": "6146.T", "name": "ディスコ", "theme": "HBM向け精密加工装置で圧倒的シェア"},
-        {"code": "6526.T", "name": "ソシオネクスト", "theme": "先端カスタムSoC。個人の信用回転が極めて活発"},
-        {"code": "7735.T", "name": "スクリーンHD", "theme": "ウエハー洗浄装置で世界首位"},
-        {"code": "6315.T", "name": "TOWA", "theme": "HBM向け半導体モールディング装置"},
+        {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置の国内筆頭"},
+        {"code": "6857.T", "name": "アドバンテスト", "theme": "AI半導体テスタ世界首位級"},
+        {"code": "6920.T", "name": "レーザーテック", "theme": "EUV検査装置・空売り踏み上げ筆頭"},
+        {"code": "6146.T", "name": "ディスコ", "theme": "HBM向け精密加工装置"},
+        {"code": "6526.T", "name": "ソシオネクスト", "theme": "先端カスタムSoC"},
+        {"code": "7735.T", "name": "スクリーンHD", "theme": "ウエハー洗浄装置"},
+        {"code": "6315.T", "name": "TOWA", "theme": "HBM向けモールディング装置"},
         {"code": "6723.T", "name": "ルネサス", "theme": "車載・産業・AI向け半導体"},
         {"code": "4063.T", "name": "信越化学工業", "theme": "シリコンウエハー世界首位"},
         {"code": "3436.T", "name": "SUMCO", "theme": "シリコンウエハー大手"},
-        {"code": "6323.T", "name": "ローツェ", "theme": "ウエハー搬送機。空売り買い戻しが強烈"},
-        {"code": "6871.T", "name": "日本マイクロニクス", "theme": "HBM向けプローブカードで急騰常連"},
-        {"code": "NVDA", "name": "エヌビディア (米)", "theme": "生成AI向けGPUの世界覇者"},
-        {"code": "AMD", "name": "AMD (米)", "theme": "AIアクセラレータ・CPU大手"},
+        {"code": "6323.T", "name": "ローツェ", "theme": "ウエハー搬送機"},
+        {"code": "6871.T", "name": "日本マイクロニクス", "theme": "プローブカード急騰常連"},
+        {"code": "NVDA", "name": "エヌビディア (米)", "theme": "生成AI向けGPU世界覇者"},
+        {"code": "AMD", "name": "AMD (米)", "theme": "AIアクセラレータ"},
         {"code": "MU", "name": "マイクロン (米)", "theme": "HBM・DRAMメモリ大手"},
         {"code": "TSM", "name": "TSMC (米)", "theme": "世界最大の半導体受託生産"},
-        {"code": "AVGO", "name": "ブロードコム (米)", "theme": "カスタムAIチップ・通信半導体"},
-        {"code": "ARM", "name": "アーム (米)", "theme": "半導体設計アーキテクチャの要"},
-        {"code": "SMCI", "name": "スーパーマイクロ (米)", "theme": "AIサーバー大手。値動きと踏み上げが激しい"}
+        {"code": "AVGO", "name": "ブロードコム (米)", "theme": "カスタムAIチップ"},
+        {"code": "ARM", "name": "アーム (米)", "theme": "半導体設計アーキテクチャ"},
+        {"code": "SMCI", "name": "スーパーマイクロ (米)", "theme": "AIサーバー大手"}
     ],
     "AI・防衛・主力": [
-        {"code": "9984.T", "name": "ソフトバンクG", "theme": "AI投資群・Arm親会社。先物連動の主役"},
-        {"code": "3778.T", "name": "さくらネット", "theme": "国策GPUクラウド。5chデイトレ板の常連急騰株"},
-        {"code": "7011.T", "name": "三菱重工業", "theme": "防衛・宇宙・原発の国策ど真ん中主力株"},
-        {"code": "7012.T", "name": "川崎重工業", "theme": "防衛装備・航空エンジン主力"},
-        {"code": "7013.T", "name": "IHI", "theme": "航空宇宙・防衛エンジン主力"},
+        {"code": "9984.T", "name": "ソフトバンクG", "theme": "AI投資群・Arm親会社"},
+        {"code": "3778.T", "name": "さくらネット", "theme": "国策GPUクラウド・5ch人気株"},
+        {"code": "7011.T", "name": "三菱重工業", "theme": "防衛・宇宙・原発国策主力"},
+        {"code": "7012.T", "name": "川崎重工業", "theme": "防衛装備・航空エンジン"},
+        {"code": "7013.T", "name": "IHI", "theme": "航空宇宙・防衛エンジン"},
         {"code": "3993.T", "name": "PKSHA", "theme": "AIアルゴリズム・対話AI"},
         {"code": "4180.T", "name": "Appier", "theme": "AIマーケティングSaaS"},
-        {"code": "5032.T", "name": "ANYCOLOR", "theme": "VTuber大手。好決算・自社株買いで踏み上げ頻発"},
-        {"code": "4385.T", "name": "メルカリ", "theme": "国内C2C大手。信用取組の妙味"},
-        {"code": "7974.T", "name": "任天堂", "theme": "次世代機テーマ・海外機関資金流入の超主力"},
-        {"code": "8306.T", "name": "三菱UFJ", "theme": "金利連動のメガバンク筆頭"},
-        {"code": "MSFT", "name": "マイクロソフト (米)", "theme": "OpenAI筆頭連携・クラウド巨人"},
-        {"code": "PLTR", "name": "パランティア (米)", "theme": "防衛・企業向けAIプラットフォーム大本命"},
-        {"code": "META", "name": "メタ (米)", "theme": "AI広告・LlamaオープンソースAI"},
-        {"code": "GOOGL", "name": "アルファベット (米)", "theme": "Gemini生成AI・検索クラウド"},
-        {"code": "CRWD", "name": "クラウドストライク (米)", "theme": "AIサイバーセキュリティ世界首位"}
+        {"code": "5032.T", "name": "ANYCOLOR", "theme": "VTuber大手"},
+        {"code": "4385.T", "name": "メルカリ", "theme": "国内C2C大手"},
+        {"code": "7974.T", "name": "任天堂", "theme": "次世代機テーマ主力"},
+        {"code": "8306.T", "name": "三菱UFJ", "theme": "メガバンク筆頭"},
+        {"code": "MSFT", "name": "マイクロソフト (米)", "theme": "OpenAI筆頭連携"},
+        {"code": "PLTR", "name": "パランティア (米)", "theme": "防衛AIプラットフォーム"},
+        {"code": "META", "name": "メタ (米)", "theme": "AI広告・Llama"},
+        {"code": "GOOGL", "name": "アルファベット (米)", "theme": "Gemini生成AI"},
+        {"code": "CRWD", "name": "クラウドストライク (米)", "theme": "AIサイバーセキュリティ"}
     ],
     "AI電力・電線": [
-        {"code": "5803.T", "name": "フジクラ", "theme": "AIデータセンター向け光ファイバー。機関買い＆踏み上げ最強格"},
+        {"code": "5803.T", "name": "フジクラ", "theme": "AIデータセンター光ファイバー最強格"},
         {"code": "5801.T", "name": "古河電気工業", "theme": "光ファイバー・送電インフラ"},
-        {"code": "5802.T", "name": "住友電気工業", "theme": "電線首位・データセンター通信網"},
-        {"code": "6501.T", "name": "日立製作所", "theme": "世界送配電グリッド・AIインフラ"},
-        {"code": "9509.T", "name": "北海道電力", "theme": "ラピダス・AIデータセンター電力供給"},
-        {"code": "9508.T", "name": "九州電力", "theme": "TSMC半導体工場向け電力需要"},
-        {"code": "6622.T", "name": "ダイヘン", "theme": "データセンター向け変圧器"},
-        {"code": "1942.T", "name": "関電工", "theme": "データセンター電気設備工事"},
-        {"code": "VST", "name": "ビストラ (米)", "theme": "AIデータセンター向け発電主力"},
-        {"code": "CEG", "name": "コンステレーション (米)", "theme": "米最大の原子力発電・AI電力供給"},
-        {"code": "GEV", "name": "GEヴェルノバ (米)", "theme": "ガスタービン・送電網設備の世界リーダー"}
+        {"code": "5802.T", "name": "住友電気工業", "theme": "電線首位"},
+        {"code": "6501.T", "name": "日立製作所", "theme": "送配電グリッド・AIインフラ"},
+        {"code": "9509.T", "name": "北海道電力", "theme": "ラピダス・AIデータセンター電力"},
+        {"code": "9508.T", "name": "九州電力", "theme": "TSMC工場向け電力"},
+        {"code": "6622.T", "name": "ダイヘン", "theme": "変圧器大手"},
+        {"code": "1942.T", "name": "関電工", "theme": "電気設備工事"},
+        {"code": "VST", "name": "ビストラ (米)", "theme": "AIデータセンター発電"},
+        {"code": "CEG", "name": "コンステレーション (米)", "theme": "原子力発電・AI電力"},
+        {"code": "GEV", "name": "GEヴェルノバ (米)", "theme": "ガスタービン・送電網"}
     ],
     "宇宙・イーロン": [
-        {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星。5chデイトレ板で人気集中の筆頭"},
-        {"code": "186A.T", "name": "アストロスケール", "theme": "宇宙デブリ除去の世界的ベンチャー"},
-        {"code": "9348.T", "name": "ispace", "theme": "月面開発輸送。イベント前後の出来高急増株"},
-        {"code": "9412.T", "name": "スカパーJSAT", "theme": "衛星通信・防衛宇宙監視"},
-        {"code": "9433.T", "name": "KDDI", "theme": "SpaceX Starlink直接通信連携"},
+        {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星・5chデイトレ"},
+        {"code": "186A.T", "name": "アストロスケール", "theme": "宇宙デブリ除去"},
+        {"code": "9348.T", "name": "ispace", "theme": "月面開発輸送"},
+        {"code": "9412.T", "name": "スカパーJSAT", "theme": "衛星通信・防衛宇宙"},
+        {"code": "9433.T", "name": "KDDI", "theme": "Starlink直接通信"},
         {"code": "7203.T", "name": "トヨタ自動車", "theme": "全固体電池・自動運転"},
-        {"code": "TSLA", "name": "テスラ (米)", "theme": "自動運転・ロボタクシー・世界最大の踏み上げ株"},
-        {"code": "RKLB", "name": "ロケットラボ (米)", "theme": "小型ロケット打上げ米宇宙主力"},
-        {"code": "ASTS", "name": "ASTスペースモバイル (米)", "theme": "宇宙スマホ直接通信。ショートスクイーズ常連"},
-        {"code": "COIN", "name": "コインベース (米)", "theme": "暗号資産連動・ハイボラティリティ銘柄"}
+        {"code": "TSLA", "name": "テスラ (米)", "theme": "自動運転・ロボタクシー"},
+        {"code": "RKLB", "name": "ロケットラボ (米)", "theme": "小型ロケット打上げ"},
+        {"code": "ASTS", "name": "ASTスペースモバイル (米)", "theme": "宇宙スマホ通信"},
+        {"code": "COIN", "name": "コインベース (米)", "theme": "暗号資産連動"}
     ],
     "小型急騰・IPO": [
-        {"code": "5253.T", "name": "カバー", "theme": "ホロライブ運営。グロース市場の売買代金トップ級"},
-        {"code": "9166.T", "name": "GENDA", "theme": "エンタメM&A急成長"},
-        {"code": "216A.T", "name": "タイミー", "theme": "スキマバイト仲介の大型グロースIPO"},
-        {"code": "285A.T", "name": "キオクシアHD", "theme": "NANDフラッシュメモリ大手の注目IPO"},
+        {"code": "5253.T", "name": "カバー", "theme": "ホロライブ運営・売買代金トップ"},
+        {"code": "9166.T", "name": "GENDA", "theme": "エンタメM&A"},
+        {"code": "216A.T", "name": "タイミー", "theme": "スキマバイト仲介IPO"},
+        {"code": "285A.T", "name": "キオクシアHD", "theme": "NANDメモリ注目IPO"},
         {"code": "141A.T", "name": "トライアルHD", "theme": "リテールAI流通"},
-        {"code": "5243.T", "name": "ノート", "theme": "AI学習・クリエイターエコノミー小型株"},
-        {"code": "247A.T", "name": "Aiロボティクス", "theme": "AIマーケティング急成長グロース"},
-        {"code": "153A.T", "name": "カウリス", "theme": "不正アクセス検知セキュリティ小型株"},
-        {"code": "3350.T", "name": "メタプラネット", "theme": "暗号資産トレジャリー。5ch板の超ボラティリティ常連株"},
-        {"code": "IONQ", "name": "アイオンQ (米)", "theme": "商用量子コンピューター代表格。空売り踏み上げ強烈"},
-        {"code": "RGTI", "name": "リゲッティ (米)", "theme": "量子コンピューター小型急騰株"},
-        {"code": "SOUN", "name": "サウンドハウンドAI (米)", "theme": "音声AI認識の小型急騰株"},
-        {"code": "RDDT", "name": "レディット (米IPO)", "theme": "AIデータライセンス＆SNSの大型IPO"},
-        {"code": "ALAB", "name": "アステラ・ラブズ (米IPO)", "theme": "AIデータセンター高速接続半導体IPO"}
+        {"code": "5243.T", "name": "ノート", "theme": "AI学習・クリエイター"},
+        {"code": "247A.T", "name": "Aiロボティクス", "theme": "AIマーケティンググロース"},
+        {"code": "153A.T", "name": "カウリス", "theme": "不正アクセス検知"},
+        {"code": "3350.T", "name": "メタプラネット", "theme": "暗号資産トレジャリー"},
+        {"code": "IONQ", "name": "アイオンQ (米)", "theme": "量子コンピュータ"},
+        {"code": "RGTI", "name": "リゲッティ (米)", "theme": "量子コンピュータ小型"},
+        {"code": "SOUN", "name": "サウンドハウンドAI (米)", "theme": "音声AI認識"},
+        {"code": "RDDT", "name": "レディット (米IPO)", "theme": "SNS・AIデータ"},
+        {"code": "ALAB", "name": "アステラ・ラブズ (米IPO)", "theme": "AI高速接続半導体"}
     ]
 }
 
@@ -506,7 +463,7 @@ def fetch_macro_market():
     return macro_data
 
 # ==========================================
-# 🏦 機関投資家クオンツ（VPIN・Amihud・ステルス吸収）＆ 5ch需給解析エンジン
+# 🏦 クオンツ＆5ch需給解析エンジン
 # ==========================================
 def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst=True, boost_5ch=True, boost_squeeze=True, boost_tokugai=True):
     try:
@@ -554,11 +511,9 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         df['High_20'] = df['High'].shift(1).rolling(20).max().fillna(df['High'])
         df['Dist_High20'] = ((df['Close'] - df['High_20']) / df['High_20'] * 100).fillna(0.0)
 
-        # 機関投資家アルゴリズム①：VPIN（Order Flow Toxicity）
         df['Signed_Order_Flow'] = ((df['Close'] - df['Open']) / high_low).fillna(0.0) * df['Vol_Ratio']
         df['VPIN_5d'] = df['Signed_Order_Flow'].rolling(5).mean().fillna(0.0)
 
-        # 機関投資家アルゴリズム②：Amihud非流動性インパクト
         df['Amihud_Impact'] = (df['Day_Return'].abs() / df['Vol_Ratio'].replace(0, 1.0)).fillna(1.0)
         df['Amihud_Ratio'] = (df['Amihud_Impact'] / df['Amihud_Impact'].rolling(20).mean().replace(0, 1.0)).fillna(1.0)
 
@@ -582,7 +537,6 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         vpin_val = float(latest['VPIN_5d'])
         amihud_r = float(latest['Amihud_Ratio'])
 
-        # 1. 機関投資家クオンツスコア
         inst_raw = 50.0 + vpin_val * 45.0 + (c_pos - 0.5) * 25.0
         if float(latest['Close']) >= float(latest['VWAP20']):
             inst_raw += 10.0
@@ -591,37 +545,35 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
             inst_status = f"🏦 機関の浮動株吸い上げ・売り板枯渇 (VPIN {vpin_val:+.2f} / 価格弾性 {amihud_r:.2f}倍)"
         elif cond_inst_accum.iloc[-1]:
             inst_raw += 10.0
-            inst_status = f"🏦 機関アルゴリズム・ステルス氷山買い集め検知 (VPIN {vpin_val:+.2f} / 20日VWAP上維持)"
+            inst_status = f"🏦 機関アルゴ・ステルス氷山買い集め検知 (VPIN {vpin_val:+.2f})"
         elif vpin_val < -0.15:
             inst_raw -= 12.0
             inst_status = f"⚠️ 機関のTWAP/VWAP売り執行警戒 (VPIN {vpin_val:+.2f})"
         else:
-            inst_status = f"⚖️ 機関オーダーフロー中立 (VPIN {vpin_val:+.2f} / 弾性 {amihud_r:.2f}倍)"
+            inst_status = f"⚖️ 機関オーダーフロー中立 (VPIN {vpin_val:+.2f})"
         inst_score = int(min(max(round(inst_raw), 15), 99))
 
-        # 2. 5chデイトレ板・シコリ玉＆初動イナゴスコア
         board5ch_raw = 50.0 + (min(vol_acc, 3.0) - 1.0) * 18.0 + (c_pos - 0.5) * 30.0
         if upper_sh >= 0.38:
             board5ch_raw -= 25.0
-            board5ch_status = f"⚠️ 上ヒゲシコリ玉警戒 (上ヒゲ率{int(upper_sh*100)}%・ヤレヤレ売り注意)"
+            board5ch_status = f"⚠️ 上ヒゲシコリ玉警戒 (上ヒゲ率{int(upper_sh*100)}%)"
         elif dist_h20 >= -0.5 and upper_sh <= 0.15 and vol_acc >= 1.2:
             board5ch_raw += 18.0
-            board5ch_status = "🚀 5ch板・青天井ブレイク (上値シコリ玉なし・イナゴ初動集中)"
+            board5ch_status = "🚀 5ch板・青天井ブレイク (上値シコリ玉なし)"
         elif cond_5ch_surge.iloc[-1]:
             board5ch_raw += 12.0
-            board5ch_status = f"🔥 5ch板・初動資金集中 (5日平均比 {vol_acc:.2f}倍の出来高急増＆高値引け)"
+            board5ch_status = f"🔥 5ch板・初動資金集中 (出来高倍率 {vol_acc:.2f}倍)"
         else:
-            board5ch_status = f"⚖️ 5ch板・通常需給 (5日出来高加速 {vol_acc:.2f}倍 / 上ヒゲ率 {int(upper_sh*100)}%)"
+            board5ch_status = f"⚖️ 5ch板・通常需給 (出来高加速 {vol_acc:.2f}倍)"
         board5ch_score = int(min(max(round(board5ch_raw), 15), 99))
 
-        # 3. 空売り踏み上げスコア
         sq_raw = 42.0 + (22.0 if dist_h20 >= 0 else (14.0 if dist_h20 >= -2.5 else 4.0))
         sq_raw += min(float(latest['Vol_Ratio']), 3.0) * 8.0 + (c_pos - 0.5) * 24.0
         squeeze_score = int(min(max(round(sq_raw), 15), 99))
         if cond_sq_breakout.iloc[-1]:
-            squeeze_type = "🔥 20日高値ブレイク踏み上げ (売り方全員含み損)"
+            squeeze_type = "🔥 20日高値ブレイク踏み上げ (売り方含み損)"
         elif dist_h20 >= -2.0 and c_pos >= 0.72:
-            squeeze_type = "⚡ 踏み上げトリガーロックオン (高値突破寸前)"
+            squeeze_type = "⚡ 踏み上げトリガーロックオン"
         else:
             squeeze_type = f"⚖️ 20日高値乖離 {dist_h20:+.2f}%"
 
@@ -632,7 +584,7 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
             signal = "🏦 機関VPINステルス買い集め＋VWAP順行"
             sub = history[cond_inst_accum.reindex(history.index, fill_value=False)]
         elif cond_5ch_surge.iloc[-1]:
-            signal = "🔥 5ch初動イナゴ集中＋シコリ玉なし高値引け"
+            signal = "🔥 5ch初動イナゴ集中＋高値引け"
             sub = history[cond_5ch_surge.reindex(history.index, fill_value=False)]
         elif cond_sq_breakout.iloc[-1]:
             signal = "🚀 20日高値ブレイク・ショートスクイーズ"
@@ -802,7 +754,7 @@ def render_5m_candlestick_chart(m5):
     st.altair_chart((wick + body + vwap_line).properties(height=190), use_container_width=True)
 
 # ==========================================
-# 🧠 7大AI【動的ロール割り当て】合議アルゴリズム
+# 🧠 7大AI合議エンジン
 # ==========================================
 def run_7ai_council_algorithm(r, m5=None):
     vwap_ref = m5['vwap5_price'] if m5 else r['vwap_price']
@@ -938,55 +890,33 @@ def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
             f"🤖 **【担当：ChatGPT・Claude・Grok 7大AI合同評議会】**\n\n"
             f"- **総合ジャッジ**：「{r['name']}（{r['code']}）」の7大AI合議スコアは **{debate['final_score']}点**、機関クオンツスコアは **{r['inst_score']}点（{r['inst_status']}）**、サバイバル戦闘力は **{r['survival_power']}pt** です。\n"
             f"- **最適ロットと資金配分**：総資金 {total_capital:,.0f}円 に対する推奨購入数は **{lot_info['shares']:,}株（投資額 {lot_info['position_value']:,.0f}円）** です。\n"
-            f"- **具体的なアクション**：明日の朝はまず寄付き（目安 **{r['pts_est_price']}**）で半分の **{half_s:,}株** を買い、**{m5_vwap}（VWAP）** 反発または **{r['squeeze_trigger_price']}（20日高値）** 突破で残り **{rem_s:,}株** を追加、利確 **{r['tp_price']}**・損切り **{r['sl_price']}** で臨むのが最も期待値（**{r['edge']:+.2f}%**・過去勝率 **{r['prob']}%**）の高い戦術です。"
+            f"- **具体的なアクション**：明日の朝はまず寄付き（目安 **{r['pts_est_price']}**）で半分の **{half_s:,}株** を買い、**{m5_vwap}（VWAP）** 反発または **{r['squeeze_trigger_price']}（20日高値）** 突破で残り **{rem_s:,}株** を追加、利確 **{r['tp_price']}**・損切り **{r['sl_price']}** で臨むのが最も期待値（財布期待値 **{r['edge']:+.2f}%**・過去勝率 **{r['prob']}%**）の高い戦術です。"
         )
 
 # ==========================================
-# 💬 会議パネル＆質問コーナー（即時反映・履歴永続版）
+# 💬 会議パネル＆質問コーナー（即時反応・履歴表示対応）
 # ==========================================
-def cb_toggle_debate(unique_key):
-    st.session_state["active_debates"][unique_key] = not st.session_state["active_debates"].get(unique_key, False)
-
-def cb_toggle_watchlist(code, r_data):
-    if code in st.session_state["watchlist"]:
-        del st.session_state["watchlist"][code]
-    else:
-        st.session_state["watchlist"][code] = r_data
-
-def cb_handle_qa_action(unique_key, q_text, r, debate, m5):
-    """質問を受け付けた瞬間にセッションに即時追加して即座に画面に表示するコールバック"""
-    if unique_key not in st.session_state["stock_chats"]:
-        st.session_state["stock_chats"][unique_key] = []
-    ans_md = generate_7ai_qa_response(q_text, r, debate, r["lot_info"], m5)
-    st.session_state["stock_chats"][unique_key].append({"q": q_text, "a": ans_md})
-
-def cb_handle_free_q(unique_key, input_key, r, debate, m5):
-    user_txt = st.session_state.get(input_key, "").strip()
-    if user_txt:
-        cb_handle_qa_action(unique_key, user_txt, r, debate, m5)
-        st.session_state[input_key] = ""
-
-def cb_clear_chat(unique_key):
-    st.session_state["stock_chats"][unique_key] = []
-
-@fragment_decorator
 def render_interactive_council_section(r, unique_key):
-    is_open = st.session_state["active_debates"].get(unique_key, False)
+    if unique_key not in st.session_state["active_debates"]:
+        st.session_state["active_debates"][unique_key] = False
+
+    is_open = st.session_state["active_debates"][unique_key]
     in_wl = r["code"] in st.session_state["watchlist"]
 
     c1, c2 = st.columns([2.2, 1.2])
     with c1:
-        st.button(
-            "🔼 会議パネルを閉じる" if is_open else "🧠 7大AIで会議して詳細＆質問コーナーを開く",
-            key=f"btn_{unique_key}", on_click=cb_toggle_debate, args=(unique_key,), use_container_width=True
-        )
+        if st.button("🔼 会議パネルを閉じる" if is_open else "🧠 7大AIで会議して詳細＆質問コーナーを開く", key=f"btn_{unique_key}", use_container_width=True):
+            st.session_state["active_debates"][unique_key] = not is_open
+            st.rerun()
     with c2:
-        st.button(
-            "✅ 監視登録済(解除)" if in_wl else "⭐ 監視リスト追加",
-            key=f"wl_{unique_key}", on_click=cb_toggle_watchlist, args=(r["code"], r), use_container_width=True
-        )
+        if st.button("✅ 監視登録済(解除)" if in_wl else "⭐ 監視リスト追加", key=f"wl_{unique_key}", use_container_width=True):
+            if in_wl:
+                del st.session_state["watchlist"][r["code"]]
+            else:
+                st.session_state["watchlist"][r["code"]] = r
+            st.rerun()
 
-    if not st.session_state["active_debates"].get(unique_key, False):
+    if not st.session_state["active_debates"][unique_key]:
         return
 
     m5 = fetch_5m_intraday_algo(r["full_code"], trigger_high20=r["raw_high20"])
@@ -1002,7 +932,7 @@ def render_interactive_council_section(r, unique_key):
             ]:
                 st.write(msg)
                 prog.progress(pct)
-                time.sleep(0.35)
+                time.sleep(0.3)
             status.update(label=f"✅ 7大AI合議完了！（合議スコア: {debate['final_score']}点）", state="complete", expanded=False)
         st.session_state["debate_Animated"].add(unique_key)
 
@@ -1026,86 +956,66 @@ def render_interactive_council_section(r, unique_key):
     )
 
     # ==========================================
-    # 💬 質問コーナー（即時反応・履歴表示対応）
+    # 💬 質問コーナー（即時反応・履歴完全保存版）
     # ==========================================
     if unique_key not in st.session_state["stock_chats"]:
         st.session_state["stock_chats"][unique_key] = []
 
     st.markdown("##### 💬 7大AI評議会へのワンタップ＆自由質問コーナー")
 
-    chat_history = st.session_state["stock_chats"].get(unique_key, [])
-    if chat_history:
-        latest_item = chat_history[-1]
-        with st.container(border=True):
-            st.markdown(f"🙋 **あなたの質問 #{len(chat_history)}：** `{latest_item['q']}`")
-            st.info(latest_item["a"])
-    else:
-        st.caption("👇 下の4つのボタン、または自由入力欄から質問すると、ここに7大AIの回答が即座に表示されます。")
-
+    # プリセット質問ボタン
     q_col1, q_col2 = st.columns(2)
+    preset_questions = [
+        ("🏦 機関投資家のステルス買い・VPINは？", "機関投資家のステルス買い集めやVPINの状況は？"),
+        ("🔥 5chシコリ玉と踏み上げ価格は？", "5ch板のシコリ玉と空売り踏み上げトリガー価格は？"),
+        ("🚨 特買い確率と8:50気配の見方は？", "翌朝の特買い確率と8:50気配の見方は？"),
+        ("💰 具体的な買い方・利確・損切りは？", "具体的な買い方と利確・損切りラインを教えて")
+    ]
+
     with q_col1:
-        st.button(
-            "🏦 機関投資家のステルス買い・VPINは？",
-            key=f"q1_{unique_key}",
-            on_click=cb_handle_qa_action,
-            args=(unique_key, "機関投資家のステルス買い集めやVPINの状況は？", r, debate, m5),
-            use_container_width=True
-        )
-        st.button(
-            "🔥 5chシコリ玉と踏み上げ価格は？",
-            key=f"q2_{unique_key}",
-            on_click=cb_handle_qa_action,
-            args=(unique_key, "5ch板のシコリ玉と空売り踏み上げトリガー価格は？", r, debate, m5),
-            use_container_width=True
-        )
+        if st.button(preset_questions[0][0], key=f"q1_{unique_key}", use_container_width=True):
+            ans = generate_7ai_qa_response(preset_questions[0][1], r, debate, r["lot_info"], m5)
+            st.session_state["stock_chats"][unique_key].append({"q": preset_questions[0][1], "a": ans})
+            st.rerun()
+        if st.button(preset_questions[1][0], key=f"q2_{unique_key}", use_container_width=True):
+            ans = generate_7ai_qa_response(preset_questions[1][1], r, debate, r["lot_info"], m5)
+            st.session_state["stock_chats"][unique_key].append({"q": preset_questions[1][1], "a": ans})
+            st.rerun()
     with q_col2:
-        st.button(
-            "🚨 特買い確率と8:50気配の見方は？",
-            key=f"q3_{unique_key}",
-            on_click=cb_handle_qa_action,
-            args=(unique_key, "翌朝の特買い確率と8:50気配の見方は？", r, debate, m5),
-            use_container_width=True
-        )
-        st.button(
-            "💰 具体的な買い方・利確・損切りは？",
-            key=f"q4_{unique_key}",
-            on_click=cb_handle_qa_action,
-            args=(unique_key, "具体的な買い方と利確・損切りラインを教えて", r, debate, m5),
-            use_container_width=True
-        )
+        if st.button(preset_questions[2][0], key=f"q3_{unique_key}", use_container_width=True):
+            ans = generate_7ai_qa_response(preset_questions[2][1], r, debate, r["lot_info"], m5)
+            st.session_state["stock_chats"][unique_key].append({"q": preset_questions[2][1], "a": ans})
+            st.rerun()
+        if st.button(preset_questions[3][0], key=f"q4_{unique_key}", use_container_width=True):
+            ans = generate_7ai_qa_response(preset_questions[3][1], r, debate, r["lot_info"], m5)
+            st.session_state["stock_chats"][unique_key].append({"q": preset_questions[3][1], "a": ans})
+            st.rerun()
 
+    # 自由入力欄
     input_key = f"free_q_in_{unique_key}"
-    f_col1, f_col2 = st.columns([3.2, 1])
-    with f_col1:
-        st.text_input(
-            "自由質問を入力",
-            key=input_key,
-            placeholder="自由に質問を入力（例：いつ売るべき？ / なぜ上がる？ / リスクは？）",
-            label_visibility="collapsed"
-        )
-    with f_col2:
-        st.button(
-            "AIに質問",
-            key=f"free_q_btn_{unique_key}",
-            on_click=cb_handle_free_q,
-            args=(unique_key, input_key, r, debate, m5),
-            use_container_width=True
-        )
+    user_q = st.text_input("自由質問を入力", key=input_key, placeholder="自由に質問を入力（例：いつ売るべき？ / なぜ上がる？ / リスクは？）", label_visibility="collapsed")
+    if st.button("AIに質問を送信", key=f"free_q_btn_{unique_key}", use_container_width=True):
+        if user_q.strip():
+            ans = generate_7ai_qa_response(user_q.strip(), r, debate, r["lot_info"], m5)
+            st.session_state["stock_chats"][unique_key].append({"q": user_q.strip(), "a": ans})
+            st.rerun()
 
+    # チャット履歴・回答表示
+    chat_history = st.session_state["stock_chats"][unique_key]
     if chat_history:
-        with st.expander(f"📚 過去の質問履歴をすべて見る（全 {len(chat_history)} 件）", expanded=False):
-            for idx_h in range(len(chat_history) - 1, -1, -1):
-                item = chat_history[idx_h]
-                with st.container(border=True):
-                    st.markdown(f"🙋 **【質問 #{idx_h + 1}】 {item['q']}**")
-                    st.success(item["a"])
-            st.button(
-                "🗑️ この銘柄の質問履歴をクリア",
-                key=f"clr_{unique_key}",
-                on_click=cb_clear_chat,
-                args=(unique_key,),
-                use_container_width=True
-            )
+        st.markdown("---")
+        st.markdown("##### 💡 AI回答＆質問履歴")
+        for idx_h in range(len(chat_history) - 1, -1, -1):
+            item = chat_history[idx_h]
+            with st.container(border=True):
+                st.markdown(f"🙋 **【質問 #{idx_h + 1}】** `{item['q']}`")
+                st.info(item["a"])
+        
+        if st.button("🗑️ この銘柄の質問履歴をクリア", key=f"clr_{unique_key}", use_container_width=True):
+            st.session_state["stock_chats"][unique_key] = []
+            st.rerun()
+    else:
+        st.caption("👇 上のボタンまたは自由入力から質問すると、ここに即座に回答と履歴が表示されます。")
 
 # ==========================================
 # 🃏 銘柄カード描画
@@ -1160,14 +1070,14 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     render_interactive_council_section(r, f"{key_prefix}_{r['code']}")
 
 # ==========================================
-# 👑 管理者専用：会員データベース一括管理タブ描画 (便利機能付き)
+# 👑 管理者専用：会員データベース一括管理コンソール
 # ==========================================
 def render_admin_management_tab():
     db = load_members_db()
-    st.markdown("### 👥 会員データベース一括管理コンソール")
+    st.markdown("### 👑 管理者専用：会員データベース一括管理コンソール")
     st.caption("新規申請のワンクリック承認・却下、パスコード自動発行、ステータス変更、CSVバックアップを一括管理できます。")
 
-    # 1. 新規会員の手動直接登録
+    # 1. 新規で会員を直接追加・承認
     with st.expander("➕ 新規会員を手動で直接登録・パスコード発行する", expanded=False):
         with st.form("admin_add_member_form", clear_on_submit=True):
             c1, c2, c3 = st.columns([1.5, 2, 1.5])
@@ -1228,7 +1138,6 @@ def render_admin_management_tab():
                 subj = "【承認完了】翌朝株価クオンツ＆7大AI解析Pro 専用アクセスコード"
                 body = f"{t_info.get('name','')} 様\n\nご利用申請が承認されました。\n\n■登録メール: {target_em}\n■専用アクセスコード: {t_code}\n"
                 ok, _ = send_auto_email(target_em, subj, body)
-                st.session_state["admin_mailto_box"] = f"mailto:{target_em}?subject={urllib.parse.quote(subj)}&body={urllib.parse.quote(body)}"
                 st.rerun()
         with b2:
             if st.button("⏸️ 利用停止(却下)", use_container_width=True):
@@ -1253,7 +1162,7 @@ def render_admin_management_tab():
     st.download_button("📥 会員一覧データベースをCSVでダウンロード", data=csv_mem, file_name="members_backup.csv", mime="text/csv", use_container_width=True)
 
 # ==========================================
-# 🚀 メイン画面実行＆弱肉強食サバイバルランキング
+# 🚀 メイン画面実行＆サバイバルランキング
 # ==========================================
 if st.button("🔄 最新データに更新（機関クオンツ＆弱肉強食サバイバル再集計）"):
     st.cache_data.clear()
@@ -1285,7 +1194,6 @@ def apply_survival_of_the_fittest(stock_list, cut_pct):
     keep_count = max(3, int(round(len(sorted_all) * (cut_pct / 100.0))))
     return sorted_all[:keep_count], sorted_all[keep_count:]
 
-is_admin_user = (st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower())
 base_tabs = [
     "🏆 総合サバイバルTOP5",
     "🏦 機関VPIN・ステルス買い特選",
@@ -1295,9 +1203,9 @@ base_tabs = [
     "📋 監視＆注文シート"
 ]
 if is_admin_user:
-    base_tabs.append("👑 会員一括管理")
+    base_tabs.append("👑 管理者・会員一括管理")
 
-tab_labels = base_tabs + list(STOCK_POOL.keys())
+tab_labels = base_tabs + list(STOCK_POOL.items())
 tabs = st.tabs(tab_labels)
 
 with tabs[0]:
@@ -1307,13 +1215,13 @@ with tabs[0]:
         render_stock_card(r, rank=idx, key_prefix="top5")
 
 with tabs[1]:
-    st.info("🏦 **機関投資家VPIN（オーダーフロー毒性）＆浮動株吸い上げ特選タブ**: 機関のステルス氷山買いや浮動株の吸収（Amihud価格弾性上昇）が検知された上位10銘柄です。")
+    st.info("🏦 **機関投資家VPIN（オーダーフロー毒性）＆浮動株吸い上げ特選タブ**: 機関のステルス氷山買いや浮動株の吸収が検知された上位10銘柄です。")
     inst_list = sorted(all_results, key=lambda x: (x["inst_score"], x["vpin"], x["survival_power"]), reverse=True)[:10]
     for idx, r in enumerate(inst_list, start=1):
         render_stock_card(r, rank=idx, key_prefix="inst_top")
 
 with tabs[2]:
-    st.info("🔥 **5chデイトレ板・初動イナゴ集中＆シコリ玉排除タブ**: 5日平均出来高からの急増率が高く、上ヒゲ（高値掴みのシコリ玉）が極めて少ない初動TOP10です。")
+    st.info("🔥 **5chデイトレ板・初動イナゴ集中＆シコリ玉排除タブ**: 5日平均出来高からの急増率が高く、上ヒゲが極めて少ない初動TOP10です。")
     b5_list = sorted(all_results, key=lambda x: (x["board5ch_score"], x["survival_power"]), reverse=True)[:10]
     for idx, r in enumerate(b5_list, start=1):
         render_stock_card(r, rank=idx, key_prefix="b5_top")
