@@ -154,13 +154,11 @@ def render_admin_member_manager():
     """管理者専用の会員一括管理コンソール"""
     db = load_members_db()
     pending_list = [v for v in db.values() if v.get("status") == "pending"]
-    approved_list = [v for v in db.values() if v.get("status") == "approved"]
 
     with st.sidebar:
         st.markdown("---")
         st.subheader(f"👑 管理者メニュー (承認待:{len(pending_list)}件)")
 
-        # 1. 承認待ちのワンタップ承認・却下
         if pending_list:
             st.warning(f"🔔 新規の会員登録申請が {len(pending_list)} 件届いています！")
             for p in pending_list:
@@ -197,7 +195,6 @@ def render_admin_member_manager():
                 st.success(f"✅ {la['email']} を承認しました！（コード: `{la['code']}`）")
                 st.markdown(f'<a href="{la["url"]}" style="display:block;text-align:center;background:#16a34a;color:#fff;padding:8px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:12px;">✉️ 相手にパスコード通知メールを送る</a>', unsafe_allow_html=True)
 
-        # 2. 自動メール送信（SMTP）設定
         with st.expander("⚙️ 自動メール送信(SMTP)＆URL設定"):
             st.caption("設定すると、承認ボタンを押した瞬間に相手へパスコードが全自動メール送信されます。")
             st.text_input("アプリの公開URL (メール内承認リンク用)", value=st.session_state.get("app_base_url", "http://localhost:8501"), key="app_base_url")
@@ -317,7 +314,7 @@ for k, default_v in [("active_debates", {}), ("debate_Animated", set()), ("stock
         st.session_state[k] = default_v
 
 # ==========================================
-# 🎨 カスタムCSS（ダークモードでも文字が白飛びしないよう完全対策）
+# 🎨 カスタムCSS
 # ==========================================
 st.markdown("""
 <style>
@@ -899,7 +896,6 @@ def run_7ai_council_algorithm(r, m5=None):
     }
 
 def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
-    """ダークモードでも100%読める純正Markdown形式で回答を生成するエンジン"""
     q_clean = unicodedata.normalize('NFKC', str(question)).strip()
     q_low = q_clean.lower()
     m5_vwap = m5["vwap5_price"] if m5 else r["vwap_price"]
@@ -946,7 +942,7 @@ def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
         )
 
 # ==========================================
-# 💬 会議パネル＆質問コーナー（Streamlitネイティブ描画で白飛び完全ゼロ版）
+# 💬 会議パネル＆質問コーナー（即時反映・履歴永続版）
 # ==========================================
 def cb_toggle_debate(unique_key):
     st.session_state["active_debates"][unique_key] = not st.session_state["active_debates"].get(unique_key, False)
@@ -957,7 +953,8 @@ def cb_toggle_watchlist(code, r_data):
     else:
         st.session_state["watchlist"][code] = r_data
 
-def cb_handle_preset_q(unique_key, q_text, r, debate, m5):
+def cb_handle_qa_action(unique_key, q_text, r, debate, m5):
+    """質問を受け付けた瞬間にセッションに即時追加して即座に画面に表示するコールバック"""
     if unique_key not in st.session_state["stock_chats"]:
         st.session_state["stock_chats"][unique_key] = []
     ans_md = generate_7ai_qa_response(q_text, r, debate, r["lot_info"], m5)
@@ -966,10 +963,7 @@ def cb_handle_preset_q(unique_key, q_text, r, debate, m5):
 def cb_handle_free_q(unique_key, input_key, r, debate, m5):
     user_txt = st.session_state.get(input_key, "").strip()
     if user_txt:
-        if unique_key not in st.session_state["stock_chats"]:
-            st.session_state["stock_chats"][unique_key] = []
-        ans_md = generate_7ai_qa_response(user_txt, r, debate, r["lot_info"], m5)
-        st.session_state["stock_chats"][unique_key].append({"q": user_txt, "a": ans_md})
+        cb_handle_qa_action(unique_key, user_txt, r, debate, m5)
         st.session_state[input_key] = ""
 
 def cb_clear_chat(unique_key):
@@ -1032,7 +1026,7 @@ def render_interactive_council_section(r, unique_key):
     )
 
     # ==========================================
-    # 💬 質問コーナー（Streamlit純正コンポーネント描画でダークモードでも100%クッキリ表示）
+    # 💬 質問コーナー（即時反応・履歴表示対応）
     # ==========================================
     if unique_key not in st.session_state["stock_chats"]:
         st.session_state["stock_chats"][unique_key] = []
@@ -1053,14 +1047,14 @@ def render_interactive_council_section(r, unique_key):
         st.button(
             "🏦 機関投資家のステルス買い・VPINは？",
             key=f"q1_{unique_key}",
-            on_click=cb_handle_preset_q,
+            on_click=cb_handle_qa_action,
             args=(unique_key, "機関投資家のステルス買い集めやVPINの状況は？", r, debate, m5),
             use_container_width=True
         )
         st.button(
             "🔥 5chシコリ玉と踏み上げ価格は？",
             key=f"q2_{unique_key}",
-            on_click=cb_handle_preset_q,
+            on_click=cb_handle_qa_action,
             args=(unique_key, "5ch板のシコリ玉と空売り踏み上げトリガー価格は？", r, debate, m5),
             use_container_width=True
         )
@@ -1068,14 +1062,14 @@ def render_interactive_council_section(r, unique_key):
         st.button(
             "🚨 特買い確率と8:50気配の見方は？",
             key=f"q3_{unique_key}",
-            on_click=cb_handle_preset_q,
+            on_click=cb_handle_qa_action,
             args=(unique_key, "翌朝の特買い確率と8:50気配の見方は？", r, debate, m5),
             use_container_width=True
         )
         st.button(
             "💰 具体的な買い方・利確・損切りは？",
             key=f"q4_{unique_key}",
-            on_click=cb_handle_preset_q,
+            on_click=cb_handle_qa_action,
             args=(unique_key, "具体的な買い方と利確・損切りラインを教えて", r, debate, m5),
             use_container_width=True
         )
@@ -1087,9 +1081,7 @@ def render_interactive_council_section(r, unique_key):
             "自由質問を入力",
             key=input_key,
             placeholder="自由に質問を入力（例：いつ売るべき？ / なぜ上がる？ / リスクは？）",
-            label_visibility="collapsed",
-            on_change=cb_handle_free_q,
-            args=(unique_key, input_key, r, debate, m5)
+            label_visibility="collapsed"
         )
     with f_col2:
         st.button(
@@ -1100,7 +1092,6 @@ def render_interactive_council_section(r, unique_key):
             use_container_width=True
         )
 
-    # 過去の質問履歴（Streamlitネイティブ枠で描画するため絶対に白飛びしない！）
     if chat_history:
         with st.expander(f"📚 過去の質問履歴をすべて見る（全 {len(chat_history)} 件）", expanded=False):
             for idx_h in range(len(chat_history) - 1, -1, -1):
@@ -1169,14 +1160,14 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     render_interactive_council_section(r, f"{key_prefix}_{r['code']}")
 
 # ==========================================
-# 👑 管理者専用：会員データベース一括管理タブ描画
+# 👑 管理者専用：会員データベース一括管理タブ描画 (便利機能付き)
 # ==========================================
 def render_admin_management_tab():
     db = load_members_db()
     st.markdown("### 👥 会員データベース一括管理コンソール")
-    st.caption("新規申請のワンクリック承認・却下、パスコード自動発行、ステータス変更、CSV入出力を一括管理できます。")
+    st.caption("新規申請のワンクリック承認・却下、パスコード自動発行、ステータス変更、CSVバックアップを一括管理できます。")
 
-    # 1. 新規で会員を直接追加・承認
+    # 1. 新規会員の手動直接登録
     with st.expander("➕ 新規会員を手動で直接登録・パスコード発行する", expanded=False):
         with st.form("admin_add_member_form", clear_on_submit=True):
             c1, c2, c3 = st.columns([1.5, 2, 1.5])
@@ -1206,7 +1197,7 @@ def render_admin_management_tab():
                     m_link = f"mailto:{cm}?subject={urllib.parse.quote(subj)}&body={urllib.parse.quote(body)}"
                     st.markdown(f'👉 <a href="{m_link}" style="background:#16a34a;color:#fff;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:bold;">✉️ パスコード通知メールを送信する</a>', unsafe_allow_html=True)
 
-    # 2. 全会員一覧テーブル＆ステータス一括変更
+    # 2. 全会員一覧テーブル
     rows = []
     for em, info in db.items():
         rows.append({
@@ -1221,7 +1212,7 @@ def render_admin_management_tab():
     df_members = pd.DataFrame(rows)
     st.dataframe(df_members, use_container_width=True, hide_index=True)
 
-    # 3. 個別会員のステータス操作（承認 / 停止 / 削除 / メール再送）
+    # 3. 個別会員のワンタップ操作（承認・停止・削除・コード送信）
     st.markdown("##### ⚡ 個別会員のワンタップ操作（承認・一時停止・削除・コード送信）")
     target_em = st.selectbox("操作する会員を選択", options=list(db.keys()), format_func=lambda x: f"{db[x].get('name','')} ({x}) - [{db[x].get('status','')}]")
     if target_em:
