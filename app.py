@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -236,7 +237,7 @@ def check_member_authentication():
     if "authenticated_user" not in st.session_state:
         st.session_state["authenticated_user"] = None
 
-    # URLクエリパラメータによるセッション維持（ブラウザの戻るボタンを押してもログアウトしない対策）
+    # URLクエリパラメータによるセッション維持（ブラウザの戻る・更新でもログアウトしない対策）
     q_user = st.query_params.get("u", "").strip().lower()
     q_tok = st.query_params.get("t", "").strip()
     if not st.session_state["authenticated_user"] and q_user and q_tok:
@@ -261,9 +262,9 @@ def check_member_authentication():
         return True
 
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; padding: 24px; border-radius: 14px; text-align: center; margin-top: 10px; margin-bottom: 16px;">
-        <h2 style="margin:0; color:#fbbf24; font-size:20px;">🔒 会員限定 クオンツ＆7大AI解析 Pro</h2>
-        <p style="font-size:13px; color:#cbd5e1; margin-top:8px; margin-bottom:0;">
+    <div style="background: linear-gradient(135deg, #090d16, #1e293b); color: #f8fafc; padding: 28px 24px; border-radius: 16px; text-align: center; margin-top: 10px; margin-bottom: 18px; box-shadow: 0 10px 25px rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1);">
+        <h2 style="margin:0; color:#fbbf24; font-size:21px; letter-spacing:0.5px;">🔒 会員限定 クオンツ＆7大AI解析 Pro</h2>
+        <p style="font-size:13px; color:#cbd5e1; margin-top:8px; margin-bottom:0; line-height:1.6;">
             本システムは完全招待・承認制です。<br>承認されたメールアドレスと専用アクセスコードを入力してください。
         </p>
     </div>
@@ -359,7 +360,8 @@ for k, default_v in [
     ("watchlist", {}),
     ("navigation_page", "TOP"),
     ("nav_history", ["TOP"]),
-    ("custom_search_code", "")
+    ("custom_search_code", ""),
+    ("scroll_to_chat_key", None)
 ]:
     if k not in st.session_state:
         st.session_state[k] = default_v
@@ -376,47 +378,242 @@ def navigate_back():
         st.session_state["navigation_page"] = "TOP"
     st.session_state["custom_search_code"] = ""
 
+# 画面上部のフローティング半透明ナビバーからのURLアクション処理
+nav_cmd = st.query_params.get("nav_cmd", "")
+if nav_cmd:
+    if nav_cmd == "top":
+        st.session_state["navigation_page"] = "TOP"
+        st.session_state["custom_search_code"] = ""
+    elif nav_cmd == "back":
+        navigate_back()
+    elif nav_cmd == "wl":
+        navigate_to("WATCHLIST")
+    elif nav_cmd == "refresh":
+        st.cache_data.clear()
+    try:
+        del st.query_params["nav_cmd"]
+    except Exception:
+        pass
+    st.rerun()
+
 # ==========================================
-# 🎨 カスタムCSS
+# 🏢 企業ロゴマーク自動取得システム (ドメインマッピング＋フォールバック)
 # ==========================================
-st.markdown("""
+COMPANY_DOMAINS = {
+    "8035.T": "tel.co.jp", "6857.T": "advantest.com", "6920.T": "lasertec.co.jp", "6146.T": "disco.co.jp",
+    "6526.T": "socionext.com", "7735.T": "screen.co.jp", "6315.T": "towa.co.jp", "6723.T": "renesas.com",
+    "4063.T": "shinetsu.co.jp", "3436.T": "sumcosi.com", "6323.T": "rorze.com", "6871.T": "micronics.co.jp",
+    "NVDA": "nvidia.com", "AMD": "amd.com", "MU": "micron.com", "TSM": "tsmc.com",
+    "AVGO": "broadcom.com", "ARM": "arm.com", "SMCI": "supermicro.com",
+    "9984.T": "group.softbank", "3778.T": "sakura.ad.jp", "7011.T": "mhi.com", "7012.T": "khi.co.jp",
+    "7013.T": "ihi.co.jp", "3993.T": "pkshatech.com", "4180.T": "appier.com", "5032.T": "anycolor.co.jp",
+    "4385.T": "about.mercari.com", "7974.T": "nintendo.co.jp", "8306.T": "mufg.jp",
+    "MSFT": "microsoft.com", "PLTR": "palantir.com", "META": "meta.com", "GOOGL": "abc.xyz", "CRWD": "crowdstrike.com",
+    "5803.T": "fujikura.co.jp", "5801.T": "furukawa.co.jp", "5802.T": "sei.co.jp", "6501.T": "hitachi.co.jp",
+    "9509.T": "hepco.co.jp", "9508.T": "kyuden.co.jp", "6622.T": "daihen.co.jp", "1942.T": "kandenko.co.jp",
+    "VST": "vistracorp.com", "CEG": "constellationenergy.com", "GEV": "gevernova.com",
+    "5595.T": "i-qps.net", "186A.T": "astroscale.com", "9348.T": "ispace-inc.com", "9412.T": "skyperfectjsat.space",
+    "9433.T": "kddi.com", "7203.T": "global.toyota", "TSLA": "tesla.com", "RKLB": "rocketlabusa.com",
+    "ASTS": "ast-science.com", "COIN": "coinbase.com",
+    "5253.T": "cover-corp.com", "9166.T": "genda.jp", "216A.T": "corp.timee.co.jp", "285A.T": "kioxia.com",
+    "141A.T": "trial-holdings.inc", "5243.T": "note.jp", "247A.T": "ai-robotics.co.jp", "153A.T": "caulis.jp",
+    "3350.T": "metaplanet.jp", "IONQ": "ionq.com", "RGTI": "rigetti.com", "SOUN": "soundhound.com",
+    "RDDT": "redditinc.com", "ALAB": "asteralabs.com"
+}
+
+def get_company_logo_html(full_code: str, name: str) -> str:
+    domain = COMPANY_DOMAINS.get(full_code, "")
+    clean_name = name.replace(" (米)", "").replace(" (米IPO)", "").strip()
+    initial = clean_name[0] if clean_name else "📈"
+    fallback_url = f"https://ui-avatars.com/api/?name={urllib.parse.quote(initial)}&background=0f172a&color=fbbf24&bold=true&size=64"
+    if domain:
+        logo_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+    else:
+        logo_url = fallback_url
+    return (
+        f'<img src="{logo_url}" onerror="this.onerror=null;this.src=\'{fallback_url}\';" '
+        f'class="company-logo-img" alt="logo" />'
+    )
+
+# ==========================================
+# 🎨 カスタムCSS ＆ 半透明フローティングナビバー描画
+# ==========================================
+curr_u_param = urllib.parse.quote(st.session_state.get("authenticated_user", "") or "")
+curr_t_param = urllib.parse.quote(generate_admin_action_token(curr_u_param, "session_keep") if curr_u_param else "")
+wl_count = len(st.session_state.get("watchlist", {}))
+curr_page_badge = "監視リスト表示中" if st.session_state.get("navigation_page") == "WATCHLIST" else "ランキング解析"
+
+st.markdown(f"""
 <style>
-button[data-baseweb="tab"] { font-size: 13px !important; font-weight: bold !important; padding: 8px 14px !important; }
-.stock-card, .rank-card, .search-result-card { background-color: #ffffff !important; color: #0f172a !important; border-radius: 12px; padding: 16px; margin-bottom: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); border-left: 6px solid #e11d48; }
-.stock-card *, .rank-card *, .search-result-card * { color: #0f172a; }
-.search-result-card { background-color: #fffbeb !important; border-left-color: #d97706; }
-.prob-badge { font-size: 22px; font-weight: bold; color: #dc2626 !important; }
-.rank-badge { display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff !important; padding: 3px 9px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-right: 4px; }
-.score-badge { display: inline-block; background: #1e293b; color: #f8fafc !important; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-.inst-badge { display: inline-block; background: linear-gradient(135deg, #1d4ed8, #3b82f6); color: #ffffff !important; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
-.board5ch-badge { display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff !important; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
-.squeeze-badge { display: inline-block; background: linear-gradient(135deg, #b91c1c, #ef4444); color: #ffffff !important; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
-.tokugai-badge { display: inline-block; background: linear-gradient(135deg, #d97706, #f59e0b); color: #ffffff !important; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
-.survival-badge { display: inline-block; background: #f3e8ff; color: #6b21a8 !important; border: 1px solid #d8b4fe; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; margin-left: 4px; }
-.signal-10tier-badge { display: inline-block; padding: 5px 14px; border-radius: 8px; font-size: 13.5px; font-weight: bold; margin-bottom: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.12); }
-.inst-box { background: #eff6ff !important; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #1e3a8a !important; }
-.inst-box * { color: #1e3a8a !important; }
-.squeeze-box { background: #fff1f2 !important; border: 1px solid #fecdd3; border-left: 4px solid #e11d48; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #881337 !important; }
-.squeeze-box * { color: #881337 !important; }
-.pts-tokugai-box { background: #fffbeb !important; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #78350f !important; }
-.pts-tokugai-box * { color: #78350f !important; }
-.board5ch-box { background: #ecfdf5 !important; border: 1px solid #a7f3d0; border-left: 4px solid #059669; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #064e3b !important; }
-.board5ch-box * { color: #064e3b !important; }
-.metrics-row { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; font-size: 11px; color: #0f172a !important; background: #f8fafc !important; padding: 8px 10px; border-radius: 6px; border: 1px solid #e2e8f0; }
-.metrics-row * { color: #0f172a !important; }
-.trade-plan-box { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; background: #f8fafc !important; padding: 8px 6px; border-radius: 8px; border: 1px dashed #cbd5e1; text-align: center; color: #0f172a !important; }
-.sizing-box { background: #f0fdf4 !important; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 12px; color: #166534 !important; }
-.sizing-box * { color: #166534 !important; }
-.ai-council-box { background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc !important; border-radius: 12px; padding: 16px; margin-top: 6px; margin-bottom: 10px; }
-.ai-council-box * { color: #f8fafc; }
-.ai-agent-card { background: rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 12.5px; line-height: 1.6; color: #f8fafc !important; }
-.consensus-banner { background: linear-gradient(135deg, #1e1b4b, #312e81); border: 2px solid #818cf8; border-radius: 10px; padding: 14px; margin-top: 12px; font-size: 12.5px; line-height: 1.7; color: #f8fafc !important; }
-.consensus-section { background: rgba(255, 255, 255, 0.07); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 8px 10px; margin-top: 8px; color: #f8fafc !important; }
+/* 全体のタイポグラフィと背景の洗練 */
+.block-container {{
+    padding-top: 3.6rem !important;
+    padding-bottom: 3rem !important;
+    max-width: 780px !important;
+}}
+button[data-baseweb="tab"] {{
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+    padding: 8px 13px !important;
+    border-radius: 8px 8px 0 0 !important;
+}}
+
+/* 💎 スクロール追従・半透明グラスモーフィズム上部ナビバー */
+.floating-glass-nav {{
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 999990;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    background: rgba(15, 23, 42, 0.74);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    white-space: nowrap;
+}}
+.floating-glass-nav a {{
+    color: #f8fafc !important;
+    text-decoration: none !important;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    transition: all 0.18s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    letter-spacing: 0.2px;
+}}
+.floating-glass-nav a:hover {{
+    background: rgba(255, 255, 255, 0.18);
+    color: #fbbf24 !important;
+    transform: translateY(-1px);
+}}
+.floating-glass-nav .nav-divider {{
+    width: 1px;
+    height: 13px;
+    background: rgba(255, 255, 255, 0.2);
+}}
+.floating-glass-nav .wl-pill {{
+    background: rgba(251, 191, 36, 0.2);
+    border: 1px solid rgba(251, 191, 36, 0.45);
+    color: #fde047 !important;
+}}
+
+/* 🏢 企業ロゴマーク */
+.company-logo-img {{
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    object-fit: contain;
+    background: #ffffff;
+    padding: 3px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.06);
+    flex-shrink: 0;
+}}
+
+/* 🃏 プレミアム銘柄カードデザイン */
+.stock-card, .rank-card, .search-result-card {{
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+    color: #0f172a !important;
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.07);
+    border: 1px solid #e2e8f0;
+    border-left: 6px solid #e11d48;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}}
+.stock-card:hover, .rank-card:hover {{
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);
+}}
+.stock-card *, .rank-card *, .search-result-card * {{ color: #0f172a; }}
+.search-result-card {{
+    background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%) !important;
+    border-left-color: #d97706;
+}}
+
+/* バッジ類 */
+.prob-badge {{ font-size: 24px; font-weight: 800; color: #dc2626 !important; letter-spacing: -0.5px; }}
+.rank-badge {{ display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff !important; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; margin-right: 5px; box-shadow: 0 2px 4px rgba(217,119,6,0.25); }}
+.score-badge {{ display: inline-block; background: #0f172a; color: #f8fafc !important; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }}
+.inst-badge {{ display: inline-block; background: linear-gradient(135deg, #1d4ed8, #2563eb); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
+.board5ch-badge {{ display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
+.squeeze-badge {{ display: inline-block; background: linear-gradient(135deg, #b91c1c, #ef4444); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
+.tokugai-badge {{ display: inline-block; background: linear-gradient(135deg, #d97706, #f59e0b); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
+.survival-badge {{ display: inline-block; background: #f3e8ff; color: #6b21a8 !important; border: 1px solid #d8b4fe; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
+
+/* 10段階シグナルバー */
+.signal-10tier-badge {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 800;
+    margin-bottom: 10px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+    letter-spacing: 0.2px;
+}}
+
+/* 情報ボックス */
+.inst-box {{ background: #eff6ff !important; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; border-radius: 9px; padding: 8px 12px; margin-top: 7px; font-size: 12px; color: #1e3a8a !important; }}
+.inst-box * {{ color: #1e3a8a !important; }}
+.squeeze-box {{ background: #fff1f2 !important; border: 1px solid #fecdd3; border-left: 4px solid #e11d48; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #881337 !important; }}
+.squeeze-box * {{ color: #881337 !important; }}
+.pts-tokugai-box {{ background: #fffbeb !important; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #78350f !important; }}
+.pts-tokugai-box * {{ color: #78350f !important; }}
+.board5ch-box {{ background: #ecfdf5 !important; border: 1px solid #a7f3d0; border-left: 4px solid #059669; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #064e3b !important; }}
+.board5ch-box * {{ color: #064e3b !important; }}
+.metrics-row {{ display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 9px; font-size: 11.5px; color: #0f172a !important; background: #f1f5f9 !important; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; }}
+.metrics-row * {{ color: #0f172a !important; }}
+.trade-plan-box {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 9px; background: #ffffff !important; padding: 9px 6px; border-radius: 10px; border: 1px solid #cbd5e1; text-align: center; color: #0f172a !important; box-shadow: inset 0 1px 3px rgba(0,0,0,0.03); }}
+.sizing-box {{ background: linear-gradient(90deg, #f0fdf4, #dcfce7) !important; border: 1px solid #86efac; border-radius: 9px; padding: 9px 12px; margin-top: 8px; font-size: 12px; color: #166534 !important; }}
+.sizing-box * {{ color: #166534 !important; }}
+
+/* 7大AI評議会ダークパネル */
+.ai-council-box {{ background: linear-gradient(135deg, #090d16, #1e293b); color: #f8fafc !important; border-radius: 14px; padding: 16px; margin-top: 8px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.1); }}
+.ai-council-box * {{ color: #f8fafc; }}
+.ai-agent-card {{ background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 10px 13px; margin-bottom: 8px; font-size: 12.5px; line-height: 1.6; color: #f8fafc !important; }}
+.consensus-banner {{ background: linear-gradient(135deg, #1e1b4b, #312e81); border: 1.5px solid #818cf8; border-radius: 12px; padding: 14px; margin-top: 12px; font-size: 12.5px; line-height: 1.7; color: #f8fafc !important; }}
+.consensus-section {{ background: rgba(255, 255, 255, 0.07); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 8px 10px; margin-top: 8px; color: #f8fafc !important; }}
+
+/* 質問回答ハイライトボックス */
+.qa-answer-highlight {{
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    border: 1.5px solid #60a5fa;
+    border-left: 5px solid #2563eb;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-top: 8px;
+    margin-bottom: 12px;
+    color: #0f172a !important;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
+}}
 </style>
+
+<!-- 🧭 上部追従・半透明フローティングナビバー -->
+<div class="floating-glass-nav">
+    <a href="?u={curr_u_param}&t={curr_t_param}&nav_cmd=top" target="_self" title="ランキングTOPへ">🏠 TOP</a>
+    <div class="nav-divider"></div>
+    <a href="?u={curr_u_param}&t={curr_t_param}&nav_cmd=back" target="_self" title="前の画面へ戻る">⬅️ 戻る</a>
+    <div class="nav-divider"></div>
+    <a href="?u={curr_u_param}&t={curr_t_param}&nav_cmd=wl" target="_self" class="wl-pill" title="監視ウォッチリストを開く">⭐ 監視 ({wl_count})</a>
+    <div class="nav-divider"></div>
+    <a href="?u={curr_u_param}&t={curr_t_param}&nav_cmd=refresh" target="_self" title="最新データに再集計">🔄 更新</a>
+</div>
 """, unsafe_allow_html=True)
 
 # --- サイドバー設定 ---
-st.sidebar.header("🧭 アプリ内ナビゲーション")
+st.sidebar.header("🧭 ナビゲーション")
 s_col1, s_col2 = st.sidebar.columns(2)
 with s_col1:
     if st.button("🏠 TOP画面", key="side_top_btn", use_container_width=True):
@@ -550,9 +747,9 @@ def fetch_macro_market():
     macro_tickers = {
         "sp500":  {"codes": ["^GSPC"],         "label": "🇺🇸 米S&P500"},
         "sox":    {"codes": ["^SOX"],          "label": "💽 米SOX半導体"},
-        "usdjpy": {"codes": ["JPY=X"],         "label": "💴 ドル円為替"},
-        "nk_fut": {"codes": ["NIY=F", "^N225"], "label": "🇯🇵 CME日経先物"},
-        "vix":    {"codes": ["^VIX"],          "label": "⚡ VIX恐怖指数"}
+        "usdjpy": {"codes": ["JPY=X"],         "label": "💴 ドル円"},
+        "nk_fut": {"codes": ["NIY=F", "^N225"], "label": "🇯🇵 日経先物"},
+        "vix":    {"codes": ["^VIX"],          "label": "⚡ VIX指数"}
     }
     macro_data = {}
     for key, info in macro_tickers.items():
@@ -760,25 +957,25 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
             tier_val -= 10.0
 
         if tier_val >= 80:
-            tier_num, tier_label, tier_color, tier_bg = 10, "【第10段階：🌟絶対買い】機関VPIN極大・翌朝爆上げ濃厚", "#ffffff", "#b91c1c"
+            tier_num, tier_label, tier_color, tier_bg = 10, "【第10段階：🌟絶対買い】機関VPIN極大・翌朝爆上げ濃厚", "#ffffff", "linear-gradient(135deg, #991b1b, #dc2626)"
         elif tier_val >= 75:
-            tier_num, tier_label, tier_color, tier_bg = 9, "【第9段階：🔥絶対買い】特買い・踏み上げ急騰ロックオン", "#ffffff", "#dc2626"
+            tier_num, tier_label, tier_color, tier_bg = 9, "【第9段階：🔥絶対買い】特買い・踏み上げ急騰ロックオン", "#ffffff", "linear-gradient(135deg, #b91c1c, #ef4444)"
         elif tier_val >= 70:
-            tier_num, tier_label, tier_color, tier_bg = 8, "【第8段階：⭕買い】機関買い集め・強気順張り", "#ffffff", "#ea580c"
+            tier_num, tier_label, tier_color, tier_bg = 8, "【第8段階：⭕買い】機関買い集め・強気順張り", "#ffffff", "linear-gradient(135deg, #c2410c, #ea580c)"
         elif tier_val >= 65:
-            tier_num, tier_label, tier_color, tier_bg = 7, "【第7段階：⭕買い】好需給・VWAP押し目買い優勢", "#ffffff", "#d97706"
+            tier_num, tier_label, tier_color, tier_bg = 7, "【第7段階：⭕買い】好需給・VWAP押し目買い優勢", "#ffffff", "linear-gradient(135deg, #b45309, #d97706)"
         elif tier_val >= 60:
-            tier_num, tier_label, tier_color, tier_bg = 6, "【第6段階：👀様子見(買い寄り)】初動の気配確認後に打診", "#0f172a", "#fde047"
+            tier_num, tier_label, tier_color, tier_bg = 6, "【第6段階：👀様子見(買い寄り)】初動の気配確認後に打診", "#0f172a", "linear-gradient(135deg, #fde047, #facc15)"
         elif tier_val >= 55:
-            tier_num, tier_label, tier_color, tier_bg = 5, "【第5段階：👀様子見(中立)】方向感待ち・深追い禁物", "#f8fafc", "#64748b"
+            tier_num, tier_label, tier_color, tier_bg = 5, "【第5段階：👀様子見(中立)】方向感待ち・深追い禁物", "#f8fafc", "linear-gradient(135deg, #475569, #64748b)"
         elif tier_val >= 50:
-            tier_num, tier_label, tier_color, tier_bg = 4, "【第4段階：⚠️危険(売り優勢)】上値シコリ玉・寄り天警戒", "#ffffff", "#b45309"
+            tier_num, tier_label, tier_color, tier_bg = 4, "【第4段階：⚠️危険(売り優勢)】上値シコリ玉・寄り天警戒", "#ffffff", "linear-gradient(135deg, #78350f, #b45309)"
         elif tier_val >= 45:
-            tier_num, tier_label, tier_color, tier_bg = 3, "【第3段階：⚠️危険】機関の売り浴びせ・下落リスク大", "#ffffff", "#991b1b"
+            tier_num, tier_label, tier_color, tier_bg = 3, "【第3段階：⚠️危険】機関の売り浴びせ・下落リスク大", "#ffffff", "linear-gradient(135deg, #7f1d1d, #991b1b)"
         elif tier_val >= 40:
-            tier_num, tier_label, tier_color, tier_bg = 2, "【第2段階：☠️絶対手を出すな】需給崩壊・高値掴み厳禁", "#ffffff", "#7f1d1d"
+            tier_num, tier_label, tier_color, tier_bg = 2, "【第2段階：☠️絶対手を出すな】需給崩壊・高値掴み厳禁", "#ffffff", "linear-gradient(135deg, #450a0a, #7f1d1d)"
         else:
-            tier_num, tier_label, tier_color, tier_bg = 1, "【第1段階：☠️絶対手を出すな】全面売り圧力・エントリー禁止", "#ffffff", "#450a0a"
+            tier_num, tier_label, tier_color, tier_bg = 1, "【第1段階：☠️絶対手を出すな】全面売り圧力・エントリー禁止", "#ffffff", "linear-gradient(135deg, #1e1b4b, #450a0a)"
 
         tp_val = max(pts_est_val, close_val) + (atr_val * 0.85)
         sl_val = close_val - (atr_val * 0.5)
@@ -1036,7 +1233,7 @@ def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
         )
 
 # ==========================================
-# 💬 会議パネル＆質問コーナー
+# 💬 会議パネル＆質問コーナー（自動スムーズスクロール搭載）
 # ==========================================
 def cb_toggle_debate(unique_key):
     st.session_state["active_debates"][unique_key] = not st.session_state["active_debates"].get(unique_key, False)
@@ -1052,6 +1249,7 @@ def cb_handle_qa_action(unique_key, q_text, r, debate, m5):
         st.session_state["stock_chats"][unique_key] = []
     ans_md = generate_7ai_qa_response(q_text, r, debate, r["lot_info"], m5)
     st.session_state["stock_chats"][unique_key].append({"q": q_text, "a": ans_md})
+    st.session_state["scroll_to_chat_key"] = unique_key
 
 def cb_handle_free_q(unique_key, input_key, r, debate, m5):
     user_txt = st.session_state.get(input_key, "").strip()
@@ -1111,7 +1309,7 @@ def render_interactive_council_section(r, unique_key):
         f'<div class="ai-council-box">'
         f'<div style="display:flex; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:6px;">'
         f'<span style="font-weight:bold; color:#fbbf24;">🧠 7大AI最高評議会（銘柄別・動的専門ロール検証）</span>'
-        f'<span style="background:{r["tier_bg"]}; color:{r["tier_color"]}; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:bold;">{r["tier_label"]}</span>'
+        f'<span style="background:{r["tier_bg"]}; color:{r["tier_color"]}; padding:2px 10px; border-radius:12px; font-size:11.5px; font-weight:bold;">{r["tier_label"]}</span>'
         f'</div>{agents_html}'
         f'<div class="consensus-banner"><div style="font-weight:bold; color:#fde047;">🏛️ 7大AI最終コンセンサス</div>{debate["verdict_html"]}</div>'
         f'</div>',
@@ -1122,14 +1320,6 @@ def render_interactive_council_section(r, unique_key):
         st.session_state["stock_chats"][unique_key] = []
 
     st.markdown("##### 💬 7大AI評議会へのワンタップ＆自由質問コーナー")
-    chat_history = st.session_state["stock_chats"].get(unique_key, [])
-    if chat_history:
-        latest_item = chat_history[-1]
-        with st.container(border=True):
-            st.markdown(f"🙋 **あなたの質問 #{len(chat_history)}：** `{latest_item['q']}`")
-            st.info(latest_item["a"])
-    else:
-        st.caption("👇 下の4つのボタン、または自由入力欄から質問すると、ここに7大AIの回答が即座に表示されます。")
 
     q_col1, q_col2 = st.columns(2)
     with q_col1:
@@ -1146,48 +1336,87 @@ def render_interactive_council_section(r, unique_key):
     with f_col2:
         st.button("AIに質問", key=f"free_q_btn_{unique_key}", on_click=cb_handle_free_q, args=(unique_key, input_key, r, debate, m5), use_container_width=True)
 
+    # スクロール先アンカー（回答表示エリア）
+    anchor_id = f"qa_ans_anchor_{unique_key}"
+    st.markdown(f'<div id="{anchor_id}"></div>', unsafe_allow_html=True)
+
+    chat_history = st.session_state["stock_chats"].get(unique_key, [])
     if chat_history:
-        with st.expander(f"📚 過去の質問履歴をすべて見る（全 {len(chat_history)} 件）", expanded=False):
-            for idx_h in range(len(chat_history) - 1, -1, -1):
-                item = chat_history[idx_h]
-                with st.container(border=True):
-                    st.markdown(f"🙋 **【質問 #{idx_h + 1}】 {item['q']}**")
-                    st.success(item["a"])
-            st.button("🗑️ この銘柄の質問履歴をクリア", key=f"clr_{unique_key}", on_click=cb_clear_chat, args=(unique_key,), use_container_width=True)
+        latest_item = chat_history[-1]
+        with st.container(border=True):
+            st.markdown(f"🙋 **最新の質問 #{len(chat_history)}：** `{latest_item['q']}`")
+            st.info(latest_item["a"])
+
+        # 質問が送信された直後、回答ボックスへさりげなくなめらかに自動スクロール
+        if st.session_state.get("scroll_to_chat_key") == unique_key:
+            components.html(
+                f"""
+                <script>
+                setTimeout(function() {{
+                    const el = window.parent.document.getElementById("{anchor_id}");
+                    if (el) {{
+                        el.scrollIntoView({{ behavior: "smooth", block: "center" }});
+                    }}
+                }}, 120);
+                </script>
+                """,
+                height=0,
+            )
+            st.session_state["scroll_to_chat_key"] = None
+
+        if len(chat_history) > 1:
+            with st.expander(f"📚 過去の質問履歴をすべて見る（全 {len(chat_history)} 件）", expanded=False):
+                for idx_h in range(len(chat_history) - 2, -1, -1):
+                    item = chat_history[idx_h]
+                    with st.container(border=True):
+                        st.markdown(f"🙋 **【質問 #{idx_h + 1}】 {item['q']}**")
+                        st.success(item["a"])
+        st.button("🗑️ この銘柄の質問履歴をクリア", key=f"clr_{unique_key}", on_click=cb_clear_chat, args=(unique_key,), use_container_width=True)
+    else:
+        st.caption("👇 上のボタンまたは自由入力欄から質問すると、直下に7大AIの回答が表示され自動でスクロールします。")
 
 # ==========================================
-# 🃏 銘柄カード描画 (10段階評価バッジ付き)
+# 🃏 銘柄カード描画 (企業ロゴ ＆ 10段階評価バッジ付き)
 # ==========================================
 def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     diff_color = "#dc2626" if r["diff"] > 0 else "#2563eb"
     diff_sign = "+" if r["diff"] > 0 else ""
     pts_sign = "+" if r["pts_gap_pct"] > 0 else ""
-    rank_html = f'<span class="rank-badge">第{rank}位</span>' if rank else ""
+    rank_html = f'<span class="rank-badge">🏆 第{rank}位</span>' if rank else ""
     lot = r["lot_info"]
+    logo_html = get_company_logo_html(r["full_code"], r["name"])
 
-    tier_badge_html = f'<div class="signal-10tier-badge" style="background-color: {r["tier_bg"]}; color: {r["tier_color"]} !important;">🎯 翌朝10段階判定: {r["tier_label"]}</div>'
+    tier_badge_html = (
+        f'<div class="signal-10tier-badge" style="background: {r["tier_bg"]}; color: {r["tier_color"]} !important;">'
+        f'<span>🎯 {r["tier_label"]}</span>'
+        f'<span style="font-size:11px; opacity:0.92;">Lv.{r["tier_num"]}/10</span>'
+        f'</div>'
+    )
 
     html_card = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'{tier_badge_html}'
-        f'<div>{rank_html}<span class="score-badge">🤖 AIスコア: {r["ai_score"]}点</span>'
-        f'<span class="inst-badge">🏦 機関クオンツ: {r["inst_score"]}点</span>'
+        f'<div style="margin-bottom:8px;">{rank_html}<span class="score-badge">🤖 AI: {r["ai_score"]}点</span>'
+        f'<span class="inst-badge">🏦 機関: {r["inst_score"]}点</span>'
         f'<span class="board5ch-badge">🔥 5ch需給: {r["board5ch_score"]}点</span>'
         f'<span class="tokugai-badge">🚨 特買い: {r["tokugai_prob"]}%</span>'
         f'<span class="survival-badge">🦁 戦闘力: {r["survival_power"]}</span></div>'
-        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">'
-        f'<div><span style="font-size:16px; font-weight:bold; color:#0f172a;">{r["name"]}</span> '
-        f'<span style="font-size:12px; color:#64748b;">({r["code"]} / {r["genre"]})</span><br>'
+        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">'
+        f'<div style="display:flex; align-items:center; gap:10px;">'
+        f'{logo_html}'
+        f'<div><span style="font-size:16.5px; font-weight:800; color:#0f172a;">{r["name"]}</span> '
+        f'<span style="font-size:12px; color:#64748b; font-weight:600;">({r["code"]} / {r["genre"]})</span><br>'
         f'<span style="font-size:14px; color:#334155;">終値: <b>{r["price"]}</b> '
-        f'(<span style="color:{diff_color}; font-weight:bold;">{diff_sign}{r["diff"]}%</span>)</span></div>'
-        f'<div style="text-align:right;"><span style="font-size:11px; color:#64748b;">翌朝上昇確率</span><br>'
+        f'(<span style="color:{diff_color}; font-weight:800;">{diff_sign}{r["diff"]}%</span>)</span></div>'
+        f'</div>'
+        f'<div style="text-align:right;"><span style="font-size:11px; color:#64748b; font-weight:600;">翌朝上昇確率</span><br>'
         f'<span class="prob-badge">{r["prob"]}%</span>'
         f'<div style="font-size:11px; color:#64748b;">({r["count"]} / 損益比{r["payoff"]}倍)</div></div>'
         f'</div>'
         f'<div class="inst-box"><b>{r["inst_status"]}</b> ｜ 20日VWAP基準: <b>{r["vwap_price"]}</b></div>'
         f'<div class="board5ch-box"><b>📢 {r["board5ch_status"]}</b> ｜ シグナル: <b>{r["signal"]}</b></div>'
         f'<div class="pts-tokugai-box">'
-        f'<b>🌙 {r["tokugai_status"]}</b> ｜ 夜間理論気配: <b>{r["pts_est_price"]}</b> ({pts_sign}{r["pts_gap_pct"]}%) ｜ 特買い発動線: <b>{r["tokugai_line"]}</b>'
+        f'<b>🌙 {r["tokugai_status"]}</b> ｜ 夜間理論気配: <b>{r["pts_est_price"]}</b> ({pts_sign}{r["pts_gap_pct"]}%) ｜ 特買い線: <b>{r["tokugai_line"]}</b>'
         f'</div>'
         f'<div class="squeeze-box">'
         f'<b>{r["squeeze_type"]}</b> ｜ 踏み上げ突破ライン(20日高値): <b>{r["squeeze_trigger_price"]}</b> ({r["dist_to_high20"]:+.2f}%)'
@@ -1198,9 +1427,9 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         f'<span>🔊 <b>出来高:</b> {r["vol_ratio"]}倍</span><span>🧱 <b>上ヒゲ:</b> {r["upper_shadow_pct"]}%</span>'
         f'</div>'
         f'<div class="trade-plan-box">'
-        f'<div><div style="font-size:10px; color:#64748b;">🌅 夜間理論寄付き</div><div style="font-size:12px; font-weight:bold;">{r["pts_est_price"]}</div></div>'
-        f'<div style="border-left:1px solid #cbd5e1; border-right:1px solid #cbd5e1;"><div style="font-size:10px; color:#15803d; font-weight:bold;">🎯 利確目標</div><div style="font-size:12px; font-weight:bold; color:#15803d;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div>'
-        f'<div><div style="font-size:10px; color:#b91c1c; font-weight:bold;">🛡️ 損切り逆指値</div><div style="font-size:12px; font-weight:bold; color:#b91c1c;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div>'
+        f'<div><div style="font-size:10px; color:#64748b;">🌅 夜間理論寄付き</div><div style="font-size:12.5px; font-weight:800;">{r["pts_est_price"]}</div></div>'
+        f'<div style="border-left:1px solid #cbd5e1; border-right:1px solid #cbd5e1;"><div style="font-size:10px; color:#15803d; font-weight:bold;">🎯 利確目標</div><div style="font-size:12.5px; font-weight:800; color:#15803d;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div>'
+        f'<div><div style="font-size:10px; color:#b91c1c; font-weight:bold;">🛡️ 損切り逆指値</div><div style="font-size:12.5px; font-weight:800; color:#b91c1c;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div>'
         f'</div>'
         f'<div class="sizing-box">'
         f'📦 <b>推奨ロット: {lot["shares"]:,}株</b> (投資額: <b>{lot["position_value"]:,.0f}円</b> / 最大損失リスク: <b>{lot["risk_amount"]:,.0f}円</b>)'
@@ -1210,38 +1439,38 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     render_interactive_council_section(r, f"{key_prefix}_{r['code']}")
 
 # ==========================================
-# 🚀 メイン画面ヘッダー＆常設ナビゲーションバー
+# 🚀 メイン画面ヘッダー＆マクロティッカーバー
 # ==========================================
-st.title("📱 翌朝株価 クオンツ＆7大AI解析 Pro")
-st.caption("【10段階シグナル判定＆機関VPIN搭載】7大AI動的ロール合議 × 5ch需給 × サイドバー会員管理")
-
-nav_b1, nav_b2, nav_b3, nav_b4 = st.columns([1.2, 1.1, 1.4, 1.3])
-with nav_b1:
-    if st.button("🏠 TOP画面へ", key="top_bar_home", use_container_width=True):
-        st.session_state["navigation_page"] = "TOP"
-        st.session_state["custom_search_code"] = ""
-        st.rerun()
-with nav_b2:
-    if st.button("⬅️ 前の画面へ戻る", key="top_bar_back", use_container_width=True):
-        navigate_back()
-        st.rerun()
-with nav_b3:
-    if st.button(f"📋 監視リスト ({len(st.session_state['watchlist'])}件)", key="top_bar_wl", use_container_width=True):
-        navigate_to("WATCHLIST")
-        st.rerun()
-with nav_b4:
-    if st.button("🔄 最新データ更新", key="top_bar_refresh", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-
 macro_info = fetch_macro_market()
 
-c1, c2 = st.columns([3, 1])
+macro_pills_html = "".join([
+    f'<div style="background:rgba(255,255,255,0.08); padding:4px 10px; border-radius:8px; font-size:11px; display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(255,255,255,0.1);">'
+    f'<span style="color:#cbd5e1;">{m["label"]}</span>'
+    f'<span style="color:{"#f87171" if m["diff"]>=0 else "#60a5fa"}; font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span>'
+    f'</div>'
+    for m in macro_info.values()
+])
+
+st.markdown(f"""
+<div style="background: linear-gradient(135deg, #090d16 0%, #1e293b 100%); color: #f8fafc; padding: 18px 20px; border-radius: 16px; margin-bottom: 14px; box-shadow: 0 8px 24px rgba(15,23,42,0.18); border: 1px solid rgba(255,255,255,0.08);">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div>
+            <div style="font-size:11px; color:#fbbf24; font-weight:700; letter-spacing:0.8px;">INSTITUTIONAL VPIN & 7-AI COUNCIL TERMINAL</div>
+            <h1 style="margin:2px 0 0 0; font-size:21px; color:#ffffff; font-weight:800;">📈 翌朝株価 クオンツ＆7大AI解析 Pro</h1>
+        </div>
+        <span style="background:rgba(251,191,36,0.15); color:#fde047; border:1px solid rgba(251,191,36,0.4); padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700;">{curr_page_badge}</span>
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:12px;">
+        {macro_pills_html}
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+c1, c2 = st.columns([3.2, 1])
 with c1:
-    custom_input = st.text_input("🔍 任意の銘柄コードを診断（国内4桁 / 米国ティッカー）", placeholder="例: 6920, 5803, 3350, NVDA, IONQ")
+    custom_input = st.text_input("🔍 任意の銘柄コードを診断（国内4桁 / 米国ティッカー）", placeholder="例: 6920, 5803, 3350, NVDA, IONQ", label_visibility="collapsed")
 with c2:
-    st.write("")
-    search_clicked = st.button("診断する", use_container_width=True)
+    search_clicked = st.button("🔍 銘柄診断", use_container_width=True)
 
 if search_clicked and custom_input:
     st.session_state["custom_search_code"] = normalize_ticker(custom_input)
@@ -1269,16 +1498,11 @@ def apply_survival_of_the_fittest(stock_list, cut_pct):
     keep_count = max(3, int(round(len(sorted_all) * (cut_pct / 100.0))))
     return sorted_all[:keep_count], sorted_all[keep_count:]
 
-# --- アプリ内ページ表示切り替え（メインタブから管理画面を除外済み） ---
+# --- アプリ内ページ表示切り替え ---
 current_page = st.session_state.get("navigation_page", "TOP")
 
 if current_page == "WATCHLIST":
-    st.markdown("---")
     st.subheader("📋 監視ウォッチリスト (マイ銘柄一覧)")
-    if st.button("⬅️ TOP画面（ランキング一覧）に戻る", use_container_width=True):
-        st.session_state["navigation_page"] = "TOP"
-        st.rerun()
-
     wl = st.session_state["watchlist"]
     if wl:
         for w_code, w_item in list(wl.items()):
@@ -1289,10 +1513,10 @@ if current_page == "WATCHLIST":
 else:
     base_tabs = [
         "🏆 総合サバイバルTOP5",
-        "🏦 機関VPIN・ステルス買い特選",
-        "🔥 5ch板・初動イナゴ特選",
-        "🚨 特買い・夜間PTS特選",
-        "💥 空売り踏み上げ特選",
+        "🏦 機関VPIN・ステルス買い",
+        "🔥 5ch板・初動イナゴ",
+        "🚨 特買い・夜間PTS",
+        "💥 空売り踏み上げ",
         "📋 監視＆注文シート"
     ]
     tab_labels = base_tabs + list(STOCK_POOL.keys())
@@ -1305,25 +1529,25 @@ else:
             render_stock_card(r, rank=idx, key_prefix="top5")
 
     with tabs[1]:
-        st.info("🏦 **機関投資家VPIN（オーダーフロー毒性）＆浮動株吸い上げ特選タブ**: 機関のステルス氷山買いや浮動株の吸収（Amihud価格弾性上昇）が検知された上位10銘柄です。")
+        st.info("🏦 **機関投資家VPIN（オーダーフロー毒性）＆浮動株吸い上げ特選**: 機関のステルス氷山買いや浮動株の吸収が検知された上位10銘柄です。")
         inst_list = sorted(all_results, key=lambda x: (x["inst_score"], x["vpin"], x["survival_power"]), reverse=True)[:10]
         for idx, r in enumerate(inst_list, start=1):
             render_stock_card(r, rank=idx, key_prefix="inst_top")
 
     with tabs[2]:
-        st.info("🔥 **5chデイトレ板・初動イナゴ集中＆シコリ玉排除タブ**: 5日平均出来高からの急増率が高く、上ヒゲ（高値掴みのシコリ玉）が極めて少ない初動TOP10です。")
+        st.info("🔥 **5chデイトレ板・初動イナゴ集中＆シコリ玉排除**: 5日平均出来高からの急増率が高く、上ヒゲ（高値掴みのシコリ玉）が極めて少ない初動TOP10です。")
         b5_list = sorted(all_results, key=lambda x: (x["board5ch_score"], x["survival_power"]), reverse=True)[:10]
         for idx, r in enumerate(b5_list, start=1):
             render_stock_card(r, rank=idx, key_prefix="b5_top")
 
     with tabs[3]:
-        st.info("🚨 **翌朝『特買い』・夜間PTS連動タブ**: 夜間先物・SOX指数の追い風と機関の買い残しから、翌朝9:00に特別買い気配になりやすい上位10銘柄です。")
+        st.info("🚨 **翌朝『特買い』・夜間PTS連動**: 夜間先物・SOX指数の追い風と機関の買い残しから、翌朝9:00に特別買い気配になりやすい上位10銘柄です。")
         tk_list = sorted(all_results, key=lambda x: (x["tokugai_prob"], x["pts_gap_pct"]), reverse=True)[:10]
         for idx, r in enumerate(tk_list, start=1):
             render_stock_card(r, rank=idx, key_prefix="tk_top")
 
     with tabs[4]:
-        st.info("💥 **空売り踏み上げ（ショートスクイーズ）タブ**: 20日高値ブレイクにより、空売り勢が朝イチに強制ロスカットを迫られる上位10銘柄です。")
+        st.info("💥 **空売り踏み上げ（ショートスクイーズ）**: 20日高値ブレイクにより、空売り勢が朝イチに強制ロスカットを迫られる上位10銘柄です。")
         sq_list = sorted(all_results, key=lambda x: (x["squeeze_score"], x["inst_score"]), reverse=True)[:10]
         for idx, r in enumerate(sq_list, start=1):
             render_stock_card(r, rank=idx, key_prefix="sq_top")
