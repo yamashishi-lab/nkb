@@ -11,7 +11,7 @@ import time
 # スマホ画面向けにページ設定
 st.set_page_config(page_title="翌朝株価 クオンツ＆7大AI解析 Pro (会員限定版)", page_icon="📈", layout="centered")
 
-# Fragmentデコレータの互換性確保（Streamlit 1.37+ 対応）
+# Fragmentデコレータ（部分更新用）の取得
 fragment_decorator = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
 # ==========================================
@@ -112,81 +112,16 @@ if "watchlist" not in st.session_state:
     st.session_state["watchlist"] = {}
 if "order_checks" not in st.session_state:
     st.session_state["order_checks"] = {}
-if "selected_category" not in st.session_state:
-    st.session_state["selected_category"] = "🏆 総合TOP5"
 
-# カスタムCSS（スマホ向けピル型カプセルタブのスタイリング＆画面ジャンプ防止）
+# カスタムCSS（タブを見やすく整え、画面スクロールジャンプを防止）
 st.markdown("""
 <style>
-html, body, [data-testid="stAppViewContainer"] { overflow-anchor: none !important; }
-
-/* 💊 解析カテゴリー選択：スマホで押しやすいピル型（カプセル型）タブボタンCSS */
-div[data-testid="stRadio"] > div[role="radiogroup"] {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px !important;
-    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-    padding: 10px;
-    border-radius: 14px;
-    border: 1px solid #cbd5e1;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.04);
+/* タブの見た目をスマホでも見やすく綺麗に調整 */
+button[data-baseweb="tab"] {
+    font-size: 13px !important;
+    font-weight: bold !important;
+    padding: 8px 14px !important;
 }
-div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-    background-color: #ffffff !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 9999px !important;
-    padding: 7px 14px !important;
-    margin: 0 !important;
-    cursor: pointer !important;
-    transition: all 0.18s ease-in-out !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
-/* ラジオボタン左側の丸印（〇）を完全に非表示化 */
-div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
-    display: none !important;
-}
-div[data-testid="stRadio"] > div[role="radiogroup"] > label p {
-    font-size: 12.5px !important;
-    font-weight: 700 !important;
-    color: #334155 !important;
-    margin: 0 !important;
-    line-height: 1.2 !important;
-    white-space: nowrap !important;
-}
-/* ホバー時（PC・スマホタップ時） */
-div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
-    border-color: #3b82f6 !important;
-    background-color: #eff6ff !important;
-    transform: translateY(-1px);
-}
-/* 選択中（アクティブ）のカプセルタブをロイヤルブルー＆立体発光に */
-div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
-    background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
-    border-color: #1e40af !important;
-    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35) !important;
-    transform: translateY(-1px);
-}
-div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) p {
-    color: #ffffff !important;
-}
-@media (max-width: 480px) {
-    div[data-testid="stRadio"] > div[role="radiogroup"] {
-        gap: 6px !important;
-        padding: 8px;
-    }
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-        padding: 7px 11px !important;
-        flex-grow: 1;
-        text-align: center;
-    }
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label p {
-        font-size: 11.5px !important;
-    }
-}
-
 .market-banner { background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; border-radius: 12px; padding: 12px 10px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.18); width: 100%; }
 .market-title { font-size: 11px; font-weight: bold; color: #94a3b8; margin-bottom: 8px; text-align: center; }
 .market-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; width: 100%; }
@@ -231,8 +166,10 @@ div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) p
 .consensus-banner { background: linear-gradient(135deg, #1e1b4b, #312e81); border: 2px solid #818cf8; border-radius: 10px; padding: 16px; margin-top: 14px; font-size: 13px; line-height: 1.75; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 .consensus-section { background: rgba(255, 255, 255, 0.06); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 10px 12px; margin-top: 8px; font-size: 12.5px; color: #f8fafc; }
 .easy-guide-box { background: rgba(16, 185, 129, 0.14); border: 1px solid #34d399; border-radius: 8px; padding: 14px; margin-top: 12px; color: #ecfdf5; font-size: 12.5px; line-height: 1.75; }
-.qa-bubble-user { background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe; border-radius: 10px 10px 2px 10px; padding: 8px 12px; margin-top: 6px; font-size: 12px; font-weight: bold; }
-.qa-bubble-ai { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; border-left: 4px solid #4f46e5; border-radius: 2px 10px 10px 10px; padding: 10px 12px; margin-top: 4px; margin-bottom: 8px; font-size: 12.5px; line-height: 1.65; }
+.qa-standby-box { background: #f8fafc; color: #475569; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; font-size: 12px; text-align: center; }
+.qa-active-box { background: linear-gradient(135deg, #eef2ff, #f8fafc); border: 2px solid #6366f1; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15); }
+.qa-bubble-user { background: #4f46e5; color: #ffffff; display: inline-block; border-radius: 6px; padding: 4px 10px; margin-bottom: 8px; font-size: 12px; font-weight: bold; }
+.qa-bubble-ai { color: #0f172a; font-size: 12.5px; line-height: 1.7; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -875,34 +812,30 @@ def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
 
     if any(k in q_lower for k in ["特買", "気配", "pts", "夜間", "adr", "先物", "8時", "板", "寄り付", "寄付き"]):
         return (
-            f"<b>🚨 【「{question}」への7大AI詳細回答：特買い＆朝8:50気配値の見極め方】</b><br>"
+            f"<b>🚨 【特買い確率＆朝8:50気配値の見極め方】</b><br>"
             f"・<b>夜間理論スタート価格：</b>米国株・SOX指数・CME日経先物の変動と前日大引けの買い残しから算出した明日の理論気配値は <b>{r['pts_est_price']}（前日比 {r['pts_gap_pct']:+.2f}%）</b>、特買い発生確率は <b>{r['tokugai_prob']}%</b> です。<br>"
             f"・<b>特買い発動ライン：</b>気配値が <b>{r['tokugai_line']}（+{r['tokugai_pct_threshold']}%超）</b> を上回ると、9:00にすぐ値がつかず3分ごとに気配値を切り上げる「特別買い気配（特買い）」となります。<br>"
-            f"・<b>特買いで寄り付いた直後の動き方：</b>特買いで高く寄り付いた直後は、最初の5分間（1本目の5分足）で利食い売りが出ることがあります。そのため、寄付きでは半分の <b>{half_s:,}株</b> だけ買い、寄付き後に下ヒゲをつけて <b>5分足VWAP（{m5_vwap}）</b> の上で踏ん張ったのを確認してから残り <b>{rem_s:,}株</b> を入れると高値掴みを完全に防げます。"
+            f"・<b>特買いで寄り付いた直後の動き方：</b>寄付きではまず半分の <b>{half_s:,}株</b> だけ買い、寄付き後に下ヒゲをつけて <b>5分足VWAP（{m5_vwap}）</b> の上で踏ん張ったのを確認してから残り <b>{rem_s:,}株</b> を入れると高値掴みを完全に防げます。"
         )
     elif any(k in q_lower for k in ["踏み上げ", "スクイーズ", "空売", "ショート", "買戻", "買い戻", "ロスカット", "トリガー"]):
         return (
-            f"<b>🔥 【「{question}」への7大AI詳細回答：空売り踏み上げ（ショートスクイーズ）攻略】</b><br>"
+            f"<b>🔥 【空売り踏み上げ（ショートスクイーズ）攻略】</b><br>"
             f"・<b>現在の踏み上げ診断：</b>踏み上げスコアは <b>{r['squeeze_score']}点（{r['squeeze_type']}）</b> です。<br>"
             f"・<b>最大の急所（トリガー価格）：</b>過去20日間で空売りした投資家の損切り逆指値が最も溜まっている防衛ラインは <b>{r['squeeze_trigger_price']}（現在値から {r['dist_to_high20']:+.2f}%）</b> です。<br>"
-            f"・<b>どう乗るべきか：</b>株価が <b>{r['squeeze_trigger_price']}</b> を1ティックでも上抜けると、売り方の強制買い戻し（成行買い）が一斉に発動し、板が薄くなって一気に <b>{r['tp_price']}</b> 方向へ跳ねやすくなります。突破した瞬間の順張り追撃が非常に有効です。"
+            f"・<b>どう乗るべきか：</b>株価が <b>{r['squeeze_trigger_price']}</b> を上抜けると、売り方の強制買い戻し（成行買い）が一斉に発動して一気に <b>{r['tp_price']}</b> 方向へ跳ねやすくなります。突破した瞬間の追撃が非常に有効です。"
         )
     elif any(k in q_lower for k in ["5分", "五分", "初動", "日中", "vwap", "チャート", "大引", "moc"]):
         return (
-            f"<b>⚡ 【「{question}」への7大AI詳細回答：5分足チャート＆大引けMOCの活用法】</b><br>"
+            f"<b>⚡ 【5分足チャート＆大引けMOCの活用法】</b><br>"
             f"・<b>前日大引け〜5分足の状況：</b>前日ラスト30分間の動きは「<b>{moc_st}</b>」、5分足トレンドは「<b>{m5_status}</b>」です。<br>"
-            f"・<b>5分足VWAP（{m5_vwap}）の使い方：</b>チャート上のオレンジ色の点線（5分足VWAP）は「その日に買った投資家全員の平均買値」です。ローソク足がこの線より<b>上</b>にあれば全員が含み益で売りが出にくく、<b>下</b>に割ると含み損の投げ売りが出やすくなります。<br>"
-            f"・したがって、朝9:00〜9:15の初動でローソク足が <b>{m5_vwap}</b> の上をキープしている限りは強気ホールド＆押し目買いが大正解です。"
+            f"・<b>5分足VWAP（{m5_vwap}）の使い方：</b>オレンジ色の点線（5分足VWAP）は「その日に買った投資家全員の平均買値」です。ローソク足がこの線より<b>上</b>にあれば全員が含み益で売りが出にくく、朝9:00〜9:15の初動で <b>{m5_vwap}</b> の上をキープしている限りは強気ホールド＆押し目買いが正解です。"
         )
     else:
         return (
             f"<b>🤖 【「{question}」に対する7大AIからの具体的アドバイス】</b><br>"
             f"・<b>総合評価：</b>7大AI合議スコアは <b>{debate['final_score']}点 / 100点</b>（過去勝率 <b>{r['prob']}%</b>・期待値 <b>{r['edge']:+.2f}%</b>）です。<br>"
             f"・<b>資金配分と株数：</b>あなたの設定資金（{total_capital:,.0f}円・許容リスク{risk_tolerance_pct}%）における最適株数は <b>合計 {lot_info['shares']:,}株</b> です。<br>"
-            f"・<b>具体的な注文手順：</b><br>"
-            f"　① まず寄付き（目安 <b>{r['price']} 〜 {r['pts_est_price']}</b>）で半分の <b>{half_s:,}株</b> を購入。<br>"
-            f"　② 5分足VWAP（<b>{m5_vwap}</b>）での反発、または踏み上げライン（<b>{r['squeeze_trigger_price']}</b>）突破で残り <b>{rem_s:,}株</b> を追加。<br>"
-            f"　③ 利確指値を <b>{r['tp_price']}（+{r['tp_pct']}%）</b>、逆指値（損切り）を <b>{r['sl_price']}（{r['sl_pct']}%）</b> に置いてトレードしてください。"
+            f"・<b>具体的な注文手順：</b>①まず寄付き（目安 <b>{r['price']} 〜 {r['pts_est_price']}</b>）で半分の <b>{half_s:,}株</b> を購入 → ②5分足VWAP（<b>{m5_vwap}</b>）支持または踏み上げ線（<b>{r['squeeze_trigger_price']}</b>）突破で残り <b>{rem_s:,}株</b> を追加 → ③利確指値を <b>{r['tp_price']}</b>、逆指値（損切り）を <b>{r['sl_price']}</b> に置いてトレードしてください。"
         )
 
 # --- コールバック関数 ---
@@ -917,28 +850,6 @@ def cb_toggle_watchlist(code, r_data):
         del st.session_state["watchlist"][code]
     else:
         st.session_state["watchlist"][code] = r_data
-
-def cb_ask_preset_question(unique_key, q_text, r_data, debate_data, m5_data):
-    st.session_state["active_debates"][unique_key] = True
-    st.session_state["debate_Animated"].add(unique_key)
-    if unique_key not in st.session_state["stock_chats"]:
-        st.session_state["stock_chats"][unique_key] = []
-    ans = generate_7ai_qa_response(q_text, r_data, debate_data, r_data["lot_info"], m5_data)
-    st.session_state["stock_chats"][unique_key].append({"q": q_text, "a": ans})
-
-def cb_ask_custom_question(unique_key, input_key, r_data, debate_data, m5_data):
-    user_q = st.session_state.get(input_key, "").strip()
-    if user_q:
-        st.session_state["active_debates"][unique_key] = True
-        st.session_state["debate_Animated"].add(unique_key)
-        if unique_key not in st.session_state["stock_chats"]:
-            st.session_state["stock_chats"][unique_key] = []
-        ans = generate_7ai_qa_response(user_q, r_data, debate_data, r_data["lot_info"], m5_data)
-        st.session_state["stock_chats"][unique_key].append({"q": user_q, "a": ans})
-        st.session_state[input_key] = ""
-
-def cb_clear_chat(unique_key):
-    st.session_state["stock_chats"][unique_key] = []
 
 # --- マクロ市場データ取得 ---
 @st.cache_data(ttl=900)
@@ -1297,7 +1208,80 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
     except Exception:
         return None
 
-# --- ★ 会議パネル＆ワンタップ質問ブロックを @st.fragment 化して画面移動を完全防止！ ---
+# --- ★ ワンタップ質問コーナーだけを最小単位で独立化（ボタンの真上に回答を固定表示し、下スクロールを100%防止！） ---
+@fragment_decorator
+def render_qa_widget_only(unique_key, r, debate, m5):
+    if unique_key not in st.session_state["stock_chats"]:
+        st.session_state["stock_chats"][unique_key] = []
+
+    st.markdown("**💬 7大AI評議会へのワンタップ質問コーナー**")
+
+    # 1. 回答表示ボックスをボタンの「真上」にあらかじめ固定配置（下に要素が増えないため下にスクロールしない！）
+    answer_slot = st.empty()
+
+    def add_qa(q_str):
+        ans_str = generate_7ai_qa_response(q_str, r, debate, r["lot_info"], m5)
+        st.session_state["stock_chats"][unique_key].append({"q": q_str, "a": ans_str})
+
+    # 2. ワンタップ選択肢ボタン
+    q_col1, q_col2 = st.columns(2)
+    with q_col1:
+        if st.button("🚨 特買い確率と8:50気配の見方は？", key=f"q1_{unique_key}", use_container_width=True):
+            add_qa("翌朝の特買い確率と8:50気配の見方は？")
+        if st.button("🔥 空売り踏み上げとトリガー価格は？", key=f"q2_{unique_key}", use_container_width=True):
+            add_qa("空売り踏み上げの確率とトリガー価格は？")
+    with q_col2:
+        if st.button("⚡ 5分足チャートの初動と乗り方は？", key=f"q3_{unique_key}", use_container_width=True):
+            add_qa("5分足チャートの初動と乗り方は？")
+        if st.button("💰 具体的な買い方と株数を教えて", key=f"q4_{unique_key}", use_container_width=True):
+            add_qa("具体的な買い方と株数をもう一度教えて")
+
+    # 3. ボタンを押した瞬間に「真上の固定枠（answer_slot）」の中身だけを書き換える
+    chat_history = st.session_state["stock_chats"].get(unique_key, [])
+    with answer_slot.container():
+        if chat_history:
+            latest = chat_history[-1]
+            st.markdown(
+                f'<div class="qa-active-box">'
+                f'<div class="qa-bubble-user">🙋 選択した質問: {latest["q"]}</div>'
+                f'<div class="qa-bubble-ai">{latest["a"]}</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                '<div class="qa-standby-box">👇 下の4つのワンタップ質問ボタンを押すと、画面が動かずに<b>ここ（ボタンの真上）</b>にすぐ回答が表示されます</div>',
+                unsafe_allow_html=True
+            )
+
+    # 4. 自由入力や過去履歴は折りたたみ（expander）に格納し、ワンタップ時のフォーカス移動を完全ブロック
+    with st.expander("✍️ 自由入力で質問する ／ 過去の質問履歴を見る"):
+        with st.form(key=f"custom_q_form_{unique_key}", clear_on_submit=True):
+            f1, f2 = st.columns([3, 1])
+            with f1:
+                user_q = st.text_input(
+                    "自由質問",
+                    placeholder="自由に質問（例：特買いで寄り付いた直後はどう動くべき？）",
+                    label_visibility="collapsed"
+                )
+            with f2:
+                sub_q = st.form_submit_button("送信", use_container_width=True)
+            if sub_q and user_q.strip():
+                add_qa(user_q.strip())
+
+        if len(chat_history) > 1:
+            st.caption("📚 過去の質問履歴")
+            for item in reversed(chat_history[:-1]):
+                st.markdown(
+                    f'<div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12px;">'
+                    f'<b>🙋 {item["q"]}</b><br>{item["a"]}</div>',
+                    unsafe_allow_html=True
+                )
+        if chat_history:
+            if st.button("🗑️ 回答表示をクリア", key=f"clear_{unique_key}"):
+                st.session_state["stock_chats"][unique_key] = []
+
+# --- 会議パネル全体の部分更新ブロック ---
 @fragment_decorator
 def render_interactive_council_section(r, unique_key):
     is_open = st.session_state["active_debates"].get(unique_key, False)
@@ -1421,73 +1405,8 @@ def render_interactive_council_section(r, unique_key):
         )
         st.markdown(council_html, unsafe_allow_html=True)
 
-        if unique_key not in st.session_state["stock_chats"]:
-            st.session_state["stock_chats"][unique_key] = []
-
-        # --- 💬 ワンタップ質問コーナー（@st.fragment により画面スクロールが一切動かない！） ---
-        st.markdown("**💬 7大AI評議会にワンタップでさらに質問する（押すとその場ですぐ回答が出ます）**")
-        q_col1, q_col2 = st.columns(2)
-        with q_col1:
-            st.button(
-                "🚨 翌朝の特買い確率と8:50気配の見方は？",
-                key=f"q1_{unique_key}",
-                on_click=cb_ask_preset_question,
-                args=(unique_key, "翌朝の特買い確率と8:50気配の見方は？", r, debate, m5),
-                use_container_width=True
-            )
-            st.button(
-                "🔥 空売り踏み上げの確率とトリガー価格は？",
-                key=f"q2_{unique_key}",
-                on_click=cb_ask_preset_question,
-                args=(unique_key, "空売り踏み上げの確率とトリガー価格は？", r, debate, m5),
-                use_container_width=True
-            )
-        with q_col2:
-            st.button(
-                "⚡ 5分足チャートの初動と乗り方は？",
-                key=f"q3_{unique_key}",
-                on_click=cb_ask_preset_question,
-                args=(unique_key, "5分足チャートの初動と乗り方は？", r, debate, m5),
-                use_container_width=True
-            )
-            st.button(
-                "💰 具体的な買い方と株数をもう一度教えて",
-                key=f"q4_{unique_key}",
-                on_click=cb_ask_preset_question,
-                args=(unique_key, "具体的な買い方と株数をもう一度教えて", r, debate, m5),
-                use_container_width=True
-            )
-
-        input_key = f"custom_q_input_{unique_key}"
-        f1, f2 = st.columns([3, 1])
-        with f1:
-            st.text_input(
-                "質問",
-                key=input_key,
-                placeholder="自由に質問（例：特買いで寄り付いた直後はどう動くべき？）",
-                label_visibility="collapsed"
-            )
-        with f2:
-            st.button(
-                "送信",
-                key=f"send_q_{unique_key}",
-                on_click=cb_ask_custom_question,
-                args=(unique_key, input_key, r, debate, m5),
-                use_container_width=True
-            )
-
-        # 最新の回答を一番上（ボタンのすぐ真下）に表示して視線移動をゼロに！
-        chat_history = st.session_state["stock_chats"].get(unique_key, [])
-        if chat_history:
-            for item in reversed(chat_history):
-                st.markdown(f'<div class="qa-bubble-user">🙋 あなた: {item["q"]}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="qa-bubble-ai">{item["a"]}</div>', unsafe_allow_html=True)
-            st.button(
-                "🗑️ 質問履歴をクリア",
-                key=f"clear_{unique_key}",
-                on_click=cb_clear_chat,
-                args=(unique_key,)
-            )
+        # ★ 独立フラグメント化した質問コーナーを呼び出し（ここだけ更新されるので画面が一切動かない）
+        render_qa_widget_only(unique_key, r, debate, m5)
         st.markdown("---")
 
 def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
@@ -1728,7 +1647,8 @@ with st.spinner("全候補銘柄の特買い確率・踏み上げ・大引けMOC
                 if clean_c in st.session_state["watchlist"]:
                     st.session_state["watchlist"][clean_c] = res
 
-category_options = [
+# --- 🗂️ カテゴリー表示を標準の「st.tabs（タブ）」に完全復元！ ---
+tab_labels = [
     "🏆 総合TOP5",
     "📋 監視＆注文シート",
     "🚨 特買い・夜間連動特選",
@@ -1736,54 +1656,46 @@ category_options = [
     "🌆 大引けMOC特選"
 ] + list(STOCK_POOL.keys())
 
-st.markdown("##### 📂 解析カテゴリー選択（タップで切替）")
-selected_cat = st.radio(
-    "カテゴリーを選択",
-    options=category_options,
-    key="selected_category",
-    horizontal=True,
-    label_visibility="collapsed"
-)
-st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+tabs = st.tabs(tab_labels)
 
-if selected_cat == "🏆 総合TOP5":
+with tabs[0]:
     st.caption("全プールから、本日のAIスコア・特買い確率・踏み上げ・大引けMOCが最も高い上位5銘柄を表示しています。")
     if all_results:
         top5_list = sorted(all_results, key=lambda x: (x["ai_score"], x["tokugai_prob"], x["squeeze_score"], x["closing_power_score"]), reverse=True)[:5]
         for idx, r in enumerate(top5_list, start=1):
             render_stock_card(r, rank=idx, key_prefix="top5")
 
-elif selected_cat == "📋 監視＆注文シート":
+with tabs[1]:
     render_watchlist_order_sheet(all_results)
 
-elif selected_cat == "🚨 特買い・夜間連動特選":
-    st.info("🚨 **特買い（特別買い気配）・夜間PTS/ADR連動特選**: 夜間先物・米SOXの追い風と、前日大引けの買い残し・空売り踏み上げが重なり、翌朝9:00に『特買い（気配切り上げ）』になりやすい上位10銘柄です。")
+with tabs[2]:
+    st.info("🚨 **特買い（特別買い気配）・夜間PTS/ADR連動特選タブ**: 夜間先物・米SOXの追い風と、前日大引けの買い残し・空売り踏み上げが重なり、翌朝9:00に『特買い（気配切り上げ）』になりやすい上位10銘柄です。")
     if all_results:
         tokugai_top_list = sorted(all_results, key=lambda x: (x["tokugai_prob"], x["pts_gap_pct"], x["ai_score"]), reverse=True)[:10]
         for idx, r in enumerate(tokugai_top_list, start=1):
             render_stock_card(r, rank=idx, key_prefix="tokugai_top")
 
-elif selected_cat == "🔥 踏み上げ特選":
-    st.info("🔥 **空売り踏み上げ（ショートスクイーズ）特選**: 20日高値ブレイク・ベアトラップ反発・バンド膨張など、空売り勢が損失に耐えきれず翌朝に強制買い戻し（ロスカット）を迫られやすい上位10銘柄です。")
+with tabs[3]:
+    st.info("🔥 **空売り踏み上げ（ショートスクイーズ）特選タブ**: 20日高値ブレイク・ベアトラップ反発・バンド膨張など、空売り勢が損失に耐えきれず翌朝に強制買い戻し（ロスカット）を迫られやすい上位10銘柄です。")
     if all_results:
         sq_top_list = sorted(all_results, key=lambda x: (x["squeeze_score"], x["closing_power_score"], x["ai_score"]), reverse=True)[:10]
         for idx, r in enumerate(sq_top_list, start=1):
             render_stock_card(r, rank=idx, key_prefix="sq_top")
 
-elif selected_cat == "🌆 大引けMOC特選":
-    st.info("🌆 **大引けMOC（引けピン買い集め）特選**: 大引けにかけてバスケット買い・高値引け（引けピン）の勢いが最も強い上位10銘柄です。翌朝のギャップアップ期待が最も高いグループです。")
+with tabs[4]:
+    st.info("🌆 **大引けMOC（引けピン買い集め）特選タブ**: 大引けにかけてバスケット買い・高値引け（引けピン）の勢いが最も強い上位10銘柄です。翌朝のギャップアップ期待が最も高いグループです。")
     if all_results:
         moc_top_list = sorted(all_results, key=lambda x: (x["closing_power_score"], x["squeeze_score"], x["ai_score"]), reverse=True)[:10]
         for idx, r in enumerate(moc_top_list, start=1):
             render_stock_card(r, rank=idx, key_prefix="moc_top")
 
-elif selected_cat in STOCK_POOL:
-    genre = selected_cat
-    if genre == "小型株": st.info("💡 **小型株セクション**: 値動きが軽く急騰しやすい純粋な小型グロース株のみを厳選。")
-    elif genre == "IPO": st.info("💡 **IPOセクション**: 直近新規上場銘柄の特買い確率・踏み上げと最適ロットを算出。")
-    elif genre == "未公開株": st.info("💡 **未公開株・VC関連セクション**: プライベートマーケット連動銘柄の資金管理。")
-    results = genre_results.get(genre, [])
-    if results:
-        results.sort(key=lambda x: (x["ai_score"], x["tokugai_prob"], x["squeeze_score"], x["closing_power_score"]), reverse=True)
-        for idx, r in enumerate(results[:20], start=1):
-            render_stock_card(r, rank=idx, key_prefix=f"genre_{genre}")
+for tab, genre in zip(tabs[5:], STOCK_POOL.keys()):
+    with tab:
+        if genre == "小型株": st.info("💡 **小型株セクション**: 値動きが軽く急騰しやすい純粋な小型グロース株のみを厳選。")
+        elif genre == "IPO": st.info("💡 **IPOセクション**: 直近新規上場銘柄の特買い確率・踏み上げと最適ロットを算出。")
+        elif genre == "未公開株": st.info("💡 **未公開株・VC関連セクション**: プライベートマーケット連動銘柄の資金管理。")
+        results = genre_results.get(genre, [])
+        if results:
+            results.sort(key=lambda x: (x["ai_score"], x["tokugai_prob"], x["squeeze_score"], x["closing_power_score"]), reverse=True)
+            for idx, r in enumerate(results[:20], start=1):
+                render_stock_card(r, rank=idx, key_prefix=f"genre_{genre}")
