@@ -4,9 +4,116 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import unicodedata
+import hashlib
+import hmac
 
 # スマホ画面向けにページ設定
-st.set_page_config(page_title="翌朝株価 クオンツ＆7大AI解析 Pro (監視リスト＆注文シート対応)", page_icon="📈", layout="centered")
+st.set_page_config(page_title="翌朝株価 クオンツ＆7大AI解析 Pro (会員限定版)", page_icon="📈", layout="centered")
+
+# ==========================================
+# 🔒 会員制ログイン＆メール許可ゲート機能
+# ==========================================
+
+# 1. 管理者（あなた）の連絡先メールアドレス（利用申請メールの宛先＆管理者権限判定になります）
+ADMIN_EMAIL = "your_admin_email@example.com"  # ←あなたのメールアドレスに変更してください
+
+# 2. あなただけが知っている「秘密のマスターキー」（会員ごとの専用8桁コードを自動生成します）
+SECRET_MASTER_KEY = "my_super_secret_quant_key_2026"  # ←好きな英数字に変更してください
+
+# 3. 許可する会員のメールアドレス一覧（ここに入っているアドレスだけがログイン可能）
+ALLOWED_MEMBERS = [
+    ADMIN_EMAIL,                # 管理者（あなた自身）
+    "member1@gmail.com",        # 許可した会員1
+    "member2@yahoo.co.jp",      # 許可した会員2
+]
+
+def generate_member_passcode(email: str) -> str:
+    """メールアドレスからその会員専用の8桁アクセスコードを自動生成する関数"""
+    clean_email = email.strip().lower()
+    h = hmac.new(SECRET_MASTER_KEY.encode(), clean_email.encode(), hashlib.sha256).hexdigest()
+    return h[:8].upper()
+
+def check_member_authentication():
+    if "authenticated_user" not in st.session_state:
+        st.session_state["authenticated_user"] = None
+
+    # すでにログイン済みならサイドバーに会員情報を表示して本編へ通過
+    if st.session_state["authenticated_user"]:
+        with st.sidebar:
+            st.success(f"👤 会員ログイン中:\n{st.session_state['authenticated_user']}")
+            # 管理者（あなた）がログインしている時だけ、会員用のパスコード発行ツールを表示
+            if st.session_state["authenticated_user"] == ADMIN_EMAIL.strip().lower():
+                with st.expander("🔑 【管理者専用】会員パスコード発行機"):
+                    st.caption("申請が来た会員のメアドを入力すると、専用8桁コードが表示されます。")
+                    target_mail = st.text_input("許可する会員のメールアドレス", key="admin_gen_mail")
+                    if target_mail:
+                        code = generate_member_passcode(target_mail)
+                        st.code(f"メールアドレス: {target_mail.strip().lower()}\n専用アクセスコード: {code}")
+                        st.caption("↑このコードをメールで返信し、コード内の ALLOWED_MEMBERS にメアドを追加してください。")
+            if st.button("🚪 ログアウト", use_container_width=True):
+                st.session_state["authenticated_user"] = None
+                st.rerun()
+        return True
+
+    # --- 未ログイン時に表示する会員専用ログイン画面 ---
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; padding: 24px; border-radius: 14px; text-align: center; margin-top: 20px; margin-bottom: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+        <h2 style="margin:0; color:#fbbf24; font-size:20px;">🔒 会員限定 クオンツ＆7大AI解析 Pro</h2>
+        <p style="font-size:13px; color:#cbd5e1; margin-top:8px; margin-bottom:0;">
+            本システムは完全招待・承認制です。<br>運営より許可されたメールアドレスと専用アクセスコードを入力してください。
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("member_login_form"):
+        input_email = st.text_input("📧 登録メールアドレス", placeholder="example@gmail.com")
+        input_code = st.text_input("🔑 専用アクセスコード（メールで届いた8桁コード）", type="password")
+        login_btn = st.form_submit_button("🔓 ログインして解析システムを開く", use_container_width=True)
+
+        if login_btn:
+            clean_mail = input_email.strip().lower()
+            allowed_list = [m.strip().lower() for m in ALLOWED_MEMBERS]
+            expected_code = generate_member_passcode(clean_mail)
+
+            # 管理者用の初回テストコード（ADMIN777）または正規の8桁HMACコードで認証
+            is_valid_code = hmac.compare_digest(input_code.strip().upper(), expected_code) or (
+                clean_mail == ADMIN_EMAIL.strip().lower() and input_code.strip() == "ADMIN777"
+            )
+
+            if clean_mail in allowed_list and is_valid_code:
+                st.session_state["authenticated_user"] = clean_mail
+                st.rerun()
+            elif clean_mail not in allowed_list:
+                st.error("⚠️ このメールアドレスはまだ利用許可されていません。下のボタンから管理者に利用申請を行ってください。")
+            else:
+                st.error("⚠️ 専用アクセスコードが正しくありません。")
+
+    # 未登録の人向けの「メールで許可申請する」ボタン
+    st.markdown("---")
+    st.markdown("##### 📩 まだ利用許可をお持ちでない方へ")
+    st.caption("下のボタンを押すとメールアプリが起動し、管理者に利用許可リクエストを送信できます。")
+    mailto_link = (
+        f"mailto:{ADMIN_EMAIL}"
+        f"?subject=【利用許可申請】翌朝株価クオンツ＆7大AI解析Pro"
+        f"&body=以下のメールアドレスでの利用許可を申請します。%0D%0A%0D%0A"
+        f"・お名前：%0D%0A"
+        f"・希望メールアドレス：%0D%0A"
+    )
+    st.markdown(
+        f'<a href="{mailto_link}" style="display:block; text-align:center; background:#2563eb; color:#ffffff; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; font-size:13px;">✉️ 管理者にメールで利用許可を申請する</a>',
+        unsafe_allow_html=True
+    )
+
+    # ★重要：未ログインの場合はここで処理を完全にストップし、下の株価データを一切読み込ませない
+    st.stop()
+
+# 認証ゲートを実行（未ログインならここでストップします）
+check_member_authentication()
+
+
+# ==========================================
+# 📈 ここからアプリのメイン処理（認証通過後のみ実行）
+# ==========================================
 
 # セッションステート初期化
 if "active_debates" not in st.session_state:
@@ -337,10 +444,10 @@ if st.session_state["watchlist"]:
         st.session_state["order_checks"] = {}
         st.rerun()
 else:
-    st.sidebar.caption("各銘柄カードの「⭐ ウォッチリストに追加」ボタンを押すと、ここに登録され『📋 監視＆注文シート』タブで一括管理できます。")
+    st.sidebar.caption("各銘柄カードの「⭐ 監視リスト追加」ボタンを押すと、ここに登録され『📋 監視＆注文シート』タブで一括管理できます。")
 
 st.title("📱 翌朝株価 クオンツ＆7大AI解析 Pro")
-st.caption("監視ウォッチリスト＆8:50注文チェックシート × 特買い気配 × 踏み上げ × 5分足VWAP × 7大AI")
+st.caption("【会員限定】監視ウォッチリスト＆8:50注文チェックシート × 特買い気配 × 踏み上げ × 5分足VWAP × 7大AI")
 
 # --- 各ジャンルの拡張候補プール ---
 STOCK_POOL = {
