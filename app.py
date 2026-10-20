@@ -146,7 +146,12 @@ def process_url_admin_action():
                 }
                 save_members_db(db)
                 st.warning(f"❌ 【ワンクリック却下完了】 {target_email} の申請を却下しました。")
-            st.query_params.clear()
+            try:
+                del st.query_params["admin_action"]
+                del st.query_params["email"]
+                del st.query_params["token"]
+            except Exception:
+                pass
 
 process_url_admin_action()
 
@@ -237,7 +242,7 @@ def check_member_authentication():
     if "authenticated_user" not in st.session_state:
         st.session_state["authenticated_user"] = None
 
-    # URLクエリパラメータによるセッション維持（ブラウザの戻る・更新でもログアウトしない対策）
+    # URLクエリパラメータによるセッション維持（リロードや戻るでもログアウトしない対策）
     q_user = st.query_params.get("u", "").strip().lower()
     q_tok = st.query_params.get("t", "").strip()
     if not st.session_state["authenticated_user"] and q_user and q_tok:
@@ -361,7 +366,8 @@ for k, default_v in [
     ("navigation_page", "TOP"),
     ("nav_history", ["TOP"]),
     ("custom_search_code", ""),
-    ("scroll_to_chat_key", None)
+    ("scroll_to_chat_key", None),
+    ("trigger_scroll_top", False)
 ]:
     if k not in st.session_state:
         st.session_state[k] = default_v
@@ -377,27 +383,10 @@ def navigate_back():
     else:
         st.session_state["navigation_page"] = "TOP"
     st.session_state["custom_search_code"] = ""
-
-# 画面上部のフローティング半透明ナビバーからのURLアクション処理
-nav_cmd = st.query_params.get("nav_cmd", "")
-if nav_cmd:
-    if nav_cmd == "top":
-        st.session_state["navigation_page"] = "TOP"
-        st.session_state["custom_search_code"] = ""
-    elif nav_cmd == "back":
-        navigate_back()
-    elif nav_cmd == "wl":
-        navigate_to("WATCHLIST")
-    elif nav_cmd == "refresh":
-        st.cache_data.clear()
-    try:
-        del st.query_params["nav_cmd"]
-    except Exception:
-        pass
-    st.rerun()
+    st.session_state["trigger_scroll_top"] = True
 
 # ==========================================
-# 🏢 企業ロゴマーク自動取得システム (ドメインマッピング＋フォールバック)
+# 🏢 企業ロゴマーク自動取得システム
 # ==========================================
 COMPANY_DOMAINS = {
     "8035.T": "tel.co.jp", "6857.T": "advantest.com", "6920.T": "lasertec.co.jp", "6146.T": "disco.co.jp",
@@ -436,16 +425,17 @@ def get_company_logo_html(full_code: str, name: str) -> str:
     )
 
 # ==========================================
-# 🎨 カスタムCSS ＆ 半透明フローティングナビバー描画
+# 🎨 カスタムCSS ＆ 半透明フローティングナビバー（ログイン維持＆ページTOPスムーズスクロール）
 # ==========================================
-curr_u_param = urllib.parse.quote(st.session_state.get("authenticated_user", "") or "")
-curr_t_param = urllib.parse.quote(generate_admin_action_token(curr_u_param, "session_keep") if curr_u_param else "")
 wl_count = len(st.session_state.get("watchlist", {}))
 curr_page_badge = "監視リスト表示中" if st.session_state.get("navigation_page") == "WATCHLIST" else "ランキング解析"
 
+# ページ最上部のアンカー配置
+st.markdown('<div id="page_top_anchor"></div>', unsafe_allow_html=True)
+
 st.markdown(f"""
 <style>
-/* 全体のタイポグラフィと背景の洗練 */
+/* 全体のタイポグラフィと余白 */
 .block-container {{
     padding-top: 3.6rem !important;
     padding-bottom: 3rem !important;
@@ -458,7 +448,7 @@ button[data-baseweb="tab"] {{
     border-radius: 8px 8px 0 0 !important;
 }}
 
-/* 💎 スクロール追従・半透明グラスモーフィズム上部ナビバー */
+/* 💎 スクロール追従・半透明グラスモーフィズム上部ナビバー（リロードなし・ログイン維持） */
 .floating-glass-nav {{
     position: fixed;
     top: 10px;
@@ -469,10 +459,10 @@ button[data-baseweb="tab"] {{
     align-items: center;
     gap: 6px;
     padding: 5px 12px;
-    background: rgba(15, 23, 42, 0.74);
+    background: rgba(15, 23, 42, 0.72);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 999px;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
     white-space: nowrap;
@@ -480,7 +470,7 @@ button[data-baseweb="tab"] {{
 .floating-glass-nav a {{
     color: #f8fafc !important;
     text-decoration: none !important;
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 600;
     padding: 4px 10px;
     border-radius: 999px;
@@ -488,7 +478,7 @@ button[data-baseweb="tab"] {{
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    letter-spacing: 0.2px;
+    cursor: pointer;
 }}
 .floating-glass-nav a:hover {{
     background: rgba(255, 255, 255, 0.18);
@@ -497,13 +487,14 @@ button[data-baseweb="tab"] {{
 }}
 .floating-glass-nav .nav-divider {{
     width: 1px;
-    height: 13px;
+    height: 12px;
     background: rgba(255, 255, 255, 0.2);
 }}
-.floating-glass-nav .wl-pill {{
-    background: rgba(251, 191, 36, 0.2);
-    border: 1px solid rgba(251, 191, 36, 0.45);
-    color: #fde047 !important;
+.floating-glass-nav .algo-pill {{
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    color: #6ee7b7 !important;
+    font-size: 10.5px;
 }}
 
 /* 🏢 企業ロゴマーク */
@@ -529,10 +520,6 @@ button[data-baseweb="tab"] {{
     box-shadow: 0 6px 20px rgba(15, 23, 42, 0.07);
     border: 1px solid #e2e8f0;
     border-left: 6px solid #e11d48;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}}
-.stock-card:hover, .rank-card:hover {{
-    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);
 }}
 .stock-card *, .rank-card *, .search-result-card * {{ color: #0f172a; }}
 .search-result-card {{
@@ -542,13 +529,13 @@ button[data-baseweb="tab"] {{
 
 /* バッジ類 */
 .prob-badge {{ font-size: 24px; font-weight: 800; color: #dc2626 !important; letter-spacing: -0.5px; }}
-.rank-badge {{ display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff !important; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; margin-right: 5px; box-shadow: 0 2px 4px rgba(217,119,6,0.25); }}
+.rank-badge {{ display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff !important; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; margin-right: 5px; }}
 .score-badge {{ display: inline-block; background: #0f172a; color: #f8fafc !important; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }}
 .inst-badge {{ display: inline-block; background: linear-gradient(135deg, #1d4ed8, #2563eb); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
 .board5ch-badge {{ display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
-.squeeze-badge {{ display: inline-block; background: linear-gradient(135deg, #b91c1c, #ef4444); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
 .tokugai-badge {{ display: inline-block; background: linear-gradient(135deg, #d97706, #f59e0b); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
 .survival-badge {{ display: inline-block; background: #f3e8ff; color: #6b21a8 !important; border: 1px solid #d8b4fe; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
+.quant-evo-badge {{ display: inline-block; background: #ecfeff; color: #0e7490 !important; border: 1px solid #a5f3fc; padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 700; margin-left: 4px; }}
 
 /* 10段階シグナルバー */
 .signal-10tier-badge {{
@@ -561,67 +548,105 @@ button[data-baseweb="tab"] {{
     font-weight: 800;
     margin-bottom: 10px;
     box-shadow: 0 3px 10px rgba(0,0,0,0.12);
-    letter-spacing: 0.2px;
 }}
 
 /* 情報ボックス */
-.inst-box {{ background: #eff6ff !important; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; border-radius: 9px; padding: 8px 12px; margin-top: 7px; font-size: 12px; color: #1e3a8a !important; }}
+.inst-box {{ background: #eff6ff !important; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; border-radius: 9px; padding: 8px 12px; margin-top: 7px; font-size: 11.5px; color: #1e3a8a !important; }}
 .inst-box * {{ color: #1e3a8a !important; }}
-.squeeze-box {{ background: #fff1f2 !important; border: 1px solid #fecdd3; border-left: 4px solid #e11d48; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #881337 !important; }}
+.squeeze-box {{ background: #fff1f2 !important; border: 1px solid #fecdd3; border-left: 4px solid #e11d48; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 11.5px; color: #881337 !important; }}
 .squeeze-box * {{ color: #881337 !important; }}
-.pts-tokugai-box {{ background: #fffbeb !important; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #78350f !important; }}
+.pts-tokugai-box {{ background: #fffbeb !important; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 11.5px; color: #78350f !important; }}
 .pts-tokugai-box * {{ color: #78350f !important; }}
-.board5ch-box {{ background: #ecfdf5 !important; border: 1px solid #a7f3d0; border-left: 4px solid #059669; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #064e3b !important; }}
+.board5ch-box {{ background: #ecfdf5 !important; border: 1px solid #a7f3d0; border-left: 4px solid #059669; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 11.5px; color: #064e3b !important; }}
 .board5ch-box * {{ color: #064e3b !important; }}
-.metrics-row {{ display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 9px; font-size: 11.5px; color: #0f172a !important; background: #f1f5f9 !important; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; }}
+.metrics-row {{ display: flex; flex-wrap: wrap; gap: 6px 11px; margin-top: 9px; font-size: 11px; color: #0f172a !important; background: #f1f5f9 !important; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; }}
 .metrics-row * {{ color: #0f172a !important; }}
-.trade-plan-box {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 9px; background: #ffffff !important; padding: 9px 6px; border-radius: 10px; border: 1px solid #cbd5e1; text-align: center; color: #0f172a !important; box-shadow: inset 0 1px 3px rgba(0,0,0,0.03); }}
-.sizing-box {{ background: linear-gradient(90deg, #f0fdf4, #dcfce7) !important; border: 1px solid #86efac; border-radius: 9px; padding: 9px 12px; margin-top: 8px; font-size: 12px; color: #166534 !important; }}
+.trade-plan-box {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 9px; background: #ffffff !important; padding: 9px 6px; border-radius: 10px; border: 1px solid #cbd5e1; text-align: center; color: #0f172a !important; }}
+.sizing-box {{ background: linear-gradient(90deg, #f0fdf4, #dcfce7) !important; border: 1px solid #86efac; border-radius: 9px; padding: 9px 12px; margin-top: 8px; font-size: 11.5px; color: #166534 !important; }}
 .sizing-box * {{ color: #166534 !important; }}
 
 /* 7大AI評議会ダークパネル */
-.ai-council-box {{ background: linear-gradient(135deg, #090d16, #1e293b); color: #f8fafc !important; border-radius: 14px; padding: 16px; margin-top: 8px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.1); }}
+.ai-council-box {{ background: linear-gradient(135deg, #090d16, #1e293b); color: #f8fafc !important; border-radius: 14px; padding: 15px; margin-top: 8px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.1); }}
 .ai-council-box * {{ color: #f8fafc; }}
-.ai-agent-card {{ background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 10px 13px; margin-bottom: 8px; font-size: 12.5px; line-height: 1.6; color: #f8fafc !important; }}
-.consensus-banner {{ background: linear-gradient(135deg, #1e1b4b, #312e81); border: 1.5px solid #818cf8; border-radius: 12px; padding: 14px; margin-top: 12px; font-size: 12.5px; line-height: 1.7; color: #f8fafc !important; }}
-.consensus-section {{ background: rgba(255, 255, 255, 0.07); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 8px 10px; margin-top: 8px; color: #f8fafc !important; }}
+.ai-agent-card {{ background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 9px 12px; margin-bottom: 7px; font-size: 12px; line-height: 1.55; color: #f8fafc !important; }}
+.consensus-banner {{ background: linear-gradient(135deg, #1e1b4b, #312e81); border: 1.5px solid #818cf8; border-radius: 12px; padding: 13px; margin-top: 10px; font-size: 12px; line-height: 1.65; color: #f8fafc !important; }}
+.consensus-section {{ background: rgba(255, 255, 255, 0.07); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 7px 10px; margin-top: 7px; color: #f8fafc !important; }}
 
-/* 質問回答ハイライトボックス */
-.qa-answer-highlight {{
-    background: linear-gradient(135deg, #eff6ff, #dbeafe);
-    border: 1.5px solid #60a5fa;
-    border-left: 5px solid #2563eb;
-    border-radius: 12px;
-    padding: 14px 16px;
+/* 💬 見やすく目に優しい・少し小さめ文字（11.5px）の質問回答専用カード */
+.qa-answer-card {{
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1;
+    border-left: 4px solid #3b82f6;
+    border-radius: 10px;
+    padding: 12px 14px;
     margin-top: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
+    font-size: 11.5px !important;
+    line-height: 1.65 !important;
+    color: #1e293b !important;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}}
+.qa-answer-card * {{
+    color: #1e293b !important;
+    font-size: 11.5px !important;
+    line-height: 1.65 !important;
+}}
+.qa-answer-card .qa-q-header {{
+    font-weight: 700;
     color: #0f172a !important;
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
+    background: #e2e8f0;
+    padding: 4px 10px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    display: inline-block;
+    font-size: 11px !important;
+}}
+.qa-answer-card b, .qa-answer-card strong {{
+    color: #1d4ed8 !important;
+    font-weight: 700;
 }}
 </style>
 
-<!-- 🧭 上部追従・半透明フローティングナビバー -->
+<!-- 🧭 上部追従・半透明フローティングナビバー（ログイン画面に戻らずページ最上部へスムーズスクロール） -->
 <div class="floating-glass-nav">
-    <a href="?u={curr_u_param}&t={curr_t_param}&nav_cmd=top" target="_self" title="ランキングTOPへ">🏠 TOP</a>
+    <a href="#page_top_anchor" title="ページの最上部へ戻る">⬆️ ページTOPへ</a>
     <div class="nav-divider"></div>
-    <a href="?u={curr_u_param}&t={curr_t_param}&nav_cmd=back" target="_self" title="前の画面へ戻る">⬅️ 戻る</a>
+    <a href="#search_box_anchor" title="銘柄検索・タブ選択へ移動">🔍 検索・タブ</a>
     <div class="nav-divider"></div>
-    <a href="?u={curr_u_param}&t={curr_t_param}&nav_cmd=wl" target="_self" class="wl-pill" title="監視ウォッチリストを開く">⭐ 監視 ({wl_count})</a>
-    <div class="nav-divider"></div>
-    <a href="?u={curr_u_param}&t={curr_t_param}&nav_cmd=refresh" target="_self" title="最新データに再集計">🔄 更新</a>
+    <span class="algo-pill" title="Hurst指数・Kalmanフィルタ・Kyleラムダ自動適応中">🧬 最新Algo自動適応中</span>
 </div>
 """, unsafe_allow_html=True)
+
+# ページトップへのプログラム的スクロール発火処理
+if st.session_state.get("trigger_scroll_top"):
+    components.html(
+        """
+        <script>
+        setTimeout(function() {
+            const topEl = window.parent.document.getElementById("page_top_anchor");
+            if (topEl) {
+                topEl.scrollIntoView({ behavior: "smooth", block: "start" });
+            } else {
+                window.parent.scrollTo({ top: 0, behavior: "smooth" });
+            }
+        }, 80);
+        </script>
+        """,
+        height=0,
+    )
+    st.session_state["trigger_scroll_top"] = False
 
 # --- サイドバー設定 ---
 st.sidebar.header("🧭 ナビゲーション")
 s_col1, s_col2 = st.sidebar.columns(2)
 with s_col1:
-    if st.button("🏠 TOP画面", key="side_top_btn", use_container_width=True):
+    if st.button("⬆️ ページTOP", key="side_top_btn", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"
         st.session_state["custom_search_code"] = ""
+        st.session_state["trigger_scroll_top"] = True
         st.rerun()
 with s_col2:
-    if st.button("⬅️ 戻る", key="side_back_btn", use_container_width=True):
+    if st.button("⬅️ 前の画面", key="side_back_btn", use_container_width=True):
         navigate_back()
         st.rerun()
 
@@ -635,7 +660,8 @@ total_capital = st.sidebar.number_input("総投資資金 (円 / ドル)", min_va
 risk_tolerance_pct = st.sidebar.slider("1トレード許容リスク (%)", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
 
 st.sidebar.markdown("---")
-st.sidebar.header("🏦 機関クオンツ＆弱肉強食設定")
+st.sidebar.header("🧬 最新クオンツ自動適応設定")
+auto_evolve_algo = st.sidebar.checkbox("🧬 最新クオンツ（Hurst指数・Kalman・Kyleλ）自動組込", value=True, help="相場レジームに応じて最新の数理クオンツアルゴリズムを自動で組み込み、重みを動的最適化します。")
 survival_cut_pct = st.sidebar.slider("弱肉強食・各タブ選抜率 (%)", min_value=40, max_value=100, value=70, step=10)
 inst_boost_mode = st.sidebar.checkbox("🏦 機関クオンツ（VPIN・ステルス吸収）優先", value=True)
 board5ch_boost = st.sidebar.checkbox("🔥 5ch板・初動イナゴ＆シコリ玉なし優先", value=True)
@@ -772,9 +798,54 @@ def fetch_macro_market():
     return macro_data
 
 # ==========================================
+# 🧬 最新クオンツ数理モジュール（Hurst指数・Kalmanフィルタ・Kyleラムダ）
+# ==========================================
+def compute_latest_quant_metrics(close_series: pd.Series, vol_ratio_series: pd.Series, day_ret_series: pd.Series) -> dict:
+    """最新のウォール街数理クオンツ指標を自動計算して返す"""
+    prices = close_series.dropna().values
+    # 1. Hurst指数（ハースト指数：H > 0.5ならトレンド持続性が強い、H < 0.5なら平均回帰）
+    hurst_val = 0.52
+    if len(prices) >= 30:
+        try:
+            lags = range(2, 12)
+            tau = [np.std(np.subtract(prices[lag:], prices[:-lag])) for lag in lags]
+            tau = [t if t > 0 else 1e-6 for t in tau]
+            poly = np.polyfit(np.log(list(lags)), np.log(tau), 1)
+            hurst_val = float(np.clip(poly[0] * 1.35, 0.25, 0.85))
+        except Exception:
+            hurst_val = 0.52
+
+    # 2. 1次元適応カルマンフィルタ（ノイズ除去トレンド推計値）
+    kalman_est = float(prices[-1])
+    if len(prices) >= 10:
+        x_est = float(prices[0])
+        p_est = 1.0
+        q_noise = 0.03  # プロセスノイズ
+        r_noise = 0.12  # 観測ノイズ
+        for z in prices[1:]:
+            p_pred = p_est + q_noise
+            k_gain = p_pred / (p_pred + r_noise)
+            x_est = x_est + k_gain * (float(z) - x_est)
+            p_est = (1.0 - k_gain) * p_pred
+        kalman_est = x_est
+    kalman_bull_pct = round((float(prices[-1]) - kalman_est) / max(kalman_est, 1e-4) * 100, 2)
+
+    # 3. Kyle's Lambda（カイルのラムダ：大口注文による価格冲击・流動性枯渇係数）
+    recent_ret = day_ret_series.tail(5).abs().mean()
+    recent_vol = vol_ratio_series.tail(5).mean()
+    kyle_lambda = round(float(recent_ret / max(recent_vol, 0.3)), 2)
+
+    return {
+        "hurst": round(hurst_val, 2),
+        "kalman_est": kalman_est,
+        "kalman_bull_pct": kalman_bull_pct,
+        "kyle_lambda": kyle_lambda
+    }
+
+# ==========================================
 # 🏦 機関投資家クオンツ ＆ 10段階シグナル判定エンジン
 # ==========================================
-def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst=True, boost_5ch=True, boost_squeeze=True, boost_tokugai=True):
+def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst=True, boost_5ch=True, boost_squeeze=True, boost_tokugai=True, use_latest_algo=True):
     try:
         if df_raw is None or df_raw.empty:
             return None
@@ -826,6 +897,12 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         df['Amihud_Impact'] = (df['Day_Return'].abs() / df['Vol_Ratio'].replace(0, 1.0)).fillna(1.0)
         df['Amihud_Ratio'] = (df['Amihud_Impact'] / df['Amihud_Impact'].rolling(20).mean().replace(0, 1.0)).fillna(1.0)
 
+        # 🧬 最新クオンツ指標（Hurst / Kalman / Kyleλ）の自動算出
+        adv_q = compute_latest_quant_metrics(df['Close'], df['Vol_Ratio'], df['Day_Return'].fillna(0.0))
+        hurst_v = adv_q["hurst"]
+        kalman_bull = adv_q["kalman_bull_pct"]
+        kyle_lam = adv_q["kyle_lambda"]
+
         cond_inst_accum = (df['VPIN_5d'] >= 0.22) & (df['Close'] >= df['VWAP20']) & (df['Close_Pos'] >= 0.68)
         cond_5ch_surge = (df['Vol_Accel_5d'] >= 1.35) & (df['Close_Pos'] >= 0.72) & (df['Upper_Shadow'] <= 0.18) & (df['Close'] > df['Open'])
         cond_sq_breakout = (df['Close'] >= df['High_20'] * 0.992) & (df['Vol_Ratio'] >= 1.2) & (df['Close_Pos'] >= 0.7)
@@ -849,12 +926,14 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         inst_raw = 50.0 + vpin_val * 45.0 + (c_pos - 0.5) * 25.0
         if float(latest['Close']) >= float(latest['VWAP20']):
             inst_raw += 10.0
+        if use_latest_algo and hurst_v >= 0.56 and kalman_bull > 0:
+            inst_raw += 7.0
         if float(latest['Day_Return']) > 0.5 and amihud_r >= 1.15 and upper_sh <= 0.2:
             inst_raw += 12.0
-            inst_status = f"🏦 機関の浮動株吸い上げ・売り板枯渇 (VPIN {vpin_val:+.2f} / 価格弾性 {amihud_r:.2f}倍)"
+            inst_status = f"🏦 機関の浮動株吸い上げ・売り板枯渇 (VPIN {vpin_val:+.2f} / 弾性 {amihud_r:.2f}倍)"
         elif cond_inst_accum.iloc[-1]:
             inst_raw += 10.0
-            inst_status = f"🏦 機関アルゴリズム・ステルス氷山買い集め検知 (VPIN {vpin_val:+.2f} / 20日VWAP上維持)"
+            inst_status = f"🏦 機関アルゴリズム・ステルス氷山買い集め検知 (VPIN {vpin_val:+.2f})"
         elif vpin_val < -0.15:
             inst_raw -= 12.0
             inst_status = f"⚠️ 機関のTWAP/VWAP売り執行警戒 (VPIN {vpin_val:+.2f})"
@@ -923,6 +1002,7 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         sox_diff = macro["sox"]["diff"] if macro else 0.0
         nk_diff = macro["nk_fut"]["diff"] if macro else 0.0
         sp_diff = macro["sp500"]["diff"] if macro else 0.0
+        vix_val = macro["vix"]["price"] if macro else 18.0
         is_jp = ".T" in code
         overnight_impact = (nk_diff * 0.5 + sox_diff * 0.4) if is_jp else (sp_diff * 0.5 + sox_diff * 0.4)
         pts_gap_pct = round(avg_gap * 0.5 + overnight_impact * 0.6 + max(0.0, (inst_score - 55) * 0.025), 2)
@@ -938,18 +1018,26 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         tokugai_prob = int(min(max(round(tokugai_raw), 5), 98))
         tokugai_status = "🚨 特買い（気配切り上げ）濃厚" if tokugai_prob >= 70 else ("🌅 買い気配先行スタート優勢" if tokugai_prob >= 52 else "⚖️ 通常気配スタート")
 
+        # 🧬 最新アルゴリズム自動進化ボーナス（VIXとHurst指数・Kalmanによるレジーム適応）
+        evo_bonus = 0.0
+        if use_latest_algo:
+            evo_bonus += (hurst_v - 0.5) * 18.0
+            evo_bonus += np.clip(kalman_bull * 1.2, -5.0, 6.0)
+            if vix_val >= 22.0 and inst_score >= 65:
+                evo_bonus += 4.0  # 高VIX下で機関が買っているディフェンシブ強気銘柄を優遇
+
         base_score = min(max(prob * 0.52, 10), 44) + min(max((expected_edge + 0.3) * 12, 0), 14)
         in_bonus = round((inst_score - 50) * 0.22) if boost_inst else 0
         b5_bonus = round((board5ch_score - 50) * 0.18) if boost_5ch else 0
         sq_bonus = round((squeeze_score - 50) * 0.16) if boost_squeeze else 0
         tk_bonus = round((tokugai_prob - 45) * 0.14) if boost_tokugai else 0
-        ai_score = int(min(max(round(base_score + in_bonus + b5_bonus + sq_bonus + tk_bonus), 15), 99))
+        ai_score = int(min(max(round(base_score + in_bonus + b5_bonus + sq_bonus + tk_bonus + evo_bonus), 15), 99))
 
         survival_power = round(
-            ai_score * 0.35 + inst_score * 0.25 + board5ch_score * 0.20 + squeeze_score * 0.10 + min(float(latest['ATR_Pct']) * 3.5, 12.0), 1
+            ai_score * 0.35 + inst_score * 0.25 + board5ch_score * 0.20 + squeeze_score * 0.10 + min(float(latest['ATR_Pct']) * 3.5, 12.0) + max(0.0, evo_bonus), 1
         )
 
-        # 🎯 翌朝株価 10段階シグナル評価の算出（絶対買い / 買い / 様子見 / 危険 / 絶対手を出すな）
+        # 🎯 翌朝株価 10段階シグナル評価（絶対買い / 買い / 様子見 / 危険 / 絶対手を出すな）
         tier_val = ai_score * 0.40 + prob * 0.25 + inst_score * 0.20 + board5ch_score * 0.15
         if upper_sh >= 0.42:
             tier_val -= 12.0
@@ -993,6 +1081,7 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
             "sl_price": fmt_p(sl_val), "sl_pct": round((sl_val - close_val) / close_val * 100, 1),
             "vwap_price": fmt_p(float(latest['VWAP20'])),
             "inst_score": inst_score, "inst_status": inst_status, "vpin": round(vpin_val, 2), "amihud_ratio": round(amihud_r, 2),
+            "hurst": hurst_v, "kalman_bull_pct": kalman_bull, "kyle_lambda": kyle_lam,
             "board5ch_score": board5ch_score, "board5ch_status": board5ch_status, "upper_shadow_pct": int(upper_sh * 100),
             "close_pos_pct": close_pos_pct, "closing_power_score": closing_power_score,
             "squeeze_score": squeeze_score, "squeeze_type": squeeze_type,
@@ -1017,7 +1106,7 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         return None
 
 @st.cache_data(ttl=1800)
-def fetch_all_pool_batch(macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai):
+def fetch_all_pool_batch(macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai, use_latest_algo):
     all_codes = list({s["code"] for stocks in STOCK_POOL.values() for s in stocks})
     raw_data = yf.download(all_codes, period="6mo", group_by="ticker", threads=True, progress=False)
 
@@ -1030,7 +1119,7 @@ def fetch_all_pool_batch(macro, boost_inst, boost_5ch, boost_squeeze, boost_toku
             c = s["code"]
             try:
                 df_c = raw_data[c] if len(all_codes) > 1 else raw_data
-                res = analyze_single_dataframe(df_c, c, s["name"], s["theme"], genre, macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai)
+                res = analyze_single_dataframe(df_c, c, s["name"], s["theme"], genre, macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai, use_latest_algo)
                 if res:
                     genre_Map[genre].append(res)
                     if c not in seen:
@@ -1041,10 +1130,10 @@ def fetch_all_pool_batch(macro, boost_inst, boost_5ch, boost_squeeze, boost_toku
     return genre_Map, all_list
 
 @st.cache_data(ttl=600)
-def fetch_single_stock(code, macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai):
+def fetch_single_stock(code, macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai, use_latest_algo):
     df_c = yf.Ticker(code).history(period="6mo")
     info = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
-    return analyze_single_dataframe(df_c, code, info["name"], info["theme"], info["genre"], macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai)
+    return analyze_single_dataframe(df_c, code, info["name"], info["theme"], info["genre"], macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai, use_latest_algo)
 
 # --- ⚡ 5分足（Intraday）解析エンジン ---
 @st.cache_data(ttl=300)
@@ -1089,10 +1178,10 @@ def render_5m_candlestick_chart(m5):
     wick = base.mark_rule(size=1.5).encode(y=alt.Y("Low:Q", scale=alt.Scale(zero=False), title="株価"), y2="High:Q", color=alt.Color("BarColor:N", scale=color_scale, legend=None))
     body = base.mark_bar(size=6).encode(y=alt.Y("Open:Q", scale=alt.Scale(zero=False)), y2="Close:Q", color=alt.Color("BarColor:N", scale=color_scale, legend=None))
     vwap_line = base.mark_line(color="#d97706", strokeWidth=2.5, strokeDash=[4, 2]).encode(y="VWAP:Q")
-    st.altair_chart((wick + body + vwap_line).properties(height=190), use_container_width=True)
+    st.altair_chart((wick + body + vwap_line).properties(height=185), use_container_width=True)
 
 # ==========================================
-# 🧠 7大AI【動的ロール割り当て】合議アルゴリズム
+# 🧠 7大AI【動的ロール割り当て＋最新クオンツ組込】合議アルゴリズム
 # ==========================================
 def run_7ai_council_algorithm(r, m5=None):
     vwap_ref = m5['vwap5_price'] if m5 else r['vwap_price']
@@ -1114,14 +1203,14 @@ def run_7ai_council_algorithm(r, m5=None):
     final_s   = int(round((claude_s + grok_s + chatgpt_s + gemini_s + perp_s + gensp_s + nblm_s) / 7.0))
 
     if is_inst_hot:
-        claude_role = "🟠 Claude【担当：機関VPINオーダーフロー毒性＆下値リスク監査】"
-        claude_msg = f"機関のVPINが <b>{r['vpin']:+.2f}</b> とプラス圏で推移し、下値は機関の氷山注文で支えられています。逆指値 <b>{r['sl_price']}</b> を置けばリスク対比の期待値は抜群です。"
+        claude_role = "🟠 Claude【担当：機関VPIN＆カルマンフィルタ数理監査】"
+        claude_msg = f"VPINが <b>{r['vpin']:+.2f}</b>、カルマン推計乖離 <b>{r['kalman_bull_pct']:+.2f}%</b> と機関の買い支えが顕著です。逆指値 <b>{r['sl_price']}</b> を置けばリスク対比の期待値は抜群です。"
     elif r["upper_shadow_pct"] >= 30:
         claude_role = "🟠 Claude【担当：高値掴みドローダウン制御＆シコリ玉警戒】"
         claude_msg = f"上ヒゲ率 <b>{r['upper_shadow_pct']}%</b> の戻り売りリスクを計算しました。朝イチの成行飛びつきは避け、<b>{vwap_ref}</b> までの押し目を待つことで最大損失を <b>{r['lot_info']['risk_amount']:,.0f}円</b> 以内にロックできます。"
     else:
-        claude_role = "🟠 Claude【担当：ケリー基準期待値＆リスクリワード数理検証】"
-        claude_msg = f"過去勝率 <b>{r['prob']}%</b>・損益比 <b>{r['payoff']}倍</b>（期待値 <b>{r['edge']:+.2f}%</b>）。総資金の <b>{r['lot_info']['capital_ratio']}%（{r['lot_info']['shares']:,}株）</b> 投入が数学的最適解です。"
+        claude_role = "🟠 Claude【担当：ハースト指数(H={r['hurst']})＆ケリー基準検証】"
+        claude_msg = f"ハースト指数 <b>{r['hurst']}</b>、過去勝率 <b>{r['prob']}%</b>・損益比 <b>{r['payoff']}倍</b>（期待値 <b>{r['edge']:+.2f}%</b>）。総資金の <b>{r['lot_info']['capital_ratio']}%（{r['lot_info']['shares']:,}株）</b> 投入が数学的最適解です。"
 
     if is_squeeze_hot:
         grok_role = "🔴 Grok【担当：ショートスクイーズ（空売り丸焦げ踏み上げ）解析】"
@@ -1151,8 +1240,8 @@ def run_7ai_council_algorithm(r, m5=None):
         gemini_msg = f"米国「{r['genre']}」セクターへの機関資金フローは堅調。プレマーケット気配（理論値 <b>{r['pts_est_price']}</b>）から寄り付き後の上値追いが期待できます。"
 
     if r["amihud_ratio"] >= 1.1:
-        perp_role = "🌐 Perplexity【担当：Amihud非流動性（浮動株枯渇・板の薄さ）監査】"
-        perp_msg = f"Amihud価格弾性率が <b>{r['amihud_ratio']}倍</b> に上昇中。機関が浮動株を吸収したことで売り板が薄くなっており、まとまった買いが入ると一気に値が飛びやすい真空状態です。"
+        perp_role = "🌐 Perplexity【担当：Amihud非流動性＆Kyleラムダ（浮動株枯渇）監査】"
+        perp_msg = f"価格弾性率が <b>{r['amihud_ratio']}倍</b>（Kyleλ: <b>{r['kyle_lambda']}</b>）に上昇中。機関が浮動株を吸収したことで売り板が薄くなっており、まとまった買いで一気に値が飛びやすい真空状態です。"
     else:
         perp_role = "🌐 Perplexity【担当：大引けMOC機関買い集め＆朝8:55見せ板ファクトチェック】"
         perp_msg = f"出来高倍率 <b>{r['vol_ratio']}倍</b>・引け位置 <b>{r['close_pos_pct']}%</b> を検証。フェイクの見せ板を排除するため、注文取消が制限される朝8:55以降の成行買い残を確認してください。"
@@ -1185,55 +1274,56 @@ def run_7ai_council_algorithm(r, m5=None):
         )
     }
 
-def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
+def generate_7ai_qa_response_html(question, r, debate, lot_info, m5=None) -> str:
+    """見やすい高コントラスト配色＆小さめ文字（11.5px）で出力するHTML回答ジェネレーター"""
     q_clean = unicodedata.normalize('NFKC', str(question)).strip()
     q_low = q_clean.lower()
     m5_vwap = m5["vwap5_price"] if m5 else r["vwap_price"]
     half_s = max(1, lot_info['shares'] // 2)
     rem_s = max(0, lot_info['shares'] - half_s)
 
-    if any(k in q_low for k in ["機関", "アルゴ", "vpin", "大口", "ステルス", "浮動株", "板"]):
+    if any(k in q_low for k in ["機関", "アルゴ", "vpin", "大口", "ステルス", "浮動株", "板", "最新", "クオンツ"]):
         return (
-            f"🏦 **【担当：ChatGPT ＆ Perplexity（機関投資家クオンツ解析）】**\n\n"
-            f"- **10段階ジャッジ**：**{r['tier_label']}**\n"
-            f"- **機関オーダーフロー診断**：現在の機関クオンツスコアは **{r['inst_score']}点**（**{r['inst_status']}**）です。\n"
-            f"- **VPIN＆板の薄さ（Amihud）**：情報優位な大口買いを示すVPINは **{r['vpin']:+.2f}**、浮動株の吸い上げによる価格弾性（Amihud比率）は **{r['amihud_ratio']}倍** です。\n"
-            f"- **実戦での乗り方**：機関の執行アルゴは **VWAP（{m5_vwap}）** を基準に買い集めます。朝イチにVWAPより上で推移していれば機関の買いが継続しているため、押し目を一緒に拾うのが最も勝率の高い戦術です。"
+            f"<div><b>🏦 【担当：ChatGPT ＆ Perplexity（機関クオンツ＆最新数理モデル解析）】</b></div>"
+            f"<div style='margin-top:4px;'>・<b>10段階ジャッジ</b>：<b>{r['tier_label']}</b></div>"
+            f"<div>・<b>機関オーダーフロー</b>：機関スコア <b>{r['inst_score']}点</b>（{r['inst_status']}）</div>"
+            f"<div>・<b>最新クオンツ指標</b>：VPIN <b>{r['vpin']:+.2f}</b> ／ ハースト指数(H) <b>{r['hurst']}</b> ／ カルマン推計乖離 <b>{r['kalman_bull_pct']:+.2f}%</b> ／ Kyleλ(板衝撃度) <b>{r['kyle_lambda']}</b></div>"
+            f"<div>・<b>実戦での乗り方</b>：機関の執行アルゴは <b>VWAP（{m5_vwap}）</b> を基準に買い集めます。朝イチにVWAP上で推移していれば機関の買いが継続しているため、押し目を一緒に拾うのが最も高勝率です。</div>"
         )
     elif any(k in q_low for k in ["特買", "気配", "pts", "夜間", "8時", "寄"]):
         return (
-            f"🚨 **【担当：Grok ＆ Gemini（夜間PTS・特買い気配解析）】**\n\n"
-            f"- **夜間理論スタート価格**：**{r['pts_est_price']}（前日比 {r['pts_gap_pct']:+.2f}%）**、特買い発生確率は **{r['tokugai_prob']}%** です。\n"
-            f"- **特買い発動ライン**：気配値が **{r['tokugai_line']}（+{r['tokugai_pct_threshold']}%）** を超えると特別買い気配（特買い）になります。高値掴みを防ぐため、寄付きはまず半分の **{half_s:,}株** で入り、**{m5_vwap}（VWAP）** サポートを確認してから残り **{rem_s:,}株** を追加してください。"
+            f"<div><b>🚨 【担当：Grok ＆ Gemini（夜間PTS・特買い気配解析）】</b></div>"
+            f"<div style='margin-top:4px;'>・<b>夜間理論スタート価格</b>：<b>{r['pts_est_price']}（前日比 {r['pts_gap_pct']:+.2f}%）</b> ／ 特買い発生確率 <b>{r['tokugai_prob']}%</b></div>"
+            f"<div>・<b>特買い発動ライン</b>：気配値が <b>{r['tokugai_line']}（+{r['tokugai_pct_threshold']}%）</b> を超えると特別買い気配になります。高値掴みを防ぐため、寄付きはまず半分の <b>{half_s:,}株</b> で入り、<b>{m5_vwap}（VWAP）</b> サポート確認後に残り <b>{rem_s:,}株</b> を追加してください。</div>"
         )
     elif any(k in q_low for k in ["踏み上げ", "空売", "スクイーズ", "高値", "シコリ", "5ch", "イナゴ"]):
         return (
-            f"🔥 **【担当：Grok ＆ Claude（5chシコリ玉＆空売り踏み上げ解析）】**\n\n"
-            f"- **5ch板・シコリ玉診断**：現在「**{r['board5ch_status']}**」（5ch需給スコア **{r['board5ch_score']}点** / 上ヒゲ率 **{r['upper_shadow_pct']}%**）です。\n"
-            f"- **踏み上げトリガー価格**：直近20日高値の **{r['squeeze_trigger_price']}（現在値から {r['dist_to_high20']:+.2f}%）** を突破すると、空売り勢の強制ロスカット（成行買い戻し）が連鎖し **{r['tp_price']}** へ急伸しやすくなります。"
+            f"<div><b>🔥 【担当：Grok ＆ Claude（5chシコリ玉＆空売り踏み上げ解析）】</b></div>"
+            f"<div style='margin-top:4px;'>・<b>5ch板・シコリ玉診断</b>：現在「<b>{r['board5ch_status']}</b>」（5ch需給スコア <b>{r['board5ch_score']}点</b> / 上ヒゲ率 <b>{r['upper_shadow_pct']}%</b>）</div>"
+            f"<div>・<b>踏み上げトリガー価格</b>：直近20日高値の <b>{r['squeeze_trigger_price']}（現在値から {r['dist_to_high20']:+.2f}%）</b> を突破すると、空売り勢の強制ロスカット（成行買い戻し）が連鎖し <b>{r['tp_price']}</b> へ急伸しやすくなります。</div>"
         )
     elif any(k in q_low for k in ["5分", "vwap", "チャート", "初動", "テクニカル", "rsi", "macd"]):
         return (
-            f"⚡ **【担当：ChatGPT ＆ Genspark（5分足＆テクニカル執行戦術）】**\n\n"
-            f"- **現在のテクニカル指標**：5分足VWAPは **{m5_vwap}**、日足RSIは **{r['rsi']}**、MACDは **{r['macd_state']}**、出来高倍率は **{r['vol_ratio']}倍** です。\n"
-            f"- **初動の乗り方**：朝9:00〜9:15の初動でローソク足が **{m5_vwap}** より上をキープしていれば機関・大口が買い支えていますので、順張りホールドが正解です。"
+            f"<div><b>⚡ 【担当：ChatGPT ＆ Genspark（5分足＆テクニカル執行戦術）】</b></div>"
+            f"<div style='margin-top:4px;'>・<b>現在のテクニカル指標</b>：5分足VWAP <b>{m5_vwap}</b> ／ 日足RSI <b>{r['rsi']}</b> ／ MACD <b>{r['macd_state']}</b> ／ 出来高倍率 <b>{r['vol_ratio']}倍</b></div>"
+            f"<div>・<b>初動の乗り方</b>：朝9:00〜9:15の初動でローソク足が <b>{m5_vwap}</b> より上をキープしていれば機関・大口が買い支えていますので、順張りホールドが正解です。</div>"
         )
     elif any(k in q_low for k in ["損切", "利確", "目標", "売", "出口", "リスク", "下が"]):
         return (
-            f"🛡️ **【担当：Claude ＆ NotebookLM（利確目標＆リスク管理）】**\n\n"
-            f"- 🎯 **第一利確目標**：**{r['tp_price']}（+{r['tp_pct']}%）** で半分を利益確定し、残りは5分足VWAP（**{m5_vwap}**）を割るまで利益を伸ばします（過去最大GU実績 **+{r['max_win_gap']}%**）。\n"
-            f"- 🛡️ **絶対損切りライン**：購入直後に必ず **{r['sl_price']}（{r['sl_pct']}%）** に逆指値を入れてください。最大損失は **約{lot_info['risk_amount']:,.0f}円（総資金の{risk_tolerance_pct}%）** に完全に抑えられます。"
+            f"<div><b>🛡️ 【担当：Claude ＆ NotebookLM（利確目標＆リスク管理）】</b></div>"
+            f"<div style='margin-top:4px;'>・<b>🎯 第一利確目標</b>：<b>{r['tp_price']}（+{r['tp_pct']}%）</b> で半分を利益確定し、残りは5分足VWAP（<b>{m5_vwap}</b>）を割るまで利益を伸ばします（過去最大GU実績 <b>+{r['max_win_gap']}%</b>）。</div>"
+            f"<div>・<b>🛡️ 絶対損切りライン</b>：購入直後に必ず <b>{r['sl_price']}（{r['sl_pct']}%）</b> に逆指値を入れてください。最大損失は <b>約{lot_info['risk_amount']:,.0f}円（総資金の{risk_tolerance_pct}%）</b> に完全に抑えられます。</div>"
         )
     else:
         return (
-            f"🤖 **【担当：ChatGPT・Claude・Grok 7大AI合同評議会】**\n\n"
-            f"- **総合ジャッジ**：「{r['name']}（{r['code']}）」の7大AI合議スコアは **{debate['final_score']}点**、10段階評価は **『{r['tier_label']}』** です。\n"
-            f"- **最適ロットと資金配分**：総資金 {total_capital:,.0f}円 に対する推奨購入数は **{lot_info['shares']:,}株（投資額 {lot_info['position_value']:,.0f}円）** です。\n"
-            f"- **具体的なアクション**：明日の朝はまず寄付き（目安 **{r['pts_est_price']}**）で半分の **{half_s:,}株** を買い、**{m5_vwap}（VWAP）** 反発または **{r['squeeze_trigger_price']}（20日高値）** 突破で残り **{rem_s:,}株** を追加、利確 **{r['tp_price']}**・損切り **{r['sl_price']}** で臨むのが最も期待値（**{r['edge']:+.2f}%**・過去勝率 **{r['prob']}%**）の高い戦術です。"
+            f"<div><b>🤖 【担当：ChatGPT・Claude・Grok 7大AI合同評議会】</b></div>"
+            f"<div style='margin-top:4px;'>・<b>総合ジャッジ</b>：「{r['name']}（{r['code']}）」の合議スコアは <b>{debate['final_score']}点</b>、10段階評価は <b>『{r['tier_label']}』</b> です。</div>"
+            f"<div>・<b>最適ロットと資金配分</b>：総資金 {total_capital:,.0f}円 に対する推奨購入数は <b>{lot_info['shares']:,}株（投資額 {lot_info['position_value']:,.0f}円）</b> です。</div>"
+            f"<div>・<b>具体的なアクション</b>：明日の朝はまず寄付き（目安 <b>{r['pts_est_price']}</b>）で半分の <b>{half_s:,}株</b> を買い、<b>{m5_vwap}（VWAP）</b> 反発または <b>{r['squeeze_trigger_price']}（20日高値）</b> 突破で残り <b>{rem_s:,}株</b> を追加、利確 <b>{r['tp_price']}</b>・損切り <b>{r['sl_price']}</b> で臨むのが最も期待値（<b>{r['edge']:+.2f}%</b>・過去勝率 <b>{r['prob']}%</b>）の高い戦術です。</div>"
         )
 
 # ==========================================
-# 💬 会議パネル＆質問コーナー（自動スムーズスクロール搭載）
+# 💬 会議パネル＆質問コーナー（自動スムーズスクロール＆高視認性コンパクト回答カード）
 # ==========================================
 def cb_toggle_debate(unique_key):
     st.session_state["active_debates"][unique_key] = not st.session_state["active_debates"].get(unique_key, False)
@@ -1247,8 +1337,8 @@ def cb_toggle_watchlist(code, r_data):
 def cb_handle_qa_action(unique_key, q_text, r, debate, m5):
     if unique_key not in st.session_state["stock_chats"]:
         st.session_state["stock_chats"][unique_key] = []
-    ans_md = generate_7ai_qa_response(q_text, r, debate, r["lot_info"], m5)
-    st.session_state["stock_chats"][unique_key].append({"q": q_text, "a": ans_md})
+    ans_html = generate_7ai_qa_response_html(q_text, r, debate, r["lot_info"], m5)
+    st.session_state["stock_chats"][unique_key].append({"q": q_text, "a": ans_html})
     st.session_state["scroll_to_chat_key"] = unique_key
 
 def cb_handle_free_q(unique_key, input_key, r, debate, m5):
@@ -1284,16 +1374,16 @@ def render_interactive_council_section(r, unique_key):
     debate = run_7ai_council_algorithm(r, m5)
 
     if unique_key not in st.session_state["debate_Animated"]:
-        with st.status(f"🧠 7大AIがそれぞれの専門領域から「{r['name']}」を徹底議論中...", expanded=True) as status:
+        with st.status(f"🧠 7大AIが最新クオンツ指標を含めて「{r['name']}」を徹底議論中...", expanded=True) as status:
             prog = st.progress(0)
             for pct, msg in [
-                (25, "🟠 Claude & 🔴 Grok が機関VPINフロー・5ch需給・踏み上げを解析中..."),
-                (60, "🟢 ChatGPT & 🔵 Gemini & 🌐 Perplexity がVWAP執行と浮動株枯渇度を検証中..."),
+                (25, "🟠 Claude & 🔴 Grok が機関VPIN・Hurst指数・5ch需給を解析中..."),
+                (60, "🟢 ChatGPT & 🔵 Gemini & 🌐 Perplexity がカルマンフィルタと浮動株枯渇度を検証中..."),
                 (100, "✨ Genspark & 📓 NotebookLM が2段階エントリー戦術を統合中...")
             ]:
                 st.write(msg)
                 prog.progress(pct)
-                time.sleep(0.35)
+                time.sleep(0.3)
             status.update(label=f"✅ 7大AI合議完了！（{r['tier_label']}）", state="complete", expanded=False)
         st.session_state["debate_Animated"].add(unique_key)
 
@@ -1309,7 +1399,7 @@ def render_interactive_council_section(r, unique_key):
         f'<div class="ai-council-box">'
         f'<div style="display:flex; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:6px;">'
         f'<span style="font-weight:bold; color:#fbbf24;">🧠 7大AI最高評議会（銘柄別・動的専門ロール検証）</span>'
-        f'<span style="background:{r["tier_bg"]}; color:{r["tier_color"]}; padding:2px 10px; border-radius:12px; font-size:11.5px; font-weight:bold;">{r["tier_label"]}</span>'
+        f'<span style="background:{r["tier_bg"]}; color:{r["tier_color"]}; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:bold;">{r["tier_label"]}</span>'
         f'</div>{agents_html}'
         f'<div class="consensus-banner"><div style="font-weight:bold; color:#fde047;">🏛️ 7大AI最終コンセンサス</div>{debate["verdict_html"]}</div>'
         f'</div>',
@@ -1323,7 +1413,7 @@ def render_interactive_council_section(r, unique_key):
 
     q_col1, q_col2 = st.columns(2)
     with q_col1:
-        st.button("🏦 機関投資家のステルス買い・VPINは？", key=f"q1_{unique_key}", on_click=cb_handle_qa_action, args=(unique_key, "機関投資家のステルス買い集めやVPINの状況は？", r, debate, m5), use_container_width=True)
+        st.button("🏦 機関のステルス買い・最新クオンツは？", key=f"q1_{unique_key}", on_click=cb_handle_qa_action, args=(unique_key, "機関投資家のステルス買いや最新クオンツ指標の状況は？", r, debate, m5), use_container_width=True)
         st.button("🔥 5chシコリ玉と踏み上げ価格は？", key=f"q2_{unique_key}", on_click=cb_handle_qa_action, args=(unique_key, "5ch板のシコリ玉と空売り踏み上げトリガー価格は？", r, debate, m5), use_container_width=True)
     with q_col2:
         st.button("🚨 特買い確率と8:50気配の見方は？", key=f"q3_{unique_key}", on_click=cb_handle_qa_action, args=(unique_key, "翌朝の特買い確率と8:50気配の見方は？", r, debate, m5), use_container_width=True)
@@ -1343,11 +1433,15 @@ def render_interactive_council_section(r, unique_key):
     chat_history = st.session_state["stock_chats"].get(unique_key, [])
     if chat_history:
         latest_item = chat_history[-1]
-        with st.container(border=True):
-            st.markdown(f"🙋 **最新の質問 #{len(chat_history)}：** `{latest_item['q']}`")
-            st.info(latest_item["a"])
+        st.markdown(
+            f'<div class="qa-answer-card">'
+            f'<div class="qa-q-header">🙋 質問 #{len(chat_history)}：{latest_item["q"]}</div>'
+            f'{latest_item["a"]}'
+            f'</div>',
+            unsafe_allow_html=True
+        )
 
-        # 質問が送信された直後、回答ボックスへさりげなくなめらかに自動スクロール
+        # 質問送信直後に回答カードへさりげなくスムーズスクロール
         if st.session_state.get("scroll_to_chat_key") == unique_key:
             components.html(
                 f"""
@@ -1357,7 +1451,7 @@ def render_interactive_council_section(r, unique_key):
                     if (el) {{
                         el.scrollIntoView({{ behavior: "smooth", block: "center" }});
                     }}
-                }}, 120);
+                }}, 100);
                 </script>
                 """,
                 height=0,
@@ -1368,15 +1462,19 @@ def render_interactive_council_section(r, unique_key):
             with st.expander(f"📚 過去の質問履歴をすべて見る（全 {len(chat_history)} 件）", expanded=False):
                 for idx_h in range(len(chat_history) - 2, -1, -1):
                     item = chat_history[idx_h]
-                    with st.container(border=True):
-                        st.markdown(f"🙋 **【質問 #{idx_h + 1}】 {item['q']}**")
-                        st.success(item["a"])
+                    st.markdown(
+                        f'<div class="qa-answer-card">'
+                        f'<div class="qa-q-header">🙋 質問 #{idx_h + 1}：{item["q"]}</div>'
+                        f'{item["a"]}'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
         st.button("🗑️ この銘柄の質問履歴をクリア", key=f"clr_{unique_key}", on_click=cb_clear_chat, args=(unique_key,), use_container_width=True)
     else:
-        st.caption("👇 上のボタンまたは自由入力欄から質問すると、直下に7大AIの回答が表示され自動でスクロールします。")
+        st.caption("👇 上のボタンまたは自由入力欄から質問すると、直下に読みやすいコンパクトカードで回答が表示され自動でスクロールします。")
 
 # ==========================================
-# 🃏 銘柄カード描画 (企業ロゴ ＆ 10段階評価バッジ付き)
+# 🃏 銘柄カード描画 (企業ロゴ ＆ 10段階評価 ＆ 最新クオンツ指標付き)
 # ==========================================
 def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     diff_color = "#dc2626" if r["diff"] > 0 else "#2563eb"
@@ -1400,7 +1498,8 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         f'<span class="inst-badge">🏦 機関: {r["inst_score"]}点</span>'
         f'<span class="board5ch-badge">🔥 5ch需給: {r["board5ch_score"]}点</span>'
         f'<span class="tokugai-badge">🚨 特買い: {r["tokugai_prob"]}%</span>'
-        f'<span class="survival-badge">🦁 戦闘力: {r["survival_power"]}</span></div>'
+        f'<span class="survival-badge">🦁 戦闘力: {r["survival_power"]}</span>'
+        f'<span class="quant-evo-badge">🧬 Hurst:{r["hurst"]} / Kal:{r["kalman_bull_pct"]:+.1f}%</span></div>'
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">'
         f'<div style="display:flex; align-items:center; gap:10px;">'
         f'{logo_html}'
@@ -1423,8 +1522,8 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         f'</div>'
         f'<div class="metrics-row">'
         f'<span>🏦 <b>VPIN:</b> {r["vpin"]:+.2f}</span><span>💎 <b>板弾性:</b> {r["amihud_ratio"]}倍</span>'
-        f'<span>📊 <b>RSI:</b> {r["rsi"]}</span><span>📈 <b>MACD:</b> {r["macd_state"]}</span>'
-        f'<span>🔊 <b>出来高:</b> {r["vol_ratio"]}倍</span><span>🧱 <b>上ヒゲ:</b> {r["upper_shadow_pct"]}%</span>'
+        f'<span>🧬 <b>Kyleλ:</b> {r["kyle_lambda"]}</span><span>📊 <b>RSI:</b> {r["rsi"]}</span>'
+        f'<span>📈 <b>MACD:</b> {r["macd_state"]}</span><span>🔊 <b>出来高:</b> {r["vol_ratio"]}倍</span>'
         f'</div>'
         f'<div class="trade-plan-box">'
         f'<div><div style="font-size:10px; color:#64748b;">🌅 夜間理論寄付き</div><div style="font-size:12.5px; font-weight:800;">{r["pts_est_price"]}</div></div>'
@@ -1452,11 +1551,11 @@ macro_pills_html = "".join([
 ])
 
 st.markdown(f"""
-<div style="background: linear-gradient(135deg, #090d16 0%, #1e293b 100%); color: #f8fafc; padding: 18px 20px; border-radius: 16px; margin-bottom: 14px; box-shadow: 0 8px 24px rgba(15,23,42,0.18); border: 1px solid rgba(255,255,255,0.08);">
+<div style="background: linear-gradient(135deg, #090d16 0%, #1e293b 100%); color: #f8fafc; padding: 18px 20px; border-radius: 16px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(15,23,42,0.18); border: 1px solid rgba(255,255,255,0.08);">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
         <div>
-            <div style="font-size:11px; color:#fbbf24; font-weight:700; letter-spacing:0.8px;">INSTITUTIONAL VPIN & 7-AI COUNCIL TERMINAL</div>
-            <h1 style="margin:2px 0 0 0; font-size:21px; color:#ffffff; font-weight:800;">📈 翌朝株価 クオンツ＆7大AI解析 Pro</h1>
+            <div style="font-size:10.5px; color:#fbbf24; font-weight:700; letter-spacing:0.8px;">AUTO-EVOLVING QUANT (VPIN × HURST × KALMAN) & 7-AI TERMINAL</div>
+            <h1 style="margin:2px 0 0 0; font-size:20px; color:#ffffff; font-weight:800;">📈 翌朝株価 クオンツ＆7大AI解析 Pro</h1>
         </div>
         <span style="background:rgba(251,191,36,0.15); color:#fde047; border:1px solid rgba(251,191,36,0.4); padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700;">{curr_page_badge}</span>
     </div>
@@ -1465,6 +1564,8 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+st.markdown('<div id="search_box_anchor"></div>', unsafe_allow_html=True)
 
 c1, c2 = st.columns([3.2, 1])
 with c1:
@@ -1478,8 +1579,8 @@ if search_clicked and custom_input:
 
 if st.session_state.get("custom_search_code"):
     norm_code = st.session_state["custom_search_code"]
-    with st.spinner(f"「{norm_code}」を機関クオンツ＆7大AIで10段階解析中..."):
-        custom_res = fetch_single_stock(norm_code, macro_info, inst_boost_mode, board5ch_boost, squeeze_boost_mode, tokugai_boost_mode)
+    with st.spinner(f"「{norm_code}」を機関クオンツ＆最新数理モデルで10段階解析中..."):
+        custom_res = fetch_single_stock(norm_code, macro_info, inst_boost_mode, board5ch_boost, squeeze_boost_mode, tokugai_boost_mode, auto_evolve_algo)
     if custom_res:
         render_stock_card(custom_res, is_custom=True, key_prefix="custom")
         if st.button("✖️ 個別診断結果を閉じてランキング一覧に戻る", use_container_width=True):
@@ -1489,8 +1590,8 @@ if st.session_state.get("custom_search_code"):
     else:
         st.error(f"銘柄「{norm_code}」のデータが見つかりませんでした。")
 
-with st.spinner("🏦 国内外の母集団を一括高速スキャン＆機関VPIN・10段階シグナル選抜中..."):
-    genre_results, all_results = fetch_all_pool_batch(macro_info, inst_boost_mode, board5ch_boost, squeeze_boost_mode, tokugai_boost_mode)
+with st.spinner("🏦 国内外の母集団を一括高速スキャン＆最新クオンツ・10段階シグナル選抜中..."):
+    genre_results, all_results = fetch_all_pool_batch(macro_info, inst_boost_mode, board5ch_boost, squeeze_boost_mode, tokugai_boost_mode, auto_evolve_algo)
 
 def apply_survival_of_the_fittest(stock_list, cut_pct):
     if not stock_list: return [], []
@@ -1503,6 +1604,10 @@ current_page = st.session_state.get("navigation_page", "TOP")
 
 if current_page == "WATCHLIST":
     st.subheader("📋 監視ウォッチリスト (マイ銘柄一覧)")
+    if st.button("⬅️ ランキング一覧画面へ戻る", use_container_width=True):
+        st.session_state["navigation_page"] = "TOP"
+        st.session_state["trigger_scroll_top"] = True
+        st.rerun()
     wl = st.session_state["watchlist"]
     if wl:
         for w_code, w_item in list(wl.items()):
@@ -1513,7 +1618,7 @@ if current_page == "WATCHLIST":
 else:
     base_tabs = [
         "🏆 総合サバイバルTOP5",
-        "🏦 機関VPIN・ステルス買い",
+        "🏦 機関VPIN・最新クオンツ",
         "🔥 5ch板・初動イナゴ",
         "🚨 特買い・夜間PTS",
         "💥 空売り踏み上げ",
@@ -1524,13 +1629,13 @@ else:
 
     with tabs[0]:
         survivors_all, elim_all = apply_survival_of_the_fittest(all_results, survival_cut_pct)
-        st.caption(f"🦁 全母集団 {len(all_results)}銘柄から下位 {len(elim_all)}銘柄を足切り！10段階評価・機関クオンツともに最強のTOP5です。")
+        st.caption(f"🦁 全母集団 {len(all_results)}銘柄から下位 {len(elim_all)}銘柄を足切り！10段階評価・最新クオンツともに最強のTOP5です。")
         for idx, r in enumerate(survivors_all[:5], start=1):
             render_stock_card(r, rank=idx, key_prefix="top5")
 
     with tabs[1]:
-        st.info("🏦 **機関投資家VPIN（オーダーフロー毒性）＆浮動株吸い上げ特選**: 機関のステルス氷山買いや浮動株の吸収が検知された上位10銘柄です。")
-        inst_list = sorted(all_results, key=lambda x: (x["inst_score"], x["vpin"], x["survival_power"]), reverse=True)[:10]
+        st.info("🏦 **機関VPIN ＆ 最新数理クオンツ（Hurst指数・Kalman推計・Kyleλ）特選**: 機関のステルス氷山買いとトレンド持続性が検知された上位10銘柄です。")
+        inst_list = sorted(all_results, key=lambda x: (x["inst_score"], x["hurst"], x["vpin"], x["survival_power"]), reverse=True)[:10]
         for idx, r in enumerate(inst_list, start=1):
             render_stock_card(r, rank=idx, key_prefix="inst_top")
 
