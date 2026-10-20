@@ -115,10 +115,78 @@ if "order_checks" not in st.session_state:
 if "selected_category" not in st.session_state:
     st.session_state["selected_category"] = "🏆 総合TOP5"
 
-# カスタムCSS（ボタンを押した際の画面ジャンプ防止 overflow-anchor 設定も追加）
+# カスタムCSS（スマホ向けピル型カプセルタブのスタイリング＆画面ジャンプ防止）
 st.markdown("""
 <style>
 html, body, [data-testid="stAppViewContainer"] { overflow-anchor: none !important; }
+
+/* 💊 解析カテゴリー選択：スマホで押しやすいピル型（カプセル型）タブボタンCSS */
+div[data-testid="stRadio"] > div[role="radiogroup"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px !important;
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    padding: 10px;
+    border-radius: 14px;
+    border: 1px solid #cbd5e1;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+    background-color: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 9999px !important;
+    padding: 7px 14px !important;
+    margin: 0 !important;
+    cursor: pointer !important;
+    transition: all 0.18s ease-in-out !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+/* ラジオボタン左側の丸印（〇）を完全に非表示化 */
+div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
+    display: none !important;
+}
+div[data-testid="stRadio"] > div[role="radiogroup"] > label p {
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+    color: #334155 !important;
+    margin: 0 !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+}
+/* ホバー時（PC・スマホタップ時） */
+div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
+    border-color: #3b82f6 !important;
+    background-color: #eff6ff !important;
+    transform: translateY(-1px);
+}
+/* 選択中（アクティブ）のカプセルタブをロイヤルブルー＆立体発光に */
+div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
+    background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
+    border-color: #1e40af !important;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35) !important;
+    transform: translateY(-1px);
+}
+div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) p {
+    color: #ffffff !important;
+}
+@media (max-width: 480px) {
+    div[data-testid="stRadio"] > div[role="radiogroup"] {
+        gap: 6px !important;
+        padding: 8px;
+    }
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+        padding: 7px 11px !important;
+        flex-grow: 1;
+        text-align: center;
+    }
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label p {
+        font-size: 11.5px !important;
+    }
+}
+
 .market-banner { background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; border-radius: 12px; padding: 12px 10px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.18); width: 100%; }
 .market-title { font-size: 11px; font-weight: bold; color: #94a3b8; margin-bottom: 8px; text-align: center; }
 .market-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; width: 100%; }
@@ -1668,7 +1736,7 @@ category_options = [
     "🌆 大引けMOC特選"
 ] + list(STOCK_POOL.keys())
 
-st.markdown("##### 📂 解析カテゴリー選択")
+st.markdown("##### 📂 解析カテゴリー選択（タップで切替）")
 selected_cat = st.radio(
     "カテゴリーを選択",
     options=category_options,
@@ -1676,7 +1744,7 @@ selected_cat = st.radio(
     horizontal=True,
     label_visibility="collapsed"
 )
-st.markdown("---")
+st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
 
 if selected_cat == "🏆 総合TOP5":
     st.caption("全プールから、本日のAIスコア・特買い確率・踏み上げ・大引けMOCが最も高い上位5銘柄を表示しています。")
