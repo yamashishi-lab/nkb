@@ -119,13 +119,11 @@ def process_url_admin_action():
                         subj = "【承認完了】翌朝株価クオンツ＆7大AI解析Pro 専用アクセスコード"
                         body = f"{db[target_email].get('name','会員')} 様\n\n利用申請が承認されました。\n\n■登録メール: {target_email}\n■専用アクセスコード: {code}\n"
                         send_auto_email(target_email, subj, body)
-                        st.success(f"✅ 【承認完了】 {target_email} を承認しました（パスコード: {code}）")
                     else:
                         db[target_email]["status"] = "rejected"
                         db[target_email]["approved_at"] = now_str
                         db[target_email]["note"] = "却下"
                         save_members_db(db)
-                        st.warning(f"❌ 【却下完了】 {target_email} の申請を却下しました。")
                 st.query_params.clear()
     except Exception:
         pass
@@ -139,11 +137,13 @@ def check_member_authentication():
     if "admin_view_mode" not in st.session_state:
         st.session_state["admin_view_mode"] = False
 
+    # ログイン中のサイドバー表示
     if st.session_state["authenticated_user"]:
         curr_user = st.session_state["authenticated_user"]
         with st.sidebar:
             st.success(f"👤 ログイン中:\n{curr_user}")
             
+            # 管理者の場合のみ会員管理画面への切り替えボタンを表示
             if curr_user == ADMIN_EMAIL.strip().lower():
                 pending_cnt = len([v for v in db.values() if v.get("status") == "pending"])
                 btn_label = "📊 解析画面に戻る" if st.session_state["admin_view_mode"] else f"👑 会員管理画面を開く ({pending_cnt}件)"
@@ -157,6 +157,7 @@ def check_member_authentication():
                 st.rerun()
         return True
 
+    # 未ログイン時の画面
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; padding: 24px; border-radius: 14px; text-align: center; margin-top: 10px; margin-bottom: 16px;">
         <h2 style="margin:0; color:#fbbf24; font-size:20px;">🔒 会員限定 クオンツ＆7大AI解析 Pro</h2>
@@ -190,7 +191,8 @@ def check_member_authentication():
                 st.error("⚠️ 専用アクセスコードが正しくありません。")
 
     st.markdown("---")
-    st.markdown("##### 📩 新規会員登録・利用許可の申請はこちら")
+    st.markdown("##### 📩 新規会員登録・利用許可の申請はこちら（メーラーは起動しません）")
+    
     with st.form("member_apply_form"):
         ap_name = st.text_input("👤 お名前（ニックネーム可）", placeholder="山田 太郎")
         ap_mail = st.text_input("📧 ご希望のメールアドレス", placeholder="your_email@example.com")
@@ -204,6 +206,7 @@ def check_member_authentication():
             else:
                 now_s = datetime.now().strftime("%Y-%m-%d %H:%M")
                 passcode = generate_member_passcode(c_mail)
+                
                 db[c_mail] = {
                     "name": ap_name.strip() or "未入力",
                     "email": c_mail,
@@ -215,7 +218,6 @@ def check_member_authentication():
                 }
                 save_members_db(db)
 
-                # 管理者へ自動メール通知
                 base_url = st.session_state.get("app_base_url", "http://localhost:8501").rstrip("/")
                 tok_ap = generate_admin_action_token(c_mail, "approve")
                 tok_rj = generate_admin_action_token(c_mail, "reject")
@@ -238,15 +240,72 @@ def check_member_authentication():
 check_member_authentication()
 
 # ==========================================
-# 📈 セッション初期化
+# 👑 管理者専用：会員一括管理コンソール
+# ==========================================
+def render_admin_management_console():
+    db = load_members_db()
+    st.markdown("### 👑 管理者専用：会員データベース一括管理コンソール")
+    st.caption("新規の利用申請の承認・却下、および全会員の管理を行えます。")
+
+    pending_list = [v for v in db.values() if v.get("status") == "pending"]
+    if pending_list:
+        st.warning(f"🔔 新規の会員登録申請が {len(pending_list)} 件届いています！")
+        for p in pending_list:
+            p_mail = p["email"]
+            p_name = p.get("name", "未入力")
+            p_code = generate_member_passcode(p_mail)
+            with st.container(border=True):
+                st.markdown(f"**📩 申請者:** {p_name} (`{p_mail}`) ／ 備考: {p.get('note','なし')}")
+                ac1, ac2 = st.columns(2)
+                with ac1:
+                    if st.button(f"✅ 承認してパスコード発行", key=f"adm_app_{p_mail}", use_container_width=True):
+                        db = load_members_db()
+                        db[p_mail]["status"] = "approved"
+                        db[p_mail]["passcode"] = p_code
+                        db[p_mail]["approved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        save_members_db(db)
+                        
+                        subj = "【承認完了】翌朝株価クオンツ＆7大AI解析Pro 専用アクセスコード"
+                        body = f"{p_name} 様\n\n会員登録が承認されました。\n\n■登録メール: {p_mail}\n■専用アクセスコード: {p_code}\n"
+                        send_auto_email(p_mail, subj, body)
+                        st.success(f"✅ {p_mail} を承認しました！（コード: {p_code}）")
+                        st.rerun()
+                with ac2:
+                    if st.button(f"❌ 却下する", key=f"adm_rej_{p_mail}", use_container_width=True):
+                        db = load_members_db()
+                        db[p_mail]["status"] = "rejected"
+                        save_members_db(db)
+                        st.warning(f"❌ {p_mail} の申請を却下しました。")
+                        st.rerun()
+    else:
+        st.info("現在、保留中の新規申請はありません。")
+
+    st.markdown("---")
+    st.markdown("#### 👥 登録済み会員一覧")
+    rows = [{"ステータス": info.get("status"), "お名前": info.get("name"), "メール": em, "パスコード": info.get("passcode"), "申請日": info.get("applied_at"), "備考": info.get("note")} for em, info in db.items()]
+    df_m = pd.DataFrame(rows)
+    st.dataframe(df_m, use_container_width=True, hide_index=True)
+
+    with st.expander("⚙️ SMTP自動メール送信設定"):
+        st.text_input("送信元メールアドレス", value=st.session_state.get("smtp_user", ADMIN_EMAIL), key="smtp_user")
+        st.text_input("SMTPアプリパスワード", type="password", key="smtp_pass")
+        st.text_input("アプリの公開URL (承認リンク用)", value=st.session_state.get("app_base_url", "http://localhost:8501"), key="app_base_url")
+
+    if st.button("📊 解析システム画面に戻る", use_container_width=True):
+        st.session_state["admin_view_mode"] = False
+        st.rerun()
+
+if st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower() and st.session_state.get("admin_view_mode", False):
+    render_admin_management_console()
+    st.stop()
+
+# ==========================================
+# 📈 セッション初期化・カスタムCSS
 # ==========================================
 for k, default_v in [("active_debates", {}), ("debate_Animated", set()), ("stock_chats", {}), ("watchlist", {})]:
     if k not in st.session_state:
         st.session_state[k] = default_v
 
-# ==========================================
-# 🎨 カスタムCSS
-# ==========================================
 st.markdown("""
 <style>
 button[data-baseweb="tab"] { font-size: 13px !important; font-weight: bold !important; padding: 8px 14px !important; }
@@ -437,7 +496,7 @@ def fetch_macro_market():
     return macro_data
 
 # ==========================================
-# 🏦 解析エンジン
+# 🏦 機関投資家クオンツ解析エンジン
 # ==========================================
 def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst=True, boost_5ch=True, boost_squeeze=True, boost_tokugai=True):
     try:
@@ -737,11 +796,6 @@ def run_7ai_council_algorithm(r, m5=None):
     half_lot = max(1, r['lot_info']['shares'] // 2)
     rem_lot = max(0, r['lot_info']['shares'] - half_lot)
 
-    code_seed = sum(ord(ch) for ch in r["code"])
-    is_squeeze_hot = r["squeeze_score"] >= 68
-    is_inst_hot = r["inst_score"] >= 68
-    is_5ch_hot = r["board5ch_score"] >= 68
-
     claude_s  = int(min(max(round(50 + (r["prob"] - 50) * 0.8 + (r["payoff"] - 1.0) * 15 - r["upper_shadow_pct"] * 0.2), 20), 99))
     grok_s    = int(min(max(round(45 + (r["board5ch_score"] - 50) * 0.45 + (r["squeeze_score"] - 50) * 0.35 + r["tokugai_prob"] * 0.15), 20), 99))
     chatgpt_s = int(min(max(round((r["ai_score"] + r["inst_score"] + claude_s) / 3.0), 20), 99))
@@ -779,7 +833,7 @@ def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
     elif "踏み上げ" in q_clean or "5ch" in q_clean:
         return f"🔥 **踏み上げ・5ch需給**：20日高値 **{r['squeeze_trigger_price']}** を突破すると強烈なスクイーズが発生します。"
     elif "利確" in q_clean or "損切" in q_clean:
-        return f"🛡️ **利確・損切**：利確目标 **{r['tp_price']}** ／ 逆指値 **{r['sl_price']}**（最大損失: 約{lot_info['risk_amount']:,.0f}円）。"
+        return f"🛡️ **利確・損切**：利確目標 **{r['tp_price']}** ／ 逆指値 **{r['sl_price']}**（最大損失: 約{lot_info['risk_amount']:,.0f}円）。"
     else:
         return f"🤖 **7大AI総合評議会**：合議スコア **{debate['final_score']}点**。推奨ロット **{lot_info['shares']:,}株**。寄付きで打診買いしVWAPで追撃する戦術が推奨されます。"
 
@@ -893,68 +947,8 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     render_interactive_council_section(r, f"{key_prefix}_{r['code']}")
 
 # ==========================================
-# 👑 管理者専用：会員一括管理コンソール
+# 🚀 メイン解析システム＆ランキング
 # ==========================================
-def render_admin_management_console():
-    db = load_members_db()
-    st.markdown("### 👑 管理者専用：会員データベース一括管理コンソール")
-    st.caption("新規の利用申請の承認・却下、および全会員の管理を行えます。")
-
-    pending_list = [v for v in db.values() if v.get("status") == "pending"]
-    if pending_list:
-        st.warning(f"🔔 新規の会員登録申請が {len(pending_list)} 件届いています！")
-        for p in pending_list:
-            p_mail = p["email"]
-            p_name = p.get("name", "未入力")
-            p_code = generate_member_passcode(p_mail)
-            with st.container(border=True):
-                st.markdown(f"**📩 申請者:** {p_name} (`{p_mail}`) ／ 備考: {p.get('note','なし')}")
-                ac1, ac2 = st.columns(2)
-                with ac1:
-                    if st.button(f"✅ 承認してパスコード発行", key=f"adm_app_{p_mail}", use_container_width=True):
-                        db = load_members_db()
-                        db[p_mail]["status"] = "approved"
-                        db[p_mail]["passcode"] = p_code
-                        db[p_mail]["approved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        save_members_db(db)
-                        
-                        subj = "【承認完了】翌朝株価クオンツ＆7大AI解析Pro 専用アクセスコード"
-                        body = f"{p_name} 様\n\n会員登録が承認されました。\n\n■登録メール: {p_mail}\n■専用アクセスコード: {p_code}\n"
-                        send_auto_email(p_mail, subj, body)
-                        st.success(f"✅ {p_mail} を承認しました！（コード: {p_code}）")
-                        st.rerun()
-                with ac2:
-                    if st.button(f"❌ 却下する", key=f"adm_rej_{p_mail}", use_container_width=True):
-                        db = load_members_db()
-                        db[p_mail]["status"] = "rejected"
-                        save_members_db(db)
-                        st.warning(f"❌ {p_mail} の申請を却下しました。")
-                        st.rerun()
-    else:
-        st.info("現在、保留中の新規申請はありません。")
-
-    st.markdown("---")
-    st.markdown("#### 👥 登録済み会員一覧")
-    rows = [{"ステータス": info.get("status"), "お名前": info.get("name"), "メール": em, "パスコード": info.get("passcode"), "申請日": info.get("applied_at"), "備考": info.get("note")} for em, info in db.items()]
-    df_m = pd.DataFrame(rows)
-    st.dataframe(df_m, use_container_width=True, hide_index=True)
-
-    with st.expander("⚙️ SMTP自動メール送信設定"):
-        st.text_input("送信元メールアドレス", value=st.session_state.get("smtp_user", ADMIN_EMAIL), key="smtp_user")
-        st.text_input("SMTPアプリパスワード", type="password", key="smtp_pass")
-        st.text_input("アプリの公開URL (承認リンク用)", value=st.session_state.get("app_base_url", "http://localhost:8501"), key="app_base_url")
-
-    if st.button("📊 解析システム画面に戻る", use_container_width=True):
-        st.session_state["admin_view_mode"] = False
-        st.rerun()
-
-# ==========================================
-# 🚀 メイン実行フロー
-# ==========================================
-if st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower() and st.session_state.get("admin_view_mode", False):
-    render_admin_management_console()
-    st.stop()
-
 if st.button("🔄 最新データに更新（再集計）"):
     st.cache_data.clear()
 
