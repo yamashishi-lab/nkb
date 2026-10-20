@@ -22,7 +22,7 @@ SECRET_MASTER_KEY = "my_super_secret_quant_key_2026"  # ←好きな英数字に
 
 ALLOWED_MEMBERS = [
     ADMIN_EMAIL,                # 管理者（あなた自身）
-    "yamashita007722@gmail.com",# 許可した会員1
+    "",# 許可した会員1
     "",                         # 許可した会員2
 ]
 
