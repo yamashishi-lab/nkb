@@ -11,6 +11,9 @@ import time
 # スマホ画面向けにページ設定
 st.set_page_config(page_title="翌朝株価 クオンツ＆7大AI解析 Pro (会員限定版)", page_icon="📈", layout="centered")
 
+# Fragmentデコレータの互換性確保（Streamlit 1.37+ 対応）
+fragment_decorator = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
+
 # ==========================================
 # 🔒 会員制ログイン＆メール許可ゲート機能
 # ==========================================
@@ -112,9 +115,10 @@ if "order_checks" not in st.session_state:
 if "selected_category" not in st.session_state:
     st.session_state["selected_category"] = "🏆 総合TOP5"
 
-# カスタムCSS
+# カスタムCSS（ボタンを押した際の画面ジャンプ防止 overflow-anchor 設定も追加）
 st.markdown("""
 <style>
+html, body, [data-testid="stAppViewContainer"] { overflow-anchor: none !important; }
 .market-banner { background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; border-radius: 12px; padding: 12px 10px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.18); width: 100%; }
 .market-title { font-size: 11px; font-weight: bold; color: #94a3b8; margin-bottom: 8px; text-align: center; }
 .market-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; width: 100%; }
@@ -159,8 +163,8 @@ st.markdown("""
 .consensus-banner { background: linear-gradient(135deg, #1e1b4b, #312e81); border: 2px solid #818cf8; border-radius: 10px; padding: 16px; margin-top: 14px; font-size: 13px; line-height: 1.75; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 .consensus-section { background: rgba(255, 255, 255, 0.06); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 10px 12px; margin-top: 8px; font-size: 12.5px; color: #f8fafc; }
 .easy-guide-box { background: rgba(16, 185, 129, 0.14); border: 1px solid #34d399; border-radius: 8px; padding: 14px; margin-top: 12px; color: #ecfdf5; font-size: 12.5px; line-height: 1.75; }
-.qa-bubble-user { background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe; border-radius: 10px 10px 2px 10px; padding: 8px 12px; margin-top: 8px; font-size: 12px; font-weight: bold; }
-.qa-bubble-ai { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; border-left: 4px solid #4f46e5; border-radius: 2px 10px 10px 10px; padding: 10px 12px; margin-top: 4px; margin-bottom: 10px; font-size: 12.5px; line-height: 1.65; }
+.qa-bubble-user { background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe; border-radius: 10px 10px 2px 10px; padding: 8px 12px; margin-top: 6px; font-size: 12px; font-weight: bold; }
+.qa-bubble-ai { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; border-left: 4px solid #4f46e5; border-radius: 2px 10px 10px 10px; padding: 10px 12px; margin-top: 4px; margin-bottom: 8px; font-size: 12.5px; line-height: 1.65; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -520,7 +524,7 @@ def render_5m_candlestick_chart(m5, show_trigger=True):
 
     st.altair_chart(alt.vconcat(price_chart, vol_chart, spacing=4).resolve_scale(x="shared"), use_container_width=True)
 
-# --- 🧠 7大AI合議エンジン（会議のまとめ・最終コンセンサスを超詳細化！） ---
+# --- 🧠 7大AI合議エンジン ---
 def run_7ai_council_algorithm(r, m5=None):
     prob = r["prob"]
     payoff = r["payoff"]
@@ -536,7 +540,6 @@ def run_7ai_council_algorithm(r, m5=None):
     macd_up = "強気" in r["macd_state"]
 
     s5 = m5["score_5m"] if m5 else 55
-    vwap5_dev = m5["vwap5_dev"] if m5 else 0.0
     moc_score = m5["moc_score"] if m5 else r["closing_power_score"]
     close_vol_r = m5["close_vol_ratio"] if m5 else 1.0
     vwap_ref = m5['vwap5_price'] if m5 else r['vwap_price']
@@ -544,7 +547,7 @@ def run_7ai_council_algorithm(r, m5=None):
     half_lot = max(1, r['lot_info']['shares'] // 2)
     rem_lot = max(0, r['lot_info']['shares'] - half_lot)
 
-    # 1. Claude (リスク管理・資金配分担当)
+    # 1. Claude
     claude_raw = 50 + (prob - 50) * 0.85 + (payoff - 1.0) * 16 - max(0, atr_pct - 3.5) * 4 + (moc_score - 50) * 0.15 + (sq_score - 50) * 0.12
     if rsi > 78 and sq_score < 70: claude_raw -= 12
     elif rsi < 35: claude_raw += 8
@@ -571,7 +574,7 @@ def run_7ai_council_algorithm(r, m5=None):
             f"・株価の乱高下幅（{atr_pct}%）に対して、見込める利益の期待値（{edge:+.2f}%）が小さく、割に合いません。より条件の良い上位銘柄に資金を回すことを強く推奨します。"
         )
 
-    # 2. Grok (特買い気配＆空売り踏み上げ担当)
+    # 2. Grok
     grok_raw = 45 + (vol_ratio - 1.0) * 16 + (10 if macd_up else -6) + ((moc_score - 50) * 0.18) + ((s5 - 50) * 0.18) + ((sq_score - 50) * 0.25) + (tokugai_prob * 0.15)
     grok_score = int(min(max(round(grok_raw), 15), 99))
 
@@ -596,7 +599,7 @@ def run_7ai_council_algorithm(r, m5=None):
             f"・出来高倍率（{vol_ratio}倍）や夜間連動（{pts_gap:+.2f}%）が穏やかなため、特買いやショートスクイーズ（踏み上げ）を狙うには力不足です。"
         )
 
-    # 3. GPT (ファンダ・テクニカル・夜間連動の総合バランサー)
+    # 3. GPT
     gpt_raw = (r["ai_score"] * 0.38) + (claude_score * 0.2) + (grok_score * 0.2) + (s5 * 0.12) + (sq_score * 0.1) + (macro_score * 1.2)
     gpt_score = int(min(max(round(gpt_raw), 15), 99))
 
@@ -620,7 +623,7 @@ def run_7ai_council_algorithm(r, m5=None):
             f"・複数の指標を総合すると、上がるか下がるかが五分五分の状態です。明確な出来高増加が出るまで待ちましょう。"
         )
 
-    # 4. Gemini (米国株・為替・セクター資金の流れ担当)
+    # 4. Gemini
     gemini_raw = 48 + (prob - 50) * 0.5 + (edge * 16) + (macro_score * 2.0) + ((moc_score - 50) * 0.2) + ((sq_score - 50) * 0.2)
     if vol_ratio >= 1.15 and macd_up: gemini_raw += 8
     gemini_score = int(min(max(round(gemini_raw), 15), 99))
@@ -645,7 +648,7 @@ def run_7ai_council_algorithm(r, m5=None):
             f"・『{r['genre']}』セクター全体への追い風がやや弱まっているため、本日は深追い禁物です。"
         )
 
-    # 5. Perplexity (出来高の裏付け・騙し上げチェック担当)
+    # 5. Perplexity
     perp_raw = 50 + (macro_score * 2.5) + ((moc_score - 50) * 0.25) + ((s5 - 50) * 0.2) + ((sq_score - 50) * 0.2)
     if vol_ratio >= 1.3: perp_raw += 10
     elif vol_ratio < 0.85 and r["diff"] > 1.5: perp_raw -= 12
@@ -671,7 +674,7 @@ def run_7ai_council_algorithm(r, m5=None):
             f"・出来高の裏付け（{vol_ratio}倍）がやや薄いため、高く始まったところに飛びつくと危険です。"
         )
 
-    # 6. Genspark (具体的な買い方・戦術まとめ担当)
+    # 6. Genspark
     genspark_raw = (claude_score + grok_score + gpt_score + gemini_score + perplexity_score) / 5.0 + (6 if (sq_score >= 68 and moc_score >= 65) else 0)
     genspark_score = int(min(max(round(genspark_raw), 15), 99))
 
@@ -695,7 +698,7 @@ def run_7ai_council_algorithm(r, m5=None):
             f"・勝率とリスクリワードのバランスが基準に達していません。キャッシュ（現金）を残して次のチャンスを待つのがプロの判断です。"
         )
 
-    # 7. NotebookLM (過去1年間のデータ照合・実績担当)
+    # 7. NotebookLM
     nblm_raw = 48 + (prob - 50) * 0.9 + (payoff - 1.0) * 14 + (10 if (sq_score >= 65 and moc_score >= 60) else -4)
     notebooklm_score = int(min(max(round(nblm_raw), 15), 99))
 
@@ -724,7 +727,6 @@ def run_7ai_council_algorithm(r, m5=None):
     cautious_count = sum(1 for s in scores_list if 50 <= s < 65)
     bearish_count = sum(1 for s in scores_list if s < 50)
 
-    # ★「7大AI最終コンセンサス（会議のまとめ）」を超・詳細化！
     if final_score >= 74:
         rank_title = f"👑 【7大AI満場一致：Sランク大本命（合議スコア {final_score}点 / 強気賛成 {bullish_count}名）】"
         summary_intro = (
@@ -794,7 +796,7 @@ def run_7ai_council_algorithm(r, m5=None):
         "final_score": final_score, "verdict_html": verdict_html, "easy_guide": easy_guide
     }
 
-# --- 7大AIに対する個別質問への自動回答エンジン（さらに詳しく回答） ---
+# --- 7大AIに対する個別質問への自動回答エンジン ---
 def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
     q_lower = question.lower()
     m5_vwap = m5["vwap5_price"] if m5 else r["vwap_price"]
@@ -835,7 +837,7 @@ def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
             f"　③ 利確指値を <b>{r['tp_price']}（+{r['tp_pct']}%）</b>、逆指値（損切り）を <b>{r['sl_price']}（{r['sl_pct']}%）</b> に置いてトレードしてください。"
         )
 
-# --- コールバック関数（タブや会議画面が絶対に閉じないように制御） ---
+# --- コールバック関数 ---
 def cb_toggle_debate(unique_key):
     is_open = st.session_state["active_debates"].get(unique_key, False)
     st.session_state["active_debates"][unique_key] = not is_open
@@ -1227,84 +1229,9 @@ def fetch_and_analyze(code, name=None, theme=None, genre="個別検索", macro=N
     except Exception:
         return None
 
-def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
-    diff_color = "#dc2626" if r["diff"] > 0 else "#2563eb"
-    diff_sign = "+" if r["diff"] > 0 else ""
-    gap_sign = "+" if r["gap"] > 0 else ""
-    pts_sign = "+" if r["pts_gap_pct"] > 0 else ""
-    sigma_sign = "+" if r["bb_sigma"] > 0 else ""
-    edge_sign = "+" if r["edge"] > 0 else ""
-    h20_sign = "+" if r["dist_to_high20"] > 0 else ""
-
-    card_class = "search-result-card" if is_custom else ("rank-card" if rank is not None else "stock-card")
-    rank_html = f'<span class="rank-badge">第{rank}位</span>' if rank is not None else ""
-    genre_html = f'<span class="genre-badge">{r["genre"]}</span>' if rank is not None else ""
-
-    m_score = r["macro_score"]
-    macro_badge_html = f'<span class="macro-badge">🌐 地合い {m_score:+d}点</span>'
-    edge_badge_html = f'<span class="edge-badge">📐 損益比 {r["payoff"]}倍 (期待値{edge_sign}{r["edge"]}%)</span>'
-    moc_badge_html = f'<span class="moc-badge">🌆 大引けMOC: {r["closing_power_score"]}点</span>'
-    sq_badge_html = f'<span class="squeeze-badge">🔥 踏み上げ: {r["squeeze_score"]}点</span>'
-    tokugai_badge_html = f'<span class="tokugai-badge">🚨 特買い確率: {r["tokugai_prob"]}%</span>'
-
-    lot = r["lot_info"]
-
-    html_card = (
-        f'<div class="{card_class}">'
-        f'<div>{rank_html}<span class="score-badge">🤖 AIスコア: {r["ai_score"]} / 100</span>{tokugai_badge_html}{sq_badge_html}{moc_badge_html}{macro_badge_html}{edge_badge_html}</div>'
-        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">'
-        f'<div><span style="font-size:16px; font-weight:bold; color:#1e293b;">{r["name"]}</span> '
-        f'<span style="font-size:12px; color:#64748b;">({r["code"]})</span>{genre_html}<br>'
-        f'<span style="font-size:14px; color:#334155;">終値: <b>{r["price"]}</b> '
-        f'(<span style="color:{diff_color}; font-weight:bold;">{diff_sign}{r["diff"]}%</span>)</span></div>'
-        f'<div style="text-align:right;"><span style="font-size:11px; color:#64748b;">翌朝上昇確率</span><br>'
-        f'<span class="prob-badge">{r["prob"]}%</span>'
-        f'<div style="font-size:11px; color:#64748b;">({r["count"]} / 平均{gap_sign}{r["gap"]}%)</div></div>'
-        f'</div>'
-        f'<div class="signal-tag">{r["signal"]}</div>'
-        f'<div class="pts-tokugai-box">'
-        f'<b>🌙 {r["tokugai_status"]}</b> ｜ 夜間PTS/先物理論気配: <b>{r["pts_est_price"]}</b> ({pts_sign}{r["pts_gap_pct"]}%)<br>'
-        f'🚨 <b>特買い（気配切り上げ）発動目安ライン: {r["tokugai_line"]}</b> (+{r["tokugai_pct_threshold"]}%超) ｜ 過去最大GU: <b>+{r["max_win_gap"]}%</b>'
-        f'</div>'
-        f'<div class="squeeze-box">'
-        f'<b>{r["squeeze_type"]}</b> ｜ 踏み上げトリガー(20日高値): <b>{r["squeeze_trigger_price"]}</b> ({h20_sign}{r["dist_to_high20"]}%)<br>'
-        f'<b>{r["closing_status"]}</b><br>'
-        f'<span style="font-size:11px; color:#9f1239;">└ {r["squeeze_detail"]}</span>'
-        f'</div>'
-        f'<div class="metrics-row">'
-        f"<span>📊 <b>RSI:</b> {r['rsi']}</span>"
-        f"<span>📈 <b>MACD:</b> {r['macd_state']}</span>"
-        f"<span>🔊 <b>出来高:</b> {r['vol_ratio']}倍</span>"
-        f"<span>📏 <b>BB:</b> {sigma_sign}{r['bb_sigma']}σ</span>"
-        f"<span>⚡ <b>ATR:</b> {r['atr_pct']}%</span>"
-        f'</div>'
-        f'<div class="trade-plan-box">'
-        f'<div class="trade-plan-item">'
-        f'<div style="font-size:10px; color:#64748b;">🌅 夜間理論寄付き</div>'
-        f'<div style="font-size:12px; font-weight:bold; color:#0f172a; margin-top:2px;">{r["pts_est_price"]}</div>'
-        f'</div>'
-        f'<div class="trade-plan-item" style="border-left:1px solid #e2e8f0; border-right:1px solid #e2e8f0;">'
-        f'<div style="font-size:10px; color:#15803d; font-weight:bold;">🎯 利確目標</div>'
-        f'<div style="font-size:12px; font-weight:bold; color:#15803d; margin-top:2px;">{r["tp_price"]}</div>'
-        f'</div>'
-        f'<div class="trade-plan-item">'
-        f'<div style="font-size:10px; color:#b91c1c; font-weight:bold;">🛡️ 損切り目安</div>'
-        f'<div style="font-size:12px; font-weight:bold; color:#b91c1c; margin-top:2px;">{r["sl_price"]}</div>'
-        f'</div>'
-        f'</div>'
-        f'<div class="sizing-box">'
-        f'📦 <b>【7大AI最適ロットサイジング】</b> 推奨購入数: <b>{lot["shares"]:,} 株</b> '
-        f'(投資額: <b>{lot["position_value"]:,.0f}円</b> / 資金比率: <b>{lot["capital_ratio"]}%</b>)<br>'
-        f'<span style="font-size:11px; color:#15803d;">※損切り到達時の最大損失額を総資金の {risk_tolerance_pct}%（{lot["risk_amount"]:,.0f}円）に自動抑制します。</span>'
-        f'</div>'
-        f'<div class="factor-box">'
-        f'<div style="margin-bottom:4px;"><b>【テーマ】</b> {r["theme"]}</div>'
-        f'<div><b>【需給判定】</b> {r["reasons"]}</div>'
-        f'</div></div>'
-    )
-    st.markdown(html_card, unsafe_allow_html=True)
-
-    unique_key = f"{key_prefix}_{r['code']}"
+# --- ★ 会議パネル＆ワンタップ質問ブロックを @st.fragment 化して画面移動を完全防止！ ---
+@fragment_decorator
+def render_interactive_council_section(r, unique_key):
     is_open = st.session_state["active_debates"].get(unique_key, False)
     in_wl = r["code"] in st.session_state["watchlist"]
 
@@ -1328,12 +1255,10 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
             use_container_width=True
         )
 
-    # --- 🧠 10秒間のリアルタイム会議演出 ＆ 詳細レポート表示 ---
     if st.session_state["active_debates"].get(unique_key, False):
         m5 = fetch_5m_intraday_algo(r["full_code"], trigger_high20=r["raw_high20"])
         debate = run_7ai_council_algorithm(r, m5)
 
-        # 初回オープン時のみ10秒間の会議中アニメーションを実行（質問時はスキップして即表示）
         if unique_key not in st.session_state["debate_Animated"]:
             with st.status(f"🧠 【会議中】7大AIが「{r['name']}」を徹底議論しています...（約10秒）", expanded=True) as status:
                 prog_bar = st.progress(0, text="会議を開始しています...")
@@ -1431,8 +1356,8 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         if unique_key not in st.session_state["stock_chats"]:
             st.session_state["stock_chats"][unique_key] = []
 
-        # --- 💬 質問コーナー（コールバック化により、押しても絶対にタブや会議画面が閉じない！） ---
-        st.markdown("**💬 7大AI評議会にさらに質問する（ボタンを押すとすぐ下に回答が表示されます）**")
+        # --- 💬 ワンタップ質問コーナー（@st.fragment により画面スクロールが一切動かない！） ---
+        st.markdown("**💬 7大AI評議会にワンタップでさらに質問する（押すとその場ですぐ回答が出ます）**")
         q_col1, q_col2 = st.columns(2)
         with q_col1:
             st.button(
@@ -1483,10 +1408,10 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
                 use_container_width=True
             )
 
-        # 質問と回答の表示エリア
+        # 最新の回答を一番上（ボタンのすぐ真下）に表示して視線移動をゼロに！
         chat_history = st.session_state["stock_chats"].get(unique_key, [])
         if chat_history:
-            for item in chat_history:
+            for item in reversed(chat_history):
                 st.markdown(f'<div class="qa-bubble-user">🙋 あなた: {item["q"]}</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="qa-bubble-ai">{item["a"]}</div>', unsafe_allow_html=True)
             st.button(
@@ -1497,7 +1422,88 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
             )
         st.markdown("---")
 
+def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
+    diff_color = "#dc2626" if r["diff"] > 0 else "#2563eb"
+    diff_sign = "+" if r["diff"] > 0 else ""
+    gap_sign = "+" if r["gap"] > 0 else ""
+    pts_sign = "+" if r["pts_gap_pct"] > 0 else ""
+    sigma_sign = "+" if r["bb_sigma"] > 0 else ""
+    edge_sign = "+" if r["edge"] > 0 else ""
+    h20_sign = "+" if r["dist_to_high20"] > 0 else ""
+
+    card_class = "search-result-card" if is_custom else ("rank-card" if rank is not None else "stock-card")
+    rank_html = f'<span class="rank-badge">第{rank}位</span>' if rank is not None else ""
+    genre_html = f'<span class="genre-badge">{r["genre"]}</span>' if rank is not None else ""
+
+    m_score = r["macro_score"]
+    macro_badge_html = f'<span class="macro-badge">🌐 地合い {m_score:+d}点</span>'
+    edge_badge_html = f'<span class="edge-badge">📐 損益比 {r["payoff"]}倍 (期待値{edge_sign}{r["edge"]}%)</span>'
+    moc_badge_html = f'<span class="moc-badge">🌆 大引けMOC: {r["closing_power_score"]}点</span>'
+    sq_badge_html = f'<span class="squeeze-badge">🔥 踏み上げ: {r["squeeze_score"]}点</span>'
+    tokugai_badge_html = f'<span class="tokugai-badge">🚨 特買い確率: {r["tokugai_prob"]}%</span>'
+
+    lot = r["lot_info"]
+
+    html_card = (
+        f'<div class="{card_class}">'
+        f'<div>{rank_html}<span class="score-badge">🤖 AIスコア: {r["ai_score"]} / 100</span>{tokugai_badge_html}{sq_badge_html}{moc_badge_html}{macro_badge_html}{edge_badge_html}</div>'
+        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">'
+        f'<div><span style="font-size:16px; font-weight:bold; color:#1e293b;">{r["name"]}</span> '
+        f'<span style="font-size:12px; color:#64748b;">({r["code"]})</span>{genre_html}<br>'
+        f'<span style="font-size:14px; color:#334155;">終値: <b>{r["price"]}</b> '
+        f'(<span style="color:{diff_color}; font-weight:bold;">{diff_sign}{r["diff"]}%</span>)</span></div>'
+        f'<div style="text-align:right;"><span style="font-size:11px; color:#64748b;">翌朝上昇確率</span><br>'
+        f'<span class="prob-badge">{r["prob"]}%</span>'
+        f'<div style="font-size:11px; color:#64748b;">({r["count"]} / 平均{gap_sign}{r["gap"]}%)</div></div>'
+        f'</div>'
+        f'<div class="signal-tag">{r["signal"]}</div>'
+        f'<div class="pts-tokugai-box">'
+        f'<b>🌙 {r["tokugai_status"]}</b> ｜ 夜間PTS/先物理論気配: <b>{r["pts_est_price"]}</b> ({pts_sign}{r["pts_gap_pct"]}%)<br>'
+        f'🚨 <b>特買い（気配切り上げ）発動目安ライン: {r["tokugai_line"]}</b> (+{r["tokugai_pct_threshold"]}%超) ｜ 過去最大GU: <b>+{r["max_win_gap"]}%</b>'
+        f'</div>'
+        f'<div class="squeeze-box">'
+        f'<b>{r["squeeze_type"]}</b> ｜ 踏み上げトリガー(20日高値): <b>{r["squeeze_trigger_price"]}</b> ({h20_sign}{r["dist_to_high20"]}%)<br>'
+        f'<b>{r["closing_status"]}</b><br>'
+        f'<span style="font-size:11px; color:#9f1239;">└ {r["squeeze_detail"]}</span>'
+        f'</div>'
+        f'<div class="metrics-row">'
+        f"<span>📊 <b>RSI:</b> {r['rsi']}</span>"
+        f"<span>📈 <b>MACD:</b> {r['macd_state']}</span>"
+        f"<span>🔊 <b>出来高:</b> {r['vol_ratio']}倍</span>"
+        f"<span>📏 <b>BB:</b> {sigma_sign}{r['bb_sigma']}σ</span>"
+        f"<span>⚡ <b>ATR:</b> {r['atr_pct']}%</span>"
+        f'</div>'
+        f'<div class="trade-plan-box">'
+        f'<div class="trade-plan-item">'
+        f'<div style="font-size:10px; color:#64748b;">🌅 夜間理論寄付き</div>'
+        f'<div style="font-size:12px; font-weight:bold; color:#0f172a; margin-top:2px;">{r["pts_est_price"]}</div>'
+        f'</div>'
+        f'<div class="trade-plan-item" style="border-left:1px solid #e2e8f0; border-right:1px solid #e2e8f0;">'
+        f'<div style="font-size:10px; color:#15803d; font-weight:bold;">🎯 利確目標</div>'
+        f'<div style="font-size:12px; font-weight:bold; color:#15803d; margin-top:2px;">{r["tp_price"]}</div>'
+        f'</div>'
+        f'<div class="trade-plan-item">'
+        f'<div style="font-size:10px; color:#b91c1c; font-weight:bold;">🛡️ 損切り目安</div>'
+        f'<div style="font-size:12px; font-weight:bold; color:#b91c1c; margin-top:2px;">{r["sl_price"]}</div>'
+        f'</div>'
+        f'</div>'
+        f'<div class="sizing-box">'
+        f'📦 <b>【7大AI最適ロットサイジング】</b> 推奨購入数: <b>{lot["shares"]:,} 株</b> '
+        f'(投資額: <b>{lot["position_value"]:,.0f}円</b> / 資金比率: <b>{lot["capital_ratio"]}%</b>)<br>'
+        f'<span style="font-size:11px; color:#15803d;">※損切り到達時の最大損失額を総資金の {risk_tolerance_pct}%（{lot["risk_amount"]:,.0f}円）に自動抑制します。</span>'
+        f'</div>'
+        f'<div class="factor-box">'
+        f'<div style="margin-bottom:4px;"><b>【テーマ】</b> {r["theme"]}</div>'
+        f'<div><b>【需給判定】</b> {r["reasons"]}</div>'
+        f'</div></div>'
+    )
+    st.markdown(html_card, unsafe_allow_html=True)
+
+    unique_key = f"{key_prefix}_{r['code']}"
+    render_interactive_council_section(r, unique_key)
+
 # --- 📋 監視ウォッチリスト ＆ 翌朝8:50実戦発注チェックシート ---
+@fragment_decorator
 def render_watchlist_order_sheet(all_results):
     wl = st.session_state["watchlist"]
 
@@ -1654,7 +1660,6 @@ with st.spinner("全候補銘柄の特買い確率・踏み上げ・大引けMOC
                 if clean_c in st.session_state["watchlist"]:
                     st.session_state["watchlist"][clean_c] = res
 
-# --- 🧭 タブの代わりにセッション固定型のカテゴリー選択バーを採用（ボタンを押しても絶対にタブが飛ばない！） ---
 category_options = [
     "🏆 総合TOP5",
     "📋 監視＆注文シート",
