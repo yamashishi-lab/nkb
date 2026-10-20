@@ -93,7 +93,6 @@ def send_auto_email(to_email: str, subject: str, body: str) -> tuple:
         return False, str(e)
 
 def process_url_admin_action():
-    """メール内のワンクリック承認/却下リンク（URLパラメータ）を自動処理"""
     q_params = st.query_params
     action = q_params.get("admin_action", "")
     target_email = q_params.get("email", "").strip().lower()
@@ -150,23 +149,25 @@ def process_url_admin_action():
 
 process_url_admin_action()
 
-def render_admin_member_manager():
-    """管理者専用の会員一括管理コンソール"""
+def render_admin_sidebar_management():
+    """管理者専用のサイドバー管理コンソール"""
     db = load_members_db()
-    pending_list = [v for v in db.values() if v.get("status") == "pending"]
+    pending_list = [v for v in db.values() if v.get("status"] == "pending"]
 
-    with st.sidebar:
-        st.markdown("---")
-        st.subheader(f"👑 管理者メニュー (承認待:{len(pending_list)}件)")
+    st.sidebar.markdown("---")
+    st.sidebar.subheader(f"👑 管理者一括管理メニュー (承認待:{len(pending_list)}件)")
 
+    admin_action_mode = st.sidebar.radio("管理機能選択", ["⏳ 申請承認待ち一覧", "👥 全会員データベース管理"], key="admin_sidebar_mode")
+
+    if admin_action_mode == "⏳ 申請承認待ち一覧":
         if pending_list:
-            st.warning(f"🔔 新規の会員登録申請が {len(pending_list)} 件届いています！")
+            st.sidebar.warning(f"🔔 新規の会員登録申請が {len(pending_list)} 件届いています！")
             for p in pending_list:
                 p_mail = p["email"]
                 p_name = p.get("name", "未入力")
                 p_code = generate_member_passcode(p_mail)
-                st.markdown(f"**📩 {p_name}** (`{p_mail}`)")
-                c_ap, c_rj = st.columns(2)
+                st.sidebar.markdown(f"**📩 {p_name}** (`{p_mail}`)")
+                c_ap, c_rj = st.sidebar.columns(2)
                 with c_ap:
                     if st.button("✅ 承認", key=f"side_ap_{p_mail}", use_container_width=True):
                         db[p_mail]["status"] = "approved"
@@ -186,22 +187,28 @@ def render_admin_member_manager():
                         db[p_mail]["status"] = "rejected"
                         save_members_db(db)
                         st.rerun()
+        else:
+            st.sidebar.info("現在、承認待ちの申請はありません。")
 
         if "last_approved_mailto" in st.session_state:
             la = st.session_state["last_approved_mailto"]
             if la["auto_sent"]:
-                st.success(f"📨 {la['email']} へパスコード（{la['code']}）を自動送信しました！")
+                st.sidebar.success(f"📨 {la['email']} へパスコードを自動送信しました！")
             else:
-                st.success(f"✅ {la['email']} を承認しました！（コード: `{la['code']}`）")
-                st.markdown(f'<a href="{la["url"]}" style="display:block;text-align:center;background:#16a34a;color:#fff;padding:8px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:12px;">✉️ 相手にパスコード通知メールを送る</a>', unsafe_allow_html=True)
+                st.sidebar.success(f"✅ {la['email']} を承認しました！（コード: `{la['code']}`）")
+                st.sidebar.markdown(f'<a href="{la["url"]}" style="display:block;text-align:center;background:#16a34a;color:#fff;padding:6px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:12px;">✉️ 相手にメールを送る</a>', unsafe_allow_html=True)
 
-        with st.expander("⚙️ 自動メール送信(SMTP)＆URL設定"):
-            st.caption("設定すると、承認ボタンを押した瞬間に相手へパスコードが全自動メール送信されます。")
-            st.text_input("アプリの公開URL (メール内承認リンク用)", value=st.session_state.get("app_base_url", "http://localhost:8501"), key="app_base_url")
-            st.text_input("送信元メールアドレス (Yahoo/Gmail等)", value=st.session_state.get("smtp_user", ADMIN_EMAIL), key="smtp_user")
-            st.text_input("SMTPアプリパスワード", type="password", key="smtp_pass", help="YahooメールやGmailのアプリパスワードを入力")
-            st.text_input("SMTPサーバー", value=st.session_state.get("smtp_server", "smtp.mail.yahoo.co.jp"), key="smtp_server")
-            st.number_input("SMTPポート (SSL=465 / TLS=587)", value=int(st.session_state.get("smtp_port", 465)), key="smtp_port")
+    else:
+        st.sidebar.markdown("##### 👥 全会員リスト")
+        rows = [{"ステータス": info.get("status"), "名前": info.get("name"), "メール": em, "コード": info.get("passcode")} for em, info in db.items()]
+        st.sidebar.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    with st.sidebar.expander("⚙️ 自動メール送信(SMTP)＆URL設定"):
+        st.text_input("アプリ公開URL", value=st.session_state.get("app_base_url", "http://localhost:8501"), key="app_base_url")
+        st.text_input("送信元メールアドレス", value=st.session_state.get("smtp_user", ADMIN_EMAIL), key="smtp_user")
+        st.text_input("SMTPアプリパスワード", type="password", key="smtp_pass")
+        st.text_input("SMTPサーバー", value=st.session_state.get("smtp_server", "smtp.mail.yahoo.co.jp"), key="smtp_server")
+        st.number_input("SMTPポート", value=int(st.session_state.get("smtp_port", 465)), key="smtp_port")
 
 def check_member_authentication():
     db = load_members_db()
@@ -216,7 +223,7 @@ def check_member_authentication():
                 st.session_state["authenticated_user"] = None
                 st.rerun()
         if curr_user == ADMIN_EMAIL.strip().lower():
-            render_admin_member_manager()
+            render_admin_sidebar_management()
         return True
 
     st.markdown("""
@@ -237,7 +244,7 @@ def check_member_authentication():
             clean_mail = input_email.strip().lower()
             expected_code = generate_member_passcode(clean_mail)
             user_rec = db.get(clean_mail)
-            is_approved = (user_rec and user_rec.get("status") == "approved") or (clean_mail == ADMIN_EMAIL.strip().lower())
+            is_approved = (user_rec and user_rec.get("status"] == "approved") or (clean_mail == ADMIN_EMAIL.strip().lower())
             is_valid_code = hmac.compare_digest(input_code.strip().upper(), expected_code) or (
                 clean_mail == ADMIN_EMAIL.strip().lower() and input_code.strip() == "ADMIN777"
             )
@@ -307,9 +314,9 @@ def check_member_authentication():
 check_member_authentication()
 
 # ==========================================
-# 📈 セッション初期化
+# 📈 セッション初期化 ＆ ブラウザバック対策
 # ==========================================
-for k, default_v in [("active_debates", {}), ("debate_Animated", set()), ("stock_chats", {}), ("watchlist", {})]:
+for k, default_v in [("active_debates", {}), ("debate_Animated", set()), ("stock_chats", {}), ("watchlist", {}), ("navigation_page", "TOP")]:
     if k not in st.session_state:
         st.session_state[k] = default_v
 
@@ -330,6 +337,7 @@ button[data-baseweb="tab"] { font-size: 13px !important; font-weight: bold !impo
 .squeeze-badge { display: inline-block; background: linear-gradient(135deg, #b91c1c, #ef4444); color: #ffffff !important; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
 .tokugai-badge { display: inline-block; background: linear-gradient(135deg, #d97706, #f59e0b); color: #ffffff !important; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
 .survival-badge { display: inline-block; background: #f3e8ff; color: #6b21a8 !important; border: 1px solid #d8b4fe; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; margin-left: 4px; }
+.signal-10tier-badge { display: inline-block; padding: 4px 12px; border-radius: 8px; font-size: 13px; font-weight: bold; margin-bottom: 6px; }
 .inst-box { background: #eff6ff !important; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #1e3a8a !important; }
 .inst-box * { color: #1e3a8a !important; }
 .squeeze-box { background: #fff1f2 !important; border: 1px solid #fecdd3; border-left: 4px solid #e11d48; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #881337 !important; }
@@ -352,6 +360,14 @@ button[data-baseweb="tab"] { font-size: 13px !important; font-weight: bold !impo
 """, unsafe_allow_html=True)
 
 # --- サイドバー設定 ---
+st.sidebar.header("🧭 アプリ内ナビゲーション")
+nav_choice = st.sidebar.radio("移動先を選択", ["🏠 TOP画面（ランキング）", "📋 監視ウォッチリスト"], key="nav_radio")
+if nav_choice == "🏠 TOP画面（ランキング）":
+    st.session_state["navigation_page"] = "TOP"
+else:
+    st.session_state["navigation_page"] = "WATCHLIST"
+
+st.sidebar.markdown("---")
 st.sidebar.header("💰 資金管理＆リスク設定")
 total_capital = st.sidebar.number_input("総投資資金 (円 / ドル)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
 risk_tolerance_pct = st.sidebar.slider("1トレード許容リスク (%)", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
@@ -365,17 +381,11 @@ squeeze_boost_mode = st.sidebar.checkbox("💥 空売り踏み上げ（20日高�
 tokugai_boost_mode = st.sidebar.checkbox("🚨 翌朝『特買い』・夜間PTS連動を優先", value=True)
 show_5m_chart = st.sidebar.checkbox("合議パネル内に5分足＆VWAPチャートを描画", value=True)
 
-st.sidebar.markdown("---")
-st.sidebar.header(f"📋 監視ウォッチリスト ({len(st.session_state['watchlist'])}銘柄)")
-if st.session_state["watchlist"]:
-    for w_code, w_item in list(st.session_state["watchlist"].items()):
-        st.sidebar.markdown(f"⭐ **{w_item['name']}** ({w_code}) — {w_item['lot_info']['shares']:,}株")
-    if st.sidebar.button("🗑️ ウォッチリスト全クリア", use_container_width=True):
-        st.session_state["watchlist"] = {}
-        st.rerun()
-
-st.title("📱 翌朝株価 クオンツ＆7大AI解析 Pro")
-st.caption("【機関投資家VPINクオンツ搭載】7大AI動的ロール合議 × 5ch需給 × 会員一括管理")
+st.sidebar.markdown(f"---")
+st.sidebar.header(f"📋 監視リスト数: {len(st.session_state['watchlist'])_}銘柄")
+if st.sidebar.button("🏠 TOP画面に戻る", use_container_width=True):
+    st.session_state["navigation_page"] = "TOP"
+    st.rerun()
 
 # --- 🦁 国内外の主力・テーマ母集団プール ---
 STOCK_POOL = {
@@ -440,7 +450,7 @@ STOCK_POOL = {
         {"code": "7203.T", "name": "トヨタ自動車", "theme": "全固体電池・自動運転"},
         {"code": "TSLA", "name": "テスラ (米)", "theme": "自動運転・ロボタクシー・世界最大の踏み上げ株"},
         {"code": "RKLB", "name": "ロケットラボ (米)", "theme": "小型ロケット打上げ米宇宙主力"},
-        {"code": "ASTS", "name": "ASTスペースモバイル (米)", "theme": "宇宙スマホ直接通信。ショートスクイーズ常連"},
+        {"code": "ASTS", "name": "ASTスペースモバイル (米)", "theme": "宇宙スマホ直接通信・ショートスクイーズ常連"},
         {"code": "COIN", "name": "コインベース (米)", "theme": "暗号資産連動・ハイボラティリティ銘柄"}
     ],
     "小型急騰・IPO": [
@@ -506,7 +516,7 @@ def fetch_macro_market():
     return macro_data
 
 # ==========================================
-# 🏦 機関投資家クオンツ（VPIN・Amihud・ステルス吸収）＆ 5ch需給解析エンジン
+# 🏦 機関投資家クオンツ ＆ 10段階シグナル判定エンジン
 # ==========================================
 def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst=True, boost_5ch=True, boost_squeeze=True, boost_tokugai=True):
     try:
@@ -554,11 +564,9 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         df['High_20'] = df['High'].shift(1).rolling(20).max().fillna(df['High'])
         df['Dist_High20'] = ((df['Close'] - df['High_20']) / df['High_20'] * 100).fillna(0.0)
 
-        # 機関投資家アルゴリズム①：VPIN（Order Flow Toxicity）
         df['Signed_Order_Flow'] = ((df['Close'] - df['Open']) / high_low).fillna(0.0) * df['Vol_Ratio']
         df['VPIN_5d'] = df['Signed_Order_Flow'].rolling(5).mean().fillna(0.0)
 
-        # 機関投資家アルゴリズム②：Amihud非流動性インパクト
         df['Amihud_Impact'] = (df['Day_Return'].abs() / df['Vol_Ratio'].replace(0, 1.0)).fillna(1.0)
         df['Amihud_Ratio'] = (df['Amihud_Impact'] / df['Amihud_Impact'].rolling(20).mean().replace(0, 1.0)).fillna(1.0)
 
@@ -582,7 +590,6 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         vpin_val = float(latest['VPIN_5d'])
         amihud_r = float(latest['Amihud_Ratio'])
 
-        # 1. 機関投資家クオンツスコア
         inst_raw = 50.0 + vpin_val * 45.0 + (c_pos - 0.5) * 25.0
         if float(latest['Close']) >= float(latest['VWAP20']):
             inst_raw += 10.0
@@ -599,7 +606,6 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
             inst_status = f"⚖️ 機関オーダーフロー中立 (VPIN {vpin_val:+.2f} / 弾性 {amihud_r:.2f}倍)"
         inst_score = int(min(max(round(inst_raw), 15), 99))
 
-        # 2. 5chデイトレ板・シコリ玉＆初動イナゴスコア
         board5ch_raw = 50.0 + (min(vol_acc, 3.0) - 1.0) * 18.0 + (c_pos - 0.5) * 30.0
         if upper_sh >= 0.38:
             board5ch_raw -= 25.0
@@ -614,7 +620,6 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
             board5ch_status = f"⚖️ 5ch板・通常需給 (5日出来高加速 {vol_acc:.2f}倍 / 上ヒゲ率 {int(upper_sh*100)}%)"
         board5ch_score = int(min(max(round(board5ch_raw), 15), 99))
 
-        # 3. 空売り踏み上げスコア
         sq_raw = 42.0 + (22.0 if dist_h20 >= 0 else (14.0 if dist_h20 >= -2.5 else 4.0))
         sq_raw += min(float(latest['Vol_Ratio']), 3.0) * 8.0 + (c_pos - 0.5) * 24.0
         squeeze_score = int(min(max(round(sq_raw), 15), 99))
@@ -688,6 +693,29 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
             ai_score * 0.35 + inst_score * 0.25 + board5ch_score * 0.20 + squeeze_score * 0.10 + min(float(latest['ATR_Pct']) * 3.5, 12.0), 1
         )
 
+        # 🎯 10段階シグナル評価の算出
+        tier_val = ai_score * 0.4 + prob * 0.3 + inst_score * 0.3
+        if tier_val >= 88:
+            tier_label, tier_color, tier_bg = "10. 絶対買い (最高峰)", "#ffffff", "#b91c1c"
+        elif tier_val >= 82:
+            tier_label, tier_color, tier_bg = "9. 強気買い", "#ffffff", "#dc2626"
+        elif tier_val >= 76:
+            tier_label, tier_color, tier_bg = "8. 買い推奨", "#ffffff", "#ea580c"
+        elif tier_val >= 70:
+            tier_label, tier_color, tier_bg = "7. 押し目買い候補", "#1e293b", "#fde047"
+        elif tier_val >= 64:
+            tier_label, tier_color, tier_bg = "6. 慎重買い", "#1e293b", "#facc15"
+        elif tier_val >= 58:
+            tier_label, tier_color, tier_bg = "5. 様子見 (中立)", "#f8fafc", "#64748b"
+        elif tier_val >= 52:
+            tier_label, tier_color, tier_bg = "4. 様子見 (ボラ警戒)", "#f8fafc", "#475569"
+        elif tier_val >= 45:
+            tier_label, tier_color, tier_bg = "3. 危険 (売り優勢)", "#ffffff", "#b45309"
+        elif tier_val >= 38:
+            tier_label, tier_color, tier_bg = "2. 強い警戒", "#ffffff", "#991b1b"
+        else:
+            tier_label, tier_color, tier_bg = "1. 絶対手を出すな", "#ffffff", "#450a0a"
+
         tp_val = max(pts_est_val, close_val) + (atr_val * 0.85)
         sl_val = close_val - (atr_val * 0.5)
         risk_per_share = max(close_val - sl_val, close_val * 0.005)
@@ -717,6 +745,7 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
             "macd_state": "強気↑" if latest['MACD_Hist'] > 0 else "調整↓",
             "atr_pct": round(float(latest['ATR_Pct']), 1), "payoff": payoff_ratio, "edge": expected_edge,
             "ai_score": ai_score, "survival_power": survival_power, "theme": theme,
+            "tier_label": tier_label, "tier_color": tier_color, "tier_bg": tier_bg,
             "lot_info": {
                 "shares": shares, "position_value": shares * close_val,
                 "capital_ratio": round((shares * close_val / total_capital) * 100, 1),
@@ -936,13 +965,13 @@ def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
     else:
         return (
             f"🤖 **【担当：ChatGPT・Claude・Grok 7大AI合同評議会】**\n\n"
-            f"- **総合ジャッジ**：「{r['name']}（{r['code']}）」の7大AI合議スコアは **{debate['final_score']}点**、機関クオンツスコアは **{r['inst_score']}点（{r['inst_status']}）**、サバイバル戦闘力は **{r['survival_power']}pt** です。\n"
+            f"- **総合ジャッジ**：「{r['name']}（{r['code']}）」の7大AI合議スコアは **{debate['final_score']}点**、10段階評価は **『{r['tier_label']}』** です。\n"
             f"- **最適ロットと資金配分**：総資金 {total_capital:,.0f}円 に対する推奨購入数は **{lot_info['shares']:,}株（投資額 {lot_info['position_value']:,.0f}円）** です。\n"
             f"- **具体的なアクション**：明日の朝はまず寄付き（目安 **{r['pts_est_price']}**）で半分の **{half_s:,}株** を買い、**{m5_vwap}（VWAP）** 反発または **{r['squeeze_trigger_price']}（20日高値）** 突破で残り **{rem_s:,}株** を追加、利確 **{r['tp_price']}**・損切り **{r['sl_price']}** で臨むのが最も期待値（**{r['edge']:+.2f}%**・過去勝率 **{r['prob']}%**）の高い戦術です。"
         )
 
 # ==========================================
-# 💬 会議パネル＆質問コーナー（即時反映・履歴永続版）
+# 💬 会議パネル＆質問コーナー
 # ==========================================
 def cb_toggle_debate(unique_key):
     st.session_state["active_debates"][unique_key] = not st.session_state["active_debates"].get(unique_key, False)
@@ -954,7 +983,6 @@ def cb_toggle_watchlist(code, r_data):
         st.session_state["watchlist"][code] = r_data
 
 def cb_handle_qa_action(unique_key, q_text, r, debate, m5):
-    """質問を受け付けた瞬間にセッションに即時追加して即座に画面に表示するコールバック"""
     if unique_key not in st.session_state["stock_chats"]:
         st.session_state["stock_chats"][unique_key] = []
     ans_md = generate_7ai_qa_response(q_text, r, debate, r["lot_info"], m5)
@@ -1003,7 +1031,7 @@ def render_interactive_council_section(r, unique_key):
                 st.write(msg)
                 prog.progress(pct)
                 time.sleep(0.35)
-            status.update(label=f"✅ 7大AI合議完了！（合議スコア: {debate['final_score']}点）", state="complete", expanded=False)
+            status.update(label=f"✅ 7大AI合議完了！（10段階評価: {r['tier_label']}）", state="complete", expanded=False)
         st.session_state["debate_Animated"].add(unique_key)
 
     if m5 and show_5m_chart:
@@ -1018,21 +1046,17 @@ def render_interactive_council_section(r, unique_key):
         f'<div class="ai-council-box">'
         f'<div style="display:flex; justify-content:space-between; margin-bottom:10px;">'
         f'<span style="font-weight:bold; color:#fbbf24;">🧠 7大AI最高評議会（銘柄別・動的専門ロール検証）</span>'
-        f'<span style="background:#4f46e5; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:bold;">合議スコア: {debate["final_score"]}点</span>'
+        f'<span style="background:#4f46e5; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:bold;">10段階判定: {r["tier_label"]}</span>'
         f'</div>{agents_html}'
         f'<div class="consensus-banner"><div style="font-weight:bold; color:#fde047;">🏛️ 7大AI最終コンセンサス</div>{debate["verdict_html"]}</div>'
         f'</div>',
         unsafe_allow_html=True
     )
 
-    # ==========================================
-    # 💬 質問コーナー（即時反応・履歴表示対応）
-    # ==========================================
     if unique_key not in st.session_state["stock_chats"]:
         st.session_state["stock_chats"][unique_key] = []
 
     st.markdown("##### 💬 7大AI評議会へのワンタップ＆自由質問コーナー")
-
     chat_history = st.session_state["stock_chats"].get(unique_key, [])
     if chat_history:
         latest_item = chat_history[-1]
@@ -1044,53 +1068,18 @@ def render_interactive_council_section(r, unique_key):
 
     q_col1, q_col2 = st.columns(2)
     with q_col1:
-        st.button(
-            "🏦 機関投資家のステルス買い・VPINは？",
-            key=f"q1_{unique_key}",
-            on_click=cb_handle_qa_action,
-            args=(unique_key, "機関投資家のステルス買い集めやVPINの状況は？", r, debate, m5),
-            use_container_width=True
-        )
-        st.button(
-            "🔥 5chシコリ玉と踏み上げ価格は？",
-            key=f"q2_{unique_key}",
-            on_click=cb_handle_qa_action,
-            args=(unique_key, "5ch板のシコリ玉と空売り踏み上げトリガー価格は？", r, debate, m5),
-            use_container_width=True
-        )
+        st.button("🏦 機関投資家のステルス買い・VPINは？", key=f"q1_{unique_key}", on_click=cb_handle_qa_action, args=(unique_key, "機関投資家のステルス買い集めやVPINの状況は？", r, debate, m5), use_container_width=True)
+        st.button("🔥 5chシコリ玉と踏み上げ価格は？", key=f"q2_{unique_key}", on_click=cb_handle_qa_action, args=(unique_key, "5ch板のシコリ玉と空売り踏み上げトリガー価格は？", r, debate, m5), use_container_width=True)
     with q_col2:
-        st.button(
-            "🚨 特買い確率と8:50気配の見方は？",
-            key=f"q3_{unique_key}",
-            on_click=cb_handle_qa_action,
-            args=(unique_key, "翌朝の特買い確率と8:50気配の見方は？", r, debate, m5),
-            use_container_width=True
-        )
-        st.button(
-            "💰 具体的な買い方・利確・損切りは？",
-            key=f"q4_{unique_key}",
-            on_click=cb_handle_qa_action,
-            args=(unique_key, "具体的な買い方と利確・損切りラインを教えて", r, debate, m5),
-            use_container_width=True
-        )
+        st.button("🚨 特買い確率と8:50気配の見方は？", key=f"q3_{unique_key}", on_click=cb_handle_qa_action, args=(unique_key, "翌朝の特買い確率と8:50気配の見方は？", r, debate, m5), use_container_width=True)
+        st.button("💰 具体的な買い方・利確・損切りは？", key=f"q4_{unique_key}", on_click=cb_handle_qa_action, args=(unique_key, "具体的な買い方と利確・損切りラインを教えて", r, debate, m5), use_container_width=True)
 
     input_key = f"free_q_in_{unique_key}"
     f_col1, f_col2 = st.columns([3.2, 1])
     with f_col1:
-        st.text_input(
-            "自由質問を入力",
-            key=input_key,
-            placeholder="自由に質問を入力（例：いつ売るべき？ / なぜ上がる？ / リスクは？）",
-            label_visibility="collapsed"
-        )
+        st.text_input("自由質問を入力", key=input_key, placeholder="自由に質問を入力（例：いつ売るべき？ / なぜ上がる？）", label_visibility="collapsed")
     with f_col2:
-        st.button(
-            "AIに質問",
-            key=f"free_q_btn_{unique_key}",
-            on_click=cb_handle_free_q,
-            args=(unique_key, input_key, r, debate, m5),
-            use_container_width=True
-        )
+        st.button("AIに質問", key=f"free_q_btn_{unique_key}", on_click=cb_handle_free_q, args=(unique_key, input_key, r, debate, m5), use_container_width=True)
 
     if chat_history:
         with st.expander(f"📚 過去の質問履歴をすべて見る（全 {len(chat_history)} 件）", expanded=False):
@@ -1099,16 +1088,10 @@ def render_interactive_council_section(r, unique_key):
                 with st.container(border=True):
                     st.markdown(f"🙋 **【質問 #{idx_h + 1}】 {item['q']}**")
                     st.success(item["a"])
-            st.button(
-                "🗑️ この銘柄の質問履歴をクリア",
-                key=f"clr_{unique_key}",
-                on_click=cb_clear_chat,
-                args=(unique_key,),
-                use_container_width=True
-            )
+            st.button("🗑️ この銘柄の質問履歴をクリア", key=f"clr_{unique_key}", on_click=cb_clear_chat, args=(unique_key,), use_container_width=True)
 
 # ==========================================
-# 🃏 銘柄カード描画
+# 🃏 銘柄カード描画 (10段階評価バッジ付き)
 # ==========================================
 def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     diff_color = "#dc2626" if r["diff"] > 0 else "#2563eb"
@@ -1117,13 +1100,15 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     rank_html = f'<span class="rank-badge">第{rank}位</span>' if rank else ""
     lot = r["lot_info"]
 
+    tier_badge_html = f'<div class="signal-10tier-badge" style="background-color: {r["tier_bg"]}; color: {r["tier_color"]};">🎯 判定: {r["tier_label"]}</div>'
+
     html_card = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
+        f'{tier_badge_html}'
         f'<div>{rank_html}<span class="score-badge">🤖 AIスコア: {r["ai_score"]}点</span>'
         f'<span class="inst-badge">🏦 機関クオンツ: {r["inst_score"]}点</span>'
         f'<span class="board5ch-badge">🔥 5ch需給: {r["board5ch_score"]}点</span>'
         f'<span class="tokugai-badge">🚨 特買い: {r["tokugai_prob"]}%</span>'
-        f'<span class="squeeze-badge">踏み上げ: {r["squeeze_score"]}点</span>'
         f'<span class="survival-badge">🦁 戦闘力: {r["survival_power"]}</span></div>'
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">'
         f'<div><span style="font-size:16px; font-weight:bold; color:#0f172a;">{r["name"]}</span> '
@@ -1160,100 +1145,7 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     render_interactive_council_section(r, f"{key_prefix}_{r['code']}")
 
 # ==========================================
-# 👑 管理者専用：会員データベース一括管理タブ描画 (便利機能付き)
-# ==========================================
-def render_admin_management_tab():
-    db = load_members_db()
-    st.markdown("### 👥 会員データベース一括管理コンソール")
-    st.caption("新規申請のワンクリック承認・却下、パスコード自動発行、ステータス変更、CSVバックアップを一括管理できます。")
-
-    # 1. 新規会員の手動直接登録
-    with st.expander("➕ 新規会員を手動で直接登録・パスコード発行する", expanded=False):
-        with st.form("admin_add_member_form", clear_on_submit=True):
-            c1, c2, c3 = st.columns([1.5, 2, 1.5])
-            with c1: new_name = st.text_input("お名前", placeholder="佐藤 健太")
-            with c2: new_mail = st.text_input("メールアドレス", placeholder="user@example.com")
-            with c3: new_note = st.text_input("備考・プラン", placeholder="VIP会員")
-            sub_add = st.form_submit_button("✅ 即時承認して登録＆パスコードメール送信", use_container_width=True)
-            if sub_add and new_mail.strip():
-                cm = new_mail.strip().lower()
-                code = generate_member_passcode(cm)
-                now_s = datetime.now().strftime("%Y-%m-%d %H:%M")
-                db[cm] = {
-                    "name": new_name.strip() or "会員",
-                    "email": cm,
-                    "status": "approved",
-                    "passcode": code,
-                    "applied_at": now_s,
-                    "approved_at": now_s,
-                    "note": new_note.strip()
-                }
-                save_members_db(db)
-                subj = "【会員登録完了】翌朝株価クオンツ＆7大AI解析Pro 専用アクセスコード"
-                body = f"{new_name} 様\n\n会員登録が完了いたしました。\n\n■登録メールアドレス: {cm}\n■専用アクセスコード: {code}\n"
-                ok, _ = send_auto_email(cm, subj, body)
-                st.success(f"✅ {cm} を承認登録しました！（専用コード: `{code}`）")
-                if not ok:
-                    m_link = f"mailto:{cm}?subject={urllib.parse.quote(subj)}&body={urllib.parse.quote(body)}"
-                    st.markdown(f'👉 <a href="{m_link}" style="background:#16a34a;color:#fff;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:bold;">✉️ パスコード通知メールを送信する</a>', unsafe_allow_html=True)
-
-    # 2. 全会員一覧テーブル
-    rows = []
-    for em, info in db.items():
-        rows.append({
-            "ステータス": info.get("status", "pending"),
-            "お名前": info.get("name", ""),
-            "メールアドレス": em,
-            "専用パスコード(8桁)": info.get("passcode", generate_member_passcode(em)),
-            "申請日時": info.get("applied_at", "-"),
-            "承認日時": info.get("approved_at", "-"),
-            "備考": info.get("note", "")
-        })
-    df_members = pd.DataFrame(rows)
-    st.dataframe(df_members, use_container_width=True, hide_index=True)
-
-    # 3. 個別会員のワンタップ操作（承認・停止・削除・コード送信）
-    st.markdown("##### ⚡ 個別会員のワンタップ操作（承認・一時停止・削除・コード送信）")
-    target_em = st.selectbox("操作する会員を選択", options=list(db.keys()), format_func=lambda x: f"{db[x].get('name','')} ({x}) - [{db[x].get('status','')}]")
-    if target_em:
-        t_info = db[target_em]
-        t_code = generate_member_passcode(target_em)
-        b1, b2, b3, b4 = st.columns(4)
-        with b1:
-            if st.button("✅ 承認(有効化)＆通知", use_container_width=True):
-                db[target_em]["status"] = "approved"
-                db[target_em]["passcode"] = t_code
-                db[target_em]["approved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                save_members_db(db)
-                subj = "【承認完了】翌朝株価クオンツ＆7大AI解析Pro 専用アクセスコード"
-                body = f"{t_info.get('name','')} 様\n\nご利用申請が承認されました。\n\n■登録メール: {target_em}\n■専用アクセスコード: {t_code}\n"
-                ok, _ = send_auto_email(target_em, subj, body)
-                st.session_state["admin_mailto_box"] = f"mailto:{target_em}?subject={urllib.parse.quote(subj)}&body={urllib.parse.quote(body)}"
-                st.rerun()
-        with b2:
-            if st.button("⏸️ 利用停止(却下)", use_container_width=True):
-                if target_em != ADMIN_EMAIL.strip().lower():
-                    db[target_em]["status"] = "rejected"
-                    save_members_db(db)
-                    st.rerun()
-        with b3:
-            if st.button("🗑️ 会員データ削除", use_container_width=True):
-                if target_em != ADMIN_EMAIL.strip().lower():
-                    del db[target_em]
-                    save_members_db(db)
-                    st.rerun()
-        with b4:
-            subj = "【再送】翌朝株価クオンツ＆7大AI解析Pro 専用アクセスコード"
-            body = f"{t_info.get('name','')} 様\n\n専用アクセスコードをお知らせします。\n\n■登録メール: {target_em}\n■専用アクセスコード: {t_code}\n"
-            m_url = f"mailto:{target_em}?subject={urllib.parse.quote(subj)}&body={urllib.parse.quote(body)}"
-            st.markdown(f'<a href="{m_url}" style="display:block;text-align:center;background:#2563eb;color:#fff;padding:8px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px;">✉️ コードをメール送信</a>', unsafe_allow_html=True)
-
-    # 4. CSVバックアップ出力
-    csv_mem = df_members.to_csv(index=False).encode("utf-8-sig")
-    st.download_button("📥 会員一覧データベースをCSVでダウンロード", data=csv_mem, file_name="members_backup.csv", mime="text/csv", use_container_width=True)
-
-# ==========================================
-# 🚀 メイン画面実行＆弱肉強食サバイバルランキング
+# 🚀 メイン画面実行＆ページ切り替え処理
 # ==========================================
 if st.button("🔄 最新データに更新（機関クオンツ＆弱肉強食サバイバル再集計）"):
     st.cache_data.clear()
@@ -1285,82 +1177,94 @@ def apply_survival_of_the_fittest(stock_list, cut_pct):
     keep_count = max(3, int(round(len(sorted_all) * (cut_pct / 100.0))))
     return sorted_all[:keep_count], sorted_all[keep_count:]
 
-is_admin_user = (st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower())
-base_tabs = [
-    "🏆 総合サバイバルTOP5",
-    "🏦 機関VPIN・ステルス買い特選",
-    "🔥 5ch板・初動イナゴ特選",
-    "🚨 特買い・夜間PTS特選",
-    "💥 空売り踏み上げ特選",
-    "📋 監視＆注文シート"
-]
-if is_admin_user:
-    base_tabs.append("👑 会員一括管理")
+# --- アプリ内ナビゲーション（ブラウザバックでログアウトしない仕様） ---
+current_page = st.session_state.get("navigation_page", "TOP")
 
-tab_labels = base_tabs + list(STOCK_POOL.keys())
-tabs = st.tabs(tab_labels)
-
-with tabs[0]:
-    survivors_all, elim_all = apply_survival_of_the_fittest(all_results, survival_cut_pct)
-    st.caption(f"🦁 全母集団 {len(all_results)}銘柄から下位 {len(elim_all)}銘柄を足切り！機関クオンツ・5ch需給ともに最強のTOP5です。")
-    for idx, r in enumerate(survivors_all[:5], start=1):
-        render_stock_card(r, rank=idx, key_prefix="top5")
-
-with tabs[1]:
-    st.info("🏦 **機関投資家VPIN（オーダーフロー毒性）＆浮動株吸い上げ特選タブ**: 機関のステルス氷山買いや浮動株の吸収（Amihud価格弾性上昇）が検知された上位10銘柄です。")
-    inst_list = sorted(all_results, key=lambda x: (x["inst_score"], x["vpin"], x["survival_power"]), reverse=True)[:10]
-    for idx, r in enumerate(inst_list, start=1):
-        render_stock_card(r, rank=idx, key_prefix="inst_top")
-
-with tabs[2]:
-    st.info("🔥 **5chデイトレ板・初動イナゴ集中＆シコリ玉排除タブ**: 5日平均出来高からの急増率が高く、上ヒゲ（高値掴みのシコリ玉）が極めて少ない初動TOP10です。")
-    b5_list = sorted(all_results, key=lambda x: (x["board5ch_score"], x["survival_power"]), reverse=True)[:10]
-    for idx, r in enumerate(b5_list, start=1):
-        render_stock_card(r, rank=idx, key_prefix="b5_top")
-
-with tabs[3]:
-    st.info("🚨 **翌朝『特買い』・夜間PTS連動タブ**: 夜間先物・SOX指数の追い風と機関の買い残しから、翌朝9:00に特別買い気配になりやすい上位10銘柄です。")
-    tk_list = sorted(all_results, key=lambda x: (x["tokugai_prob"], x["pts_gap_pct"]), reverse=True)[:10]
-    for idx, r in enumerate(tk_list, start=1):
-        render_stock_card(r, rank=idx, key_prefix="tk_top")
-
-with tabs[4]:
-    st.info("💥 **空売り踏み上げ（ショートスクイーズ）タブ**: 20日高値ブレイクにより、空売り勢が朝イチに強制ロスカットを迫られる上位10銘柄です。")
-    sq_list = sorted(all_results, key=lambda x: (x["squeeze_score"], x["inst_score"]), reverse=True)[:10]
-    for idx, r in enumerate(sq_list, start=1):
-        render_stock_card(r, rank=idx, key_prefix="sq_top")
-
-with tabs[5]:
-    wl = st.session_state["watchlist"]
-    st.markdown(f"#### 📋 監視ウォッチリスト ({len(wl)}銘柄)")
-    if st.button("⚡ 総合TOP3をワンタップ一括登録", use_container_width=True):
-        for item in survivors_all[:3]:
-            st.session_state["watchlist"][item["code"]] = item
+if current_page == "WATCHLIST":
+    st.markdown("---")
+    st.subheader("📋 監視ウォッチリスト (マイ銘柄一覧)")
+    if st.button("⬅️ TOP画面（ランキング）に戻る", use_container_width=True):
+        st.session_state["navigation_page"] = "TOP"
         st.rerun()
+    
+    wl = st.session_state["watchlist"]
     if wl:
-        df_wl = pd.DataFrame([{
-            "コード": c, "銘柄名": x["name"], "戦闘力": x["survival_power"], "機関スコア": x["inst_score"],
-            "夜間理論気配": x["pts_est_price"], "特買い線": x["tokugai_line"],
-            "推奨株数": f"{x['lot_info']['shares']:,}株", "利確": x["tp_price"], "損切": x["sl_price"]
-        } for c, x in wl.items()])
-        st.dataframe(df_wl, use_container_width=True, hide_index=True)
+        for w_code, w_item in list(wl.items()):
+            render_stock_card(w_item, is_custom=False, key_prefix=f"wl_page_{w_code}")
     else:
-        st.info("各カードの「⭐ 監視リスト追加」を押すとここに一覧表示されます。")
+        st.info("⭐ 監視リストに登録されている銘柄はありません。ランキングや検索結果から「監視リスト追加」ボタンを押してください。")
 
-genre_start_idx = 6
-if is_admin_user:
-    with tabs[6]:
-        render_admin_management_tab()
-    genre_start_idx = 7
+else:
+    base_tabs = [
+        "🏆 総合サバイバルTOP5",
+        "🏦 機関VPIN・ステルス買い特選",
+        "🔥 5ch板・初動イナゴ特選",
+        "🚨 特買い・夜間PTS特選",
+        "💥 空売り踏み上げ特選",
+        "📋 監視＆注文シート"
+    ]
+    tab_labels = base_tabs + list(STOCK_POOL.keys())
+    tabs = st.tabs(tab_labels)
 
-for tab, genre in zip(tabs[genre_start_idx:], STOCK_POOL.keys()):
-    with tab:
-        g_raw = genre_results.get(genre, [])
-        g_surv, g_elim = apply_survival_of_the_fittest(g_raw, survival_cut_pct)
-        st.caption(f"🦁 **{genre}サバイバル選抜**: 候補 {len(g_raw)}銘柄中、戦闘力上位 **{len(g_surv)}銘柄が生存**（下位 {len(g_elim)}銘柄が脱落）")
-        for idx, r in enumerate(g_surv, start=1):
-            render_stock_card(r, rank=idx, key_prefix=f"genre_{genre}")
-        if g_elim:
-            with st.expander(f"💀 本日のサバイバル脱落・入れ替え候補銘柄を見る（{len(g_elim)}銘柄）"):
-                for e_item in g_elim:
-                    st.caption(f"▼ **{e_item['name']} ({e_item['code']})** — 戦闘力: {e_item['survival_power']}pt / {e_item['inst_status']}")
+    with tabs[0]:
+        survivors_all, elim_all = apply_survival_of_the_fittest(all_results, survival_cut_pct)
+        st.caption(f"🦁 全母集団 {len(all_results)}銘柄から下位 {len(elim_all)}銘柄を足切り！機関クオンツ・5ch需給ともに最強のTOP5です。")
+        for idx, r in enumerate(survivors_all[:5], start=1):
+            render_stock_card(r, rank=idx, key_prefix="top5")
+
+    with tabs[1]:
+        st.info("🏦 **機関投資家VPIN（オーダーフロー毒性）＆浮動株吸い上げ特選タブ**: 機関のステルス氷山買いや浮動株の吸収（Amihud価格弾性上昇）が検知された上位10銘柄です。")
+        inst_list = sorted(all_results, key=lambda x: (x["inst_score"], x["vpin"], x["survival_power"]), reverse=True)[:10]
+        for idx, r in enumerate(inst_list, start=1):
+            render_stock_card(r, rank=idx, key_prefix="inst_top")
+
+    with tabs[2]:
+        st.info("🔥 **5chデイトレ板・初動イナゴ集中＆シコリ玉排除タブ**: 5日平均出来高からの急増率が高く、上ヒゲ（高値掴みのシコリ玉）が極めて少ない初動TOP10です。")
+        b5_list = sorted(all_results, key=lambda x: (x["board5ch_score"], x["survival_power"]), reverse=True)[:10]
+        for idx, r in enumerate(b5_list, start=1):
+            render_stock_card(r, rank=idx, key_prefix="b5_top")
+
+    with tabs[3]:
+        st.info("🚨 **翌朝『特買い』・夜間PTS連動タブ**: 夜間先物・SOX指数の追い風と機関の買い残しから、翌朝9:00に特別買い気配になりやすい上位10銘柄です。")
+        tk_list = sorted(all_results, key=lambda x: (x["tokugai_prob"], x["pts_gap_pct"]), reverse=True)[:10]
+        for idx, r in enumerate(tk_list, start=1):
+            render_stock_card(r, rank=idx, key_prefix="tk_top")
+
+    with tabs[4]:
+        st.info("💥 **空売り踏み上げ（ショートスクイーズ）タブ**: 20日高値ブレイクにより、空売り勢が朝イチに強制ロスカットを迫られる上位10銘柄です。")
+        sq_list = sorted(all_results, key=lambda x: (x["squeeze_score"], x["inst_score"]), reverse=True)[:10]
+        for idx, r in enumerate(sq_list, start=1):
+            render_stock_card(r, rank=idx, key_prefix="sq_top")
+
+    with tabs[5]:
+        wl = st.session_state["watchlist"]
+        st.markdown(f"#### 📋 監視ウォッチリスト ({len(wl)}銘柄)")
+        if st.button("⚡ 総合TOP3をワンタップ一括登録", use_container_width=True):
+            for item in survivors_all[:3]:
+                st.session_state["watchlist"][item["code"]] = item
+            st.rerun()
+        if st.button("📂 監視ウォッチリスト専用ページに移動", use_container_width=True):
+            st.session_state["navigation_page"] = "WATCHLIST"
+            st.rerun()
+        if wl:
+            df_wl = pd.DataFrame([{
+                "コード": c, "銘柄名": x["name"], "判定": x["tier_label"], "戦闘力": x["survival_power"],
+                "機関スコア": x["inst_score"], "夜間理論気配": x["pts_est_price"], "特買い線": x["tokugai_line"],
+                "推奨株数": f"{x['lot_info']['shares']:,}株", "利確": x["tp_price"], "損切": x["sl_price"]
+            } for c, x in wl.items()])
+            st.dataframe(df_wl, use_container_width=True, hide_index=True)
+        else:
+            st.info("各カードの「⭐ 監視リスト追加」を押すとここに一覧表示されます。")
+
+    genre_start_idx = 6
+    for tab, genre in zip(tabs[genre_start_idx:], STOCK_POOL.keys()):
+        with tab:
+            g_raw = genre_results.get(genre, [])
+            g_surv, g_elim = apply_survival_of_the_fittest(g_raw, survival_cut_pct)
+            st.caption(f"🦁 **{genre}サバイバル選抜**: 候補 {len(g_raw)}銘柄中、戦闘力上位 **{len(g_surv)}銘柄が生存**（下位 {len(g_elim)}銘柄が脱落）")
+            for idx, r in enumerate(g_surv, start=1):
+                render_stock_card(r, rank=idx, key_prefix=f"genre_{genre}")
+            if g_elim:
+                with st.expander(f"💀 本日のサバイバル脱落・入れ替え候補銘柄を見る（{len(g_elim)}銘柄）"):
+                    for e_item in g_elim:
+                        st.caption(f"▼ **{e_item['name']} ({e_item['code']})** — 戦闘力: {e_item['survival_power']}pt / {e_item['inst_status']}")
