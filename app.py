@@ -161,9 +161,14 @@ def render_admin_sidebar_management():
     pending_list = [v for v in db.values() if v.get("status") == "pending"]
 
     st.sidebar.markdown("---")
-    st.sidebar.subheader(f"👑 管理者一括管理メニュー (承認待:{len(pending_list)}件)")
+    st.sidebar.subheader(f"👑 管理者メニュー (承認待:{len(pending_list)}件)")
 
-    admin_action_mode = st.sidebar.radio("管理機能選択", ["⏳ 申請承認待ち一覧", "👥 全会員データベース管理"], key="admin_sidebar_mode")
+    if st.sidebar.button("🛠️ 管理者専用ページ(全画面)を開く", key="side_open_admin_page", use_container_width=True):
+        st.session_state["navigation_page"] = "ADMIN"
+        st.query_params["nav"] = "ADMIN"
+        st.rerun()
+
+    admin_action_mode = st.sidebar.radio("クイック管理", ["⏳ 申請承認待ち一覧", "👥 全会員データベース管理"], key="admin_sidebar_mode")
 
     if admin_action_mode == "⏳ 申請承認待ち一覧":
         if pending_list:
@@ -237,12 +242,167 @@ def render_admin_sidebar_management():
         st.text_input("SMTPサーバー", value=st.session_state.get("smtp_server", "smtp.mail.yahoo.co.jp"), key="smtp_server")
         st.number_input("SMTPポート", value=int(st.session_state.get("smtp_port", 465)), key="smtp_port")
 
+def render_admin_full_page():
+    """メイン画面に表示する管理者専用の会員管理フルコンソール"""
+    db = load_members_db()
+    pending_list = [v for v in db.values() if v.get("status") == "pending"]
+    approved_list = [v for v in db.values() if v.get("status") == "approved"]
+
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #31102f 0%, #0f172a 100%); color: #f8fafc; padding: 18px 22px; border-radius: 16px; margin-bottom: 14px; border: 1px solid rgba(251,191,36,0.35); box-shadow: 0 8px 24px rgba(0,0,0,0.2);">
+        <div style="font-size:12px; color:#fbbf24; font-weight:700;">ADMINISTRATOR ONLY CONSOLE</div>
+        <h2 style="margin:2px 0 4px 0; font-size:21px; color:#ffffff;">👑 管理者専用・会員データベース＆承認管理センター</h2>
+        <div style="font-size:13px; color:#cbd5e1;">新規申請のワンクリック承認・パスコード発行・手動会員登録・CSV出力を一括管理できます。</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("⬅️ 株価解析ランキング画面（TOP）へ戻る", key="back_from_admin_top", use_container_width=True):
+        st.session_state["navigation_page"] = "TOP"
+        if "nav" in st.query_params:
+            del st.query_params["nav"]
+        st.session_state["trigger_scroll_top"] = True
+        st.rerun()
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("⏳ 承認待ち申請", f"{len(pending_list)} 件")
+    m2.metric("✅ 承認済み会員数", f"{len(approved_list)} 名")
+    m3.metric("👥 総登録データ数", f"{len(db)} 件")
+
+    adm_tab1, adm_tab2, adm_tab3 = st.tabs([
+        f"⏳ 承認待ち申請 ({len(pending_list)}件)",
+        f"👥 全会員リスト＆手動追加 ({len(db)}件)",
+        "⚙️ 自動メール送信(SMTP)設定"
+    ])
+
+    with adm_tab1:
+        if pending_list:
+            st.warning(f"🔔 現在 {len(pending_list)} 件の新規利用申請が届いています。")
+            for p in pending_list:
+                p_mail = p["email"]
+                p_name = p.get("name", "未入力")
+                p_note = p.get("note", "-")
+                p_time = p.get("applied_at", "-")
+                p_code = generate_member_passcode(p_mail)
+
+                st.markdown(
+                    f'<div class="rank-card" style="border-left-color:#f59e0b;">'
+                    f'<div style="font-size:16px; font-weight:800;">👤 {p_name} <span style="font-size:13.5px; color:#475569;">({p_mail})</span></div>'
+                    f'<div style="font-size:13px; color:#334155; margin-top:4px;">💬 備考・紹介者: <b>{p_note or "なし"}</b> ｜ 🕒 申請日時: {p_time} ｜ 🔑 発行予定コード: <code>{p_code}</code></div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+                ca, cr = st.columns(2)
+                with ca:
+                    if st.button(f"✅ 承認してパスコード発行 ({p_name})", key=f"main_ap_{p_mail}", use_container_width=True):
+                        db[p_mail]["status"] = "approved"
+                        db[p_mail]["passcode"] = p_code
+                        db[p_mail]["approved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        save_members_db(db)
+                        subj = "【承認完了】翌朝株価クオンツ＆7大AI解析Pro 専用アクセスコード"
+                        body = f"{p_name} 様\n\n会員登録が承認されました。\n\n■登録メール: {p_mail}\n■専用アクセスコード: {p_code}\n"
+                        ok, _ = send_auto_email(p_mail, subj, body)
+                        st.session_state["last_approved_mailto"] = {
+                            "email": p_mail, "code": p_code, "auto_sent": ok,
+                            "url": f"mailto:{p_mail}?subject={urllib.parse.quote(subj)}&body={urllib.parse.quote(body)}"
+                        }
+                        st.rerun()
+                with cr:
+                    if st.button(f"❌ 却下する ({p_name})", key=f"main_rj_{p_mail}", use_container_width=True):
+                        db[p_mail]["status"] = "rejected"
+                        save_members_db(db)
+                        st.rerun()
+        else:
+            st.success("🎉 現在、承認待ちの申請はありません。")
+
+        if "last_approved_mailto" in st.session_state:
+            la = st.session_state["last_approved_mailto"]
+            if la["auto_sent"]:
+                st.success(f"📨 {la['email']} へ専用パスコード（{la['code']}）を自動メール送信しました！")
+            else:
+                st.success(f"✅ {la['email']} を承認しました！（専用パスコード: `{la['code']}`）")
+                st.markdown(f'<a href="{la["url"]}" style="display:inline-block;background:#16a34a;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;font-weight:bold;">✉️ 承認通知メールをメーラーで送信する</a>', unsafe_allow_html=True)
+
+    with adm_tab2:
+        st.markdown("##### ➕ 新規会員の手動即時追加（招待用）")
+        with st.form("admin_manual_add_form"):
+            mc1, mc2, mc3 = st.columns([1.5, 2, 1.5])
+            with mc1:
+                new_m_name = st.text_input("お名前", placeholder="佐藤 一郎")
+            with mc2:
+                new_m_mail = st.text_input("メールアドレス", placeholder="user@example.com")
+            with mc3:
+                new_m_note = st.text_input("備考", placeholder="VIP招待")
+            if st.form_submit_button("➕ 即時承認済みとして追加・パスコード発行", use_container_width=True):
+                cm = new_m_mail.strip().lower()
+                if cm and "@" in cm:
+                    code_gen = generate_member_passcode(cm)
+                    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    db[cm] = {
+                        "name": new_m_name.strip() or "招待会員",
+                        "email": cm,
+                        "status": "approved",
+                        "passcode": code_gen,
+                        "applied_at": now_str,
+                        "approved_at": now_str,
+                        "note": new_m_note.strip() or "管理者手動追加"
+                    }
+                    save_members_db(db)
+                    st.success(f"✅ {cm} を承認済み会員として追加しました！ 専用パスコード: `{code_gen}`")
+                    st.rerun()
+                else:
+                    st.error("正しいメールアドレスを入力してください。")
+
+        st.markdown("---")
+        st.markdown("##### 👥 登録会員一覧テーブル")
+        rows = [{
+            "状態": info.get("status"),
+            "名前": info.get("name"),
+            "メールアドレス": em,
+            "専用8桁コード": info.get("passcode"),
+            "申請日時": info.get("applied_at", "-"),
+            "承認日時": info.get("approved_at", "-"),
+            "備考": info.get("note", "")
+        } for em, info in db.items()]
+        df_members = pd.DataFrame(rows)
+        st.dataframe(df_members, use_container_width=True, hide_index=True)
+
+        c_sel, c_act1, c_act2 = st.columns([2.2, 1, 1])
+        with c_sel:
+            target_em = st.selectbox("ステータス変更する会員を選択", options=list(db.keys()), format_func=lambda x: f"{db[x].get('name','')} ({x}) - [{db[x].get('status')}]")
+        with c_act1:
+            st.write("")
+            if st.button("✅ 有効化(承認)", key="main_adm_act", use_container_width=True):
+                db[target_em]["status"] = "approved"
+                db[target_em]["passcode"] = generate_member_passcode(target_em)
+                db[target_em]["approved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                save_members_db(db)
+                st.rerun()
+        with c_act2:
+            st.write("")
+            if st.button("⏸️ 利用停止", key="main_adm_stop", use_container_width=True):
+                if target_em != ADMIN_EMAIL.strip().lower():
+                    db[target_em]["status"] = "rejected"
+                    save_members_db(db)
+                    st.rerun()
+                else:
+                    st.warning("管理者自身は停止できません。")
+
+        csv_mem = df_members.to_csv(index=False).encode("utf-8-sig")
+        st.download_button("📥 全会員リストをCSVでダウンロード", data=csv_mem, file_name="members_backup.csv", mime="text/csv", use_container_width=True)
+
+    with adm_tab3:
+        st.markdown("##### ⚙️ 自動メール送信 (SMTP) 設定")
+        st.caption("設定しておくと、申請承認時にユーザーへ専用パスコードが自動メール送信されます。")
+        st.text_input("アプリ公開URL", value=st.session_state.get("app_base_url", "http://localhost:8501"), key="app_base_url_main")
+        st.text_input("送信元メールアドレス", value=st.session_state.get("smtp_user", ADMIN_EMAIL), key="smtp_user_main")
+        st.text_input("SMTPアプリパスワード", type="password", key="smtp_pass_main")
+
 def check_member_authentication():
     db = load_members_db()
     if "authenticated_user" not in st.session_state:
         st.session_state["authenticated_user"] = None
 
-    # URLクエリパラメータによるセッション維持（リロードや戻るでもログアウトしない対策）
+    # URLクエリパラメータによるセッション維持（リロードやリンク移動でもログアウトしない対策）
     q_user = st.query_params.get("u", "").strip().lower()
     q_tok = st.query_params.get("t", "").strip()
     if not st.session_state["authenticated_user"] and q_user and q_tok:
@@ -255,6 +415,14 @@ def check_member_authentication():
         curr_user = st.session_state["authenticated_user"]
         st.query_params["u"] = curr_user
         st.query_params["t"] = generate_admin_action_token(curr_user, "session_keep")
+
+        # URLパラメータ ?nav=ADMIN または ?nav=TOP によるページ切り替え検知
+        q_nav = st.query_params.get("nav", "").upper()
+        if q_nav == "ADMIN" and curr_user == ADMIN_EMAIL.strip().lower():
+            st.session_state["navigation_page"] = "ADMIN"
+        elif q_nav == "TOP":
+            st.session_state["navigation_page"] = "TOP"
+            del st.query_params["nav"]
 
         with st.sidebar:
             st.success(f"👤 ログイン中:\n{curr_user}")
@@ -346,7 +514,6 @@ def check_member_authentication():
                     f"{reject_url}\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n"
                 )
-                # バックグラウンドでSMTP設定がある場合のみ自動送信（メールアプリ起動ボタンは表示しない）
                 send_auto_email(ADMIN_EMAIL, admin_subj, admin_body)
                 st.success("✅ 申請を受け付けました！管理者の承認審査が完了すると専用パスコードが発行されます。")
     st.stop()
@@ -380,6 +547,8 @@ def navigate_back():
         st.session_state["navigation_page"] = st.session_state["nav_history"].pop()
     else:
         st.session_state["navigation_page"] = "TOP"
+    if "nav" in st.query_params:
+        del st.query_params["nav"]
     st.session_state["custom_search_code"] = ""
     st.session_state["trigger_scroll_top"] = True
 
@@ -423,10 +592,26 @@ def get_company_logo_html(full_code: str, name: str) -> str:
     )
 
 # ==========================================
-# 🎨 カスタムCSS ＆ 半透明フローティングナビバー（全体の文字サイズをほんの少し拡大）
+# 🎨 カスタムCSS ＆ 半透明フローティングナビバー（管理者用リンク付き）
 # ==========================================
 wl_count = len(st.session_state.get("watchlist", {}))
-curr_page_badge = "監視リスト表示中" if st.session_state.get("navigation_page") == "WATCHLIST" else "ランキング解析"
+nav_p = st.session_state.get("navigation_page", "TOP")
+curr_page_badge = "👑 管理者コンソール" if nav_p == "ADMIN" else ("📋 監視リスト表示中" if nav_p == "WATCHLIST" else "📊 ランキング解析")
+
+# 管理者かどうかの判定と、フローティングバー用管理者リンクの生成
+curr_login_user = st.session_state.get("authenticated_user", "")
+is_admin_user = (curr_login_user == ADMIN_EMAIL.strip().lower())
+admin_floating_link_html = ""
+if is_admin_user:
+    db_now = load_members_db()
+    pend_cnt = sum(1 for v in db_now.values() if v.get("status") == "pending")
+    u_enc = urllib.parse.quote(curr_login_user)
+    t_enc = generate_admin_action_token(curr_login_user, "session_keep")
+    pend_badge = f"({pend_cnt})" if pend_cnt > 0 else ""
+    if nav_p == "ADMIN":
+        admin_floating_link_html = f'<div class="nav-divider"></div><a href="?u={u_enc}&t={t_enc}&nav=TOP" target="_self" class="admin-pill">📊 解析TOPへ戻る</a>'
+    else:
+        admin_floating_link_html = f'<div class="nav-divider"></div><a href="?u={u_enc}&t={t_enc}&nav=ADMIN" target="_self" class="admin-pill">👑 管理ページ{pend_badge}</a>'
 
 # ページ最上部のアンカー配置
 st.markdown('<div id="page_top_anchor"></div>', unsafe_allow_html=True)
@@ -460,7 +645,7 @@ button[data-baseweb="tab"] {{
     align-items: center;
     gap: 6px;
     padding: 5px 13px;
-    background: rgba(15, 23, 42, 0.72);
+    background: rgba(15, 23, 42, 0.75);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.18);
@@ -499,6 +684,13 @@ button[data-baseweb="tab"] {{
     padding: 2px 8px;
     border-radius: 999px;
 }}
+.floating-glass-nav .admin-pill {{
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #0f172a !important;
+    font-weight: 800 !important;
+    padding: 3px 10px !important;
+    border-radius: 999px;
+}}
 
 /* 🏢 企業ロゴマーク */
 .company-logo-img {{
@@ -530,7 +722,7 @@ button[data-baseweb="tab"] {{
     border-left-color: #d97706;
 }}
 
-/* バッジ類（ほんの少し拡大） */
+/* バッジ類 */
 .prob-badge {{ font-size: 25.5px; font-weight: 800; color: #dc2626 !important; letter-spacing: -0.5px; }}
 .rank-badge {{ display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff !important; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; margin-right: 5px; }}
 .score-badge {{ display: inline-block; background: #0f172a; color: #f8fafc !important; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }}
@@ -553,7 +745,7 @@ button[data-baseweb="tab"] {{
     box-shadow: 0 3px 10px rgba(0,0,0,0.12);
 }}
 
-/* 情報ボックス（11.5px → 12.5pxへ微増） */
+/* 情報ボックス */
 .inst-box {{ background: #eff6ff !important; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; border-radius: 9px; padding: 8px 12px; margin-top: 7px; font-size: 12.5px; color: #1e3a8a !important; }}
 .inst-box * {{ color: #1e3a8a !important; }}
 .squeeze-box {{ background: #fff1f2 !important; border: 1px solid #fecdd3; border-left: 4px solid #e11d48; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 12.5px; color: #881337 !important; }}
@@ -568,14 +760,14 @@ button[data-baseweb="tab"] {{
 .sizing-box {{ background: linear-gradient(90deg, #f0fdf4, #dcfce7) !important; border: 1px solid #86efac; border-radius: 9px; padding: 9px 12px; margin-top: 8px; font-size: 12.5px; color: #166534 !important; }}
 .sizing-box * {{ color: #166534 !important; }}
 
-/* 7大AI評議会ダークパネル（12px → 13pxへ微増） */
+/* 7大AI評議会ダークパネル */
 .ai-council-box {{ background: linear-gradient(135deg, #090d16, #1e293b); color: #f8fafc !important; border-radius: 14px; padding: 16px; margin-top: 8px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.1); }}
 .ai-council-box * {{ color: #f8fafc; }}
 .ai-agent-card {{ background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 10px 13px; margin-bottom: 7px; font-size: 13px; line-height: 1.6; color: #f8fafc !important; }}
 .consensus-banner {{ background: linear-gradient(135deg, #1e1b4b, #312e81); border: 1.5px solid #818cf8; border-radius: 12px; padding: 14px; margin-top: 10px; font-size: 13px; line-height: 1.65; color: #f8fafc !important; }}
 .consensus-section {{ background: rgba(255, 255, 255, 0.07); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 8px 11px; margin-top: 7px; color: #f8fafc !important; }}
 
-/* 💬 質問回答専用カード（11.5px → 12.5pxへほんの少し拡大） */
+/* 💬 質問回答専用カード */
 .qa-answer-card {{
     background: #f8fafc !important;
     border: 1px solid #cbd5e1;
@@ -610,15 +802,39 @@ button[data-baseweb="tab"] {{
 }}
 </style>
 
-<!-- 🧭 上部追従・半透明フローティングナビバー（ログイン画面に戻らずページ最上部へスムーズスクロール） -->
+<!-- 🧭 上部追従・半透明フローティングナビバー（管理者の場合のみ管理ページリンクを表示） -->
 <div class="floating-glass-nav">
     <a href="#page_top_anchor" title="ページの最上部へ戻る">⬆️ ページTOPへ</a>
     <div class="nav-divider"></div>
     <a href="#search_box_anchor" title="銘柄検索・タブ選択へ移動">🔍 検索・タブ</a>
     <div class="nav-divider"></div>
-    <span class="algo-pill" title="Hurst指数・Kalmanフィルタ・Kyleラムダ自動適応中">🧬 最新Algo自動適応中</span>
+    <span class="algo-pill" title="Hurst指数・Kalmanフィルタ・Kyleラムダ自動適応中">🧬 最新Algo適応中</span>
+    {admin_floating_link_html}
 </div>
 """, unsafe_allow_html=True)
+
+# 👑 管理者でログインしている場合のみ、メイン画面最上部にも専用管理ページ切替バーを表示
+if is_admin_user:
+    db_top = load_members_db()
+    pend_top_cnt = sum(1 for v in db_top.values() if v.get("status") == "pending")
+    adm_bar_c1, adm_bar_c2 = st.columns([2.3, 1.4])
+    with adm_bar_c1:
+        if pend_top_cnt > 0:
+            st.warning(f"👑 **管理者モード** ｜ 🔔 新規の承認待ち申請が **{pend_top_cnt}件** あります！")
+        else:
+            st.info(f"👑 **管理者モード** ｜ 承認待ち申請: 0件（登録会員: {len(db_top)}名）")
+    with adm_bar_c2:
+        if st.session_state.get("navigation_page") == "ADMIN":
+            if st.button("📊 株価解析TOP画面へ戻る", key="top_bar_to_main_btn", use_container_width=True):
+                st.session_state["navigation_page"] = "TOP"
+                if "nav" in st.query_params:
+                    del st.query_params["nav"]
+                st.rerun()
+        else:
+            if st.button(f"👑 会員管理ページを開く ({pend_top_cnt}件待)", key="top_bar_to_admin_btn", use_container_width=True):
+                navigate_to("ADMIN")
+                st.query_params["nav"] = "ADMIN"
+                st.rerun()
 
 # ページトップへのプログラム的スクロール発火処理
 if st.session_state.get("trigger_scroll_top"):
@@ -645,6 +861,8 @@ s_col1, s_col2 = st.sidebar.columns(2)
 with s_col1:
     if st.button("⬆️ ページTOP", key="side_top_btn", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"
+        if "nav" in st.query_params:
+            del st.query_params["nav"]
         st.session_state["custom_search_code"] = ""
         st.session_state["trigger_scroll_top"] = True
         st.rerun()
@@ -671,6 +889,11 @@ board5ch_boost = st.sidebar.checkbox("🔥 5ch板・初動イナゴ＆シコリ�
 squeeze_boost_mode = st.sidebar.checkbox("💥 空売り踏み上げ（20日高値突破）優先", value=True)
 tokugai_boost_mode = st.sidebar.checkbox("🚨 翌朝『特買い』・夜間PTS連動を優先", value=True)
 show_5m_chart = st.sidebar.checkbox("合議パネル内に5分足＆VWAPチャートを描画", value=True)
+
+# もし管理者ページ（ADMIN）が開かれている場合は、専用管理画面を描画して終了
+if st.session_state.get("navigation_page") == "ADMIN" and is_admin_user:
+    render_admin_full_page()
+    st.stop()
 
 # --- 🦁 国内外の主力・テーマ母集団プール ---
 STOCK_POOL = {
@@ -804,9 +1027,7 @@ def fetch_macro_market():
 # 🧬 最新クオンツ数理モジュール（Hurst指数・Kalmanフィルタ・Kyleラムダ）
 # ==========================================
 def compute_latest_quant_metrics(close_series: pd.Series, vol_ratio_series: pd.Series, day_ret_series: pd.Series) -> dict:
-    """最新のウォール街数理クオンツ指標を自動計算して返す"""
     prices = close_series.dropna().values
-    # 1. Hurst指数（ハースト指数：H > 0.5ならトレンド持続性が強い、H < 0.5なら平均回帰）
     hurst_val = 0.52
     if len(prices) >= 30:
         try:
@@ -818,7 +1039,6 @@ def compute_latest_quant_metrics(close_series: pd.Series, vol_ratio_series: pd.S
         except Exception:
             hurst_val = 0.52
 
-    # 2. 1次元適応カルマンフィルタ（ノイズ除去トレンド推計値）
     kalman_est = float(prices[-1])
     if len(prices) >= 10:
         x_est = float(prices[0])
@@ -833,7 +1053,6 @@ def compute_latest_quant_metrics(close_series: pd.Series, vol_ratio_series: pd.S
         kalman_est = x_est
     kalman_bull_pct = round((float(prices[-1]) - kalman_est) / max(kalman_est, 1e-4) * 100, 2)
 
-    # 3. Kyle's Lambda（カイルのラムダ：大口注文による価格衝撃・流動性枯渇係数）
     recent_ret = day_ret_series.tail(5).abs().mean()
     recent_vol = vol_ratio_series.tail(5).mean()
     kyle_lambda = round(float(recent_ret / max(recent_vol, 0.3)), 2)
@@ -900,7 +1119,6 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         df['Amihud_Impact'] = (df['Day_Return'].abs() / df['Vol_Ratio'].replace(0, 1.0)).fillna(1.0)
         df['Amihud_Ratio'] = (df['Amihud_Impact'] / df['Amihud_Impact'].rolling(20).mean().replace(0, 1.0)).fillna(1.0)
 
-        # 🧬 最新クオンツ指標（Hurst / Kalman / Kyleλ）の自動算出
         adv_q = compute_latest_quant_metrics(df['Close'], df['Vol_Ratio'], df['Day_Return'].fillna(0.0))
         hurst_v = adv_q["hurst"]
         kalman_bull = adv_q["kalman_bull_pct"]
@@ -1021,7 +1239,6 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         tokugai_prob = int(min(max(round(tokugai_raw), 5), 98))
         tokugai_status = "🚨 特買い（気配切り上げ）濃厚" if tokugai_prob >= 70 else ("🌅 買い気配先行スタート優勢" if tokugai_prob >= 52 else "⚖️ 通常気配スタート")
 
-        # 🧬 最新アルゴリズム自動進化ボーナス（VIXとHurst指数・Kalmanによるレジーム適応）
         evo_bonus = 0.0
         if use_latest_algo:
             evo_bonus += (hurst_v - 0.5) * 18.0
@@ -1040,7 +1257,6 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
             ai_score * 0.35 + inst_score * 0.25 + board5ch_score * 0.20 + squeeze_score * 0.10 + min(float(latest['ATR_Pct']) * 3.5, 12.0) + max(0.0, evo_bonus), 1
         )
 
-        # 🎯 翌朝株価 10段階シグナル評価
         tier_val = ai_score * 0.40 + prob * 0.25 + inst_score * 0.20 + board5ch_score * 0.15
         if upper_sh >= 0.42:
             tier_val -= 12.0
@@ -1278,7 +1494,6 @@ def run_7ai_council_algorithm(r, m5=None):
     }
 
 def generate_7ai_qa_response_html(question, r, debate, lot_info, m5=None) -> str:
-    """高コントラスト配色＆読みやすい12.5pxで出力するHTML回答ジェネレーター"""
     q_clean = unicodedata.normalize('NFKC', str(question)).strip()
     q_low = q_clean.lower()
     m5_vwap = m5["vwap5_price"] if m5 else r["vwap_price"]
@@ -1429,7 +1644,6 @@ def render_interactive_council_section(r, unique_key):
     with f_col2:
         st.button("AIに質問", key=f"free_q_btn_{unique_key}", on_click=cb_handle_free_q, args=(unique_key, input_key, r, debate, m5), use_container_width=True)
 
-    # スクロール先アンカー（回答表示エリア）
     anchor_id = f"qa_ans_anchor_{unique_key}"
     st.markdown(f'<div id="{anchor_id}"></div>', unsafe_allow_html=True)
 
@@ -1444,7 +1658,6 @@ def render_interactive_council_section(r, unique_key):
             unsafe_allow_html=True
         )
 
-        # 質問送信直後に回答カードへさりげなくスムーズスクロール
         if st.session_state.get("scroll_to_chat_key") == unique_key:
             components.html(
                 f"""
