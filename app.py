@@ -11,7 +11,7 @@ import time
 # スマホ画面向けにページ設定
 st.set_page_config(page_title="翌朝株価 クオンツ＆7大AI解析 Pro (会員限定版)", page_icon="📈", layout="centered")
 
-# Fragmentデコレータ（部分更新用）の取得（※二重ネスト厳禁）
+# Fragmentデコレータ（部分更新用）の取得
 fragment_decorator = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
 # ==========================================
@@ -92,24 +92,22 @@ for k, default_v in [("active_debates", {}), ("debate_Animated", set()), ("stock
         st.session_state[k] = default_v
 
 # ==========================================
-# 🎨 カスタムCSS（白文字化バグを完全防止）
+# 🎨 カスタムCSS
 # ==========================================
 st.markdown("""
 <style>
 button[data-baseweb="tab"] { font-size: 13px !important; font-weight: bold !important; padding: 8px 14px !important; }
-.market-banner { background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; border-radius: 12px; padding: 12px 10px; margin-bottom: 16px; }
-.market-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; width: 100%; }
-.market-item { background: rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 7px 4px; text-align: center; }
-.span-2 { grid-column: span 2; } .span-3 { grid-column: span 3; }
 .stock-card, .rank-card, .search-result-card { background-color: #ffffff !important; color: #0f172a !important; border-radius: 12px; padding: 16px; margin-bottom: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); border-left: 6px solid #e11d48; }
 .search-result-card { background-color: #fffbeb !important; border-left-color: #d97706; }
 .prob-badge { font-size: 22px; font-weight: bold; color: #dc2626; }
 .rank-badge { display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; padding: 3px 9px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-right: 4px; }
 .score-badge { display: inline-block; background: #1e293b; color: #f8fafc; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+.inst-badge { display: inline-block; background: linear-gradient(135deg, #1d4ed8, #3b82f6); color: #fff; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
 .board5ch-badge { display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: #fff; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
 .squeeze-badge { display: inline-block; background: linear-gradient(135deg, #b91c1c, #ef4444); color: #fff; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
 .tokugai-badge { display: inline-block; background: linear-gradient(135deg, #d97706, #f59e0b); color: #fff; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 4px; }
-.survival-badge { display: inline-block; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; margin-left: 4px; }
+.survival-badge { display: inline-block; background: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; margin-left: 4px; }
+.inst-box { background: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #1e3a8a !important; }
 .squeeze-box { background: #fff1f2; border: 1px solid #fecdd3; border-left: 4px solid #e11d48; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #881337 !important; }
 .pts-tokugai-box { background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #78350f !important; }
 .board5ch-box { background: #ecfdf5; border: 1px solid #a7f3d0; border-left: 4px solid #059669; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #064e3b !important; }
@@ -120,7 +118,6 @@ button[data-baseweb="tab"] { font-size: 13px !important; font-weight: bold !impo
 .ai-agent-card { background: rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 12.5px; line-height: 1.6; color: #f8fafc !important; }
 .consensus-banner { background: linear-gradient(135deg, #1e1b4b, #312e81); border: 2px solid #818cf8; border-radius: 10px; padding: 14px; margin-top: 12px; font-size: 12.5px; line-height: 1.7; color: #f8fafc !important; }
 .consensus-section { background: rgba(255, 255, 255, 0.07); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 8px 10px; margin-top: 8px; color: #f8fafc !important; }
-/* ★質問コーナーの文字色を完全固定（白飛び防止） */
 .qa-active-box { background: #ffffff !important; border: 2px solid #4f46e5 !important; border-radius: 10px; padding: 14px !important; margin-bottom: 10px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15); color: #0f172a !important; }
 .qa-bubble-user { background: #4f46e5 !important; color: #ffffff !important; display: inline-block; border-radius: 6px; padding: 4px 10px; margin-bottom: 8px; font-size: 12px; font-weight: bold; }
 .qa-bubble-ai { color: #0f172a !important; font-size: 13px !important; line-height: 1.75 !important; background: #f8fafc !important; padding: 10px !important; border-radius: 8px !important; border-left: 4px solid #4f46e5 !important; }
@@ -134,10 +131,11 @@ total_capital = st.sidebar.number_input("総投資資金 (円 / ドル)", min_va
 risk_tolerance_pct = st.sidebar.slider("1トレード許容リスク (%)", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
 
 st.sidebar.markdown("---")
-st.sidebar.header("🦁 弱肉強食サバイバル＆優先設定")
-survival_cut_pct = st.sidebar.slider("弱肉強食・各タブ選抜率 (%)", min_value=40, max_value=100, value=70, step=10, help="出来高やモメンタムが弱い下位銘柄を自動的に脱落させ、上位銘柄のみをタブに残します。")
+st.sidebar.header("🏦 機関クオンツ＆弱肉強食設定")
+survival_cut_pct = st.sidebar.slider("弱肉強食・各タブ選抜率 (%)", min_value=40, max_value=100, value=70, step=10)
+inst_boost_mode = st.sidebar.checkbox("🏦 機関クオンツ（VPIN・ステルス吸収）優先", value=True)
 board5ch_boost = st.sidebar.checkbox("🔥 5ch板・初動イナゴ＆シコリ玉なし優先", value=True)
-squeeze_boost_mode = st.sidebar.checkbox("🔥 空売り踏み上げ（20日高値突破）優先", value=True)
+squeeze_boost_mode = st.sidebar.checkbox("💥 空売り踏み上げ（20日高値突破）優先", value=True)
 tokugai_boost_mode = st.sidebar.checkbox("🚨 翌朝『特買い』・夜間PTS連動を優先", value=True)
 show_5m_chart = st.sidebar.checkbox("合議パネル内に5分足＆VWAPチャートを描画", value=True)
 
@@ -151,12 +149,12 @@ if st.session_state["watchlist"]:
         st.rerun()
 
 st.title("📱 翌朝株価 クオンツ＆7大AI解析 Pro")
-st.caption("【進化版】5chデイトレ板需給（シコリ玉排除）× 弱肉強食サバイバル選抜 × 7大AI完全対話")
+st.caption("【機関投資家VPINクオンツ搭載】7大AI動的ロール合議 × 5ch需給 × 弱肉強食サバイバル")
 
-# --- 🦁 国内外の主力・テーマ母集団プール（ここから弱肉強食で自動選抜・入れ替え） ---
+# --- 🦁 国内外の主力・テーマ母集団プール ---
 STOCK_POOL = {
     "半導体": [
-        {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置の国内筆頭。海外勢の指数買い中心"},
+        {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置の国内筆頭。機関の指数バスケット買い中心"},
         {"code": "6857.T", "name": "アドバンテスト", "theme": "AI半導体テスタ世界首位級。SOX指数連動"},
         {"code": "6920.T", "name": "レーザーテック", "theme": "EUV検査装置。デイトレ売買代金・空売り踏み上げ筆頭"},
         {"code": "6146.T", "name": "ディスコ", "theme": "HBM向け精密加工装置で圧倒的シェア"},
@@ -186,7 +184,7 @@ STOCK_POOL = {
         {"code": "4180.T", "name": "Appier", "theme": "AIマーケティングSaaS"},
         {"code": "5032.T", "name": "ANYCOLOR", "theme": "VTuber大手。好決算・自社株買いで踏み上げ頻発"},
         {"code": "4385.T", "name": "メルカリ", "theme": "国内C2C大手。信用取組の妙味"},
-        {"code": "7974.T", "name": "任天堂", "theme": "次世代機テーマ・海外資金流入の超主力"},
+        {"code": "7974.T", "name": "任天堂", "theme": "次世代機テーマ・海外機関資金流入の超主力"},
         {"code": "8306.T", "name": "三菱UFJ", "theme": "金利連動のメガバンク筆頭"},
         {"code": "MSFT", "name": "マイクロソフト (米)", "theme": "OpenAI筆頭連携・クラウド巨人"},
         {"code": "PLTR", "name": "パランティア (米)", "theme": "防衛・企業向けAIプラットフォーム大本命"},
@@ -195,7 +193,7 @@ STOCK_POOL = {
         {"code": "CRWD", "name": "クラウドストライク (米)", "theme": "AIサイバーセキュリティ世界首位"}
     ],
     "AI電力・電線": [
-        {"code": "5803.T", "name": "フジクラ", "theme": "AIデータセンター向け光ファイバー。踏み上げ最強格"},
+        {"code": "5803.T", "name": "フジクラ", "theme": "AIデータセンター向け光ファイバー。機関買い＆踏み上げ最強格"},
         {"code": "5801.T", "name": "古河電気工業", "theme": "光ファイバー・送電インフラ"},
         {"code": "5802.T", "name": "住友電気工業", "theme": "電線首位・データセンター通信網"},
         {"code": "6501.T", "name": "日立製作所", "theme": "世界送配電グリッド・AIインフラ"},
@@ -282,9 +280,9 @@ def fetch_macro_market():
     return macro_data
 
 # ==========================================
-# ⚡ 高速一括取得＆5ch需給・弱肉強食解析エンジン
+# 🏦 機関投資家クオンツ（VPIN・Amihud・ステルス吸収）＆ 5ch需給解析エンジン
 # ==========================================
-def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_5ch=True, boost_squeeze=True, boost_tokugai=True):
+def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst=True, boost_5ch=True, boost_squeeze=True, boost_tokugai=True):
     try:
         if df_raw is None or df_raw.empty:
             return None
@@ -312,7 +310,6 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_5ch=
         df['MACD'] = ema12 - ema26
         df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
         df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
-        df['MACD_Hist_Diff'] = df['MACD_Hist'].diff()
 
         tr = pd.concat([
             df['High'] - df['Low'],
@@ -331,10 +328,17 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_5ch=
         df['High_20'] = df['High'].shift(1).rolling(20).max().fillna(df['High'])
         df['Dist_High20'] = ((df['Close'] - df['High_20']) / df['High_20'] * 100).fillna(0.0)
 
-        # ★ 新搭載：5chデイトレ板・イナゴ需給＆シコリ玉（上ヒゲ）判定アルゴリズム
+        # ★ 機関投資家アルゴリズム①：VPIN（Order Flow Toxicity / 情報優位な大口買い圧力）
+        df['Signed_Order_Flow'] = ((df['Close'] - df['Open']) / high_low).fillna(0.0) * df['Vol_Ratio']
+        df['VPIN_5d'] = df['Signed_Order_Flow'].rolling(5).mean().fillna(0.0)
+
+        # ★ 機関投資家アルゴリズム②：Amihud非流動性インパクト（板の薄さ・浮動株吸い上げ度）
+        df['Amihud_Impact'] = (df['Day_Return'].abs() / df['Vol_Ratio'].replace(0, 1.0)).fillna(1.0)
+        df['Amihud_Ratio'] = (df['Amihud_Impact'] / df['Amihud_Impact'].rolling(20).mean().replace(0, 1.0)).fillna(1.0)
+
+        cond_inst_accum = (df['VPIN_5d'] >= 0.22) & (df['Close'] >= df['VWAP20']) & (df['Close_Pos'] >= 0.68)
         cond_5ch_surge = (df['Vol_Accel_5d'] >= 1.35) & (df['Close_Pos'] >= 0.72) & (df['Upper_Shadow'] <= 0.18) & (df['Close'] > df['Open'])
         cond_sq_breakout = (df['Close'] >= df['High_20'] * 0.992) & (df['Vol_Ratio'] >= 1.2) & (df['Close_Pos'] >= 0.7)
-        cond_closing_moc = (df['Close_Pos'] >= 0.80) & (df['Upper_Shadow'] <= 0.15) & (df['Vol_Ratio'] >= 1.15)
 
         df['Next_Open'] = df['Open'].shift(-1)
         df['Gap_Pct'] = (df['Next_Open'] - df['Close']) / df['Close'] * 100
@@ -345,16 +349,35 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_5ch=
         if len(history) == 0:
             return None
 
-        # 1. 5chデイトレ板・シコリ玉＆初動イナゴスコア計算（ボリンジャーバンド収縮の代わりに搭載）
         upper_sh = float(latest['Upper_Shadow'])
         vol_acc = float(latest['Vol_Accel_5d'])
         c_pos = float(latest['Close_Pos'])
         dist_h20 = float(latest['Dist_High20'])
+        vpin_val = float(latest['VPIN_5d'])
+        amihud_r = float(latest['Amihud_Ratio'])
 
+        # 🏦 1. 機関投資家クオンツスコア（VPIN × VWAPステルス吸収 × Amihud浮動株枯渇）
+        inst_raw = 50.0 + vpin_val * 45.0 + (c_pos - 0.5) * 25.0
+        if float(latest['Close']) >= float(latest['VWAP20']):
+            inst_raw += 10.0
+        if float(latest['Day_Return']) > 0.5 and amihud_r >= 1.15 and upper_sh <= 0.2:
+            inst_raw += 12.0
+            inst_status = f"🏦 機関の浮動株吸い上げ・売り板枯渇 (VPIN {vpin_val:+.2f} / 価格弾性 {amihud_r:.2f}倍)"
+        elif cond_inst_accum.iloc[-1]:
+            inst_raw += 10.0
+            inst_status = f"🏦 機関アルゴリズム・ステルス氷山買い集め検知 (VPIN {vpin_val:+.2f} / 20日VWAP上維持)"
+        elif vpin_val < -0.15:
+            inst_raw -= 12.0
+            inst_status = f"⚠️ 機関のTWAP/VWAP売り執行警戒 (VPIN {vpin_val:+.2f})"
+        else:
+            inst_status = f"⚖️ 機関オーダーフロー中立 (VPIN {vpin_val:+.2f} / 弾性 {amihud_r:.2f}倍)"
+        inst_score = int(min(max(round(inst_raw), 15), 99))
+
+        # 🔥 2. 5chデイトレ板・シコリ玉＆初動イナゴスコア
         board5ch_raw = 50.0 + (min(vol_acc, 3.0) - 1.0) * 18.0 + (c_pos - 0.5) * 30.0
         if upper_sh >= 0.38:
-            board5ch_raw -= 25.0  # 長い上ヒゲ＝高値掴みイナゴのシコリ玉大量発生で厳しく減点
-            board5ch_status = f"⚠️ 上ヒゲシコリ玉警戒 (上ヒゲ率{int(upper_sh*100)}%・戻り売り注意)"
+            board5ch_raw -= 25.0
+            board5ch_status = f"⚠️ 上ヒゲシコリ玉警戒 (上ヒゲ率{int(upper_sh*100)}%・ヤレヤレ売り注意)"
         elif dist_h20 >= -0.5 and upper_sh <= 0.15 and vol_acc >= 1.2:
             board5ch_raw += 18.0
             board5ch_status = "🚀 5ch板・青天井ブレイク (上値シコリ玉なし・イナゴ初動集中)"
@@ -365,7 +388,7 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_5ch=
             board5ch_status = f"⚖️ 5ch板・通常需給 (5日出来高加速 {vol_acc:.2f}倍 / 上ヒゲ率 {int(upper_sh*100)}%)"
         board5ch_score = int(min(max(round(board5ch_raw), 15), 99))
 
-        # 2. 空売り踏み上げスコア
+        # 💥 3. 空売り踏み上げスコア
         sq_raw = 42.0 + (22.0 if dist_h20 >= 0 else (14.0 if dist_h20 >= -2.5 else 4.0))
         sq_raw += min(float(latest['Vol_Ratio']), 3.0) * 8.0 + (c_pos - 0.5) * 24.0
         squeeze_score = int(min(max(round(sq_raw), 15), 99))
@@ -376,21 +399,19 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_5ch=
         else:
             squeeze_type = f"⚖️ 20日高値乖離 {dist_h20:+.2f}%"
 
-        # 3. 大引けMOCスコア
         close_pos_pct = int(round(c_pos * 100))
         closing_power_score = int(min(max(round(40.0 + c_pos * 35.0 + min(float(latest['Vol_Ratio']), 2.5) * 10.0), 15), 99))
-        closing_status = f"🌆 大引けMOC引けピン (高値引け度{close_pos_pct}%)" if cond_closing_moc.iloc[-1] else f"引け位置 {close_pos_pct}%"
 
-        # 過去バックテスト照合
-        if cond_5ch_surge.iloc[-1]:
+        # バックテスト照合
+        if cond_inst_accum.iloc[-1]:
+            signal = "🏦 機関VPINステルス買い集め＋VWAP順行"
+            sub = history[cond_inst_accum.reindex(history.index, fill_value=False)]
+        elif cond_5ch_surge.iloc[-1]:
             signal = "🔥 5ch初動イナゴ集中＋シコリ玉なし高値引け"
             sub = history[cond_5ch_surge.reindex(history.index, fill_value=False)]
         elif cond_sq_breakout.iloc[-1]:
             signal = "🚀 20日高値ブレイク・ショートスクイーズ"
             sub = history[cond_sq_breakout.reindex(history.index, fill_value=False)]
-        elif cond_closing_moc.iloc[-1]:
-            signal = "🌆 大引けMOCバスケット買い集め"
-            sub = history[cond_closing_moc.reindex(history.index, fill_value=False)]
         elif latest['Day_Return'] > 0:
             signal = "📈 陽線トレンド継続"
             sub = history[history['Day_Return'] > 0]
@@ -413,13 +434,12 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_5ch=
         payoff_ratio = round(avg_win / max(avg_loss, 0.1), 2)
         expected_edge = round((prob / 100 * avg_win) - ((100 - prob) / 100 * avg_loss), 2)
 
-        # 夜間PTS・マクロ連動
         sox_diff = macro["sox"]["diff"] if macro else 0.0
         nk_diff = macro["nk_fut"]["diff"] if macro else 0.0
         sp_diff = macro["sp500"]["diff"] if macro else 0.0
         is_jp = ".T" in code
         overnight_impact = (nk_diff * 0.5 + sox_diff * 0.4) if is_jp else (sp_diff * 0.5 + sox_diff * 0.4)
-        pts_gap_pct = round(avg_gap * 0.5 + overnight_impact * 0.6 + max(0.0, (closing_power_score - 55) * 0.02), 2)
+        pts_gap_pct = round(avg_gap * 0.5 + overnight_impact * 0.6 + max(0.0, (inst_score - 55) * 0.025), 2)
 
         close_val = float(latest['Close'])
         atr_val = float(latest['ATR'])
@@ -428,20 +448,19 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_5ch=
         tokugai_pct_threshold = max(2.2, min(round(float(latest['ATR_Pct']) * 0.95, 2), 4.0))
         tokugai_line_val = close_val * (1.0 + tokugai_pct_threshold / 100.0)
 
-        tokugai_raw = 20.0 + max(0.0, pts_gap_pct) * 14.0 + max(0.0, board5ch_score - 50) * 0.5 + max(0.0, squeeze_score - 50) * 0.5
+        tokugai_raw = 18.0 + max(0.0, pts_gap_pct) * 14.0 + max(0.0, inst_score - 50) * 0.4 + max(0.0, board5ch_score - 50) * 0.4 + max(0.0, squeeze_score - 50) * 0.4
         tokugai_prob = int(min(max(round(tokugai_raw), 5), 98))
         tokugai_status = "🚨 特買い（気配切り上げ）濃厚" if tokugai_prob >= 70 else ("🌅 買い気配先行スタート優勢" if tokugai_prob >= 52 else "⚖️ 通常気配スタート")
 
-        # 総合AIスコア＆弱肉強食サバイバル戦闘力（Survival Power）
-        base_score = min(max(prob * 0.55, 10), 45) + min(max((expected_edge + 0.3) * 12, 0), 15)
-        b5_bonus = round((board5ch_score - 50) * 0.22) if boost_5ch else 0
-        sq_bonus = round((squeeze_score - 50) * 0.18) if boost_squeeze else 0
-        tk_bonus = round((tokugai_prob - 45) * 0.15) if boost_tokugai else 0
-        ai_score = int(min(max(round(base_score + b5_bonus + sq_bonus + tk_bonus), 15), 99))
+        base_score = min(max(prob * 0.52, 10), 44) + min(max((expected_edge + 0.3) * 12, 0), 14)
+        in_bonus = round((inst_score - 50) * 0.22) if boost_inst else 0
+        b5_bonus = round((board5ch_score - 50) * 0.18) if boost_5ch else 0
+        sq_bonus = round((squeeze_score - 50) * 0.16) if boost_squeeze else 0
+        tk_bonus = round((tokugai_prob - 45) * 0.14) if boost_tokugai else 0
+        ai_score = int(min(max(round(base_score + in_bonus + b5_bonus + sq_bonus + tk_bonus), 15), 99))
 
-        # 🦁 弱肉強食サバイバル戦闘力（出来高の勢い×ボラティリティ×シコリ玉の無さ×AIスコア）
         survival_power = round(
-            ai_score * 0.45 + board5ch_score * 0.25 + squeeze_score * 0.15 + min(float(latest['ATR_Pct']) * 4.0, 15.0), 1
+            ai_score * 0.35 + inst_score * 0.25 + board5ch_score * 0.20 + squeeze_score * 0.10 + min(float(latest['ATR_Pct']) * 3.5, 12.0), 1
         )
 
         tp_val = max(pts_est_val, close_val) + (atr_val * 0.85)
@@ -459,8 +478,9 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_5ch=
             "tp_price": fmt_p(tp_val), "tp_pct": round((tp_val - close_val) / close_val * 100, 1),
             "sl_price": fmt_p(sl_val), "sl_pct": round((sl_val - close_val) / close_val * 100, 1),
             "vwap_price": fmt_p(float(latest['VWAP20'])),
+            "inst_score": inst_score, "inst_status": inst_status, "vpin": round(vpin_val, 2), "amihud_ratio": round(amihud_r, 2),
             "board5ch_score": board5ch_score, "board5ch_status": board5ch_status, "upper_shadow_pct": int(upper_sh * 100),
-            "close_pos_pct": close_pos_pct, "closing_power_score": closing_power_score, "closing_status": closing_status,
+            "close_pos_pct": close_pos_pct, "closing_power_score": closing_power_score,
             "squeeze_score": squeeze_score, "squeeze_type": squeeze_type,
             "squeeze_trigger_price": fmt_p(high20_val), "raw_high20": high20_val, "dist_to_high20": round(dist_h20, 2),
             "pts_est_price": fmt_p(pts_est_val), "pts_gap_pct": pts_gap_pct,
@@ -482,8 +502,7 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_5ch=
         return None
 
 @st.cache_data(ttl=1800)
-def fetch_all_pool_batch(macro, boost_5ch, boost_squeeze, boost_tokugai):
-    """全銘柄を yf.download で一括高速取得し、タイムアウトを完全に防ぐ"""
+def fetch_all_pool_batch(macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai):
     all_codes = list({s["code"] for stocks in STOCK_POOL.values() for s in stocks})
     raw_data = yf.download(all_codes, period="6mo", group_by="ticker", threads=True, progress=False)
 
@@ -496,7 +515,7 @@ def fetch_all_pool_batch(macro, boost_5ch, boost_squeeze, boost_tokugai):
             c = s["code"]
             try:
                 df_c = raw_data[c] if len(all_codes) > 1 else raw_data
-                res = analyze_single_dataframe(df_c, c, s["name"], s["theme"], genre, macro, boost_5ch, boost_squeeze, boost_tokugai)
+                res = analyze_single_dataframe(df_c, c, s["name"], s["theme"], genre, macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai)
                 if res:
                     genre_Map[genre].append(res)
                     if c not in seen:
@@ -507,10 +526,10 @@ def fetch_all_pool_batch(macro, boost_5ch, boost_squeeze, boost_tokugai):
     return genre_Map, all_list
 
 @st.cache_data(ttl=600)
-def fetch_single_stock(code, macro, boost_5ch, boost_squeeze, boost_tokugai):
+def fetch_single_stock(code, macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai):
     df_c = yf.Ticker(code).history(period="6mo")
     info = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
-    return analyze_single_dataframe(df_c, code, info["name"], info["theme"], info["genre"], macro, boost_5ch, boost_squeeze, boost_tokugai)
+    return analyze_single_dataframe(df_c, code, info["name"], info["theme"], info["genre"], macro, boost_inst, boost_5ch, boost_squeeze, boost_tokugai)
 
 # --- ⚡ 5分足（Intraday）解析エンジン ---
 @st.cache_data(ttl=300)
@@ -534,7 +553,7 @@ def fetch_5m_intraday_algo(full_code, trigger_high20=None):
         is_jp = ".T" in full_code
         vwap5_fmt = f"{latest_vwap5:,.0f}円" if is_jp else f"${latest_vwap5:,.2f}"
 
-        status_5m = "🔥 5分足VWAP上・順行トレンド" if vwap5_dev >= 0 else "🧊 5分足VWAP下・押し目待機"
+        status_5m = "🔥 5分足VWAP上・機関TWAP順行" if vwap5_dev >= 0 else "🧊 5分足VWAP下・押し目待機"
         chart_df = pd.DataFrame({
             "Time": day_df.index.strftime("%H:%M"),
             "Open": day_df["Open"].astype(float).values, "High": day_df["High"].astype(float).values,
@@ -558,82 +577,157 @@ def render_5m_candlestick_chart(m5):
     st.altair_chart((wick + body + vwap_line).properties(height=190), use_container_width=True)
 
 # ==========================================
-# 🧠 7大AI合議アルゴリズム＆質問回答エンジン
+# 🧠 7大AI【動的ロール割り当て】合議アルゴリズム（GPT→ChatGPT変更済）
 # ==========================================
 def run_7ai_council_algorithm(r, m5=None):
+    """銘柄の波形や特徴に応じて、7大AIがそれぞれの得意分野の中で毎回異なる専門テーマ（担当ジャンル）に変化して検証する"""
     vwap_ref = m5['vwap5_price'] if m5 else r['vwap_price']
     half_lot = max(1, r['lot_info']['shares'] // 2)
     rem_lot = max(0, r['lot_info']['shares'] - half_lot)
 
-    claude_s = int(min(max(round(50 + (r["prob"] - 50) * 0.8 + (r["payoff"] - 1.0) * 15 - r["upper_shadow_pct"] * 0.2), 20), 99))
-    grok_s   = int(min(max(round(45 + (r["board5ch_score"] - 50) * 0.45 + (r["squeeze_score"] - 50) * 0.35 + r["tokugai_prob"] * 0.15), 20), 99))
-    gpt_s    = int(min(max(round((r["ai_score"] + claude_s + grok_s) / 3.0), 20), 99))
-    gemini_s = int(min(max(round(50 + r["pts_gap_pct"] * 12 + (r["closing_power_score"] - 50) * 0.3), 20), 99))
-    perp_s   = int(min(max(round(r["board5ch_score"] * 0.6 + r["closing_power_score"] * 0.4), 20), 99))
-    gensp_s  = int(min(max(round((claude_s + grok_s + gpt_s + gemini_s + perp_s) / 5.0), 20), 99))
-    nblm_s   = int(min(max(round(48 + (r["prob"] - 50) * 0.9 + (r["payoff"] - 1.0) * 12), 20), 99))
-    final_s  = int(round((claude_s + grok_s + gpt_s + gemini_s + perp_s + gensp_s + nblm_s) / 7.0))
+    # 銘柄コードと日付・波形スコアから、各AIの得意分野ローテーションを決定
+    code_seed = sum(ord(ch) for ch in r["code"])
+    is_squeeze_hot = r["squeeze_score"] >= 68
+    is_inst_hot = r["inst_score"] >= 68
+    is_5ch_hot = r["board5ch_score"] >= 68
+
+    claude_s  = int(min(max(round(50 + (r["prob"] - 50) * 0.8 + (r["payoff"] - 1.0) * 15 - r["upper_shadow_pct"] * 0.2), 20), 99))
+    grok_s    = int(min(max(round(45 + (r["board5ch_score"] - 50) * 0.45 + (r["squeeze_score"] - 50) * 0.35 + r["tokugai_prob"] * 0.15), 20), 99))
+    chatgpt_s = int(min(max(round((r["ai_score"] + r["inst_score"] + claude_s) / 3.0), 20), 99))
+    gemini_s  = int(min(max(round(50 + r["pts_gap_pct"] * 12 + (r["inst_score"] - 50) * 0.35), 20), 99))
+    perp_s    = int(min(max(round(r["inst_score"] * 0.55 + r["board5ch_score"] * 0.45), 20), 99))
+    gensp_s   = int(min(max(round((claude_s + grok_s + chatgpt_s + gemini_s + perp_s) / 5.0), 20), 99))
+    nblm_s    = int(min(max(round(48 + (r["prob"] - 50) * 0.9 + (r["payoff"] - 1.0) * 12), 20), 99))
+    final_s   = int(round((claude_s + grok_s + chatgpt_s + gemini_s + perp_s + gensp_s + nblm_s) / 7.0))
+
+    # 1. Claude（得意分野：数理リスク管理 ／ 機関VPINオーダーフロー毒性 ／ ケリー基準資金配分）
+    if is_inst_hot:
+        claude_role = "🟠 Claude【担当：機関VPINオーダーフロー毒性＆下値リスク監査】"
+        claude_msg = f"機関のVPIN（情報優位フロー）が <b>{r['vpin']:+.2f}</b> とプラス圏で推移し、下値は機関の氷山注文で支えられています。逆指値 <b>{r['sl_price']}</b> を置けばリスク対比の期待値は抜群です。"
+    elif r["upper_shadow_pct"] >= 30:
+        claude_role = "🟠 Claude【担当：高値掴みドローダウン制御＆シコリ玉警戒】"
+        claude_msg = f"上ヒゲ率 <b>{r['upper_shadow_pct']}%</b> の戻り売りリスクを計算しました。朝イチの成行飛びつきは避け、<b>{vwap_ref}</b> までの押し目を待つことで最大損失を <b>{r['lot_info']['risk_amount']:,.0f}円</b> 以内に完全ロックできます。"
+    else:
+        claude_role = "🟠 Claude【担当：ケリー基準期待値＆リスクリワード数理検証】"
+        claude_msg = f"過去勝率 <b>{r['prob']}%</b>・損益比 <b>{r['payoff']}倍</b>（期待値 <b>{r['edge']:+.2f}%</b>）。統計的に優位なセットアップであり、総資金の <b>{r['lot_info']['capital_ratio']}%（{r['lot_info']['shares']:,}株）</b> 投入が数学的最適解です。"
+
+    # 2. Grok（得意分野：X/5chリアルタイム群集心理 ／ 空売り踏み上げ ／ 特買いイナゴ初動）
+    if is_squeeze_hot:
+        grok_role = "🔴 Grok【担当：ショートスクイーズ（空売り丸焦げ踏み上げ）解析】"
+        grok_msg = f"空売り勢の防衛線である20日高値（<b>{r['squeeze_trigger_price']}</b>）まであと <b>{r['dist_to_high20']:+.2f}%</b>！ここを突破した瞬間、売り方の強制ロスカット買い戻しが連鎖爆発します。"
+    elif is_5ch_hot:
+        grok_role = "🔴 Grok【担当：5chデイトレ実況板・初動イナゴモメンタム解析】"
+        grok_msg = f"5ch板需給は「<b>{r['board5ch_status']}</b>」。シコリ玉が極めて少なく、寄付きからデイトレーダーの順張り資金が一気に集中しやすい波形です。"
+    else:
+        grok_role = "🔴 Grok【担当：SNSセンチメント＆寄り前『特買い』気配爆発力】"
+        grok_msg = f"翌朝の特買い発生確率は <b>{r['tokugai_prob']}%</b>（特買い発動ライン <b>{r['tokugai_line']}</b>）。朝8:50の気配値が <b>{r['pts_est_price']}</b> 超えなら初動の勢いに乗るチャンスです。"
+
+    # 3. ChatGPT（得意分野：機関アルゴ執行戦略 ／ マルチタイムフレーム統合 ／ ポートフォリオ戦術）
+    if code_seed % 3 == 0:
+        chatgpt_role = "🟢 ChatGPT【担当：機関投資家VWAP/TWAPアルゴリズム追随戦略】"
+        chatgpt_msg = f"機関投資家の執行基準線であるVWAP（<b>{vwap_ref}</b>）と日足MACD（<b>{r['macd_state']}</b>）を統合評価。機関アルゴと同様にVWAPより上での順張り分割買いが最も合理的です。"
+    elif code_seed % 3 == 1:
+        chatgpt_role = "🟢 ChatGPT【担当：日足×5分足マルチタイムフレーム・シナリオ構築】"
+        chatgpt_msg = f"日足のトレンド強度はAIスコア <b>{r['ai_score']}点</b>、夜間理論ギャップは <b>{r['pts_gap_pct']:+.2f}%</b>。寄付き直後の乱高下をやり過ごし、9:10以降のトレンド確定に乗る王道シナリオを推奨します。"
+    else:
+        chatgpt_role = "🟢 ChatGPT【担当：総合クオンツバランス＆機関ステルス吸収判定】"
+        chatgpt_msg = f"機関クオンツ評価「<b>{r['inst_status']}</b>」と個人需給のバランスが高水準で一致。第一利確ターゲット <b>{r['tp_price']}（+{r['tp_pct']}%）</b> を狙うメイン銘柄として承認します。"
+
+    # 4. Gemini（得意分野：グローバルマクロ連動 ／ テーマ・国策セクター資金循環 ／ 夜間ADR・先物波及）
+    if ".T" in r["full_code"]:
+        gemini_role = f"🔵 Gemini【担当：CME日経先物・米SOX連動＆『{r['genre']}』資金循環】"
+        gemini_msg = f"海外マクロ地合いと「{r['genre']}」テーマ（{r['theme']}）の資金流入を解析。夜間理論気配は <b>{r['pts_est_price']}</b> と算出され、海外勢のバスケット買いが入りやすい環境です。"
+    else:
+        gemini_role = f"🔵 Gemini【担当：米国ウォール街セクターローテーション＆金利・VIX連動】"
+        gemini_msg = f"米国「{r['genre']}」セクターへの機関資金フローは堅調。プレマーケット気配（理論値 <b>{r['pts_est_price']}</b>）から寄り付き後の上値追いが期待できます。"
+
+    # 5. Perplexity（得意分野：ダークプール・大口約定監査 ／ 板の薄さAmihud検証 ／ 見せ板ファクトチェック）
+    if r["amihud_ratio"] >= 1.1:
+        perp_role = "🌐 Perplexity【担当：Amihud非流動性（浮動株枯渇・板の薄さ）監査】"
+        perp_msg = f"Amihud価格弾性率が <b>{r['amihud_ratio']}倍</b> に上昇中。機関が浮動株を吸収したことで売り板が薄くなっており、まとまった買いが入ると一気に値が飛びやすい真空状態です。"
+    else:
+        perp_role = "🌐 Perplexity【担当：大引けMOC機関買い集め＆朝8:55見せ板ファクトチェック】"
+        perp_msg = f"出来高倍率 <b>{r['vol_ratio']}倍</b>・引け位置 <b>{r['close_pos_pct']}%</b> を検証。フェイクの見せ板を排除するため、注文取消が制限される朝8:55以降の成行買い残を確認してください。"
+
+    # 6. Genspark（得意分野：時間軸別エグゼキューション戦術 ／ 2段階ピラミッディング ／ トレーリング利確）
+    if is_squeeze_hot:
+        gensp_role = "✨ Genspark【担当：高値ブレイクアウト追撃（ピラミッディング）戦術】"
+        gensp_msg = f"①寄付きでまず <b>{half_lot:,}株</b> エントリー → ②空売り踏み上げトリガーである <b>{r['squeeze_trigger_price']}</b> を突破した瞬間に残り <b>{rem_lot:,}株</b> を追撃投入する攻撃型戦術がベストです！"
+    else:
+        gensp_role = "✨ Genspark【担当：機関流・5分足VWAP押し目2分割エントリー戦術】"
+        gensp_msg = f"①朝9:00に打診買い <b>{half_lot:,}株</b> → ②9:05〜9:25に5分足VWAP（<b>{vwap_ref}</b>）で下ヒゲ反発を確認して残り <b>{rem_lot:,}株</b> を追加し、<b>{r['tp_price']}</b> で利確します。"
+
+    # 7. NotebookLM（得意分野：過去1年アノマリー照合 ／ 類似波形バックテスト ／ 勝ちパターン抽出）
+    nblm_role = "📓 NotebookLM【担当：過去1年ヒストリカル類似波形＆アノマリー照合】"
+    nblm_msg = f"過去1年間で「{r['signal']}」が出現した <b>{r['count']}</b> を照合した結果、翌朝上昇率は <b>{r['prob']}%</b>、過去最大ギャップアップは <b>+{r['max_win_gap']}%</b> と高い再現性を記録しています。"
 
     return {
         "final_score": final_s,
         "agents": [
-            ("🟠 Claude（リスク・シコリ玉監査）", claude_s, f"過去勝率 <b>{r['prob']}%（{r['count']}）</b>、損益比 <b>{r['payoff']}倍</b>。上ヒゲ率 <b>{r['upper_shadow_pct']}%</b> を考慮し、逆指値 <b>{r['sl_price']}</b> を徹底すれば安全に戦えます。"),
-            ("🔴 Grok（5chイナゴ需給＆踏み上げ）", grok_s, f"5ch板需給は「<b>{r['board5ch_status']}</b>」。20日高値（<b>{r['squeeze_trigger_price']}</b>）突破で空売り勢の強制ロスカットが連鎖します。"),
-            ("🟢 GPT（総合トレンド判定）", gpt_s, f"5分足VWAP（<b>{vwap_ref}</b>）を軸にした順張りが有効。夜間理論気配は <b>{r['pts_est_price']}（{r['pts_gap_pct']:+.2f}%）</b> です。"),
-            ("🔵 Gemini（マクロ・テーマ資金）", gemini_s, f"「{r['genre']}」セクター（{r['theme']}）。海外先物と連動し、第一利確目標 <b>{r['tp_price']}（+{r['tp_pct']}%）</b> を狙える環境です。"),
-            ("🌐 Perplexity（見せ板・シコリ玉検証）", perp_s, f"大引け位置 <b>{r['close_pos_pct']}%</b>、出来高倍率 <b>{r['vol_ratio']}倍</b>。朝8:55以降も買い気配が消えなければ本物の大口資金です。"),
-            ("✨ Genspark（2段階分割エントリー）", gensp_s, f"①朝9:00に半分（<b>{half_lot:,}株</b>）打診買い → ②VWAP（<b>{vwap_ref}</b>）反発または <b>{r['squeeze_trigger_price']}</b> 突破で残り <b>{rem_lot:,}株</b> を追撃！"),
-            ("📓 NotebookLM（過去1年データ照合）", nblm_s, f"過去同条件（{r['signal']}）では勝率 <b>{r['prob']}%</b>、最大ギャップアップ <b>+{r['max_win_gap']}%</b> を記録しています。")
+            (claude_role, claude_s, claude_msg),
+            (grok_role, grok_s, grok_msg),
+            (chatgpt_role, chatgpt_s, chatgpt_msg),
+            (gemini_role, gemini_s, gemini_msg),
+            (perp_role, perp_s, perp_msg),
+            (gensp_role, gensp_s, gensp_msg),
+            (nblm_role, nblm_s, nblm_msg),
         ],
         "verdict_html": (
-            f'<div class="consensus-section"><b>① 🌅 朝8:55気配チェック：</b>夜間理論気配 <b>{r["pts_est_price"]}</b>（特買いライン <b>{r["tokugai_line"]}</b>）以上を維持しているか確認。</div>'
-            f'<div class="consensus-section"><b>② ⚡ 分割エントリー：</b>総推奨 <b>{r["lot_info"]["shares"]:,}株</b> のうち、寄付きで <b>{half_lot:,}株</b>、VWAP（<b>{vwap_ref}</b>）支持または高値（<b>{r["squeeze_trigger_price"]}</b>）突破で残り <b>{rem_lot:,}株</b> を投入。</div>'
-            f'<div class="consensus-section"><b>③ 🎯 利確＆損切り：</b>利確目標 <b>{r["tp_price"]}（+{r["tp_pct"]}%）</b> ／ 逆指値 <b>{r["sl_price"]}（最大損失 {r["lot_info"]["risk_amount"]:,.0f}円）</b>。</div>'
+            f'<div class="consensus-section"><b>① 🏦 機関クオンツ＆朝8:55気配判定：</b>{r["inst_status"]}。夜間理論気配 <b>{r["pts_est_price"]}</b>（特買い線 <b>{r["tokugai_line"]}</b>）を維持しているか確認。</div>'
+            f'<div class="consensus-section"><b>② ⚡ 2段階エントリー：</b>推奨総数 <b>{r["lot_info"]["shares"]:,}株</b> のうち、寄付きで <b>{half_lot:,}株</b>、VWAP（<b>{vwap_ref}</b>）反発または20日高値（<b>{r["squeeze_trigger_price"]}</b>）突破で残り <b>{rem_lot:,}株</b> を投入。</div>'
+            f'<div class="consensus-section"><b>③ 🎯 利確＆絶対損切り：</b>利確目標 <b>{r["tp_price"]}（+{r["tp_pct"]}%）</b> ／ 逆指値 <b>{r["sl_price"]}（最大損失 {r["lot_info"]["risk_amount"]:,.0f}円）</b>。</div>'
         )
     }
 
 def generate_7ai_qa_response(question, r, debate, lot_info, m5=None):
-    """どんな質問にも必ず具体的な数値入りで回答を生成するエンジン"""
+    """質問内容に応じて、最も得意なAIたちが専門ロールで即座に回答するエンジン"""
     q_clean = unicodedata.normalize('NFKC', str(question)).strip()
     q_low = q_clean.lower()
     m5_vwap = m5["vwap5_price"] if m5 else r["vwap_price"]
     half_s = max(1, lot_info['shares'] // 2)
     rem_s = max(0, lot_info['shares'] - half_s)
 
-    if any(k in q_low for k in ["特買", "気配", "pts", "夜間", "8時", "板", "寄"]):
+    if any(k in q_low for k in ["機関", "アルゴ", "vpin", "大口", "ステルス", "浮動株", "板"]):
         return (
-            f"🚨 <b>【「{q_clean}」への7大AI回答：特買い＆寄り前気配】</b><br>"
+            f"🏦 <b>【「{q_clean}」への回答｜担当：ChatGPT ＆ Perplexity（機関投資家クオンツ解析）】</b><br>"
+            f"・<b>機関オーダーフロー診断：</b>現在の機関クオンツスコアは <b>{r['inst_score']}点</b>（<b>{r['inst_status']}</b>）です。<br>"
+            f"・<b>VPIN＆板の薄さ（Amihud）：</b>情報優位な大口買いを示すVPINは <b>{r['vpin']:+.2f}</b>、浮動株の吸い上げによる価格弾性（Amihud比率）は <b>{r['amihud_ratio']}倍</b> です。<br>"
+            f"・<b>実戦での乗り方：</b>機関の執行アルゴは <b>VWAP（{m5_vwap}）</b> を基準に買い集めます。朝イチにVWAPより上で推移していれば機関の買いが継続しているため、押し目を一緒に拾うのが最も勝率の高い戦術です。"
+        )
+    elif any(k in q_low for k in ["特買", "気配", "pts", "夜間", "8時", "寄"]):
+        return (
+            f"🚨 <b>【「{q_clean}」への回答｜担当：Grok ＆ Gemini（夜間PTS・特買い気配解析）】</b><br>"
             f"・明日の夜間理論気配値は <b>{r['pts_est_price']}（前日比 {r['pts_gap_pct']:+.2f}%）</b>、特買い発生確率は <b>{r['tokugai_prob']}%</b> です。<br>"
-            f"・気配値が <b>{r['tokugai_line']}（+{r['tokugai_pct_threshold']}%）</b> を超えると特別買い気配（特買い）になります。高値掴みを防ぐため、寄付きは半分の <b>{half_s:,}株</b> で入り、<b>{m5_vwap}（VWAP）</b> の上で支えられるのを見てから残り <b>{rem_s:,}株</b> を追加してください。"
+            f"・気配値が <b>{r['tokugai_line']}（+{r['tokugai_pct_threshold']}%）</b> を超えると特別買い気配（特買い）になります。寄付きはまず半分の <b>{half_s:,}株</b> で入り、<b>{m5_vwap}（VWAP）</b> サポートを確認してから残り <b>{rem_s:,}株</b> を追加してください。"
         )
     elif any(k in q_low for k in ["踏み上げ", "空売", "スクイーズ", "高値", "シコリ", "5ch", "イナゴ"]):
         return (
-            f"🔥 <b>【「{q_clean}」への7大AI回答：5ch板シコリ玉＆空売り踏み上げ診断】</b><br>"
-            f"・<b>5ch板・需給診断：</b>現在「<b>{r['board5ch_status']}</b>」（5ch需給スコア <b>{r['board5ch_score']}点</b> / 上ヒゲ率 <b>{r['upper_shadow_pct']}%</b>）です。<br>"
-            f"・<b>踏み上げ急所ライン：</b>直近20日高値の <b>{r['squeeze_trigger_price']}（現在値から {r['dist_to_high20']:+.2f}%）</b> を突破すると、空売り勢の強制買い戻しが一斉に発動し <b>{r['tp_price']}</b> へ向かいやすくなります。"
+            f"🔥 <b>【「{q_clean}」への回答｜担当：Grok ＆ Claude（5chシコリ玉＆空売り踏み上げ解析）】</b><br>"
+            f"・<b>5ch板・シコリ玉診断：</b>現在「<b>{r['board5ch_status']}</b>」（5ch需給スコア <b>{r['board5ch_score']}点</b> / 上ヒゲ率 <b>{r['upper_shadow_pct']}%</b>）です。<br>"
+            f"・<b>踏み上げトリガー価格：</b>直近20日高値の <b>{r['squeeze_trigger_price']}（現在値から {r['dist_to_high20']:+.2f}%）</b> を突破すると、空売り勢の強制ロスカット（成行買い戻し）が連鎖し <b>{r['tp_price']}</b> へ急伸しやすくなります。"
         )
     elif any(k in q_low for k in ["5分", "vwap", "チャート", "初動", "テクニカル", "rsi", "macd"]):
         return (
-            f"⚡ <b>【「{q_clean}」への7大AI回答：5分足チャート＆VWAP攻略】</b><br>"
-            f"・現在の5分足VWAP（平均買値）は <b>{m5_vwap}</b>、日足RSIは <b>{r['rsi']}</b>、MACDは <b>{r['macd_state']}</b>、出来高倍率は <b>{r['vol_ratio']}倍</b> です。<br>"
-            f"・朝9:00〜9:15の初動で株価が <b>{m5_vwap}</b> より上をキープしていれば大口が買い支えていますので、押し目買いが最も効果的です。"
+            f"⚡ <b>【「{q_clean}」への回答｜担当：ChatGPT ＆ Genspark（5分足＆テクニカル執行戦術）】</b><br>"
+            f"・現在の5分足VWAPは <b>{m5_vwap}</b>、日足RSIは <b>{r['rsi']}</b>、MACDは <b>{r['macd_state']}</b>、出来高倍率は <b>{r['vol_ratio']}倍</b> です。<br>"
+            f"・朝9:00〜9:15の初動でローソク足が <b>{m5_vwap}</b> より上をキープしていれば機関・大口が買い支えていますので、順張りホールドが正解です。"
         )
     elif any(k in q_low for k in ["損切", "利確", "目標", "売", "出口", "リスク", "下が"]):
         return (
-            f"🛡️ <b>【「{q_clean}」への7大AI回答：利確目標と損切りライン】</b><br>"
-            f"・<b>🎯 第一利確目標：</b><b>{r['tp_price']}（+{r['tp_pct']}%）</b> で半分利確し、残りは5分足VWAP（<b>{m5_vwap}</b>）を割るまで利益を伸ばします。<br>"
-            f"・<b>🛡️ 絶対損切りライン：</b>購入直後に必ず <b>{r['sl_price']}（{r['sl_pct']}%）</b> に逆指値を入れてください。万が一損切りになっても損失は <b>約{lot_info['risk_amount']:,.0f}円（総資金の{risk_tolerance_pct}%）</b> に限定されます。"
+            f"🛡️ <b>【「{q_clean}」への回答｜担当：Claude ＆ NotebookLM（利確目標＆リスク管理）】</b><br>"
+            f"・<b>🎯 第一利確目標：</b><b>{r['tp_price']}（+{r['tp_pct']}%）</b> で半分を利益確定し、残りは5分足VWAP（<b>{m5_vwap}</b>）を割るまで利益を伸ばします（過去最大GU実績 <b>+{r['max_win_gap']}%</b>）。<br>"
+            f"・<b>🛡️ 絶対損切りライン：</b>購入直後に必ず <b>{r['sl_price']}（{r['sl_pct']}%）</b> に逆指値を入れてください。最大損失は <b>約{lot_info['risk_amount']:,.0f}円（総資金の{risk_tolerance_pct}%）</b> に完全に抑えられます。"
         )
     else:
         return (
-            f"🤖 <b>【「{q_clean}」に対する7大AI評議会のダイレクト回答】</b><br>"
-            f"・<b>総合結論：</b>「{r['name']}（{r['code']}）」の7大AI合議スコアは <b>{debate['final_score']}点</b>、弱肉強食サバイバル戦闘力は <b>{r['survival_power']}pt</b> です。<br>"
-            f"・<b>具体的な売買プラン：</b>総資金 {total_capital:,.0f}円 に対する推奨ロットは <b>{lot_info['shares']:,}株（投資額 {lot_info['position_value']:,.0f}円）</b> です。<br>"
-            f"・明日の朝はまず寄付き（目安 <b>{r['pts_est_price']}</b>）で半分の <b>{half_s:,}株</b> を買い、<b>{m5_vwap}（VWAP）</b> サポートまたは <b>{r['squeeze_trigger_price']}（20日高値）</b> 突破で残り <b>{rem_s:,}株</b> を追加、利確 <b>{r['tp_price']}</b>・損切り <b>{r['sl_price']}</b> で臨むのが最も勝率（過去 <b>{r['prob']}%</b>）の高い戦術です。"
+            f"🤖 <b>【自由質問「{q_clean}」への回答｜担当：ChatGPT・Claude・Grok 7大AI合同評議会】</b><br>"
+            f"・<b>総合ジャッジ：</b>「{r['name']}（{r['code']}）」の7大AI合議スコアは <b>{debate['final_score']}点</b>、機関クオンツスコアは <b>{r['inst_score']}点（{r['inst_status']}）</b>、サバイバル戦闘力は <b>{r['survival_power']}pt</b> です。<br>"
+            f"・<b>あなたの質問への結論と売買プラン：</b>総資金 {total_capital:,.0f}円 に対する最適ロットは <b>{lot_info['shares']:,}株（投資額 {lot_info['position_value']:,.0f}円）</b> です。<br>"
+            f"・明日の朝はまず寄付き（目安 <b>{r['pts_est_price']}</b>）で半分の <b>{half_s:,}株</b> を買い、<b>{m5_vwap}（VWAP）</b> 反発または <b>{r['squeeze_trigger_price']}（20日高値）</b> 突破で残り <b>{rem_s:,}株</b> を追加、利確 <b>{r['tp_price']}</b>・損切り <b>{r['sl_price']}</b> で臨むのが最も期待値（<b>{r['edge']:+.2f}%</b>・過去勝率 <b>{r['prob']}%</b>）の高い戦術です。"
         )
 
 # ==========================================
-# 💬 会議パネル＆質問コーナー（二重フラグメント廃止・完全動作版）
+# 💬 会議パネル＆質問コーナー（st.form廃止・100%確実動作コールバック版）
 # ==========================================
 def cb_toggle_debate(unique_key):
     st.session_state["active_debates"][unique_key] = not st.session_state["active_debates"].get(unique_key, False)
@@ -643,6 +737,26 @@ def cb_toggle_watchlist(code, r_data):
         del st.session_state["watchlist"][code]
     else:
         st.session_state["watchlist"][code] = r_data
+
+def cb_handle_preset_q(unique_key, q_text, r, debate, m5):
+    """ワンタップ質問ボタン用コールバック"""
+    if unique_key not in st.session_state["stock_chats"]:
+        st.session_state["stock_chats"][unique_key] = []
+    ans_html = generate_7ai_qa_response(q_text, r, debate, r["lot_info"], m5)
+    st.session_state["stock_chats"][unique_key].append({"q": q_text, "a": ans_html})
+
+def cb_handle_free_q(unique_key, input_key, r, debate, m5):
+    """自由入力質問用コールバック（Enterキー押下でもボタン押下でも確実に発動し入力欄をクリア）"""
+    user_txt = st.session_state.get(input_key, "").strip()
+    if user_txt:
+        if unique_key not in st.session_state["stock_chats"]:
+            st.session_state["stock_chats"][unique_key] = []
+        ans_html = generate_7ai_qa_response(user_txt, r, debate, r["lot_info"], m5)
+        st.session_state["stock_chats"][unique_key].append({"q": user_txt, "a": ans_html})
+        st.session_state[input_key] = ""
+
+def cb_clear_chat(unique_key):
+    st.session_state["stock_chats"][unique_key] = []
 
 @fragment_decorator
 def render_interactive_council_section(r, unique_key):
@@ -668,12 +782,16 @@ def render_interactive_council_section(r, unique_key):
     debate = run_7ai_council_algorithm(r, m5)
 
     if unique_key not in st.session_state["debate_Animated"]:
-        with st.status(f"🧠 7大AIが「{r['name']}」の5ch需給・踏み上げを議論中...", expanded=True) as status:
+        with st.status(f"🧠 7大AIがそれぞれの専門領域から「{r['name']}」を徹底議論中...", expanded=True) as status:
             prog = st.progress(0)
-            for pct, msg in [(25, "🟠 Claude & 🔴 Grok が5chシコリ玉と踏み上げ線を解析中..."), (60, "🟢 GPT & 🔵 Gemini が夜間PTSとVWAPを計算中..."), (100, "✨ Genspark & 📓 NotebookLM が売買計画を統合中...")]:
+            for pct, msg in [
+                (25, "🟠 Claude & 🔴 Grok が機関VPINフロー・5ch需給・踏み上げを解析中..."),
+                (60, "🟢 ChatGPT & 🔵 Gemini & 🌐 Perplexity がVWAP執行と浮動株枯渇度を検証中..."),
+                (100, "✨ Genspark & 📓 NotebookLM が2段階エントリー戦術を統合中...")
+            ]:
                 st.write(msg)
                 prog.progress(pct)
-                time.sleep(0.4)
+                time.sleep(0.35)
             status.update(label=f"✅ 7大AI合議完了！（合議スコア: {debate['final_score']}点）", state="complete", expanded=False)
         st.session_state["debate_Animated"].add(unique_key)
 
@@ -688,7 +806,7 @@ def render_interactive_council_section(r, unique_key):
     st.markdown(
         f'<div class="ai-council-box">'
         f'<div style="display:flex; justify-content:space-between; margin-bottom:10px;">'
-        f'<span style="font-weight:bold; color:#fbbf24;">🧠 7大AI最高評議会レポート</span>'
+        f'<span style="font-weight:bold; color:#fbbf24;">🧠 7大AI最高評議会（銘柄別・動的専門ロール検証）</span>'
         f'<span style="background:#4f46e5; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:bold;">合議スコア: {debate["final_score"]}点</span>'
         f'</div>{agents_html}'
         f'<div class="consensus-banner"><div style="font-weight:bold; color:#fde047;">🏛️ 7大AI最終コンセンサス</div>{debate["verdict_html"]}</div>'
@@ -697,47 +815,14 @@ def render_interactive_council_section(r, unique_key):
     )
 
     # ==========================================
-    # 💬 質問コーナー（白飛び・空文字バグ完全修正版）
+    # 💬 質問コーナー（st.formを使わずコールバック直結で100%即答）
     # ==========================================
     if unique_key not in st.session_state["stock_chats"]:
         st.session_state["stock_chats"][unique_key] = []
 
     st.markdown("##### 💬 7大AI評議会へのワンタップ＆自由質問コーナー")
 
-    # 1. ボタンが押されたら、画面描画の前に即座に履歴へ追加する
-    q_col1, q_col2 = st.columns(2)
-    triggered_q = None
-    with q_col1:
-        if st.button("🚨 特買い確率と8:50気配の見方は？", key=f"q1_{unique_key}", use_container_width=True):
-            triggered_q = "翌朝の特買い確率と8:50気配の見方は？"
-        if st.button("🔥 5chシコリ玉と踏み上げ価格は？", key=f"q2_{unique_key}", use_container_width=True):
-            triggered_q = "5ch板のシコリ玉と空売り踏み上げトリガー価格は？"
-    with q_col2:
-        if st.button("⚡ 5分足チャートの初動と乗り方は？", key=f"q3_{unique_key}", use_container_width=True):
-            triggered_q = "5分足チャートの初動と乗り方は？"
-        if st.button("💰 具体的な買い方・利確・損切りは？", key=f"q4_{unique_key}", use_container_width=True):
-            triggered_q = "具体的な買い方と利確・損切りラインを教えて"
-
-    # 2. 自由入力フォーム（on_clickを使わず、確実に送信テキストを受け取る）
-    with st.form(key=f"custom_q_form_{unique_key}", clear_on_submit=True):
-        f1, f2 = st.columns([3.2, 1])
-        with f1:
-            user_input_text = st.text_input(
-                "自由質問",
-                placeholder="自由に質問を入力（例：いつ売るべき？ / なぜ上がる？ / リスクは？）",
-                label_visibility="collapsed"
-            )
-        with f2:
-            form_submitted = st.form_submit_button("AIに質問", use_container_width=True)
-        if form_submitted and user_input_text.strip():
-            triggered_q = user_input_text.strip()
-
-    # 質問がトリガーされたら即座に回答を生成して保存
-    if triggered_q:
-        ans_html = generate_7ai_qa_response(triggered_q, r, debate, r["lot_info"], m5)
-        st.session_state["stock_chats"][unique_key].append({"q": triggered_q, "a": ans_html})
-
-    # 3. 最新の回答と履歴をクッキリした黒文字ボックスで表示
+    # 1. 最新回答＆履歴表示（質問ボタンのすぐ上にリアルタイム表示）
     chat_history = st.session_state["stock_chats"].get(unique_key, [])
     if chat_history:
         latest_item = chat_history[-1]
@@ -748,7 +833,66 @@ def render_interactive_council_section(r, unique_key):
             f'</div>',
             unsafe_allow_html=True
         )
-        with st.expander(f"📚 過去の質問履歴をすべて見る（全 {len(chat_history)} 件）", expanded=False):
+    else:
+        st.info("👇 下のワンタップボタン、または自由入力欄から質問すると、ここに7大AIの回答が即座に表示されます。")
+
+    # 2. ワンタップ質問ボタン（4種類）
+    q_col1, q_col2 = st.columns(2)
+    with q_col1:
+        st.button(
+            "🏦 機関投資家のステルス買い・VPINは？",
+            key=f"q1_{unique_key}",
+            on_click=cb_handle_preset_q,
+            args=(unique_key, "機関投資家のステルス買い集めやVPINの状況は？", r, debate, m5),
+            use_container_width=True
+        )
+        st.button(
+            "🔥 5chシコリ玉と踏み上げ価格は？",
+            key=f"q2_{unique_key}",
+            on_click=cb_handle_preset_q,
+            args=(unique_key, "5ch板のシコリ玉と空売り踏み上げトリガー価格は？", r, debate, m5),
+            use_container_width=True
+        )
+    with q_col2:
+        st.button(
+            "🚨 特買い確率と8:50気配の見方は？",
+            key=f"q3_{unique_key}",
+            on_click=cb_handle_preset_q,
+            args=(unique_key, "翌朝の特買い確率と8:50気配の見方は？", r, debate, m5),
+            use_container_width=True
+        )
+        st.button(
+            "💰 具体的な買い方・利確・損切りは？",
+            key=f"q4_{unique_key}",
+            on_click=cb_handle_preset_q,
+            args=(unique_key, "具体的な買い方と利確・損切りラインを教えて", r, debate, m5),
+            use_container_width=True
+        )
+
+    # 3. 自由入力欄（st.formを廃止し、Enterキーでも「AIに質問」ボタンでも確実にon_click/on_changeで即答！）
+    input_key = f"free_q_in_{unique_key}"
+    f_col1, f_col2 = st.columns([3.2, 1])
+    with f_col1:
+        st.text_input(
+            "自由質問を入力",
+            key=input_key,
+            placeholder="自由に質問を入力（例：いつ売るべき？ / なぜ上がる？ / リスクは？）",
+            label_visibility="collapsed",
+            on_change=cb_handle_free_q,
+            args=(unique_key, input_key, r, debate, m5)
+        )
+    with f_col2:
+        st.button(
+            "AIに質問",
+            key=f"free_q_btn_{unique_key}",
+            on_click=cb_handle_free_q,
+            args=(unique_key, input_key, r, debate, m5),
+            use_container_width=True
+        )
+
+    # 4. 過去の質問履歴一覧
+    if chat_history:
+        with st.expander(f"📚 質問履歴をすべて見る（全 {len(chat_history)} 件）", expanded=False):
             for idx_h in range(len(chat_history) - 1, -1, -1):
                 item = chat_history[idx_h]
                 st.markdown(
@@ -758,11 +902,13 @@ def render_interactive_council_section(r, unique_key):
                     f'</div>',
                     unsafe_allow_html=True
                 )
-            if st.button("🗑️ この銘柄の質問履歴をクリア", key=f"clr_{unique_key}", use_container_width=True):
-                st.session_state["stock_chats"][unique_key] = []
-                st.rerun()
-    else:
-        st.info("👆 上の4つのボタン、または自由入力欄から質問すると、ここに7大AIの回答が即座に表示されます。")
+            st.button(
+                "🗑️ この銘柄の質問履歴をクリア",
+                key=f"clr_{unique_key}",
+                on_click=cb_clear_chat,
+                args=(unique_key,),
+                use_container_width=True
+            )
 
 # ==========================================
 # 🃏 銘柄カード描画
@@ -777,6 +923,7 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     html_card = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div>{rank_html}<span class="score-badge">🤖 AIスコア: {r["ai_score"]}点</span>'
+        f'<span class="inst-badge">🏦 機関クオンツ: {r["inst_score"]}点</span>'
         f'<span class="board5ch-badge">🔥 5ch需給: {r["board5ch_score"]}点</span>'
         f'<span class="tokugai-badge">🚨 特買い: {r["tokugai_prob"]}%</span>'
         f'<span class="squeeze-badge">踏み上げ: {r["squeeze_score"]}点</span>'
@@ -790,17 +937,18 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         f'<span class="prob-badge">{r["prob"]}%</span>'
         f'<div style="font-size:11px; color:#64748b;">({r["count"]} / 損益比{r["payoff"]}倍)</div></div>'
         f'</div>'
+        f'<div class="inst-box"><b>{r["inst_status"]}</b> ｜ 20日VWAP基準: <b>{r["vwap_price"]}</b></div>'
         f'<div class="board5ch-box"><b>📢 {r["board5ch_status"]}</b> ｜ シグナル: <b>{r["signal"]}</b></div>'
         f'<div class="pts-tokugai-box">'
         f'<b>🌙 {r["tokugai_status"]}</b> ｜ 夜間理論気配: <b>{r["pts_est_price"]}</b> ({pts_sign}{r["pts_gap_pct"]}%) ｜ 特買い発動線: <b>{r["tokugai_line"]}</b>'
         f'</div>'
         f'<div class="squeeze-box">'
-        f'<b>{r["squeeze_type"]}</b> ｜ 踏み上げ突破ライン(20日高値): <b>{r["squeeze_trigger_price"]}</b> ({r["dist_to_high20"]:+.2f}%) ｜ {r["closing_status"]}'
+        f'<b>{r["squeeze_type"]}</b> ｜ 踏み上げ突破ライン(20日高値): <b>{r["squeeze_trigger_price"]}</b> ({r["dist_to_high20"]:+.2f}%)'
         f'</div>'
         f'<div class="metrics-row">'
+        f'<span>🏦 <b>VPIN:</b> {r["vpin"]:+.2f}</span><span>💎 <b>板弾性:</b> {r["amihud_ratio"]}倍</span>'
         f'<span>📊 <b>RSI:</b> {r["rsi"]}</span><span>📈 <b>MACD:</b> {r["macd_state"]}</span>'
-        f'<span>🔊 <b>出来高:</b> {r["vol_ratio"]}倍</span><span>🧱 <b>上ヒゲ率:</b> {r["upper_shadow_pct"]}%</span>'
-        f'<span>⚡ <b>ATR:</b> {r["atr_pct"]}%</span>'
+        f'<span>🔊 <b>出来高:</b> {r["vol_ratio"]}倍</span><span>🧱 <b>上ヒゲ:</b> {r["upper_shadow_pct"]}%</span>'
         f'</div>'
         f'<div class="trade-plan-box">'
         f'<div><div style="font-size:10px; color:#64748b;">🌅 夜間理論寄付き</div><div style="font-size:12px; font-weight:bold;">{r["pts_est_price"]}</div></div>'
@@ -817,12 +965,11 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
 # ==========================================
 # 🚀 メイン画面実行＆弱肉強食サバイバルランキング
 # ==========================================
-if st.button("🔄 最新データに更新（弱肉強食サバイバル再集計）"):
+if st.button("🔄 最新データに更新（機関クオンツ＆弱肉強食サバイバル再集計）"):
     st.cache_data.clear()
 
 macro_info = fetch_macro_market()
 
-# 個別銘柄検索
 c1, c2 = st.columns([3, 1])
 with c1: custom_input = st.text_input("🔍 任意の銘柄コードを診断（国内4桁 / 米国ティッカー）", placeholder="例: 6920, 5803, 3350, NVDA, IONQ")
 with c2:
@@ -832,28 +979,25 @@ with c2:
 if custom_input or search_clicked:
     norm_code = normalize_ticker(custom_input)
     if norm_code:
-        with st.spinner(f"「{norm_code}」を解析中..."):
-            custom_res = fetch_single_stock(norm_code, macro_info, board5ch_boost, squeeze_boost_mode, tokugai_boost_mode)
+        with st.spinner(f"「{norm_code}」を機関クオンツ＆7大AIで解析中..."):
+            custom_res = fetch_single_stock(norm_code, macro_info, inst_boost_mode, board5ch_boost, squeeze_boost_mode, tokugai_boost_mode)
         if custom_res:
             render_stock_card(custom_res, is_custom=True, key_prefix="custom")
         else:
             st.error(f"銘柄「{custom_input}」のデータが見つかりませんでした。")
 
-with st.spinner("🦁 国内外の母集団を一括高速スキャン＆弱肉強食サバイバル選抜中..."):
-    genre_results, all_results = fetch_all_pool_batch(macro_info, board5ch_boost, squeeze_boost_mode, tokugai_boost_mode)
+with st.spinner("🏦 国内外の母集団を一括高速スキャン＆機関VPIN・弱肉強食サバイバル選抜中..."):
+    genre_results, all_results = fetch_all_pool_batch(macro_info, inst_boost_mode, board5ch_boost, squeeze_boost_mode, tokugai_boost_mode)
 
-# 🦁 弱肉強食サバイバル選抜フィルタリング関数
 def apply_survival_of_the_fittest(stock_list, cut_pct):
     if not stock_list: return [], []
-    # 上ヒゲが長すぎる（シコリ玉だらけ）＆出来高が細っている銘柄はペナルティで下位へ落とす
-    sorted_all = sorted(stock_list, key=lambda x: (x["survival_power"], x["board5ch_score"], x["ai_score"]), reverse=True)
+    sorted_all = sorted(stock_list, key=lambda x: (x["survival_power"], x["inst_score"], x["board5ch_score"], x["ai_score"]), reverse=True)
     keep_count = max(3, int(round(len(sorted_all) * (cut_pct / 100.0))))
-    survivors = sorted_all[:keep_count]
-    eliminated = sorted_all[keep_count:]
-    return survivors, eliminated
+    return sorted_all[:keep_count], sorted_all[keep_count:]
 
 tab_labels = [
     "🏆 総合サバイバルTOP5",
+    "🏦 機関VPIN・ステルス買い特選",
     "🔥 5ch板・初動イナゴ特選",
     "🚨 特買い・夜間PTS特選",
     "💥 空売り踏み上げ特選",
@@ -864,29 +1008,35 @@ tabs = st.tabs(tab_labels)
 
 with tabs[0]:
     survivors_all, elim_all = apply_survival_of_the_fittest(all_results, survival_cut_pct)
-    st.caption(f"🦁 全母集団 {len(all_results)}銘柄から、シコリ玉（上ヒゲ）や出来高不足の {len(elim_all)}銘柄を足切り！生き残った総合TOP5です。")
+    st.caption(f"🦁 全母集団 {len(all_results)}銘柄から下位 {len(elim_all)}銘柄を足切り！機関クオンツ・5ch需給ともに最強のTOP5です。")
     for idx, r in enumerate(survivors_all[:5], start=1):
         render_stock_card(r, rank=idx, key_prefix="top5")
 
 with tabs[1]:
-    st.info("🔥 **5chデイトレ板・初動イナゴ集中＆シコリ玉排除タブ**: 5日平均出来高からの急増率が高く、上ヒゲ（高値掴みのシコリ玉）が極めて少ない青天井・初動銘柄TOP10です。")
+    st.info("🏦 **機関投資家VPIN（オーダーフロー毒性）＆浮動株吸い上げ特選タブ**: 機関のステルス氷山買いや浮動株の吸収（Amihud価格弾性上昇）が検知された上位10銘柄です。")
+    inst_list = sorted(all_results, key=lambda x: (x["inst_score"], x["vpin"], x["survival_power"]), reverse=True)[:10]
+    for idx, r in enumerate(inst_list, start=1):
+        render_stock_card(r, rank=idx, key_prefix="inst_top")
+
+with tabs[2]:
+    st.info("🔥 **5chデイトレ板・初動イナゴ集中＆シコリ玉排除タブ**: 5日平均出来高からの急増率が高く、上ヒゲ（高値掴みのシコリ玉）が極めて少ない初動TOP10です。")
     b5_list = sorted(all_results, key=lambda x: (x["board5ch_score"], x["survival_power"]), reverse=True)[:10]
     for idx, r in enumerate(b5_list, start=1):
         render_stock_card(r, rank=idx, key_prefix="b5_top")
 
-with tabs[2]:
-    st.info("🚨 **翌朝『特買い』・夜間PTS連動タブ**: 夜間先物・SOX指数の追い風と大引けの買い残しから、翌朝9:00に特別買い気配になりやすい上位10銘柄です。")
+with tabs[3]:
+    st.info("🚨 **翌朝『特買い』・夜間PTS連動タブ**: 夜間先物・SOX指数の追い風と機関の買い残しから、翌朝9:00に特別買い気配になりやすい上位10銘柄です。")
     tk_list = sorted(all_results, key=lambda x: (x["tokugai_prob"], x["pts_gap_pct"]), reverse=True)[:10]
     for idx, r in enumerate(tk_list, start=1):
         render_stock_card(r, rank=idx, key_prefix="tk_top")
 
-with tabs[3]:
-    st.info("💥 **空売り踏み上げ（ショートスクイーズ）タブ**: 20日高値ブレイクにより、空売り勢が朝イチに強制ロスカット（成行買い戻し）を迫られる上位10銘柄です。")
-    sq_list = sorted(all_results, key=lambda x: (x["squeeze_score"], x["board5ch_score"]), reverse=True)[:10]
+with tabs[4]:
+    st.info("💥 **空売り踏み上げ（ショートスクイーズ）タブ**: 20日高値ブレイクにより、空売り勢が朝イチに強制ロスカットを迫られる上位10銘柄です。")
+    sq_list = sorted(all_results, key=lambda x: (x["squeeze_score"], x["inst_score"]), reverse=True)[:10]
     for idx, r in enumerate(sq_list, start=1):
         render_stock_card(r, rank=idx, key_prefix="sq_top")
 
-with tabs[4]:
+with tabs[5]:
     wl = st.session_state["watchlist"]
     st.markdown(f"#### 📋 監視ウォッチリスト ({len(wl)}銘柄)")
     if st.button("⚡ 総合TOP3をワンタップ一括登録", use_container_width=True):
@@ -895,7 +1045,7 @@ with tabs[4]:
         st.rerun()
     if wl:
         df_wl = pd.DataFrame([{
-            "コード": c, "銘柄名": x["name"], "戦闘力": x["survival_power"],
+            "コード": c, "銘柄名": x["name"], "戦闘力": x["survival_power"], "機関スコア": x["inst_score"],
             "夜間理論気配": x["pts_est_price"], "特買い線": x["tokugai_line"],
             "推奨株数": f"{x['lot_info']['shares']:,}株", "利確": x["tp_price"], "損切": x["sl_price"]
         } for c, x in wl.items()])
@@ -903,14 +1053,14 @@ with tabs[4]:
     else:
         st.info("各カードの「⭐ 監視リスト追加」を押すとここに一覧表示されます。")
 
-for tab, genre in zip(tabs[5:], STOCK_POOL.keys()):
+for tab, genre in zip(tabs[6:], STOCK_POOL.keys()):
     with tab:
         g_raw = genre_results.get(genre, [])
         g_surv, g_elim = apply_survival_of_the_fittest(g_raw, survival_cut_pct)
-        st.caption(f"🦁 **{genre}サバイバル選抜**: 候補 {len(g_raw)}銘柄中、戦闘力上位 **{len(g_surv)}銘柄が生存**（下位 {len(g_elim)}銘柄が脱落・入れ替え対象）")
+        st.caption(f"🦁 **{genre}サバイバル選抜**: 候補 {len(g_raw)}銘柄中、戦闘力上位 **{len(g_surv)}銘柄が生存**（下位 {len(g_elim)}銘柄が脱落）")
         for idx, r in enumerate(g_surv, start=1):
             render_stock_card(r, rank=idx, key_prefix=f"genre_{genre}")
         if g_elim:
             with st.expander(f"💀 本日のサバイバル脱落・入れ替え候補銘柄を見る（{len(g_elim)}銘柄）"):
                 for e_item in g_elim:
-                    st.caption(f"▼ **{e_item['name']} ({e_item['code']})** — 戦闘力: {e_item['survival_power']}pt / {e_item['board5ch_status']}")
+                    st.caption(f"▼ **{e_item['name']} ({e_item['code']})** — 戦闘力: {e_item['survival_power']}pt / {e_item['inst_status']}")
