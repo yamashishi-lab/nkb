@@ -15,7 +15,7 @@ st.set_page_config(page_title="翌朝株価 クオンツ＆7大AI解析 Pro (会
 # ==========================================
 
 # 1. 管理者（あなた）の連絡先メールアドレス（利用申請メールの宛先＆管理者権限判定になります）
-ADMIN_EMAIL = "your_admin_email@example.com"  # ←あなたのメールアドレスに変更してください
+ADMIN_EMAIL = "nthbh399@ybb.ne.jp"  # ←あなたのメールアドレスに変更してください
 
 # 2. あなただけが知っている「秘密のマスターキー」（会員ごとの専用8桁コードを自動生成します）
 SECRET_MASTER_KEY = "my_super_secret_quant_key_2026"  # ←好きな英数字に変更してください
