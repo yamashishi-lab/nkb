@@ -74,7 +74,7 @@ def send_auto_email(to_email: str, subject: str, body: str) -> tuple:
     smtp_port = int(st.session_state.get("smtp_port", 465))
 
     if not smtp_user or not smtp_pass:
-        return False, "SMTP未設定（手動メールリンクを使用可能）"
+        return False, "SMTP未設定"
     try:
         msg = MIMEText(body, "plain", "utf-8")
         msg["Subject"] = subject
@@ -202,7 +202,7 @@ def render_admin_sidebar_management():
                 st.sidebar.success(f"📨 {la['email']} へパスコードを自動送信しました！")
             else:
                 st.sidebar.success(f"✅ {la['email']} を承認しました！（コード: `{la['code']}`）")
-                st.sidebar.markdown(f'<a href="{la["url"]}" style="display:block;text-align:center;background:#16a34a;color:#fff;padding:6px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:12px;">✉️ 相手にメールを送る</a>', unsafe_allow_html=True)
+                st.sidebar.markdown(f'<a href="{la["url"]}" style="display:block;text-align:center;background:#16a34a;color:#fff;padding:6px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px;">✉️ 相手にメールを送る</a>', unsafe_allow_html=True)
 
     else:
         st.sidebar.markdown("##### 👥 全会員リスト＆個別操作")
@@ -268,8 +268,8 @@ def check_member_authentication():
 
     st.markdown("""
     <div style="background: linear-gradient(135deg, #090d16, #1e293b); color: #f8fafc; padding: 28px 24px; border-radius: 16px; text-align: center; margin-top: 10px; margin-bottom: 18px; box-shadow: 0 10px 25px rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1);">
-        <h2 style="margin:0; color:#fbbf24; font-size:21px; letter-spacing:0.5px;">🔒 会員限定 クオンツ＆7大AI解析 Pro</h2>
-        <p style="font-size:13px; color:#cbd5e1; margin-top:8px; margin-bottom:0; line-height:1.6;">
+        <h2 style="margin:0; color:#fbbf24; font-size:22px; letter-spacing:0.5px;">🔒 会員限定 クオンツ＆7大AI解析 Pro</h2>
+        <p style="font-size:14px; color:#cbd5e1; margin-top:8px; margin-bottom:0; line-height:1.6;">
             本システムは完全招待・承認制です。<br>承認されたメールアドレスと専用アクセスコードを入力してください。
         </p>
     </div>
@@ -294,7 +294,7 @@ def check_member_authentication():
                 st.query_params["t"] = generate_admin_action_token(clean_mail, "session_keep")
                 st.rerun()
             elif user_rec and user_rec.get("status") == "pending":
-                st.warning("⏳ 現在、管理者による承認審査中です。承認メールが届くまで今しばらくお待ちください。")
+                st.warning("⏳ 現在、管理者による承認審査中です。承認が完了するまで今しばらくお待ちください。")
             elif not is_approved:
                 st.error("⚠️ このメールアドレスはまだ会員登録されていません。下のフォームから利用申請を行ってください。")
             else:
@@ -304,7 +304,7 @@ def check_member_authentication():
     st.markdown("##### 📩 新規会員登録・利用許可の申請はこちら")
     with st.form("member_apply_form"):
         ap_name = st.text_input("👤 お名前（ニックネーム可）", placeholder="山田 太郎")
-        ap_mail = st.text_input("📧 ご希望のメールアドレス", placeholder="your_email@example.com")
+        ap_mail = st.text_input("📧 メールアドレス", placeholder="your_email@example.com")
         ap_note = st.text_input("💬 ひとこと・紹介者など（任意）")
         ap_btn = st.form_submit_button("📨 管理者に利用申請を送信する", use_container_width=True)
 
@@ -346,11 +346,9 @@ def check_member_authentication():
                     f"{reject_url}\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n"
                 )
-                ok_admin, _ = send_auto_email(ADMIN_EMAIL, admin_subj, admin_body)
+                # バックグラウンドでSMTP設定がある場合のみ自動送信（メールアプリ起動ボタンは表示しない）
+                send_auto_email(ADMIN_EMAIL, admin_subj, admin_body)
                 st.success("✅ 申請を受け付けました！管理者の承認審査が完了すると専用パスコードが発行されます。")
-                if not ok_admin:
-                    mailto_admin = f"mailto:{ADMIN_EMAIL}?subject={urllib.parse.quote(admin_subj)}&body={urllib.parse.quote(admin_body)}"
-                    st.markdown(f'<a href="{mailto_admin}" style="display:block;text-align:center;background:#2563eb;color:#fff;padding:12px;border-radius:8px;text-decoration:none;font-weight:bold;">📧 メールアプリを開いて管理者に申請内容を通知する</a>', unsafe_allow_html=True)
     st.stop()
 
 check_member_authentication()
@@ -425,7 +423,7 @@ def get_company_logo_html(full_code: str, name: str) -> str:
     )
 
 # ==========================================
-# 🎨 カスタムCSS ＆ 半透明フローティングナビバー（ログイン維持＆ページTOPスムーズスクロール）
+# 🎨 カスタムCSS ＆ 半透明フローティングナビバー（全体の文字サイズをほんの少し拡大）
 # ==========================================
 wl_count = len(st.session_state.get("watchlist", {}))
 curr_page_badge = "監視リスト表示中" if st.session_state.get("navigation_page") == "WATCHLIST" else "ランキング解析"
@@ -435,20 +433,23 @@ st.markdown('<div id="page_top_anchor"></div>', unsafe_allow_html=True)
 
 st.markdown(f"""
 <style>
-/* 全体のタイポグラフィと余白 */
+/* 全体のタイポグラフィと余白（ほんの少し大きめに調整） */
+html, body, [class*="css"] {{
+    font-size: 15.5px;
+}}
 .block-container {{
     padding-top: 3.6rem !important;
     padding-bottom: 3rem !important;
-    max-width: 780px !important;
+    max-width: 790px !important;
 }}
 button[data-baseweb="tab"] {{
-    font-size: 12.5px !important;
+    font-size: 13.5px !important;
     font-weight: 700 !important;
-    padding: 8px 13px !important;
+    padding: 8px 14px !important;
     border-radius: 8px 8px 0 0 !important;
 }}
 
-/* 💎 スクロール追従・半透明グラスモーフィズム上部ナビバー（リロードなし・ログイン維持） */
+/* 💎 スクロール追従・半透明グラスモーフィズム上部ナビバー */
 .floating-glass-nav {{
     position: fixed;
     top: 10px;
@@ -458,7 +459,7 @@ button[data-baseweb="tab"] {{
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 5px 12px;
+    padding: 5px 13px;
     background: rgba(15, 23, 42, 0.72);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -470,7 +471,7 @@ button[data-baseweb="tab"] {{
 .floating-glass-nav a {{
     color: #f8fafc !important;
     text-decoration: none !important;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     padding: 4px 10px;
     border-radius: 999px;
@@ -494,13 +495,15 @@ button[data-baseweb="tab"] {{
     background: rgba(16, 185, 129, 0.2);
     border: 1px solid rgba(16, 185, 129, 0.45);
     color: #6ee7b7 !important;
-    font-size: 10.5px;
+    font-size: 11.5px;
+    padding: 2px 8px;
+    border-radius: 999px;
 }}
 
 /* 🏢 企業ロゴマーク */
 .company-logo-img {{
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
     border-radius: 9px;
     object-fit: contain;
     background: #ffffff;
@@ -515,8 +518,8 @@ button[data-baseweb="tab"] {{
     background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
     color: #0f172a !important;
     border-radius: 16px;
-    padding: 18px;
-    margin-bottom: 12px;
+    padding: 19px;
+    margin-bottom: 13px;
     box-shadow: 0 6px 20px rgba(15, 23, 42, 0.07);
     border: 1px solid #e2e8f0;
     border-left: 6px solid #e11d48;
@@ -527,69 +530,69 @@ button[data-baseweb="tab"] {{
     border-left-color: #d97706;
 }}
 
-/* バッジ類 */
-.prob-badge {{ font-size: 24px; font-weight: 800; color: #dc2626 !important; letter-spacing: -0.5px; }}
-.rank-badge {{ display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff !important; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; margin-right: 5px; }}
-.score-badge {{ display: inline-block; background: #0f172a; color: #f8fafc !important; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }}
-.inst-badge {{ display: inline-block; background: linear-gradient(135deg, #1d4ed8, #2563eb); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
-.board5ch-badge {{ display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
-.tokugai-badge {{ display: inline-block; background: linear-gradient(135deg, #d97706, #f59e0b); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
-.survival-badge {{ display: inline-block; background: #f3e8ff; color: #6b21a8 !important; border: 1px solid #d8b4fe; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; margin-left: 4px; }}
-.quant-evo-badge {{ display: inline-block; background: #ecfeff; color: #0e7490 !important; border: 1px solid #a5f3fc; padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 700; margin-left: 4px; }}
+/* バッジ類（ほんの少し拡大） */
+.prob-badge {{ font-size: 25.5px; font-weight: 800; color: #dc2626 !important; letter-spacing: -0.5px; }}
+.rank-badge {{ display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff !important; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; margin-right: 5px; }}
+.score-badge {{ display: inline-block; background: #0f172a; color: #f8fafc !important; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }}
+.inst-badge {{ display: inline-block; background: linear-gradient(135deg, #1d4ed8, #2563eb); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-left: 4px; }}
+.board5ch-badge {{ display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-left: 4px; }}
+.tokugai-badge {{ display: inline-block; background: linear-gradient(135deg, #d97706, #f59e0b); color: #ffffff !important; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-left: 4px; }}
+.survival-badge {{ display: inline-block; background: #f3e8ff; color: #6b21a8 !important; border: 1px solid #d8b4fe; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; margin-left: 4px; }}
+.quant-evo-badge {{ display: inline-block; background: #ecfeff; color: #0e7490 !important; border: 1px solid #a5f3fc; padding: 2px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 700; margin-left: 4px; }}
 
 /* 10段階シグナルバー */
 .signal-10tier-badge {{
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 7px 14px;
+    padding: 8px 14px;
     border-radius: 10px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 800;
     margin-bottom: 10px;
     box-shadow: 0 3px 10px rgba(0,0,0,0.12);
 }}
 
-/* 情報ボックス */
-.inst-box {{ background: #eff6ff !important; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; border-radius: 9px; padding: 8px 12px; margin-top: 7px; font-size: 11.5px; color: #1e3a8a !important; }}
+/* 情報ボックス（11.5px → 12.5pxへ微増） */
+.inst-box {{ background: #eff6ff !important; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; border-radius: 9px; padding: 8px 12px; margin-top: 7px; font-size: 12.5px; color: #1e3a8a !important; }}
 .inst-box * {{ color: #1e3a8a !important; }}
-.squeeze-box {{ background: #fff1f2 !important; border: 1px solid #fecdd3; border-left: 4px solid #e11d48; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 11.5px; color: #881337 !important; }}
+.squeeze-box {{ background: #fff1f2 !important; border: 1px solid #fecdd3; border-left: 4px solid #e11d48; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 12.5px; color: #881337 !important; }}
 .squeeze-box * {{ color: #881337 !important; }}
-.pts-tokugai-box {{ background: #fffbeb !important; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 11.5px; color: #78350f !important; }}
+.pts-tokugai-box {{ background: #fffbeb !important; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 12.5px; color: #78350f !important; }}
 .pts-tokugai-box * {{ color: #78350f !important; }}
-.board5ch-box {{ background: #ecfdf5 !important; border: 1px solid #a7f3d0; border-left: 4px solid #059669; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 11.5px; color: #064e3b !important; }}
+.board5ch-box {{ background: #ecfdf5 !important; border: 1px solid #a7f3d0; border-left: 4px solid #059669; border-radius: 9px; padding: 8px 12px; margin-top: 6px; font-size: 12.5px; color: #064e3b !important; }}
 .board5ch-box * {{ color: #064e3b !important; }}
-.metrics-row {{ display: flex; flex-wrap: wrap; gap: 6px 11px; margin-top: 9px; font-size: 11px; color: #0f172a !important; background: #f1f5f9 !important; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; }}
+.metrics-row {{ display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 9px; font-size: 12px; color: #0f172a !important; background: #f1f5f9 !important; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; }}
 .metrics-row * {{ color: #0f172a !important; }}
 .trade-plan-box {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 9px; background: #ffffff !important; padding: 9px 6px; border-radius: 10px; border: 1px solid #cbd5e1; text-align: center; color: #0f172a !important; }}
-.sizing-box {{ background: linear-gradient(90deg, #f0fdf4, #dcfce7) !important; border: 1px solid #86efac; border-radius: 9px; padding: 9px 12px; margin-top: 8px; font-size: 11.5px; color: #166534 !important; }}
+.sizing-box {{ background: linear-gradient(90deg, #f0fdf4, #dcfce7) !important; border: 1px solid #86efac; border-radius: 9px; padding: 9px 12px; margin-top: 8px; font-size: 12.5px; color: #166534 !important; }}
 .sizing-box * {{ color: #166534 !important; }}
 
-/* 7大AI評議会ダークパネル */
-.ai-council-box {{ background: linear-gradient(135deg, #090d16, #1e293b); color: #f8fafc !important; border-radius: 14px; padding: 15px; margin-top: 8px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.1); }}
+/* 7大AI評議会ダークパネル（12px → 13pxへ微増） */
+.ai-council-box {{ background: linear-gradient(135deg, #090d16, #1e293b); color: #f8fafc !important; border-radius: 14px; padding: 16px; margin-top: 8px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.1); }}
 .ai-council-box * {{ color: #f8fafc; }}
-.ai-agent-card {{ background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 9px 12px; margin-bottom: 7px; font-size: 12px; line-height: 1.55; color: #f8fafc !important; }}
-.consensus-banner {{ background: linear-gradient(135deg, #1e1b4b, #312e81); border: 1.5px solid #818cf8; border-radius: 12px; padding: 13px; margin-top: 10px; font-size: 12px; line-height: 1.65; color: #f8fafc !important; }}
-.consensus-section {{ background: rgba(255, 255, 255, 0.07); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 7px 10px; margin-top: 7px; color: #f8fafc !important; }}
+.ai-agent-card {{ background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 10px 13px; margin-bottom: 7px; font-size: 13px; line-height: 1.6; color: #f8fafc !important; }}
+.consensus-banner {{ background: linear-gradient(135deg, #1e1b4b, #312e81); border: 1.5px solid #818cf8; border-radius: 12px; padding: 14px; margin-top: 10px; font-size: 13px; line-height: 1.65; color: #f8fafc !important; }}
+.consensus-section {{ background: rgba(255, 255, 255, 0.07); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 8px 11px; margin-top: 7px; color: #f8fafc !important; }}
 
-/* 💬 見やすく目に優しい・少し小さめ文字（11.5px）の質問回答専用カード */
+/* 💬 質問回答専用カード（11.5px → 12.5pxへほんの少し拡大） */
 .qa-answer-card {{
     background: #f8fafc !important;
     border: 1px solid #cbd5e1;
     border-left: 4px solid #3b82f6;
     border-radius: 10px;
-    padding: 12px 14px;
+    padding: 13px 15px;
     margin-top: 8px;
     margin-bottom: 10px;
-    font-size: 11.5px !important;
-    line-height: 1.65 !important;
+    font-size: 12.5px !important;
+    line-height: 1.7 !important;
     color: #1e293b !important;
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
 }}
 .qa-answer-card * {{
     color: #1e293b !important;
-    font-size: 11.5px !important;
-    line-height: 1.65 !important;
+    font-size: 12.5px !important;
+    line-height: 1.7 !important;
 }}
 .qa-answer-card .qa-q-header {{
     font-weight: 700;
@@ -599,7 +602,7 @@ button[data-baseweb="tab"] {{
     border-radius: 6px;
     margin-bottom: 8px;
     display: inline-block;
-    font-size: 11px !important;
+    font-size: 12px !important;
 }}
 .qa-answer-card b, .qa-answer-card strong {{
     color: #1d4ed8 !important;
@@ -820,8 +823,8 @@ def compute_latest_quant_metrics(close_series: pd.Series, vol_ratio_series: pd.S
     if len(prices) >= 10:
         x_est = float(prices[0])
         p_est = 1.0
-        q_noise = 0.03  # プロセスノイズ
-        r_noise = 0.12  # 観測ノイズ
+        q_noise = 0.03
+        r_noise = 0.12
         for z in prices[1:]:
             p_pred = p_est + q_noise
             k_gain = p_pred / (p_pred + r_noise)
@@ -830,7 +833,7 @@ def compute_latest_quant_metrics(close_series: pd.Series, vol_ratio_series: pd.S
         kalman_est = x_est
     kalman_bull_pct = round((float(prices[-1]) - kalman_est) / max(kalman_est, 1e-4) * 100, 2)
 
-    # 3. Kyle's Lambda（カイルのラムダ：大口注文による価格冲击・流動性枯渇係数）
+    # 3. Kyle's Lambda（カイルのラムダ：大口注文による価格衝撃・流動性枯渇係数）
     recent_ret = day_ret_series.tail(5).abs().mean()
     recent_vol = vol_ratio_series.tail(5).mean()
     kyle_lambda = round(float(recent_ret / max(recent_vol, 0.3)), 2)
@@ -1024,7 +1027,7 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
             evo_bonus += (hurst_v - 0.5) * 18.0
             evo_bonus += np.clip(kalman_bull * 1.2, -5.0, 6.0)
             if vix_val >= 22.0 and inst_score >= 65:
-                evo_bonus += 4.0  # 高VIX下で機関が買っているディフェンシブ強気銘柄を優遇
+                evo_bonus += 4.0
 
         base_score = min(max(prob * 0.52, 10), 44) + min(max((expected_edge + 0.3) * 12, 0), 14)
         in_bonus = round((inst_score - 50) * 0.22) if boost_inst else 0
@@ -1037,7 +1040,7 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
             ai_score * 0.35 + inst_score * 0.25 + board5ch_score * 0.20 + squeeze_score * 0.10 + min(float(latest['ATR_Pct']) * 3.5, 12.0) + max(0.0, evo_bonus), 1
         )
 
-        # 🎯 翌朝株価 10段階シグナル評価（絶対買い / 買い / 様子見 / 危険 / 絶対手を出すな）
+        # 🎯 翌朝株価 10段階シグナル評価
         tier_val = ai_score * 0.40 + prob * 0.25 + inst_score * 0.20 + board5ch_score * 0.15
         if upper_sh >= 0.42:
             tier_val -= 12.0
@@ -1209,7 +1212,7 @@ def run_7ai_council_algorithm(r, m5=None):
         claude_role = "🟠 Claude【担当：高値掴みドローダウン制御＆シコリ玉警戒】"
         claude_msg = f"上ヒゲ率 <b>{r['upper_shadow_pct']}%</b> の戻り売りリスクを計算しました。朝イチの成行飛びつきは避け、<b>{vwap_ref}</b> までの押し目を待つことで最大損失を <b>{r['lot_info']['risk_amount']:,.0f}円</b> 以内にロックできます。"
     else:
-        claude_role = "🟠 Claude【担当：ハースト指数(H={r['hurst']})＆ケリー基準検証】"
+        claude_role = f"🟠 Claude【担当：ハースト指数(H={r['hurst']})＆ケリー基準検証】"
         claude_msg = f"ハースト指数 <b>{r['hurst']}</b>、過去勝率 <b>{r['prob']}%</b>・損益比 <b>{r['payoff']}倍</b>（期待値 <b>{r['edge']:+.2f}%</b>）。総資金の <b>{r['lot_info']['capital_ratio']}%（{r['lot_info']['shares']:,}株）</b> 投入が数学的最適解です。"
 
     if is_squeeze_hot:
@@ -1275,7 +1278,7 @@ def run_7ai_council_algorithm(r, m5=None):
     }
 
 def generate_7ai_qa_response_html(question, r, debate, lot_info, m5=None) -> str:
-    """見やすい高コントラスト配色＆小さめ文字（11.5px）で出力するHTML回答ジェネレーター"""
+    """高コントラスト配色＆読みやすい12.5pxで出力するHTML回答ジェネレーター"""
     q_clean = unicodedata.normalize('NFKC', str(question)).strip()
     q_low = q_clean.lower()
     m5_vwap = m5["vwap5_price"] if m5 else r["vwap_price"]
@@ -1323,7 +1326,7 @@ def generate_7ai_qa_response_html(question, r, debate, lot_info, m5=None) -> str
         )
 
 # ==========================================
-# 💬 会議パネル＆質問コーナー（自動スムーズスクロール＆高視認性コンパクト回答カード）
+# 💬 会議パネル＆質問コーナー
 # ==========================================
 def cb_toggle_debate(unique_key):
     st.session_state["active_debates"][unique_key] = not st.session_state["active_debates"].get(unique_key, False)
@@ -1398,8 +1401,8 @@ def render_interactive_council_section(r, unique_key):
     st.markdown(
         f'<div class="ai-council-box">'
         f'<div style="display:flex; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:6px;">'
-        f'<span style="font-weight:bold; color:#fbbf24;">🧠 7大AI最高評議会（銘柄別・動的専門ロール検証）</span>'
-        f'<span style="background:{r["tier_bg"]}; color:{r["tier_color"]}; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:bold;">{r["tier_label"]}</span>'
+        f'<span style="font-weight:bold; color:#fbbf24; font-size:13.5px;">🧠 7大AI最高評議会（銘柄別・動的専門ロール検証）</span>'
+        f'<span style="background:{r["tier_bg"]}; color:{r["tier_color"]}; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:bold;">{r["tier_label"]}</span>'
         f'</div>{agents_html}'
         f'<div class="consensus-banner"><div style="font-weight:bold; color:#fde047;">🏛️ 7大AI最終コンセンサス</div>{debate["verdict_html"]}</div>'
         f'</div>',
@@ -1471,7 +1474,7 @@ def render_interactive_council_section(r, unique_key):
                     )
         st.button("🗑️ この銘柄の質問履歴をクリア", key=f"clr_{unique_key}", on_click=cb_clear_chat, args=(unique_key,), use_container_width=True)
     else:
-        st.caption("👇 上のボタンまたは自由入力欄から質問すると、直下に読みやすいコンパクトカードで回答が表示され自動でスクロールします。")
+        st.caption("👇 上のボタンまたは自由入力欄から質問すると、直下に読みやすいカードで回答が表示され自動でスクロールします。")
 
 # ==========================================
 # 🃏 銘柄カード描画 (企業ロゴ ＆ 10段階評価 ＆ 最新クオンツ指標付き)
@@ -1487,7 +1490,7 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     tier_badge_html = (
         f'<div class="signal-10tier-badge" style="background: {r["tier_bg"]}; color: {r["tier_color"]} !important;">'
         f'<span>🎯 {r["tier_label"]}</span>'
-        f'<span style="font-size:11px; opacity:0.92;">Lv.{r["tier_num"]}/10</span>'
+        f'<span style="font-size:12px; opacity:0.92;">Lv.{r["tier_num"]}/10</span>'
         f'</div>'
     )
 
@@ -1503,14 +1506,14 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">'
         f'<div style="display:flex; align-items:center; gap:10px;">'
         f'{logo_html}'
-        f'<div><span style="font-size:16.5px; font-weight:800; color:#0f172a;">{r["name"]}</span> '
-        f'<span style="font-size:12px; color:#64748b; font-weight:600;">({r["code"]} / {r["genre"]})</span><br>'
-        f'<span style="font-size:14px; color:#334155;">終値: <b>{r["price"]}</b> '
+        f'<div><span style="font-size:17.5px; font-weight:800; color:#0f172a;">{r["name"]}</span> '
+        f'<span style="font-size:13px; color:#64748b; font-weight:600;">({r["code"]} / {r["genre"]})</span><br>'
+        f'<span style="font-size:15px; color:#334155;">終値: <b>{r["price"]}</b> '
         f'(<span style="color:{diff_color}; font-weight:800;">{diff_sign}{r["diff"]}%</span>)</span></div>'
         f'</div>'
-        f'<div style="text-align:right;"><span style="font-size:11px; color:#64748b; font-weight:600;">翌朝上昇確率</span><br>'
+        f'<div style="text-align:right;"><span style="font-size:12px; color:#64748b; font-weight:600;">翌朝上昇確率</span><br>'
         f'<span class="prob-badge">{r["prob"]}%</span>'
-        f'<div style="font-size:11px; color:#64748b;">({r["count"]} / 損益比{r["payoff"]}倍)</div></div>'
+        f'<div style="font-size:12px; color:#64748b;">({r["count"]} / 損益比{r["payoff"]}倍)</div></div>'
         f'</div>'
         f'<div class="inst-box"><b>{r["inst_status"]}</b> ｜ 20日VWAP基準: <b>{r["vwap_price"]}</b></div>'
         f'<div class="board5ch-box"><b>📢 {r["board5ch_status"]}</b> ｜ シグナル: <b>{r["signal"]}</b></div>'
@@ -1526,9 +1529,9 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         f'<span>📈 <b>MACD:</b> {r["macd_state"]}</span><span>🔊 <b>出来高:</b> {r["vol_ratio"]}倍</span>'
         f'</div>'
         f'<div class="trade-plan-box">'
-        f'<div><div style="font-size:10px; color:#64748b;">🌅 夜間理論寄付き</div><div style="font-size:12.5px; font-weight:800;">{r["pts_est_price"]}</div></div>'
-        f'<div style="border-left:1px solid #cbd5e1; border-right:1px solid #cbd5e1;"><div style="font-size:10px; color:#15803d; font-weight:bold;">🎯 利確目標</div><div style="font-size:12.5px; font-weight:800; color:#15803d;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div>'
-        f'<div><div style="font-size:10px; color:#b91c1c; font-weight:bold;">🛡️ 損切り逆指値</div><div style="font-size:12.5px; font-weight:800; color:#b91c1c;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div>'
+        f'<div><div style="font-size:11px; color:#64748b;">🌅 夜間理論寄付き</div><div style="font-size:13.5px; font-weight:800;">{r["pts_est_price"]}</div></div>'
+        f'<div style="border-left:1px solid #cbd5e1; border-right:1px solid #cbd5e1;"><div style="font-size:11px; color:#15803d; font-weight:bold;">🎯 利確目標</div><div style="font-size:13.5px; font-weight:800; color:#15803d;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div>'
+        f'<div><div style="font-size:11px; color:#b91c1c; font-weight:bold;">🛡️ 損切り逆指値</div><div style="font-size:13.5px; font-weight:800; color:#b91c1c;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div>'
         f'</div>'
         f'<div class="sizing-box">'
         f'📦 <b>推奨ロット: {lot["shares"]:,}株</b> (投資額: <b>{lot["position_value"]:,.0f}円</b> / 最大損失リスク: <b>{lot["risk_amount"]:,.0f}円</b>)'
@@ -1543,7 +1546,7 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
 macro_info = fetch_macro_market()
 
 macro_pills_html = "".join([
-    f'<div style="background:rgba(255,255,255,0.08); padding:4px 10px; border-radius:8px; font-size:11px; display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(255,255,255,0.1);">'
+    f'<div style="background:rgba(255,255,255,0.08); padding:4px 10px; border-radius:8px; font-size:12px; display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(255,255,255,0.1);">'
     f'<span style="color:#cbd5e1;">{m["label"]}</span>'
     f'<span style="color:{"#f87171" if m["diff"]>=0 else "#60a5fa"}; font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span>'
     f'</div>'
@@ -1554,10 +1557,10 @@ st.markdown(f"""
 <div style="background: linear-gradient(135deg, #090d16 0%, #1e293b 100%); color: #f8fafc; padding: 18px 20px; border-radius: 16px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(15,23,42,0.18); border: 1px solid rgba(255,255,255,0.08);">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
         <div>
-            <div style="font-size:10.5px; color:#fbbf24; font-weight:700; letter-spacing:0.8px;">AUTO-EVOLVING QUANT (VPIN × HURST × KALMAN) & 7-AI TERMINAL</div>
-            <h1 style="margin:2px 0 0 0; font-size:20px; color:#ffffff; font-weight:800;">📈 翌朝株価 クオンツ＆7大AI解析 Pro</h1>
+            <div style="font-size:11.5px; color:#fbbf24; font-weight:700; letter-spacing:0.8px;">AUTO-EVOLVING QUANT (VPIN × HURST × KALMAN) & 7-AI TERMINAL</div>
+            <h1 style="margin:2px 0 0 0; font-size:21px; color:#ffffff; font-weight:800;">📈 翌朝株価 クオンツ＆7大AI解析 Pro</h1>
         </div>
-        <span style="background:rgba(251,191,36,0.15); color:#fde047; border:1px solid rgba(251,191,36,0.4); padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700;">{curr_page_badge}</span>
+        <span style="background:rgba(251,191,36,0.15); color:#fde047; border:1px solid rgba(251,191,36,0.4); padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700;">{curr_page_badge}</span>
     </div>
     <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:12px;">
         {macro_pills_html}
