@@ -10,7 +10,6 @@ import hmac
 import time
 import json
 import os
-import random
 import smtplib
 import urllib.parse
 import urllib.request
@@ -26,14 +25,13 @@ st.set_page_config(
 fragment_decorator = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
 # ==========================================
-# 🔒 会員DB ＆ 投票DB ＆ SMTP ＆ LLM設定永続化
+# 🔒 会員DB ＆ SMTP ＆ LLM設定永続化
 # ==========================================
 ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
 SECRET_MASTER_KEY = "my_super_secret_quant_key_2026"
 MEMBERS_DB_FILE = "members_db.json"
 SMTP_CONFIG_FILE = "admin_smtp_config.json"
 LLM_CONFIG_FILE = "admin_llm_config.json"
-VOTES_DB_FILE = "member_votes_db.json"
 
 def generate_member_passcode(email: str) -> str:
     return hmac.new(SECRET_MASTER_KEY.encode(), email.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
@@ -42,13 +40,14 @@ def generate_admin_action_token(email: str, action: str) -> str:
     return hashlib.sha256(f"{email.strip().lower()}:{action}:{SECRET_MASTER_KEY}".encode()).hexdigest()[:16]
 
 def _load_json(path: str, default: dict) -> dict:
+    res = dict(default)
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
-                default.update(json.load(f))
+                res.update(json.load(f))
         except Exception:
             pass
-    return default
+    return res
 
 def _save_json(path: str, data: dict):
     try:
@@ -76,11 +75,29 @@ def load_llm_config() -> dict:
 def save_llm_config(cfg: dict):
     _save_json(LLM_CONFIG_FILE, cfg)
 
-def load_votes_db() -> dict:
-    return _load_json(VOTES_DB_FILE, {})
-
-def save_votes_db(db: dict):
-    _save_json(VOTES_DB_FILE, db)
+def get_active_llm_settings() -> dict:
+    """サイドバー入力値・SessionState・保存ファイル・環境変数を統合して確実にAPIキーを取得"""
+    file_cfg = load_llm_config()
+    provider = st.session_state.get("rt_llm_provider") or file_cfg.get("provider", "gemini")
+    gemini_key = (
+        st.session_state.get("rt_gemini_api_key", "").strip()
+        or file_cfg.get("gemini_api_key", "").strip()
+        or os.environ.get("GEMINI_API_KEY", "").strip()
+    )
+    gemini_model = st.session_state.get("rt_gemini_model") or file_cfg.get("gemini_model", "gemini-2.5-flash")
+    openai_key = (
+        st.session_state.get("rt_openai_api_key", "").strip()
+        or file_cfg.get("openai_api_key", "").strip()
+        or os.environ.get("OPENAI_API_KEY", "").strip()
+    )
+    openai_model = st.session_state.get("rt_openai_model") or file_cfg.get("openai_model", "gpt-4o-mini")
+    return {
+        "provider": provider,
+        "gemini_api_key": gemini_key,
+        "gemini_model": gemini_model,
+        "openai_api_key": openai_key,
+        "openai_model": openai_model
+    }
 
 def load_members_db() -> dict:
     db = _load_json(MEMBERS_DB_FILE, {})
@@ -255,7 +272,7 @@ for k, v in [
     ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}),
     ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"),
     ("nav_history", ["TOP"]), ("custom_search_code", ""), ("scroll_to_chat_key", None),
-    ("scroll_council_key", None), ("daily_gacha_stock", None), ("user_prediction_pts", 120)
+    ("scroll_council_key", None), ("active_category", "🏆 総合TOP5")
 ]:
     if k not in st.session_state: st.session_state[k] = v
 
@@ -278,56 +295,56 @@ nav_p = st.session_state.get("navigation_page", "TOP")
 curr_page_badge = "👑 管理者コンソール" if nav_p == "ADMIN" else ("📋 監視リスト" if nav_p == "WATCHLIST" else "⚡ AIクオンツ解析")
 is_admin_user = (st.session_state.get("authenticated_user", "") == ADMIN_EMAIL.strip().lower())
 
+# サイドバー開閉ボタンと重ならないよう padding-top を 4.8rem、フローティングバーを top: 14px に調整
 st.markdown('<div id="page_top_anchor"></div>', unsafe_allow_html=True)
 st.markdown("""
 <style>
 html, body, [class*="css"] { font-size: 15.5px; }
-.block-container { padding-top: 3.4rem !important; padding-bottom: 3rem !important; max-width: 840px !important; }
-.floating-glass-nav { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 999990; display: flex; align-items: center; gap: 10px; padding: 6px 16px; background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(14px); border: 1px solid rgba(56, 189, 248, 0.28); border-radius: 999px; white-space: nowrap; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
-.floating-glass-nav a { color: #f8fafc !important; text-decoration: none !important; font-size: 12px; font-weight: 700; }
+.block-container { padding-top: 4.8rem !important; padding-bottom: 3rem !important; max-width: 840px !important; }
+.floating-glass-nav { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 99990; display: flex; align-items: center; gap: 12px; padding: 5px 16px; background: rgba(15, 23, 42, 0.90); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.30); border-radius: 999px; white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,0.35); }
+.floating-glass-nav a { color: #f8fafc !important; text-decoration: none !important; font-size: 11.5px; font-weight: 700; transition: color 0.15s; }
+.floating-glass-nav a:hover { color: #38bdf8 !important; }
 
-/* モダン・ピル型ラジオタブ */
+/* コンパクト＆スタイリッシュなピル・セグメントUI */
+div[data-testid="stPills"], div[data-testid="stSegmentedControl"] {
+    margin-top: -2px !important;
+    margin-bottom: 4px !important;
+}
 div[data-testid="stRadio"] > div[role="radiogroup"] {
-    display: flex !important; flex-wrap: wrap !important; gap: 7px !important;
-    background: linear-gradient(135deg, #090d16, #1e293b) !important;
-    padding: 11px !important; border-radius: 16px !important;
-    border: 1px solid rgba(251, 191, 36, 0.28) !important;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18) !important;
+    display: flex !important; flex-wrap: wrap !important; gap: 5px !important;
+    background: rgba(15, 23, 42, 0.92) !important;
+    padding: 7px 9px !important; border-radius: 12px !important;
+    border: 1px solid rgba(56, 189, 248, 0.25) !important;
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-    background: rgba(255, 255, 255, 0.06) !important;
-    border: 1px solid rgba(255, 255, 255, 0.14) !important;
-    border-radius: 999px !important; padding: 6px 14px !important;
-    margin: 0 !important; transition: all 0.2s ease !important; cursor: pointer !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 8px !important; padding: 4px 10px !important;
+    margin: 0 !important; transition: all 0.15s ease !important; cursor: pointer !important;
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
-    background: rgba(251, 191, 36, 0.2) !important; border-color: #fbbf24 !important; transform: translateY(-1px) !important;
+    background: rgba(56, 189, 248, 0.18) !important; border-color: #38bdf8 !important;
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child { display: none !important; }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label p {
-    color: #e2e8f0 !important; font-size: 12.8px !important; font-weight: 700 !important; margin: 0 !important;
+    color: #cbd5e1 !important; font-size: 12px !important; font-weight: 700 !important; margin: 0 !important;
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
-    background: linear-gradient(135deg, #f59e0b, #e11d48) !important;
-    border-color: #fde047 !important; box-shadow: 0 4px 14px rgba(225, 29, 72, 0.45) !important;
+    background: linear-gradient(135deg, #0284c7, #2563eb) !important;
+    border-color: #7dd3fc !important; box-shadow: 0 2px 10px rgba(37, 99, 235, 0.4) !important;
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) p {
-    color: #ffffff !important; font-weight: 900 !important;
+    color: #ffffff !important; font-weight: 800 !important;
 }
 
-/* スマート・コマンドデッキ枠 */
-.smart-deck-card {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    border-radius: 16px; padding: 14px 16px; margin-bottom: 12px;
-    color: #f8fafc; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.15);
+/* スリム・コントロールバー見出し */
+.compact-bar-label {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11.5px; font-weight: 800; color: #38bdf8;
+    background: linear-gradient(90deg, rgba(15,23,42,0.95), rgba(30,41,59,0.85));
+    padding: 5px 12px; border-radius: 8px; border-left: 3px solid #38bdf8;
+    margin-bottom: 5px; letter-spacing: 0.03em;
 }
-.gacha-card {
-    background: linear-gradient(135deg, #2e1065 0%, #0f172a 100%);
-    border: 1.5px solid #c084fc; border-radius: 16px; padding: 16px; margin-bottom: 14px;
-    color: #f8fafc !important; box-shadow: 0 8px 25px rgba(147, 51, 234, 0.25);
-}
-.gacha-card * { color: #f8fafc; }
 
 .company-logo-img { width: 38px; height: 38px; border-radius: 9px; object-fit: contain; background: #fff; padding: 2px; border: 1px solid #e2e8f0; }
 .rank-card, .search-result-card { background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important; color: #0f172a !important; border-radius: 16px; padding: 18px; margin-bottom: 13px; box-shadow: 0 6px 20px rgba(15,23,42,0.07); border: 1px solid #e2e8f0; border-left: 6px solid #e11d48; }
@@ -376,14 +393,13 @@ div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) p
 .qa-answer-card * { color: #0f172a !important; }
 .qa-direct-box { background: #eff6ff !important; border: 1px solid #93c5fd; border-left: 4px solid #2563eb; padding: 10px 12px; border-radius: 8px; margin: 8px 0; font-size: 14px !important; }
 .qa-answer-card b, .qa-answer-card strong { color: #1d4ed8 !important; font-weight: 700; }
-.vote-gauge-wrap { background: #f1f5f9; border-radius: 999px; height: 10px; width: 100%; overflow: hidden; display: flex; margin-top: 4px; border: 1px solid #cbd5e1; }
 </style>
 <div class="floating-glass-nav">
     <a href="#page_top_anchor">⬆️ TOP</a>
     <span style="color:#475569;">|</span>
-    <a href="#smart_deck_anchor">🎛️ コマンドデッキ</a>
+    <a href="#smart_deck_anchor">⚡ エンジン＆検索</a>
     <span style="color:#475569;">|</span>
-    <a href="#search_box_anchor">🔍 銘柄検索・カテゴリ</a>
+    <a href="#category_bar_anchor">📂 ジャンル切替</a>
 </div>
 """, unsafe_allow_html=True)
 
@@ -399,7 +415,7 @@ if is_admin_user:
         if ac2.button(f"👑 会員管理ページを開く ({pend_cnt}件)", use_container_width=True):
             navigate_to("ADMIN"); st.rerun()
 
-# --- サイドバー設定（チェックボックスを廃止し、スマートなトグル＆カードUIへ） ---
+# --- サイドバー設定 ---
 st.sidebar.header("🧭 ナビゲーション")
 sc1, sc2 = st.sidebar.columns(2)
 if sc1.button("⬆️ ページTOP", use_container_width=True):
@@ -409,7 +425,7 @@ if sc2.button("⬅️ 前の画面", use_container_width=True):
 if st.sidebar.button(f"📋 監視ウォッチリスト ({len(st.session_state['watchlist'])}銘柄)", use_container_width=True):
     navigate_to("WATCHLIST"); st.rerun()
 
-# --- 🤖 本物LLMエンジン（Gemini / OpenAI）設定UI ---
+# --- 🤖 本物LLMエンジン設定UI（入力した瞬間に自動保存＆ディベートキャッシュ即時クリア） ---
 st.sidebar.markdown("---")
 st.sidebar.header("🧠 LLM マルチエージェント設定")
 llm_cfg = load_llm_config()
@@ -426,28 +442,72 @@ llm_provider = st.sidebar.segmented_control(
     horizontal=True,
     index=0 if llm_cfg.get("provider", "gemini") == "gemini" else 1
 )
+st.session_state["rt_llm_provider"] = llm_provider
 
 if llm_provider == "gemini":
+    g_models = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
+    saved_gm = llm_cfg.get("gemini_model", "gemini-2.5-flash")
+    gm_idx = g_models.index(saved_gm) if saved_gm in g_models else 0
+
     api_key_input = st.sidebar.text_input("🔑 Gemini API Key", value=llm_cfg.get("gemini_api_key", ""), type="password", placeholder="AIzaSy...")
-    model_input = st.sidebar.selectbox("🧠 モデル", ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"], index=0)
-    if st.sidebar.button("💾 AIエンジン設定を保存", use_container_width=True):
-        llm_cfg.update({"provider": "gemini", "gemini_api_key": api_key_input.strip(), "gemini_model": model_input})
+    model_input = st.sidebar.selectbox("🧠 モデル", g_models, index=gm_idx)
+
+    clean_key = api_key_input.strip()
+    st.session_state["rt_gemini_api_key"] = clean_key
+    st.session_state["rt_gemini_model"] = model_input
+
+    # 入力や変更があればボタンを押さなくても即座に自動保存＆古い未設定エラーキャッシュを消去
+    if clean_key != llm_cfg.get("gemini_api_key", "") or model_input != llm_cfg.get("gemini_model", "") or llm_cfg.get("provider") != "gemini":
+        llm_cfg.update({"provider": "gemini", "gemini_api_key": clean_key, "gemini_model": model_input})
         save_llm_config(llm_cfg)
-        st.sidebar.success("✅ Gemini設定を保存しました！")
-    active_api_key = api_key_input.strip() or os.environ.get("GEMINI_API_KEY", "")
+        st.session_state["council_threads"] = {}
+        st.session_state["council_meta"] = {}
+        st.session_state["streamed_keys"] = set()
+
+    if st.sidebar.button("🔄 AI設定を反映して合議を再生成", use_container_width=True):
+        llm_cfg.update({"provider": "gemini", "gemini_api_key": clean_key, "gemini_model": model_input})
+        save_llm_config(llm_cfg)
+        st.session_state["council_threads"] = {}
+        st.session_state["council_meta"] = {}
+        st.session_state["streamed_keys"] = set()
+        st.sidebar.success("✅ Gemini設定を反映しました！")
+        st.rerun()
+
+    active_api_key = clean_key or os.environ.get("GEMINI_API_KEY", "").strip()
 else:
+    o_models = ["gpt-4o-mini", "gpt-4o"]
+    saved_om = llm_cfg.get("openai_model", "gpt-4o-mini")
+    om_idx = o_models.index(saved_om) if saved_om in o_models else 0
+
     api_key_input = st.sidebar.text_input("🔑 OpenAI API Key", value=llm_cfg.get("openai_api_key", ""), type="password", placeholder="sk-...")
-    model_input = st.sidebar.selectbox("🧠 モデル", ["gpt-4o-mini", "gpt-4o"], index=0)
-    if st.sidebar.button("💾 AIエンジン設定を保存", use_container_width=True):
-        llm_cfg.update({"provider": "openai", "openai_api_key": api_key_input.strip(), "openai_model": model_input})
+    model_input = st.sidebar.selectbox("🧠 モデル", o_models, index=om_idx)
+
+    clean_key = api_key_input.strip()
+    st.session_state["rt_openai_api_key"] = clean_key
+    st.session_state["rt_openai_model"] = model_input
+
+    if clean_key != llm_cfg.get("openai_api_key", "") or model_input != llm_cfg.get("openai_model", "") or llm_cfg.get("provider") != "openai":
+        llm_cfg.update({"provider": "openai", "openai_api_key": clean_key, "openai_model": model_input})
         save_llm_config(llm_cfg)
-        st.sidebar.success("✅ OpenAI設定を保存しました！")
-    active_api_key = api_key_input.strip() or os.environ.get("OPENAI_API_KEY", "")
+        st.session_state["council_threads"] = {}
+        st.session_state["council_meta"] = {}
+        st.session_state["streamed_keys"] = set()
+
+    if st.sidebar.button("🔄 AI設定を反映して合議を再生成", use_container_width=True):
+        llm_cfg.update({"provider": "openai", "openai_api_key": clean_key, "openai_model": model_input})
+        save_llm_config(llm_cfg)
+        st.session_state["council_threads"] = {}
+        st.session_state["council_meta"] = {}
+        st.session_state["streamed_keys"] = set()
+        st.sidebar.success("✅ OpenAI設定を反映しました！")
+        st.rerun()
+
+    active_api_key = clean_key or os.environ.get("OPENAI_API_KEY", "").strip()
 
 if active_api_key:
     st.sidebar.markdown('<div style="background:rgba(16,185,129,0.15);border:1px solid #10b981;color:#10b981;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;">🟢 7専門AIエージェント：オンライン稼働中</div>', unsafe_allow_html=True)
 else:
-    st.sidebar.warning("⚠️ APIキーを設定すると本物のLLM合議が稼働します")
+    st.sidebar.warning("⚠️ APIキーを入力すると即座にLLM合議が稼働します")
 
 st.sidebar.markdown("---")
 st.sidebar.header("💰 資金管理＆スマート表示スイッチ")
@@ -455,7 +515,6 @@ total_capital = st.sidebar.number_input("総投資資金 (円 / ドル)", min_va
 risk_tolerance_pct = st.sidebar.slider("1トレード許容リスク (%)", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
 survival_cut_pct = st.sidebar.slider("弱肉強食・各タブ選抜率 (%)", min_value=40, max_value=100, value=70, step=10)
 
-# 四角いチェックボックスではなく iOS風スマートトグル (st.toggle) を採用
 toggle_fn = getattr(st.sidebar, "toggle", st.sidebar.checkbox)
 live_stream_mode = toggle_fn("🎬 会議のリアルタイム1人ずつ発言演出", value=True)
 show_5m_chart = toggle_fn("📈 合議パネル内に5分足＆VWAP描画", value=True)
@@ -859,7 +918,7 @@ def fetch_realtime_deep_research(full_code: str, fallback_r: dict) -> dict:
     return data
 
 # ==========================================
-# 🧠 嘘のない「7人の専門AIクオンツ・エージェント」合議エンジン
+# 🧠 「7人の専門AIクオンツ・エージェント」合議エンジン
 # ==========================================
 AI_ROSTER = {
     "AEGIS":   "🛡️ AEGIS (数理リスク・ドローダウン防衛官)",
@@ -928,14 +987,15 @@ def _extract_json_from_text(raw_text: str):
         raise
 
 def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float = 0.85) -> tuple:
-    cfg = load_llm_config()
+    cfg = get_active_llm_settings()
     provider = cfg.get("provider", "gemini")
 
     if provider == "gemini":
-        api_key = cfg.get("gemini_api_key", "").strip() or os.environ.get("GEMINI_API_KEY", "").strip()
+        api_key = cfg.get("gemini_api_key", "").strip()
         model = cfg.get("gemini_model", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
         if not api_key:
             return None, "Gemini APIキーが未設定です。左サイドバーの「🧠 LLM マルチエージェント設定」に入力してください。"
+        # 純粋なHTTPS URL文字列（Markdownリンク混入バグを完全修正）
         url = f"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={urllib.parse.quote(api_key)}"
         payload = {
             "systemInstruction": {"parts": [{"text": system_prompt}]},
@@ -954,7 +1014,7 @@ def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float 
         except Exception as e:
             return None, f"Gemini API通信エラー: {str(e)}"
     else:
-        api_key = cfg.get("openai_api_key", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip()
+        api_key = cfg.get("openai_api_key", "").strip()
         model = cfg.get("openai_model", "gpt-4o-mini").strip() or "gpt-4o-mini"
         if not api_key:
             return None, "OpenAI APIキーが未設定です。左サイドバーの「🧠 LLM マルチエージェント設定」に入力してください。"
@@ -1072,16 +1132,18 @@ def run_7ai_council_algorithm(r: dict, m5=None, extra_seed: int = 0, debate_styl
         final_s = int(llm_json.get("final_score", final_s))
         custom_sum = str(llm_json.get("consensus_summary", "")).strip()
         verdict_html = (f'<div class="consensus-section"><b>🧠 マルチエージェント合議の核心結論：</b>{custom_sum}</div>' if custom_sum else "") + default_verdict_html
+        has_error = False
     else:
         dialogue.append({
             "speaker": "👑 NEXUS (システム通知)",
             "score": final_s,
             "tone": "doubt",
-            "text": f"⚠️ <b>{err_msg or 'LLM応答の解析に失敗しました'}</b><br>左サイドバーの「🧠 LLM マルチエージェント設定」に有効なAPIキーを設定すると、この銘柄（<b>{r['name']}</b>：現在値 <b>{r['price']}</b> / VPIN <b>{r['vpin']:+.2f}</b> / 総合勝率 <b>{r['total_win_rate']}%</b>）について本物のAIエージェント同士が議論を開始します。"
+            "text": f"⚠️ <b>{err_msg or 'LLM応答の解析に失敗しました'}</b><br>左サイドバーの「🧠 LLM マルチエージェント設定」に有効なAPIキーを入力すると、即座にこの銘柄（<b>{r['name']}</b>：現在値 <b>{r['price']}</b> / VPIN <b>{r['vpin']:+.2f}</b> / 総合勝率 <b>{r['total_win_rate']}%</b>）について本物のAIエージェント同士が議論を開始します。"
         })
         verdict_html = default_verdict_html
+        has_error = True
 
-    return {"final_score": final_s, "dialogue": dialogue, "verdict_html": verdict_html}
+    return {"final_score": final_s, "dialogue": dialogue, "verdict_html": verdict_html, "has_error": has_error}
 
 def generate_extra_heated_round(r: dict, m5=None, round_num: int = 1, existing_thread: list = None) -> list:
     quant_context = _build_stock_quant_context(r, m5)
@@ -1176,7 +1238,7 @@ def generate_7ai_qa_response_html(question: str, r: dict, debate: dict, lot_info
     )
 
 # ==========================================
-# 💬 会議パネル描画（1人ずつ順番に発言するライブ・ストリーミング演出搭載）
+# 💬 会議パネル描画
 # ==========================================
 def _format_single_turn_html(turn: dict) -> str:
     if "round" in turn:
@@ -1213,51 +1275,20 @@ def cb_handle_qa_action(uk, q_text, r, debate, m5):
 def cb_clear_chat(uk):
     st.session_state["stock_chats"][uk] = []
 
-def cb_cast_vote(code, direction):
-    vdb = load_votes_db()
-    rec = vdb.get(code, {"bull": 14, "bear": 4})
-    rec[direction] = rec.get(direction, 0) + 1
-    vdb[code] = rec
-    save_votes_db(vdb)
-    st.session_state["user_prediction_pts"] = st.session_state.get("user_prediction_pts", 120) + 5
-
 @fragment_decorator
 def render_interactive_council_section(r, unique_key):
-    # --- 会員参加型：『AI vs 会員』翌朝ギャップアップ予想バトル ---
-    vdb = load_votes_db()
-    seed_b = (int(hashlib.md5(r["code"].encode()).hexdigest()[:4], 16) % 18) + 8
-    v_rec = vdb.get(r["code"], {"bull": seed_b, "bear": max(2, 22 - seed_b)})
-    total_v = max(1, v_rec["bull"] + v_rec["bear"])
-    bull_pct = int(round(v_rec["bull"] / total_v * 100))
-    bear_pct = 100 - bull_pct
-
-    st.markdown(
-        f'<div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:12px;">'
-        f'<div style="display:flex;justify-content:space-between;font-weight:800;color:#1e293b;">'
-        f'<span>⚔️ 会員みんなの翌朝予想バトル（投票で+5pt）</span>'
-        f'<span>📈強気 {bull_pct}% ({v_rec["bull"]}票) vs 📉弱気 {bear_pct}% ({v_rec["bear"]}票)</span></div>'
-        f'<div class="vote-gauge-wrap"><div style="width:{bull_pct}%;background:linear-gradient(90deg,#ef4444,#f97316);"></div><div style="width:{bear_pct}%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);"></div></div>'
-        f'</div>',
-        unsafe_allow_html=True
-    )
-
-    vc1, vc2, c1, c2 = st.columns([1.0, 1.0, 2.2, 1.2])
-    vc1.button("📈 翌朝上がる", key=f"vbull_{unique_key}", on_click=cb_cast_vote, args=(r["code"], "bull"), use_container_width=True)
-    vc2.button("📉 翌朝下がる", key=f"vbear_{unique_key}", on_click=cb_cast_vote, args=(r["code"], "bear"), use_container_width=True)
-
     is_open = st.session_state["active_debates"].get(unique_key, False)
     in_wl = r["code"] in st.session_state["watchlist"]
 
+    c1, c2 = st.columns([2.6, 1.1])
     c1.button("🔼 AIエージェント合議を閉じる" if is_open else "⚡ 7専門AIエージェント合議を見る＆参加", key=f"btn_{unique_key}", on_click=cb_toggle_debate, args=(unique_key,), use_container_width=True)
     c2.button("✅ 監視済(解除)" if in_wl else "⭐ 監視追加", key=f"wl_{unique_key}", on_click=cb_toggle_watchlist, args=(r["code"], r), use_container_width=True)
 
     if not is_open:
         return
 
-    # ディベート温度感セレクター（ピル型）
     cur_style = st.session_state["debate_style_map"].get(unique_key, "⚖️ 標準バランス")
-    sel_col1, sel_col2 = st.columns([2.6, 1.1])
-    new_style = sel_col1.radio(
+    new_style = st.radio(
         "ディベート温度感",
         options=["⚖️ 標準バランス", "🔥 激論・徹底検証", "🛡️ 超辛口・リスク監査"],
         horizontal=True,
@@ -1280,6 +1311,14 @@ def render_interactive_council_section(r, unique_key):
         st.caption(f"📅 直近5分足 ({m5['chart_date']}) ｜ 5分足VWAP: **{m5['vwap5_price']}** ({m5['vwap5_dev']:+.2f}%)")
         render_5m_candlestick_chart(m5)
 
+    # もし前回APIキー未設定でエラーキャッシュになっていて、その後APIキーが設定された場合は自動再生成
+    cached_meta = st.session_state["council_meta"].get(unique_key)
+    cfg_now = get_active_llm_settings()
+    has_key_now = bool(cfg_now["gemini_api_key"] if cfg_now["provider"] == "gemini" else cfg_now["openai_api_key"])
+    if cached_meta and cached_meta.get("has_error") and has_key_now:
+        st.session_state["council_threads"].pop(unique_key, None)
+        st.session_state["streamed_keys"].discard(unique_key)
+
     is_first_stream = False
     if unique_key not in st.session_state["council_threads"]:
         with st.spinner(f"🧠 7専門AIエージェントが『{r['name']}』のクオンツ指標をリアルタイム解析中..."):
@@ -1292,8 +1331,7 @@ def render_interactive_council_section(r, unique_key):
     turns_list = st.session_state["council_threads"][unique_key]
     scroll_win_id = f"council_win_{unique_key}"
 
-    # 🎬 1人ずつリアルタイムに吹き出しが出現するライブ・ストリーミング演出
-    if live_stream_mode and (is_first_stream or unique_key not in st.session_state["streamed_keys"]):
+    if live_stream_mode and not meta.get("has_error") and (is_first_stream or unique_key not in st.session_state["streamed_keys"]):
         st.session_state["streamed_keys"].add(unique_key)
         live_box = st.empty()
         status_bar = st.empty()
@@ -1438,43 +1476,39 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     render_interactive_council_section(r, f"{key_prefix}_{r['code']}")
 
 # ==========================================
-# 🚀 メイン画面ヘッダー ＆ スマート・コマンドデッキ（チェックボックス全廃）
+# 🚀 メイン画面ヘッダー ＆ コンパクト・エンジン＆ジャンルバー
 # ==========================================
 macro_info = fetch_macro_market()
-macro_pills = "".join([f'<div style="background:rgba(255,255,255,0.08);padding:4px 10px;border-radius:8px;font-size:12px;display:inline-flex;gap:5px;"><span style="color:#cbd5e1;">{m["label"]}</span><span style="color:{"#f87171" if m["diff"]>=0 else "#60a5fa"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
+macro_pills = "".join([f'<div style="background:rgba(255,255,255,0.08);padding:3px 9px;border-radius:6px;font-size:11.5px;display:inline-flex;gap:4px;"><span style="color:#cbd5e1;">{m["label"]}</span><span style="color:{"#f87171" if m["diff"]>=0 else "#60a5fa"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 
-u_pts = st.session_state.get("user_prediction_pts", 120)
-rank_title = "👑 伝説のクオンツ" if u_pts >= 200 else ("💎 上級ストラテジスト" if u_pts >= 150 else "⚡ 認定アナリスト")
+st.markdown(f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:15px 18px;border-radius:14px;margin-bottom:10px;border:1px solid rgba(56,189,248,0.25);"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div><div style="font-size:10.5px;color:#38bdf8;font-weight:800;letter-spacing:0.06em;">MULTI-AGENT QUANT & ORDERFLOW SYSTEM</div><h1 style="margin:2px 0 0 0;font-size:19.5px;color:#fff;font-weight:900;">⚡ 翌朝株価 クオンツ＆AIエージェント合議 Pro</h1></div><div><span style="background:rgba(251,191,36,0.15);color:#fde047;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:700;">{curr_page_badge}</span></div></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">{macro_pills}</div></div>', unsafe_allow_html=True)
 
-st.markdown(f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:18px 20px;border-radius:16px;margin-bottom:12px;border:1px solid rgba(56,189,248,0.25);"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div><div style="font-size:11.5px;color:#38bdf8;font-weight:800;letter-spacing:0.06em;">MULTI-AGENT QUANT & ORDERFLOW SYSTEM</div><h1 style="margin:2px 0 0 0;font-size:21px;color:#fff;font-weight:900;">⚡ 翌朝株価 クオンツ＆AIエージェント合議 Pro</h1></div><div style="display:flex;gap:6px;align-items:center;"><span style="background:rgba(56,189,248,0.18);border:1px solid #38bdf8;color:#e0f2fe;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:800;">{rank_title} ({u_pts}pt)</span><span style="background:rgba(251,191,36,0.15);color:#fde047;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;">{curr_page_badge}</span></div></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">{macro_pills}</div></div>', unsafe_allow_html=True)
-
-# 🎛️ チェックボックスを置き換える「スマート・アルゴリズム・コマンドデッキ」
+# ⚡ 超コンパクト＆スタイリッシュな「解析エンジン・ブースト」バー
 st.markdown('<div id="smart_deck_anchor"></div>', unsafe_allow_html=True)
 BOOST_OPTIONS = {
-    "🧬 最新クオンツ (Hurst/Kalman)": "algo",
-    "🏦 機関VPIN・ステルス吸収": "inst",
-    "🔥 短期モメンタム・高値引け": "mom",
-    "💥 20日高値・空売り踏み上げ": "sq",
-    "🚨 翌朝『特買い』・PTS連動": "tok"
+    "🧬 Hurst/Kalman": "algo",
+    "🏦 機関VPIN": "inst",
+    "🔥 短期モメンタム": "mom",
+    "💥 20日高値突破": "sq",
+    "🚨 翌朝特買い": "tok"
 }
 
-with st.container():
-    st.markdown('<div class="smart-deck-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><span style="font-size:13px;font-weight:800;color:#38bdf8;">🎛️ スマート・アルゴリズム・コマンドデッキ（ワンタップで解析エンジンを動的ブースト）</span><span style="font-size:11px;color:#94a3b8;">※チェックボックス不要のピル型マルチトグル</span></div></div>', unsafe_allow_html=True)
-    if hasattr(st, "pills"):
-        selected_boosts = st.pills(
-            "アルゴリズム・ブースト選択",
-            options=list(BOOST_OPTIONS.keys()),
-            default=list(BOOST_OPTIONS.keys()),
-            selection_mode="multi",
-            label_visibility="collapsed"
-        )
-    else:
-        selected_boosts = st.multiselect(
-            "アルゴリズム・ブースト選択",
-            options=list(BOOST_OPTIONS.keys()),
-            default=list(BOOST_OPTIONS.keys()),
-            label_visibility="collapsed"
-        )
+st.markdown('<div class="compact-bar-label"><span>⚡ QUANT ENGINE BOOST</span><span style="color:#94a3b8;font-weight:600;">タップで解析ファクターを即時ON/OFF</span></div>', unsafe_allow_html=True)
+if hasattr(st, "pills"):
+    selected_boosts = st.pills(
+        "解析エンジンブースト",
+        options=list(BOOST_OPTIONS.keys()),
+        default=list(BOOST_OPTIONS.keys()),
+        selection_mode="multi",
+        label_visibility="collapsed"
+    )
+else:
+    selected_boosts = st.multiselect(
+        "解析エンジンブースト",
+        options=list(BOOST_OPTIONS.keys()),
+        default=list(BOOST_OPTIONS.keys()),
+        label_visibility="collapsed"
+    )
 
 active_codes = {BOOST_OPTIONS[k] for k in (selected_boosts or [])}
 auto_evolve_algo = "algo" in active_codes
@@ -1486,33 +1520,9 @@ tokugai_boost_mode = "tok" in active_codes
 with st.spinner("🏦 国内外の母集団を一括スキャン＆最新クオンツ解析中..."):
     genre_results, all_results = fetch_all_pool_batch(macro_info, inst_boost_mode, board5ch_boost, squeeze_boost_mode, tokugai_boost_mode, auto_evolve_algo)
 
-# 🎰 会員が毎日楽しめる「本日のAIシークレット発掘ガチャ（隠れVPINお宝株）」
-gc1, gc2, gc3 = st.columns([1.6, 1.6, 1.2])
-if gc1.button("🎰 本日の『AI隠れお宝株ガチャ』を引く", use_container_width=True):
-    hidden_gems = [x for x in all_results if x["inst_score"] >= 62 and x["total_win_rate"] >= 55] or all_results
-    st.session_state["daily_gacha_stock"] = random.choice(hidden_gems) if hidden_gems else None
-    st.session_state["user_prediction_pts"] = st.session_state.get("user_prediction_pts", 120) + 10
-if gc2.button("⚡ 激アツ急騰候補（特買い率MAX）を1銘柄召喚", use_container_width=True):
-    top_tk = sorted(all_results, key=lambda x: (x["tokugai_prob"], x["squeeze_score"]), reverse=True)
-    st.session_state["daily_gacha_stock"] = top_tk[0] if top_tk else None
-if gc3.button("✖️ ガチャ枠を閉じる", use_container_width=True):
-    st.session_state["daily_gacha_stock"] = None
-
-if st.session_state.get("daily_gacha_stock"):
-    g_stock = st.session_state["daily_gacha_stock"]
-    st.markdown(
-        f'<div class="gacha-card">'
-        f'<div style="font-size:12px;color:#e879f9;font-weight:900;">🎰 SECRET QUANT DISCOVERY (ガチャ発掘ボーナス +10pt獲得！)</div>'
-        f'<div style="font-size:18px;font-weight:900;margin-top:3px;">💎 隠れお宝発掘：『{g_stock["name"]} ({g_stock["code"]})』 — {g_stock["tier_label"]}</div>'
-        f'<div style="font-size:13px;color:#e2e8f0;margin-top:4px;">現在値 <b>{g_stock["price"]}</b> ｜ 機関VPINスコア <b>{g_stock["inst_score"]}点 (VPIN {g_stock["vpin"]:+.2f})</b> ｜ 総合勝率 <b>{g_stock["total_win_rate"]}%</b> ｜ 夜間理論気配 <b>{g_stock["pts_est_price"]}</b></div>'
-        f'</div>',
-        unsafe_allow_html=True
-    )
-    render_stock_card(g_stock, is_custom=True, key_prefix="gacha")
-
-st.markdown('<div id="search_box_anchor"></div>', unsafe_allow_html=True)
-c1, c2 = st.columns([3.2, 1])
-custom_input = c1.text_input("🔍 任意の銘柄コードを診断", placeholder="例: 6920, 5803, 3350, NVDA, IONQ", label_visibility="collapsed")
+# 🔍 スリムな個別銘柄検索バー
+c1, c2 = st.columns([3.4, 1])
+custom_input = c1.text_input("🔍 任意の銘柄コードを診断", placeholder="銘柄コードまたは米ティッカーを入力 (例: 6920, 5803, NVDA, IONQ)", label_visibility="collapsed")
 if c2.button("🔍 銘柄診断", use_container_width=True) and custom_input:
     st.session_state["custom_search_code"] = normalize_ticker(custom_input)
     navigate_to("SEARCH_RESULT")
@@ -1534,6 +1544,8 @@ def apply_survival_of_the_fittest(stock_list, cut_pct):
     keep = max(3, int(round(len(s_all) * (cut_pct / 100.0))))
     return s_all[:keep], s_all[keep:]
 
+# 📂 コンパクト・カテゴリー＆ジャンルセレクター
+st.markdown('<div id="category_bar_anchor"></div>', unsafe_allow_html=True)
 if st.session_state.get("navigation_page", "TOP") == "WATCHLIST":
     st.subheader("📋 監視ウォッチリスト")
     if st.button("⬅️ ランキング一覧へ戻る", use_container_width=True):
@@ -1541,8 +1553,23 @@ if st.session_state.get("navigation_page", "TOP") == "WATCHLIST":
     for w_code, w_item in list(st.session_state["watchlist"].items()):
         render_stock_card(w_item, key_prefix=f"wl_page_{w_code}")
 else:
-    all_categories = ["🏆 総合TOP5", "🏦 機関VPIN・最新クオンツ", "🔥 短期モメンタム集中", "🚨 特買い・夜間PTS", "💥 空売り踏み上げ", "📋 監視＆注文シート"] + [f"📂 {g}" for g in STOCK_POOL.keys()]
-    selected_cat = st.radio("カテゴリ切替", options=all_categories, horizontal=True, label_visibility="collapsed")
+    all_categories = [
+        "🏆 総合TOP5", "🏦 機関VPIN", "🔥 短期モメンタム", "🚨 特買い・PTS", "💥 踏み上げ", "📋 監視シート"
+    ] + [f"📂 {g}" for g in STOCK_POOL.keys()]
+
+    st.markdown('<div class="compact-bar-label"><span>📂 RANKING & SECTOR SELECT</span><span style="color:#94a3b8;font-weight:600;">戦略ランキング / テーマ別セクター切替</span></div>', unsafe_allow_html=True)
+    if hasattr(st, "pills"):
+        picked_cat = st.pills(
+            "カテゴリ切替",
+            options=all_categories,
+            default=st.session_state.get("active_category", "🏆 総合TOP5"),
+            selection_mode="single",
+            label_visibility="collapsed"
+        )
+        selected_cat = picked_cat if picked_cat else st.session_state.get("active_category", "🏆 総合TOP5")
+        st.session_state["active_category"] = selected_cat
+    else:
+        selected_cat = st.radio("カテゴリ切替", options=all_categories, horizontal=True, label_visibility="collapsed")
 
     surv_all, elim_all = apply_survival_of_the_fittest(all_results, survival_cut_pct)
 
@@ -1550,19 +1577,19 @@ else:
         st.caption(f"🦁 全母集団 {len(all_results)}銘柄から下位 {len(elim_all)}銘柄を足切り！総合勝率・10段階評価ともに最強のTOP5です。")
         for idx, r in enumerate(surv_all[:5], start=1):
             render_stock_card(r, rank=idx, key_prefix="top5")
-    elif selected_cat == "🏦 機関VPIN・最新クオンツ":
+    elif selected_cat == "🏦 機関VPIN":
         for idx, r in enumerate(sorted(all_results, key=lambda x: (x["inst_score"], x["total_win_rate"], x["vpin"]), reverse=True)[:10], start=1):
             render_stock_card(r, rank=idx, key_prefix="inst_top")
-    elif selected_cat == "🔥 短期モメンタム集中":
+    elif selected_cat == "🔥 短期モメンタム":
         for idx, r in enumerate(sorted(all_results, key=lambda x: (x["board5ch_score"], x["total_win_rate"]), reverse=True)[:10], start=1):
             render_stock_card(r, rank=idx, key_prefix="b5_top")
-    elif selected_cat == "🚨 特買い・夜間PTS":
+    elif selected_cat == "🚨 特買い・PTS":
         for idx, r in enumerate(sorted(all_results, key=lambda x: (x["tokugai_prob"], x["pts_gap_pct"]), reverse=True)[:10], start=1):
             render_stock_card(r, rank=idx, key_prefix="tk_top")
-    elif selected_cat == "💥 空売り踏み上げ":
+    elif selected_cat == "💥 踏み上げ":
         for idx, r in enumerate(sorted(all_results, key=lambda x: (x["squeeze_score"], x["total_win_rate"]), reverse=True)[:10], start=1):
             render_stock_card(r, rank=idx, key_prefix="sq_top")
-    elif selected_cat == "📋 監視＆注文シート":
+    elif selected_cat == "📋 監視シート":
         wl = st.session_state["watchlist"]
         st.markdown(f"#### 📋 監視ウォッチリスト ({len(wl)}銘柄)")
         if st.button("⚡ 総合TOP3をワンタップ一括登録", use_container_width=True):
