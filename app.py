@@ -84,6 +84,9 @@ def load_llm_config() -> dict:
     cfg = _load_json(LLM_CONFIG_FILE, default_cfg)
     cfg["gemini_api_key"] = clean_api_key_str(cfg.get("gemini_api_key", ""))
     cfg["openai_api_key"] = clean_api_key_str(cfg.get("openai_api_key", ""))
+    # 廃止された1.5系が保存されていた場合は2.5-flashに自動補正
+    if "1.5" in str(cfg.get("gemini_model", "")):
+        cfg["gemini_model"] = "gemini-2.5-flash"
     return cfg
 
 def save_llm_config(cfg: dict):
@@ -109,6 +112,8 @@ def get_active_llm_settings() -> dict:
         or secret_gemini
     )
     gemini_model = st.session_state.get("rt_gemini_model") or file_cfg.get("gemini_model", "gemini-2.5-flash")
+    if "1.5" in gemini_model:
+        gemini_model = "gemini-2.5-flash"
     openai_key = (
         clean_api_key_str(st.session_state.get("rt_openai_api_key", ""))
         or clean_api_key_str(file_cfg.get("openai_api_key", ""))
@@ -320,7 +325,6 @@ nav_p = st.session_state.get("navigation_page", "TOP")
 curr_page_badge = "👑 管理者コンソール" if nav_p == "ADMIN" else ("📋 監視リスト" if nav_p == "WATCHLIST" else "⚡ AIクオンツ解析")
 is_admin_user = (st.session_state.get("authenticated_user", "") == ADMIN_EMAIL.strip().lower())
 
-# サイドバー開閉ボタンと重ならないよう padding-top を 4.8rem、フローティングバーを top: 14px に調整
 st.markdown('<div id="page_top_anchor"></div>', unsafe_allow_html=True)
 st.markdown("""
 <style>
@@ -441,13 +445,51 @@ if is_admin_user:
             navigate_to("ADMIN"); st.rerun()
 
 # ==========================================
-# 🧠 本物LLM通信コア（SSLエラー対策・自動モデルフォールバック・柔軟JSON抽出）
+# 🧠 本物LLM通信コア（利用可能モデル自動検出 ＆ 壊れないJSON/正規表現ハイブリッド解析）
 # ==========================================
+@st.cache_data(ttl=3600)
+def fetch_available_gemini_models(api_key: str) -> list:
+    """APIキーで実際にgenerateContentが利用可能なGeminiモデル一覧を自動取得（404エラー完全防止）"""
+    if not api_key:
+        return []
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={urllib.parse.quote(api_key)}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 QuantAgentPro/3.0"}, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=15, context=ssl_ctx) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            models = []
+            for m in data.get("models", []):
+                methods = m.get("supportedGenerationMethods", [])
+                name = m.get("name", "").replace("models/", "")
+                if "generateContent" in methods and name.startswith("gemini"):
+                    # 特殊な画像・音声・埋め込み専用モデルを除外
+                    if not any(x in name for x in ["vision", "embedding", "imagen", "veo", "tts", "audio", "robotics", "computer-use"]):
+                        models.append(name)
+            # 優先順位ソート（flash系・新しい世代を優先）
+            preferred_order = [
+                "gemini-2.5-flash",
+                "gemini-2.5-pro",
+                "gemini-2.0-flash",
+                "gemini-2.0-flash-lite",
+                "gemini-flash-latest",
+                "gemini-pro-latest"
+            ]
+            sorted_m = [p for p in preferred_order if p in models]
+            for m in models:
+                if m not in sorted_m:
+                    sorted_m.append(m)
+            return sorted_m
+    except Exception:
+        return []
+
 def _extract_json_from_text(raw_text: str):
+    """JSON文字列の抽出＋万一壊れていた場合の正規表現レスキュー抽出"""
     if not raw_text:
-        raise ValueError("AIからの応答が空でした。")
+        raise ValueError("AIからの応答テキストが空でした。")
     txt = raw_text.strip()
-    # コードブロック除去
     txt = re.sub(r"^```(?:json)?\s*", "", txt, flags=re.IGNORECASE)
     txt = re.sub(r"\s*```$", "", txt)
     txt = txt.strip()
@@ -455,19 +497,58 @@ def _extract_json_from_text(raw_text: str):
     end_b = txt.rfind("}")
     if start_b != -1 and end_b != -1 and end_b > start_b:
         txt = txt[start_b:end_b + 1]
+
+    # 1. 標準パース
     try:
         return json.loads(txt)
     except Exception:
-        # 末尾カンマや制御文字の自動修復
+        pass
+
+    # 2. 制御文字・改行・末尾カンマ修復パース
+    try:
         txt_fixed = re.sub(r",\s*([}\]])", r"\1", txt)
         txt_fixed = re.sub(r"[\x00-\x1f]+", " ", txt_fixed)
         return json.loads(txt_fixed)
+    except Exception:
+        pass
 
-def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float = 0.75) -> tuple:
+    # 3. ディベートturnsの正規表現レスキュー抽出（セリフ内に未エスケープの " があった場合でも復旧）
+    turns_rescued = []
+    pattern = re.compile(
+        r'"speaker_key"\s*:\s*"([^"]+)"[\s\S]*?"score"\s*:\s*(\d+)[\s\S]*?"tone"\s*:\s*"([^"]+)"[\s\S]*?"text"\s*:\s*"(.*?)"(?=\s*\})',
+        re.DOTALL
+    )
+    for m in pattern.finditer(txt):
+        turns_rescued.append({
+            "speaker_key": m.group(1),
+            "score": int(m.group(2)),
+            "tone": m.group(3),
+            "text": m.group(4).replace('\\"', '"')
+        })
+    if turns_rescued:
+        f_m = re.search(r'"final_score"\s*:\s*(\d+)', txt)
+        c_m = re.search(r'"consensus_summary"\s*:\s*"([^"]*)"', txt)
+        return {
+            "final_score": int(f_m.group(1)) if f_m else 85,
+            "turns": turns_rescued,
+            "consensus_summary": c_m.group(1) if c_m else ""
+        }
+
+    # 4. Q&A回答の正規表現レスキュー抽出
+    da_m = re.search(r'"direct_answer_html"\s*:\s*"(.*?)"(?=\s*,\s*"specialist_comment_html"|\s*\})', txt, re.DOTALL)
+    sc_m = re.search(r'"specialist_comment_html"\s*:\s*"(.*?)"(?=\s*\})', txt, re.DOTALL)
+    if da_m:
+        return {
+            "direct_answer_html": da_m.group(1).replace('\\"', '"'),
+            "specialist_comment_html": sc_m.group(1).replace('\\"', '"') if sc_m else ""
+        }
+
+    raise ValueError(f"JSON解析失敗 (先頭120文字: {txt[:120]})")
+
+def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float = 0.7) -> tuple:
     cfg = get_active_llm_settings()
     provider = cfg.get("provider", "gemini")
 
-    # SSL証明書エラー回避コンテキスト
     ssl_ctx = ssl.create_default_context()
     ssl_ctx.check_hostname = False
     ssl_ctx.verify_mode = ssl.CERT_NONE
@@ -478,60 +559,73 @@ def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float 
         if not api_key:
             return None, "Gemini APIキーが未設定です。左サイドバーの「🔑 Gemini API Key」に入力してください。"
 
-        # 選択モデルが利用不可・クォータ制限の場合でも自動で別モデルへフォールバック
+        # APIキーが実際に使えるモデル一覧を取得して候補リストを構築
+        avail_models = fetch_available_gemini_models(api_key)
         candidate_models = []
-        for m in [primary_model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+        if primary_model in avail_models:
+            candidate_models.append(primary_model)
+        for m in avail_models:
             if m not in candidate_models:
                 candidate_models.append(m)
+        if not candidate_models:
+            candidate_models = [primary_model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
 
-        last_err = ""
-        for model_name in candidate_models:
+        errors_log = []
+        combined_prompt = f"【システム指示】\n{system_prompt}\n\n【ユーザー指示】\n{user_prompt}"
+
+        for model_name in candidate_models[:3]:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={urllib.parse.quote(api_key)}"
-            combined_prompt = f"【システム指示】\n{system_prompt}\n\n【ユーザー指示】\n{user_prompt}"
-            payload = {
-                "contents": [{"role": "user", "parts": [{"text": combined_prompt}]}],
-                "generationConfig": {
-                    "temperature": temperature,
-                    "responseMimeType": "application/json"
+            # まずJSON MIMEタイプ指定でリクエスト、万が一モデルが非対応なら通常テキストでリトライ
+            for use_json_mime in (True, False):
+                gen_cfg = {"temperature": temperature}
+                if use_json_mime:
+                    gen_cfg["responseMimeType"] = "application/json"
+                payload = {
+                    "contents": [{"role": "user", "parts": [{"text": combined_prompt}]}],
+                    "generationConfig": gen_cfg
                 }
-            }
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Content-Type": "application/json",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) QuantAgentPro/2.0"
-                },
-                method="POST"
-            )
-            try:
-                with urllib.request.urlopen(req, timeout=45, context=ssl_ctx) as resp:
-                    res_data = json.loads(resp.read().decode("utf-8"))
-                    candidates = res_data.get("candidates", [])
-                    if not candidates:
-                        last_err = f"Gemini応答が空でした ({res_data})"
-                        continue
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    text_out = "".join(p.get("text", "") for p in parts)
-                    parsed = _extract_json_from_text(text_out)
-                    return parsed, None
-            except urllib.error.HTTPError as he:
-                err_body = he.read().decode("utf-8", errors="ignore")
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0 QuantAgentPro/3.0"
+                    },
+                    method="POST"
+                )
                 try:
-                    err_j = json.loads(err_body)
-                    err_detail = err_j.get("error", {}).get("message", err_body[:180])
-                except Exception:
-                    err_detail = err_body[:180]
-                last_err = f"HTTP {he.code} ({model_name}): {err_detail}"
-                # APIキー自体が無効な場合は即座に返す
-                if he.code in (400, 401, 403) and ("API_KEY" in err_body.upper() or "KEY" in err_detail.upper()):
-                    return None, f"APIキーが無効です ({err_detail})"
-                continue
-            except Exception as e:
-                last_err = f"{type(e).__name__}: {str(e)}"
-                continue
+                    with urllib.request.urlopen(req, timeout=45, context=ssl_ctx) as resp:
+                        res_data = json.loads(resp.read().decode("utf-8"))
+                        candidates = res_data.get("candidates", [])
+                        if not candidates:
+                            errors_log.append(f"{model_name}: 応答候補が空")
+                            break
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        text_out = "".join(p.get("text", "") for p in parts)
+                        parsed = _extract_json_from_text(text_out)
+                        return parsed, None
+                except urllib.error.HTTPError as he:
+                    err_body = he.read().decode("utf-8", errors="ignore")
+                    try:
+                        err_j = json.loads(err_body)
+                        err_detail = err_j.get("error", {}).get("message", err_body[:160])
+                    except Exception:
+                        err_detail = err_body[:160]
+                    errors_log.append(f"HTTP {he.code} ({model_name}): {err_detail}")
+                    # APIキー自体の不正は即終了
+                    if he.code in (400, 401, 403) and ("API_KEY" in err_body.upper() or "KEY_INVALID" in err_body.upper()):
+                        return None, f"APIキーが無効です ({err_detail})"
+                    # 400エラーでresponseMimeType非対応の可能性がある場合のみuse_json_mime=Falseへ、それ以外は次のモデルへ
+                    if he.code == 400 and use_json_mime:
+                        continue
+                    break
+                except Exception as e:
+                    errors_log.append(f"{model_name}: {type(e).__name__} ({str(e)[:120]})")
+                    if use_json_mime:
+                        continue
+                    break
 
-        return None, f"Gemini API通信エラー ({last_err})"
+        return None, " / ".join(errors_log[:2]) if errors_log else "Gemini API通信エラー"
 
     else:
         api_key = clean_api_key_str(cfg.get("openai_api_key", ""))
@@ -551,7 +645,7 @@ def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float 
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}",
-                "User-Agent": "Mozilla/5.0 QuantAgentPro/2.0"
+                "User-Agent": "Mozilla/5.0 QuantAgentPro/3.0"
             },
             method="POST"
         )
@@ -576,7 +670,7 @@ if sc2.button("⬅️ 前の画面", use_container_width=True):
 if st.sidebar.button(f"📋 監視ウォッチリスト ({len(st.session_state['watchlist'])}銘柄)", use_container_width=True):
     navigate_to("WATCHLIST"); st.rerun()
 
-# --- 🤖 本物LLMエンジン設定UI（入力した瞬間に自動保存＆ディベートキャッシュ即時クリア） ---
+# --- 🤖 本物LLMエンジン設定UI（APIキーから利用可能モデルを動的取得） ---
 st.sidebar.markdown("---")
 st.sidebar.header("🧠 LLM マルチエージェント設定")
 llm_cfg = load_llm_config()
@@ -596,14 +690,17 @@ llm_provider = st.sidebar.segmented_control(
 st.session_state["rt_llm_provider"] = llm_provider
 
 if llm_provider == "gemini":
-    g_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-pro"]
+    api_key_input = st.sidebar.text_input("🔑 Gemini API Key", value=llm_cfg.get("gemini_api_key", ""), type="password", placeholder="AIzaSy...")
+    clean_key = clean_api_key_str(api_key_input)
+
+    # 入力されたキーで利用可能なモデル一覧を自動取得（404になる廃止モデルを排除）
+    detected_models = fetch_available_gemini_models(clean_key) if clean_key else []
+    g_models = detected_models if detected_models else ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-flash-latest"]
+
     saved_gm = llm_cfg.get("gemini_model", "gemini-2.5-flash")
     gm_idx = g_models.index(saved_gm) if saved_gm in g_models else 0
+    model_input = st.sidebar.selectbox("🧠 モデル (API対応モデル自動検出)", g_models, index=gm_idx)
 
-    api_key_input = st.sidebar.text_input("🔑 Gemini API Key", value=llm_cfg.get("gemini_api_key", ""), type="password", placeholder="AIzaSy...")
-    model_input = st.sidebar.selectbox("🧠 モデル", g_models, index=gm_idx)
-
-    clean_key = clean_api_key_str(api_key_input)
     st.session_state["rt_gemini_api_key"] = clean_key
     st.session_state["rt_gemini_model"] = model_input
 
@@ -625,12 +722,12 @@ if llm_provider == "gemini":
         st.rerun()
     if btn_c2.button("🔌 接続テスト", use_container_width=True):
         with st.sidebar:
-            with st.spinner("Gemini API 接続確認中..."):
-                test_res, test_err = call_real_llm_json("JSONのみを返してください。", '{"status": "ok"} を返してください。', 0.1)
+            with st.spinner(f"{model_input} 接続確認中..."):
+                test_res, test_err = call_real_llm_json("必ずJSONオブジェクトのみを出力してください。", '{"status": "ok"} とだけ出力してください。', 0.1)
                 if test_res:
                     st.session_state["council_threads"] = {}
                     st.session_state["council_meta"] = {}
-                    st.success("✅ Gemini API 正常接続を確認！")
+                    st.success(f"✅ {model_input} 正常接続を確認！")
                 else:
                     st.error(f"❌ {test_err}")
 
@@ -666,7 +763,7 @@ else:
     if btn_c2.button("🔌 接続テスト", use_container_width=True):
         with st.sidebar:
             with st.spinner("OpenAI API 接続確認中..."):
-                test_res, test_err = call_real_llm_json("JSONのみを返してください。", '{"status": "ok"} を返してください。', 0.1)
+                test_res, test_err = call_real_llm_json("必ずJSONオブジェクトのみを出力してください。", '{"status": "ok"} とだけ出力してください。', 0.1)
                 if test_res:
                     st.session_state["council_threads"] = {}
                     st.session_state["council_meta"] = {}
@@ -1196,22 +1293,22 @@ def run_7ai_council_algorithm(r: dict, m5=None, extra_seed: int = 0, debate_styl
     quant_context = _build_stock_quant_context(r, m5)
     style_instruction = {
         "⚖️ 標準バランス": "データ分析から自然に疑問・反論が生まれ、最後はユーモアを交えて合理的な3段階分割案に収束させてください。",
-        "🔥 激論・徹底検証": "強気特攻のIGNISとリスク防衛のAEGIS・CHRONOSがバチバチに衝突し、ヒートアップ（tone: 'rage'）や一時退席イベント（system_event / system_rejoin）も交えた白熱の激論を展開してください。",
-        "🛡️ 超辛口・リスク監査": "高値掴みやダマシのリスク、上ヒゲやボリンジャー過熱感など「負けるシナリオ」を徹底的に洗い出し、最も安全な引きつけエントリー条件を厳しく議論してください。"
+        "🔥 激論・徹底検証": "強気特攻のIGNISとリスク防衛のAEGIS・CHRONOSがバチバチに衝突し、ヒートアップ（tone: 'rage'）も交えた白熱の激論を展開してください。",
+        "🛡️ 超辛口・リスク監査": "高値掴みやダマシのリスク、上ヒゲやボリンジャー過熱感など負けるシナリオを徹底的に洗い出し、最も安全な引きつけエントリー条件を厳しく議論してください。"
     }.get(debate_style, "")
 
     system_prompt = f"""あなたは株式クオンツ解析システムの「7専門AIエージェント合議エンジン」です。
-与えられた銘柄の実際の数値（現在値、ローソク足、上ヒゲ/下ヒゲ、VPIN、Hurst、カルマン乖離、20日高値乖離、夜間PTS気配、勝率、推奨ロット等）を深く読み解き、7つの専門エージェントそれぞれの視点と口調でリアルなディベート（7〜8ターン）を生成してください。
+与えられた銘柄の実際の数値（現在値、ローソク足、上ヒゲ/下ヒゲ、VPIN、Hurst、カルマン乖離、20日高値乖離、夜間PTS気配、勝率、推奨ロット等）を深く読み解き、7つの専門エージェントそれぞれの視点と口調でリアルなディベート（7ターン）を生成してください。
 
 {AI_PERSONA_RULES}
 
 【今回のディベート温度感指定】
 {style_instruction}
 
-【構成ルール】
+【構成ルール（厳守）】
 1. `speaker_key` には必ず `AEGIS`, `IGNIS`, `TECHNOS`, `MACRO`, `MICRO`, `CHRONOS`, `NEXUS` のいずれかを指定する。
 2. 序盤は `tone: "normal"` でデータ提示、中盤は `tone: "doubt"`（疑問）、`"rebuttal"`（反論）、`"rage"`（激論）、終盤は `"humor"`（仲裁）を経て、最終ターンは必ず `"speaker_key": "NEXUS"` が `"tone": "agree"` で3段階分割エントリー（第1弾 {lot_p1:,}株 / 第2弾 {lot_p2:,}株 / 第3弾 {lot_p3:,}株）を総括して締める。
-3. セリフ内の重要な数値は `<b>...</b>` タグで囲んで強調すること。
+3. セリフ内の重要な数値は `<b>...</b>` タグで囲んで強調すること。JSON破損を防ぐため、セリフ（text）の中ではダブルクォーテーション `"` を使わず、`「...」` または `<b>...</b>` を使用すること。
 
 【厳守するJSON出力フォーマット】
 {{
@@ -1230,7 +1327,7 @@ def run_7ai_council_algorithm(r: dict, m5=None, extra_seed: int = 0, debate_styl
 
 {quant_context}"""
 
-    llm_json, err_msg = call_real_llm_json(system_prompt, user_prompt, temperature=0.8)
+    llm_json, err_msg = call_real_llm_json(system_prompt, user_prompt, temperature=0.75)
 
     dialogue = [{"round": f"⚡ 『{r['name']}（{r['code']}）』7専門AIエージェント 合議セッション（{debate_style}）"}]
     if llm_json and isinstance(llm_json.get("turns"), list) and len(llm_json["turns"]) >= 2:
@@ -1258,7 +1355,7 @@ def generate_extra_heated_round(r: dict, m5=None, round_num: int = 1, existing_t
     system_prompt = f"""あなたは株式クオンツ解析の「7専門AIエージェント合議エンジン」です。
 これまでの議論を踏まえ、延長ラウンド（第+{round_num}ラウンド）として「ザラ場中のアルゴ揺さぶり（見せ板・VWAP割れダマシ）への対処と後場への持続性」について、3〜4名のエージェントがさらに深く議論するJSONを出力してください。
 {AI_PERSONA_RULES}
-`speaker_key` は `AEGIS`, `IGNIS`, `TECHNOS`, `MACRO`, `MICRO`, `CHRONOS`, `NEXUS` のいずれかとし、数値は `<b>...</b>` で強調してください。
+`speaker_key` は `AEGIS`, `IGNIS`, `TECHNOS`, `MACRO`, `MICRO`, `CHRONOS`, `NEXUS` のいずれかとし、数値は `<b>...</b>` で強調してください。セリフ内ではダブルクォーテーション `"` を使わず `「...」` を使用してください。
 
 【JSON出力フォーマット】
 {{
@@ -1270,7 +1367,7 @@ def generate_extra_heated_round(r: dict, m5=None, round_num: int = 1, existing_t
   ]
 }}"""
 
-    llm_json, err_msg = call_real_llm_json(system_prompt, f"【直近の議論】\n{recent_log}\n\n{quant_context}", temperature=0.8)
+    llm_json, err_msg = call_real_llm_json(system_prompt, f"【直近の議論】\n{recent_log}\n\n{quant_context}", temperature=0.75)
     res = [{"round": f"🔥 延長ディベート（第+{round_num}ラウンド）：ザラ場中のアルゴ揺さぶり＆後場持続性の検証"}]
     if llm_json and isinstance(llm_json.get("turns"), list):
         res.extend(_normalize_llm_turns(llm_json["turns"], {}, r["ai_score"]))
@@ -1287,7 +1384,7 @@ def generate_ai_reply_to_user_opinion(user_msg: str, r: dict, m5=None, existing_
 会議に参加している人間の投資家（オーナー）が発言しました。
 オーナーの発言・疑問に対して、最も適任な2〜3名のエージェント（MICRO, AEGIS, IGNIS, NEXUS等）がリアルタイム取得データとクオンツ指標を引用しながら直接応答し、売買プランを柔軟に調整してください。
 {AI_PERSONA_RULES}
-重要な数値は `<b>...</b>` で強調してください。
+重要な数値は `<b>...</b>` で強調し、セリフ内ではダブルクォーテーション `"` を使わず `「...」` を使用してください。
 
 【JSON出力フォーマット】
 {{
@@ -1298,7 +1395,7 @@ def generate_ai_reply_to_user_opinion(user_msg: str, r: dict, m5=None, existing_
   ]
 }}"""
 
-    llm_json, err_msg = call_real_llm_json(system_prompt, f"【オーナー発言】「{user_msg}」\n\n【直近の議論】\n{recent_log}\n\n{quant_context}", temperature=0.75)
+    llm_json, err_msg = call_real_llm_json(system_prompt, f"【オーナー発言】「{user_msg}」\n\n【直近の議論】\n{recent_log}\n\n{quant_context}", temperature=0.7)
     res = [{"round": f"🗣️ あなたの発言「{user_msg}」に対するAIエージェントの応答"}]
     if llm_json and isinstance(llm_json.get("turns"), list):
         res.extend(_normalize_llm_turns(llm_json["turns"], {}, r["ai_score"]))
@@ -1314,7 +1411,7 @@ def generate_7ai_qa_response_html(question: str, r: dict, debate: dict, lot_info
 
     system_prompt = """あなたはAIクオンツ調査チームの代表アナリスト（NEXUS & MICRO）です。
 ユーザーの質問に対して、提供されたリアルタイム株価データ・ファンダメンタル指標（PER/PBR/ROE/時価総額/目標株価）・最新ニュース・クオンツ指標をもとに、ピンポイントかつ具体的に回答してください。
-出力は以下のJSONフォーマットを厳守し、重要な数値や結論は `<b>...</b>` で囲み、改行には `<br>` を使用してください。
+出力は以下のJSONフォーマットを厳守し、重要な数値や結論は `<b>...</b>` で囲み、改行には `<br>` を使用してください。テキスト内ではダブルクォーテーション `"` を使わず `「...」` を使用してください。
 
 【JSON出力フォーマット】
 {
@@ -1344,7 +1441,7 @@ def generate_7ai_qa_response_html(question: str, r: dict, debate: dict, lot_info
     )
 
 # ==========================================
-# 💬 会議パネル描画（エラー時はキャッシュせず即再試行可能）
+# 💬 会議パネル描画
 # ==========================================
 def _format_single_turn_html(turn: dict) -> str:
     if "round" in turn:
@@ -1417,7 +1514,6 @@ def render_interactive_council_section(r, unique_key):
         st.caption(f"📅 直近5分足 ({m5['chart_date']}) ｜ 5分足VWAP: **{m5['vwap5_price']}** ({m5['vwap5_dev']:+.2f}%)")
         render_5m_candlestick_chart(m5)
 
-    # 過去のキャッシュがエラーだった場合は、絶対に保持せず破棄して毎回新たに通信を試みる
     cached_meta = st.session_state["council_meta"].get(unique_key)
     if cached_meta and cached_meta.get("has_error"):
         st.session_state["council_threads"].pop(unique_key, None)
@@ -1428,7 +1524,6 @@ def render_interactive_council_section(r, unique_key):
     if unique_key not in st.session_state["council_threads"]:
         with st.spinner(f"🧠 7専門AIエージェントが『{r['name']}』のクオンツ指標をリアルタイム解析中..."):
             debate = run_7ai_council_algorithm(r, m5, extra_seed=cur_seed, debate_style=new_style)
-            # エラーがない正常応答のみをキャッシュに保存する（エラー固定化バグを完全防止）
             if not debate.get("has_error"):
                 st.session_state["council_threads"][unique_key] = list(debate["dialogue"])
                 st.session_state["council_meta"][unique_key] = debate
