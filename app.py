@@ -279,15 +279,14 @@ def call_api_seamless(sys_p: str, usr_p: str, temp: float = 0.75) -> tuple:
     return None, "内蔵クオンツ動的推論AI (429バイパス)"
 
 def build_quant_debate(r: dict, smap: dict, fs: int, vref: str, lp1: int, lp2: int, lp3: int, style: str, seed: int) -> dict:
-    """銘柄コード×シード×ミリ秒エントロピーから毎回異なる8〜10ターンの乱雑なプロ掛け合いを生成（ブチ切れは1%の確率で段階的に発生）"""
+    """銘柄コード×シードから毎回異なる8〜10ターンの乱雑なプロ掛け合いを生成（ブチ切れは1%の確率で段階的に発生）"""
     h_val = int(hashlib.md5(f"{r['code']}_{seed}_{r['price']}_{style}".encode()).hexdigest()[:8], 16)
     rng = random.Random(h_val)
-    is_rage_event = (rng.randint(1, 100) == 1)  # 1%の確率でのみ終盤ヒートアップからブチ切れ発生
+    is_rage_event = (rng.randint(1, 100) == 1)
 
     b5_info = f"5ch実況スレでも言及 <b>{r['b5_hits']}件</b> と注目が集まっている" if r.get("b5_hits", 0) > 0 else f"5ch実況スレの過熱ノイズはまだ少なく、機関主導の静かな需給（短期スコア <b>{r['board5ch_score']}点</b>）だ"
     v_desc = "機関のステルス買い集め" if r["vpin"] >= 0.15 else ("大口の利確・売り抜け警戒" if r["vpin"] < -0.1 else "機関オーダーフロー均衡")
 
-    # 1. 導入（MICRO または TECHNOS または MACRO からランダムに開始）
     openers = [
         ("MICRO", f"『{r['name']}（{r['code']}）』の板オーダーフローから入るぞ。現在値 <b>{r['price']}（{r['diff']:+.2f}%）</b>、VPINは <b>{r['vpin']:+.2f}</b> で{v_desc}を示唆している。Amihud弾性は <b>{r['amihud_ratio']}倍</b> だ。"),
         ("MICRO", f"まずミクロ需給を共有する。{r['name']}のVPINは <b>{r['vpin']:+.2f}</b>、カルマン推計乖離は <b>{r['kalman_bull_pct']:+.2f}%</b>。基準VWAP（<b>{vref}</b>）を軸に大口のアイスバーグ注文が観測されているな。"),
@@ -296,7 +295,6 @@ def build_quant_debate(r: dict, smap: dict, fs: int, vref: str, lp1: int, lp2: i
     ]
     sp1, tx1 = rng.choice(openers)
 
-    # 2. 波形・モメンタム勢の割り込み
     tech_pool = [
         f"補足すると、Hurst指数は <b>{r['hurst']}</b>、ボリンジャーは <b>{r['bb_z']:+.2f}σ</b>（20日乖離 <b>{r['ma20_dev']:+.2f}%</b>）に位置している。基準VWAP <b>{vref}</b> の攻防が翌朝の分水嶺になるね。",
         f"ローソク足の内訳を見ると上ヒゲ <b>{r['upper_shadow_pct']}%</b>・下ヒゲ <b>{r['lower_shadow_pct']}%</b>・引け位置 <b>{r['close_pos_pct']}%</b> だ。{r['theme']}セクターの中でも波形の純度は高い。",
@@ -308,7 +306,6 @@ def build_quant_debate(r: dict, smap: dict, fs: int, vref: str, lp1: int, lp2: i
         f"大口のアルゴが20日高値 <b>{r['squeeze_trigger_price']}</b> を意識してるのは明白だぜ。特買い確率 <b>{r['tokugai_prob']}%</b> のエッジが出ている以上、初動から乗らない手はない。"
     ]
 
-    # 3. AEGISの懐疑・リスク指摘（ブラックジョーク交じり）
     black_jokes = [
         "信用全力で高値ジャンピングキャッチしたイナゴの追証アラームが鳴り響く未来が見えるわね。",
         "寄り天で焼かれた個人投資家の嘆きが5chのサーバーを重くするのが定番パターンよ。",
@@ -323,7 +320,6 @@ def build_quant_debate(r: dict, smap: dict, fs: int, vref: str, lp1: int, lp2: i
         f"20日線乖離 <b>{r['ma20_dev']:+.2f}%</b> の水準で無策に突っ込むのは反対ね。{bj}まずは総ロット <b>{r['lot_info']['shares']:,}株</b> のうち第1弾 <b>{lp1:,}株</b> だけに絞って打診すべきだわ。"
     ]
 
-    # 4. 乱雑な掛け合い（MICRO / MACRO / IGNIS / AEGIS の応酬）
     rebuttals_mid = [
         ("IGNIS", "rebuttal", f"いやAEGIS、慎重すぎるって！下ヒゲ <b>{r['lower_shadow_pct']}%</b> でザラ場の売り物はすでに吸収済みだ。押し目を待ってたら指をくわえて見送ることになるぞ。"),
         ("MICRO", "normal", f"割って入るが、板の厚み（Amihud弾性 <b>{r['amihud_ratio']}倍</b>）を見る限り、<b>{vref}</b> 付近には機関の厚い指値板が残っている。IGNISの言う上値追いの根拠も、AEGISの言う押し目形成も両方起こり得る波形だ。"),
@@ -331,20 +327,18 @@ def build_quant_debate(r: dict, smap: dict, fs: int, vref: str, lp1: int, lp2: i
     ]
     rng.shuffle(rebuttals_mid)
 
-    # 5. 1%の確率で発生する段階的ヒートアップ＆ブチ切れ or 99%のプロの冷静な応酬
     if is_rage_event:
         heat_turns = [
             {"speaker_key": "AEGIS", "score": smap["AEGIS"], "tone": "doubt", "text": f"だから言ってるでしょ！どれだけモメンタムが強く見えても、<b>{r['sl_price']}</b> の撤退ラインを無視するプランは却下よ！"},
             {"speaker_key": "IGNIS", "score": smap["IGNIS"], "tone": "rage", "text": f"いい加減にしろよAEGIS！！さっきから下値リスクばっかり並べやがって！VPIN <b>{r['vpin']:+.2f}</b>・短期需給 <b>{r['board5ch_score']}点</b>・20日高値 <b>{r['squeeze_trigger_price']}</b> 目前のこの大相場を前にして、ビビってロット落としてどうすんだ！機関の踏み上げ燃料が溜まりきってるこの瞬間を逃したらクオンツの名折れだろうが！！"}
         ]
     else:
-        calm_ clash = [
+        calm_clash = [
             ("AEGIS", "doubt", f"もちろん上値余地（利確目標 <b>{r['tp_price']} / +{r['tp_pct']}%</b>）は否定しないわ。ただ、前場のアルゴ振るい落としに巻き込まれないよう、VWAP（<b>{vref}</b>）反発を確認してから第2弾 <b>{lp2:,}株</b> を入れる手順を徹底したいの。"),
             ("IGNIS", "normal", f"なるほどな、第1弾 <b>{lp1:,}株</b> で初動の気配を取りつつ、<b>{r['squeeze_trigger_price']}</b> ブレイクで第3弾 <b>{lp3:,}株</b> を追撃する3段ロケットなら、俺の踏み上げシナリオとも完全に噛み合うぜ。")
         ]
         heat_turns = [{"speaker_key": k, "score": smap[k], "tone": tn, "text": tx} for k, tn, tx in calm_clash]
 
-    # 6. CHRONOS（バックテスト統計＆ユーモア）と NEXUS（総括）
     chronos_pool = [
         f"まあまあ二人とも、過去6ヶ月の統計データ（<b>{r['count']}</b>）を見れば答えは出ている。同条件での翌朝GU勝率は <b>{r['prob']}%</b>、寄り後陽線勝率は <b>{r['intraday_win_rate']}%</b>、総合勝率は <b>{r['total_win_rate']}%</b>（ペイオフ <b>{r['payoff']}倍</b> / 期待値 <b>{r['edge']:+.2f}%</b>）。人間の感情より統計の優位性を信じようじゃないか。",
         f"バックテスト照合官として結論を添えよう。過去6ヶ月で類似シグナル点灯時の総合勝率は <b>{r['total_win_rate']}%</b>、順張り勝率は <b>{r['trend_win_rate']}%</b> だ。相場の格言通り『頭と尻尾はくれてやれ』、統計エッジ <b>{r['edge']:+.2f}%</b> を淡々と回収する局面だよ。"
@@ -444,7 +438,6 @@ def fetch_macro():
     return res
 
 def calc_quant_adv(close_s: pd.Series) -> dict:
-    """廃止した古いkyle_lambdaを除去し、Hurst指数とKalmanフィルタに純化・高速化"""
     p = close_s.dropna().values; hurst = 0.52
     if len(p) >= 30:
         try:
@@ -522,7 +515,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, bi=True, b5
         ist = f"🏦 機関ステルス買い集め検知 (VPIN {vpin:+.2f} / 弾性 {amih:.2f}倍)" if c_inst.iloc[-1] or iraw >= 62 else f"⚖️ 機関オーダーフロー中立 (VPIN {vpin:+.2f})"
         isc = int(min(max(round(iraw), 15), 99))
 
-        # 5chリアルタイムスレッド情報統合
         b5_data = (b5_live_map or {}).get(code, {"hits": 0, "sent_bonus": 0.0, "snip": ""})
         b5_hits, b5_bonus = b5_data["hits"], (b5_data["sent_bonus"] if b5 else 0.0)
         b5raw = 50.0 + (min(vacc, 3.0) - 1.0) * 18.0 + (cpos - 0.5) * 30.0 - (25.0 if ush >= 0.38 else 0.0) + (15.0 if c_5ch.iloc[-1] else 0.0) + b5_bonus
@@ -749,7 +741,6 @@ def gen_qa_html(q: str, r: dict, m5=None) -> str:
     return f"<div><b>🤖 【自由質問：「{qc}」へのAIクオンツ回答】</b> <span style='font-size:11px;color:#64748b;'>({deep['fetched_at']})</span></div><div class='qa-direct-box'>{d_html}</div><div style='background:#f8fafc;border:1px solid #cbd5e1;padding:8px 11px;border-radius:7px;margin-top:5px;font-size:12.5px;'>{s_html}</div><div style='font-size:11.5px;color:#475569;margin-top:4px;'><b>📅 直近5日推移</b>：{days_s}</div>"
 
 def _fmt_turn(t: dict) -> str:
-    """ご要望通り『反論』『データ解析』などのバッジ表記を完全撤廃し、純粋な会話バブルとして表示"""
     if "round" in t: return f'<div class="round-divider">{t["round"]}</div>'
     if t.get("is_user"): return f'<div class="chat-bubble-user"><div style="font-weight:800;color:#fde047;font-size:12px;">🗣️ あなたの発言</div><div>{t["text"]}</div></div>'
     b_cls = {"doubt": "chat-bubble-doubt", "rebuttal": "chat-bubble-rebuttal", "rage": "chat-bubble-rage", "humor": "chat-bubble-humor", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
@@ -797,7 +788,6 @@ def render_council_sec(r, uk):
     turns = st.session_state["council_threads"][uk]
     wid = f"cwin_{uk}"
 
-    # 会話感が出るよう1発言ずつ丁寧なウェイト（約1.0〜1.35秒）で順番に描画＆自動スクロール
     if live_stream_mode and (first_run or uk not in st.session_state["streamed_keys"]):
         st.session_state["streamed_keys"].add(uk)
         lbox, sbar, so_far = st.empty(), st.empty(), []
