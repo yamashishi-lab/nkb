@@ -10,6 +10,8 @@ import hmac
 import time
 import json
 import os
+import re
+import ssl
 import smtplib
 import urllib.parse
 import urllib.request
@@ -32,6 +34,15 @@ SECRET_MASTER_KEY = "my_super_secret_quant_key_2026"
 MEMBERS_DB_FILE = "members_db.json"
 SMTP_CONFIG_FILE = "admin_smtp_config.json"
 LLM_CONFIG_FILE = "admin_llm_config.json"
+
+def clean_api_key_str(raw_key: str) -> str:
+    """コピペ時の空白・改行・全角文字・引用符を完全除去"""
+    if not raw_key:
+        return ""
+    s = unicodedata.normalize("NFKC", str(raw_key)).strip()
+    s = s.strip('"').strip("'").strip()
+    s = re.sub(r"\s+", "", s)
+    return s
 
 def generate_member_passcode(email: str) -> str:
     return hmac.new(SECRET_MASTER_KEY.encode(), email.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
@@ -65,30 +76,44 @@ def save_smtp_config(cfg: dict):
 def load_llm_config() -> dict:
     default_cfg = {
         "provider": "gemini",
-        "gemini_api_key": os.environ.get("GEMINI_API_KEY", ""),
+        "gemini_api_key": clean_api_key_str(os.environ.get("GEMINI_API_KEY", "")),
         "gemini_model": "gemini-2.5-flash",
-        "openai_api_key": os.environ.get("OPENAI_API_KEY", ""),
+        "openai_api_key": clean_api_key_str(os.environ.get("OPENAI_API_KEY", "")),
         "openai_model": "gpt-4o-mini"
     }
-    return _load_json(LLM_CONFIG_FILE, default_cfg)
+    cfg = _load_json(LLM_CONFIG_FILE, default_cfg)
+    cfg["gemini_api_key"] = clean_api_key_str(cfg.get("gemini_api_key", ""))
+    cfg["openai_api_key"] = clean_api_key_str(cfg.get("openai_api_key", ""))
+    return cfg
 
 def save_llm_config(cfg: dict):
+    cfg["gemini_api_key"] = clean_api_key_str(cfg.get("gemini_api_key", ""))
+    cfg["openai_api_key"] = clean_api_key_str(cfg.get("openai_api_key", ""))
     _save_json(LLM_CONFIG_FILE, cfg)
 
 def get_active_llm_settings() -> dict:
-    """サイドバー入力値・SessionState・保存ファイル・環境変数を統合して確実にAPIキーを取得"""
+    """サイドバー入力値・SessionState・保存ファイル・環境変数・st.secretsをすべて統合して確実に取得"""
     file_cfg = load_llm_config()
+    secret_gemini, secret_openai = "", ""
+    try:
+        secret_gemini = clean_api_key_str(st.secrets.get("GEMINI_API_KEY", ""))
+        secret_openai = clean_api_key_str(st.secrets.get("OPENAI_API_KEY", ""))
+    except Exception:
+        pass
+
     provider = st.session_state.get("rt_llm_provider") or file_cfg.get("provider", "gemini")
     gemini_key = (
-        st.session_state.get("rt_gemini_api_key", "").strip()
-        or file_cfg.get("gemini_api_key", "").strip()
-        or os.environ.get("GEMINI_API_KEY", "").strip()
+        clean_api_key_str(st.session_state.get("rt_gemini_api_key", ""))
+        or clean_api_key_str(file_cfg.get("gemini_api_key", ""))
+        or clean_api_key_str(os.environ.get("GEMINI_API_KEY", ""))
+        or secret_gemini
     )
     gemini_model = st.session_state.get("rt_gemini_model") or file_cfg.get("gemini_model", "gemini-2.5-flash")
     openai_key = (
-        st.session_state.get("rt_openai_api_key", "").strip()
-        or file_cfg.get("openai_api_key", "").strip()
-        or os.environ.get("OPENAI_API_KEY", "").strip()
+        clean_api_key_str(st.session_state.get("rt_openai_api_key", ""))
+        or clean_api_key_str(file_cfg.get("openai_api_key", ""))
+        or clean_api_key_str(os.environ.get("OPENAI_API_KEY", ""))
+        or secret_openai
     )
     openai_model = st.session_state.get("rt_openai_model") or file_cfg.get("openai_model", "gpt-4o-mini")
     return {
@@ -415,6 +440,132 @@ if is_admin_user:
         if ac2.button(f"👑 会員管理ページを開く ({pend_cnt}件)", use_container_width=True):
             navigate_to("ADMIN"); st.rerun()
 
+# ==========================================
+# 🧠 本物LLM通信コア（SSLエラー対策・自動モデルフォールバック・柔軟JSON抽出）
+# ==========================================
+def _extract_json_from_text(raw_text: str):
+    if not raw_text:
+        raise ValueError("AIからの応答が空でした。")
+    txt = raw_text.strip()
+    # コードブロック除去
+    txt = re.sub(r"^```(?:json)?\s*", "", txt, flags=re.IGNORECASE)
+    txt = re.sub(r"\s*```$", "", txt)
+    txt = txt.strip()
+    start_b = txt.find("{")
+    end_b = txt.rfind("}")
+    if start_b != -1 and end_b != -1 and end_b > start_b:
+        txt = txt[start_b:end_b + 1]
+    try:
+        return json.loads(txt)
+    except Exception:
+        # 末尾カンマや制御文字の自動修復
+        txt_fixed = re.sub(r",\s*([}\]])", r"\1", txt)
+        txt_fixed = re.sub(r"[\x00-\x1f]+", " ", txt_fixed)
+        return json.loads(txt_fixed)
+
+def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float = 0.75) -> tuple:
+    cfg = get_active_llm_settings()
+    provider = cfg.get("provider", "gemini")
+
+    # SSL証明書エラー回避コンテキスト
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+
+    if provider == "gemini":
+        api_key = clean_api_key_str(cfg.get("gemini_api_key", ""))
+        primary_model = cfg.get("gemini_model", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+        if not api_key:
+            return None, "Gemini APIキーが未設定です。左サイドバーの「🔑 Gemini API Key」に入力してください。"
+
+        # 選択モデルが利用不可・クォータ制限の場合でも自動で別モデルへフォールバック
+        candidate_models = []
+        for m in [primary_model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+            if m not in candidate_models:
+                candidate_models.append(m)
+
+        last_err = ""
+        for model_name in candidate_models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={urllib.parse.quote(api_key)}"
+            combined_prompt = f"【システム指示】\n{system_prompt}\n\n【ユーザー指示】\n{user_prompt}"
+            payload = {
+                "contents": [{"role": "user", "parts": [{"text": combined_prompt}]}],
+                "generationConfig": {
+                    "temperature": temperature,
+                    "responseMimeType": "application/json"
+                }
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) QuantAgentPro/2.0"
+                },
+                method="POST"
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=45, context=ssl_ctx) as resp:
+                    res_data = json.loads(resp.read().decode("utf-8"))
+                    candidates = res_data.get("candidates", [])
+                    if not candidates:
+                        last_err = f"Gemini応答が空でした ({res_data})"
+                        continue
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    text_out = "".join(p.get("text", "") for p in parts)
+                    parsed = _extract_json_from_text(text_out)
+                    return parsed, None
+            except urllib.error.HTTPError as he:
+                err_body = he.read().decode("utf-8", errors="ignore")
+                try:
+                    err_j = json.loads(err_body)
+                    err_detail = err_j.get("error", {}).get("message", err_body[:180])
+                except Exception:
+                    err_detail = err_body[:180]
+                last_err = f"HTTP {he.code} ({model_name}): {err_detail}"
+                # APIキー自体が無効な場合は即座に返す
+                if he.code in (400, 401, 403) and ("API_KEY" in err_body.upper() or "KEY" in err_detail.upper()):
+                    return None, f"APIキーが無効です ({err_detail})"
+                continue
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {str(e)}"
+                continue
+
+        return None, f"Gemini API通信エラー ({last_err})"
+
+    else:
+        api_key = clean_api_key_str(cfg.get("openai_api_key", ""))
+        model = cfg.get("openai_model", "gpt-4o-mini").strip() or "gpt-4o-mini"
+        if not api_key:
+            return None, "OpenAI APIキーが未設定です。左サイドバーの「🔑 OpenAI API Key」に入力してください。"
+        url = "https://api.openai.com/v1/chat/completions"
+        payload = {
+            "model": model,
+            "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+            "temperature": temperature,
+            "response_format": {"type": "json_object"}
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+                "User-Agent": "Mozilla/5.0 QuantAgentPro/2.0"
+            },
+            method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=45, context=ssl_ctx) as resp:
+                res_data = json.loads(resp.read().decode("utf-8"))
+                text_out = res_data["choices"][0]["message"]["content"]
+                return _extract_json_from_text(text_out), None
+        except urllib.error.HTTPError as he:
+            err_body = he.read().decode("utf-8", errors="ignore")
+            return None, f"OpenAI API HTTPエラー ({he.code}): {err_body[:200]}"
+        except Exception as e:
+            return None, f"OpenAI API通信エラー ({type(e).__name__}: {str(e)})"
+
 # --- サイドバー設定 ---
 st.sidebar.header("🧭 ナビゲーション")
 sc1, sc2 = st.sidebar.columns(2)
@@ -445,18 +596,17 @@ llm_provider = st.sidebar.segmented_control(
 st.session_state["rt_llm_provider"] = llm_provider
 
 if llm_provider == "gemini":
-    g_models = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
+    g_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-pro"]
     saved_gm = llm_cfg.get("gemini_model", "gemini-2.5-flash")
     gm_idx = g_models.index(saved_gm) if saved_gm in g_models else 0
 
     api_key_input = st.sidebar.text_input("🔑 Gemini API Key", value=llm_cfg.get("gemini_api_key", ""), type="password", placeholder="AIzaSy...")
     model_input = st.sidebar.selectbox("🧠 モデル", g_models, index=gm_idx)
 
-    clean_key = api_key_input.strip()
+    clean_key = clean_api_key_str(api_key_input)
     st.session_state["rt_gemini_api_key"] = clean_key
     st.session_state["rt_gemini_model"] = model_input
 
-    # 入力や変更があればボタンを押さなくても即座に自動保存＆古い未設定エラーキャッシュを消去
     if clean_key != llm_cfg.get("gemini_api_key", "") or model_input != llm_cfg.get("gemini_model", "") or llm_cfg.get("provider") != "gemini":
         llm_cfg.update({"provider": "gemini", "gemini_api_key": clean_key, "gemini_model": model_input})
         save_llm_config(llm_cfg)
@@ -464,16 +614,27 @@ if llm_provider == "gemini":
         st.session_state["council_meta"] = {}
         st.session_state["streamed_keys"] = set()
 
-    if st.sidebar.button("🔄 AI設定を反映して合議を再生成", use_container_width=True):
+    btn_c1, btn_c2 = st.sidebar.columns(2)
+    if btn_c1.button("🔄 合議を再生成", use_container_width=True):
         llm_cfg.update({"provider": "gemini", "gemini_api_key": clean_key, "gemini_model": model_input})
         save_llm_config(llm_cfg)
         st.session_state["council_threads"] = {}
         st.session_state["council_meta"] = {}
         st.session_state["streamed_keys"] = set()
-        st.sidebar.success("✅ Gemini設定を反映しました！")
+        st.sidebar.success("✅ キャッシュをリセットしました！")
         st.rerun()
+    if btn_c2.button("🔌 接続テスト", use_container_width=True):
+        with st.sidebar:
+            with st.spinner("Gemini API 接続確認中..."):
+                test_res, test_err = call_real_llm_json("JSONのみを返してください。", '{"status": "ok"} を返してください。', 0.1)
+                if test_res:
+                    st.session_state["council_threads"] = {}
+                    st.session_state["council_meta"] = {}
+                    st.success("✅ Gemini API 正常接続を確認！")
+                else:
+                    st.error(f"❌ {test_err}")
 
-    active_api_key = clean_key or os.environ.get("GEMINI_API_KEY", "").strip()
+    active_api_key = clean_key or clean_api_key_str(os.environ.get("GEMINI_API_KEY", ""))
 else:
     o_models = ["gpt-4o-mini", "gpt-4o"]
     saved_om = llm_cfg.get("openai_model", "gpt-4o-mini")
@@ -482,7 +643,7 @@ else:
     api_key_input = st.sidebar.text_input("🔑 OpenAI API Key", value=llm_cfg.get("openai_api_key", ""), type="password", placeholder="sk-...")
     model_input = st.sidebar.selectbox("🧠 モデル", o_models, index=om_idx)
 
-    clean_key = api_key_input.strip()
+    clean_key = clean_api_key_str(api_key_input)
     st.session_state["rt_openai_api_key"] = clean_key
     st.session_state["rt_openai_model"] = model_input
 
@@ -493,19 +654,31 @@ else:
         st.session_state["council_meta"] = {}
         st.session_state["streamed_keys"] = set()
 
-    if st.sidebar.button("🔄 AI設定を反映して合議を再生成", use_container_width=True):
+    btn_c1, btn_c2 = st.sidebar.columns(2)
+    if btn_c1.button("🔄 合議を再生成", use_container_width=True):
         llm_cfg.update({"provider": "openai", "openai_api_key": clean_key, "openai_model": model_input})
         save_llm_config(llm_cfg)
         st.session_state["council_threads"] = {}
         st.session_state["council_meta"] = {}
         st.session_state["streamed_keys"] = set()
-        st.sidebar.success("✅ OpenAI設定を反映しました！")
+        st.sidebar.success("✅ キャッシュをリセットしました！")
         st.rerun()
+    if btn_c2.button("🔌 接続テスト", use_container_width=True):
+        with st.sidebar:
+            with st.spinner("OpenAI API 接続確認中..."):
+                test_res, test_err = call_real_llm_json("JSONのみを返してください。", '{"status": "ok"} を返してください。', 0.1)
+                if test_res:
+                    st.session_state["council_threads"] = {}
+                    st.session_state["council_meta"] = {}
+                    st.success("✅ OpenAI API 正常接続を確認！")
+                else:
+                    st.error(f"❌ {test_err}")
 
-    active_api_key = clean_key or os.environ.get("OPENAI_API_KEY", "").strip()
+    active_api_key = clean_key or clean_api_key_str(os.environ.get("OPENAI_API_KEY", ""))
 
 if active_api_key:
-    st.sidebar.markdown('<div style="background:rgba(16,185,129,0.15);border:1px solid #10b981;color:#10b981;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;">🟢 7専門AIエージェント：オンライン稼働中</div>', unsafe_allow_html=True)
+    masked_k = f"{active_api_key[:6]}...{active_api_key[-4:]}" if len(active_api_key) > 10 else "設定済"
+    st.sidebar.markdown(f'<div style="background:rgba(16,185,129,0.15);border:1px solid #10b981;color:#10b981;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;">🟢 7専門AIオンライン ({masked_k})</div>', unsafe_allow_html=True)
 else:
     st.sidebar.warning("⚠️ APIキーを入力すると即座にLLM合議が稼働します")
 
@@ -970,73 +1143,6 @@ def _build_stock_quant_context(r: dict, m5=None, deep: dict = None) -> str:
         ctx += f"\n・ファンダメンタル＆ニュース: 時価総額 {deep['mcap']} / PER {deep['pe']} / PBR {deep['pbr']} / ROE {deep['roe']} / アナリスト目標平均 {deep['target_mean']} / 直近ニュース: {news_str}\n"
     return ctx.strip()
 
-def _extract_json_from_text(raw_text: str):
-    txt = raw_text.strip()
-    if txt.startswith("```"):
-        lines = txt.splitlines()
-        if lines[0].startswith("```"): lines = lines[1:]
-        if lines and lines[-1].startswith("```"): lines = lines[:-1]
-        txt = "\n".join(lines).strip()
-    try:
-        return json.loads(txt)
-    except Exception:
-        start_b = txt.find("{")
-        end_b = txt.rfind("}")
-        if start_b != -1 and end_b != -1 and end_b > start_b:
-            return json.loads(txt[start_b:end_b+1])
-        raise
-
-def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float = 0.85) -> tuple:
-    cfg = get_active_llm_settings()
-    provider = cfg.get("provider", "gemini")
-
-    if provider == "gemini":
-        api_key = cfg.get("gemini_api_key", "").strip()
-        model = cfg.get("gemini_model", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
-        if not api_key:
-            return None, "Gemini APIキーが未設定です。左サイドバーの「🧠 LLM マルチエージェント設定」に入力してください。"
-        # 純粋なHTTPS URL文字列（Markdownリンク混入バグを完全修正）
-        url = f"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={urllib.parse.quote(api_key)}"
-        payload = {
-            "systemInstruction": {"parts": [{"text": system_prompt}]},
-            "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
-            "generationConfig": {"temperature": temperature, "responseMimeType": "application/json"}
-        }
-        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                res_data = json.loads(resp.read().decode("utf-8"))
-                text_out = res_data["candidates"][0]["content"]["parts"][0]["text"]
-                return _extract_json_from_text(text_out), None
-        except urllib.error.HTTPError as he:
-            err_body = he.read().decode("utf-8", errors="ignore")
-            return None, f"Gemini API HTTPエラー ({he.code}): {err_body[:200]}"
-        except Exception as e:
-            return None, f"Gemini API通信エラー: {str(e)}"
-    else:
-        api_key = cfg.get("openai_api_key", "").strip()
-        model = cfg.get("openai_model", "gpt-4o-mini").strip() or "gpt-4o-mini"
-        if not api_key:
-            return None, "OpenAI APIキーが未設定です。左サイドバーの「🧠 LLM マルチエージェント設定」に入力してください。"
-        url = "[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)"
-        payload = {
-            "model": model,
-            "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
-            "temperature": temperature,
-            "response_format": {"type": "json_object"}
-        }
-        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                res_data = json.loads(resp.read().decode("utf-8"))
-                text_out = res_data["choices"][0]["message"]["content"]
-                return _extract_json_from_text(text_out), None
-        except urllib.error.HTTPError as he:
-            err_body = he.read().decode("utf-8", errors="ignore")
-            return None, f"OpenAI API HTTPエラー ({he.code}): {err_body[:200]}"
-        except Exception as e:
-            return None, f"OpenAI API通信エラー: {str(e)}"
-
 def _normalize_llm_turns(turns_raw: list, scores_map: dict, final_s: int) -> list:
     dialogue = []
     for item in turns_raw:
@@ -1124,10 +1230,10 @@ def run_7ai_council_algorithm(r: dict, m5=None, extra_seed: int = 0, debate_styl
 
 {quant_context}"""
 
-    llm_json, err_msg = call_real_llm_json(system_prompt, user_prompt, temperature=0.85)
+    llm_json, err_msg = call_real_llm_json(system_prompt, user_prompt, temperature=0.8)
 
     dialogue = [{"round": f"⚡ 『{r['name']}（{r['code']}）』7専門AIエージェント 合議セッション（{debate_style}）"}]
-    if llm_json and isinstance(llm_json.get("turns"), list) and len(llm_json["turns"]) >= 3:
+    if llm_json and isinstance(llm_json.get("turns"), list) and len(llm_json["turns"]) >= 2:
         dialogue.extend(_normalize_llm_turns(llm_json["turns"], scores_map, final_s))
         final_s = int(llm_json.get("final_score", final_s))
         custom_sum = str(llm_json.get("consensus_summary", "")).strip()
@@ -1138,7 +1244,7 @@ def run_7ai_council_algorithm(r: dict, m5=None, extra_seed: int = 0, debate_styl
             "speaker": "👑 NEXUS (システム通知)",
             "score": final_s,
             "tone": "doubt",
-            "text": f"⚠️ <b>{err_msg or 'LLM応答の解析に失敗しました'}</b><br>左サイドバーの「🧠 LLM マルチエージェント設定」に有効なAPIキーを入力すると、即座にこの銘柄（<b>{r['name']}</b>：現在値 <b>{r['price']}</b> / VPIN <b>{r['vpin']:+.2f}</b> / 総合勝率 <b>{r['total_win_rate']}%</b>）について本物のAIエージェント同士が議論を開始します。"
+            "text": f"⚠️ <b>{err_msg or 'LLM応答の解析に失敗しました'}</b><br>下の「🔄 <b>今すぐAI合議を再試行する</b>」ボタンを押すか、左サイドバーの「🔌 <b>接続テスト</b>」でAPIキーの状態を確認してください。"
         })
         verdict_html = default_verdict_html
         has_error = True
@@ -1164,7 +1270,7 @@ def generate_extra_heated_round(r: dict, m5=None, round_num: int = 1, existing_t
   ]
 }}"""
 
-    llm_json, err_msg = call_real_llm_json(system_prompt, f"【直近の議論】\n{recent_log}\n\n{quant_context}", temperature=0.85)
+    llm_json, err_msg = call_real_llm_json(system_prompt, f"【直近の議論】\n{recent_log}\n\n{quant_context}", temperature=0.8)
     res = [{"round": f"🔥 延長ディベート（第+{round_num}ラウンド）：ザラ場中のアルゴ揺さぶり＆後場持続性の検証"}]
     if llm_json and isinstance(llm_json.get("turns"), list):
         res.extend(_normalize_llm_turns(llm_json["turns"], {}, r["ai_score"]))
@@ -1226,7 +1332,7 @@ def generate_7ai_qa_response_html(question: str, r: dict, debate: dict, lot_info
             body_html += f"<div style='background:#f8fafc;border:1px solid #cbd5e1;padding:9px 12px;border-radius:8px;margin-top:6px;font-size:13px;'>{spec_html}</div>"
     else:
         body_html = (
-            f"<div class='qa-direct-box'>⚠️ <b>LLM未接続 ({err_msg})</b><br>"
+            f"<div class='qa-direct-box'>⚠️ <b>LLM通信エラー ({err_msg})</b><br>"
             f"・<b>現在値</b>：<b>{deep['live_price']}（{deep['live_diff']:+.2f}%）</b> ｜ PER <b>{deep['pe']}</b> ／ PBR <b>{deep['pbr']}</b> ／ 目標株価 <b>{deep['target_mean']}</b><br>"
             f"・<b>AI判定</b>：<b>{r['tier_label']}</b>（総合勝率 <b>{r['total_win_rate']}%</b>） ｜ 利確 <b>{r['tp_price']}</b> ／ 損切り <b>{r['sl_price']}</b></div>"
         )
@@ -1238,7 +1344,7 @@ def generate_7ai_qa_response_html(question: str, r: dict, debate: dict, lot_info
     )
 
 # ==========================================
-# 💬 会議パネル描画
+# 💬 会議パネル描画（エラー時はキャッシュせず即再試行可能）
 # ==========================================
 def _format_single_turn_html(turn: dict) -> str:
     if "round" in turn:
@@ -1311,24 +1417,30 @@ def render_interactive_council_section(r, unique_key):
         st.caption(f"📅 直近5分足 ({m5['chart_date']}) ｜ 5分足VWAP: **{m5['vwap5_price']}** ({m5['vwap5_dev']:+.2f}%)")
         render_5m_candlestick_chart(m5)
 
-    # もし前回APIキー未設定でエラーキャッシュになっていて、その後APIキーが設定された場合は自動再生成
+    # 過去のキャッシュがエラーだった場合は、絶対に保持せず破棄して毎回新たに通信を試みる
     cached_meta = st.session_state["council_meta"].get(unique_key)
-    cfg_now = get_active_llm_settings()
-    has_key_now = bool(cfg_now["gemini_api_key"] if cfg_now["provider"] == "gemini" else cfg_now["openai_api_key"])
-    if cached_meta and cached_meta.get("has_error") and has_key_now:
+    if cached_meta and cached_meta.get("has_error"):
         st.session_state["council_threads"].pop(unique_key, None)
+        st.session_state["council_meta"].pop(unique_key, None)
         st.session_state["streamed_keys"].discard(unique_key)
 
     is_first_stream = False
     if unique_key not in st.session_state["council_threads"]:
         with st.spinner(f"🧠 7専門AIエージェントが『{r['name']}』のクオンツ指標をリアルタイム解析中..."):
             debate = run_7ai_council_algorithm(r, m5, extra_seed=cur_seed, debate_style=new_style)
-            st.session_state["council_threads"][unique_key] = list(debate["dialogue"])
-            st.session_state["council_meta"][unique_key] = debate
-            is_first_stream = True
+            # エラーがない正常応答のみをキャッシュに保存する（エラー固定化バグを完全防止）
+            if not debate.get("has_error"):
+                st.session_state["council_threads"][unique_key] = list(debate["dialogue"])
+                st.session_state["council_meta"][unique_key] = debate
+                is_first_stream = True
+            else:
+                meta = debate
+                turns_list = list(debate["dialogue"])
 
-    meta = st.session_state["council_meta"][unique_key]
-    turns_list = st.session_state["council_threads"][unique_key]
+    if unique_key in st.session_state["council_threads"]:
+        meta = st.session_state["council_meta"][unique_key]
+        turns_list = st.session_state["council_threads"][unique_key]
+
     scroll_win_id = f"council_win_{unique_key}"
 
     if live_stream_mode and not meta.get("has_error") and (is_first_stream or unique_key not in st.session_state["streamed_keys"]):
@@ -1359,6 +1471,13 @@ def render_interactive_council_section(r, unique_key):
             unsafe_allow_html=True
         )
 
+    if meta.get("has_error"):
+        if st.button("🔄 今すぐAI合議を再試行する", key=f"retry_err_{unique_key}", use_container_width=True):
+            st.session_state["council_threads"].pop(unique_key, None)
+            st.session_state["council_meta"].pop(unique_key, None)
+            st.session_state["streamed_keys"].discard(unique_key)
+            st.rerun()
+
     if st.session_state.get("scroll_council_key") == unique_key:
         components.html(f'<script>setTimeout(function(){{const w=window.parent.document.getElementById("{scroll_win_id}");if(w)w.scrollTop=w.scrollHeight;}},120);</script>', height=0)
         st.session_state["scroll_council_key"] = None
@@ -1367,6 +1486,9 @@ def render_interactive_council_section(r, unique_key):
     if ex_col1.button("💬 議論の続きを生成（＋1ラウンド）", key=f"ext_{unique_key}", use_container_width=True):
         nxt_r = st.session_state["debate_round_seed"].get(unique_key, 0) + 1
         st.session_state["debate_round_seed"][unique_key] = nxt_r
+        if unique_key not in st.session_state["council_threads"]:
+            st.session_state["council_threads"][unique_key] = list(turns_list)
+            st.session_state["council_meta"][unique_key] = meta
         with st.spinner("🔥 AIエージェントが延長ラウンドを議論中..."):
             ext_turns = generate_extra_heated_round(r, m5, nxt_r, st.session_state["council_threads"][unique_key])
             st.session_state["council_threads"][unique_key].extend(ext_turns)
@@ -1377,12 +1499,16 @@ def render_interactive_council_section(r, unique_key):
         st.session_state["debate_round_seed"][unique_key] = new_seed
         st.session_state["streamed_keys"].discard(unique_key)
         st.session_state["council_threads"].pop(unique_key, None)
+        st.session_state["council_meta"].pop(unique_key, None)
         st.rerun()
 
     with st.form(f"join_council_form_{unique_key}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
         user_opinion = jc1.text_input("会議で発言する", placeholder="ディベートに割り込む（例：朝から行くべき？ / 上ヒゲが怖い / 現在の株価は？）", label_visibility="collapsed")
         if jc2.form_submit_button("💬 発言を投下", use_container_width=True) and user_opinion.strip():
+            if unique_key not in st.session_state["council_threads"]:
+                st.session_state["council_threads"][unique_key] = list(turns_list)
+                st.session_state["council_meta"][unique_key] = meta
             st.session_state["council_threads"][unique_key].append({"is_user": True, "text": user_opinion.strip()})
             with st.spinner("💬 あなたの発言に対してAIエージェントが議論中..."):
                 replies = generate_ai_reply_to_user_opinion(user_opinion.strip(), r, m5, st.session_state["council_threads"][unique_key])
