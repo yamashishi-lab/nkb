@@ -121,105 +121,98 @@ check_auth()
 for k, v in [("active_debates", {}), ("streamed_keys", set()), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("exhausted_models", set()), ("nav_history", []), ("scroll_target", None), ("scroll_top_trig", 0), ("top_nav_key", 0)]:
     if k not in st.session_state: st.session_state[k] = v
 
-# --- モダン3連フローティング・ピルバー ＆ カード内タイピングアニメーションCSS ---
-st.markdown("""<div id="page_top_anchor"></div><style>
-html,body,[class*="css"]{font-size:15px;} .block-container{padding-top:2.8rem!important;padding-bottom:3rem!important;max-width:840px!important;}
+# --- CSS生出力バグを防ぐ安全なスタイル注入 ---
+def inject_css():
+    css_raw = """
+    html,body,[class*="css"]{font-size:15px;}
+    .block-container{padding-top:2.4rem!important;padding-bottom:3rem!important;max-width:820px!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor){
+        position:sticky!important;top:2.75rem!important;z-index:999!important;
+        max-width:440px!important;margin:0 auto 8px auto!important;
+        background:linear-gradient(135deg, rgba(15,23,42,0.92), rgba(30,41,59,0.92))!important;
+        backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important;
+        padding:5px 8px!important;border-radius:999px!important;
+        border:1px solid rgba(56,189,248,0.35)!important;
+        box-shadow:0 8px 24px rgba(0,0,0,0.35)!important;
+    }
+    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[data-testid="stPills"]{margin:0!important;padding:0!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[role="tablist"],
+    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[data-baseweb="button-group"]{
+        display:grid!important;grid-template-columns:1fr 1fr 1.25fr!important;gap:6px!important;width:100%!important;
+    }
+    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button{
+        width:100%!important;min-height:28px!important;height:28px!important;padding:0 8px!important;
+        border-radius:999px!important;background:rgba(255,255,255,0.06)!important;
+        color:#f1f5f9!important;border:1px solid rgba(148,163,184,0.22)!important;
+        font-size:11.5px!important;font-weight:800!important;white-space:nowrap!important;
+        display:flex!important;align-items:center!important;justify-content:center!important;margin:0!important;
+    }
+    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button:hover{
+        background:linear-gradient(135deg, rgba(56,189,248,0.28), rgba(37,99,235,0.28))!important;
+        border-color:#38bdf8!important;color:#fff!important;
+    }
+    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button p{
+        font-size:11.5px!important;font-weight:800!important;margin:0!important;line-height:1!important;color:inherit!important;
+    }
+    @keyframes dotPulse{0%,60%,100%{transform:translateY(0);opacity:0.3;}30%{transform:translateY(-4px);opacity:1;}}
+    .inline-typing-wrap{display:inline-flex;align-items:center;gap:8px;padding:4px 10px;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.3);border-radius:999px;margin-top:2px;}
+    .inline-typing-label{font-size:11.5px;color:#7dd3fc!important;font-weight:700;}
+    .inline-typing-dots{display:inline-flex;align-items:center;gap:4px;}
+    .inline-typing-dots span{width:5.5px;height:5.5px;background:#38bdf8;border-radius:50%;display:inline-block;animation:dotPulse 1.25s infinite ease-in-out;}
+    .inline-typing-dots span:nth-child(1){animation-delay:0s;}
+    .inline-typing-dots span:nth-child(2){animation-delay:0.18s;}
+    .inline-typing-dots span:nth-child(3){animation-delay:0.36s;}
+    .inline-pause-wrap{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;background:rgba(148,163,184,0.1);border:1px dashed rgba(148,163,184,0.3);border-radius:999px;margin-top:2px;font-size:11px;color:#94a3b8!important;}
+    div[data-testid="stPills"]{margin-top:-2px!important;margin-bottom:4px!important;}
+    .compact-bar-label{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;color:#38bdf8;background:linear-gradient(90deg,#0f172a,#1e293b);padding:5px 12px;border-radius:8px;border-left:3px solid #38bdf8;margin-bottom:4px;}
+    .company-logo-img{width:36px;height:36px;border-radius:8px;background:#fff;padding:2px;border:1px solid #e2e8f0;}
+    .rank-card,.search-result-card{background:linear-gradient(180deg,#fff 0%,#f8fafc 100%)!important;color:#0f172a!important;border-radius:14px;padding:13px 14px;margin-bottom:10px;box-shadow:0 4px 14px rgba(15,23,42,0.06);border:1px solid #e2e8f0;border-left:6px solid #e11d48;}
+    .rank-card *,.search-result-card *{color:#0f172a;}
+    .search-result-card{background:linear-gradient(180deg,#fffbeb 0%,#fef3c7 100%)!important;border-left-color:#d97706;}
+    .prob-badge{font-size:21px;font-weight:900;color:#dc2626!important;}
+    .rank-badge{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff!important;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;margin-right:4px;}
+    .score-badge{background:#0f172a;color:#f8fafc!important;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;}
+    .inst-badge{background:#1d4ed8;color:#fff!important;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700;margin-left:3px;}
+    .board5ch-badge{background:#059669;color:#fff!important;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700;margin-left:3px;}
+    .tokugai-badge{background:#d97706;color:#fff!important;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700;margin-left:3px;}
+    .winrate-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:#fff1f2!important;border:1px solid #fecdd3;border-radius:8px;padding:5px 4px;margin-top:6px;text-align:center;}
+    .signal-10tier-badge{display:flex;justify-content:space-between;align-items:center;padding:6px 11px;border-radius:8px;font-size:12.5px;font-weight:800;margin-bottom:6px;}
+    .trade-plan-box{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:6px;background:#fff!important;padding:6px 4px;border-radius:8px;border:1px solid #cbd5e1;text-align:center;}
+    .sizing-box{background:#f0fdf4!important;border:1px solid #86efac;border-radius:8px;padding:5px 10px;margin-top:5px;font-size:11.5px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;}
+    details.quant-detail-drawer{margin-top:6px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:5px 10px;}
+    details.quant-detail-drawer summary{font-size:11.5px;font-weight:800;color:#1e40af!important;cursor:pointer;outline:none;list-style:none;}
+    details.quant-detail-drawer summary::-webkit-details-marker{display:none;}
+    .inst-box{background:#eff6ff!important;border-left:3px solid #2563eb;border-radius:6px;padding:5px 8px;margin-top:5px;font-size:11.5px;}
+    .squeeze-box{background:#fff1f2!important;border-left:3px solid #e11d48;border-radius:6px;padding:5px 8px;margin-top:4px;font-size:11.5px;}
+    .pts-tokugai-box{background:#fffbeb!important;border-left:3px solid #d97706;border-radius:6px;padding:5px 8px;margin-top:4px;font-size:11.5px;}
+    .board5ch-box{background:#ecfdf5!important;border-left:3px solid #059669;border-radius:6px;padding:5px 8px;margin-top:4px;font-size:11.5px;}
+    .delicate-box{background:#fff!important;border-left:3px solid #7c3aed;border-radius:6px;padding:5px 8px;margin-top:4px;font-size:11.5px;line-height:1.45;}
+    .metrics-row{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:5px;font-size:11px;background:#e2e8f0!important;padding:4px 8px;border-radius:6px;}
+    .ai-council-box{background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc!important;border-radius:12px;padding:12px;margin-top:6px;margin-bottom:9px;border:1px solid rgba(56,189,248,0.35);}
+    .ai-council-box *{color:#f8fafc;}
+    .council-scroll-window{max-height:520px;overflow-y:auto;padding:10px;background:rgba(6,10,19,0.85);border:1px solid rgba(255,255,255,0.14);border-radius:9px;margin-bottom:8px;scroll-behavior:smooth;}
+    .round-divider{text-align:center;margin:8px 0;padding:4px 8px;background:rgba(56,189,248,0.18);border-top:1px solid #38bdf8;border-bottom:1px solid #38bdf8;color:#7dd3fc!important;font-size:11.5px;font-weight:800;border-radius:5px;}
+    .chat-bubble-ai,.chat-bubble-doubt,.chat-bubble-rebuttal,.chat-bubble-rage,.chat-bubble-humor,.chat-bubble-agree{border-radius:9px;padding:9px 12px;margin-bottom:8px;font-size:12.5px;line-height:1.65;}
+    .chat-bubble-ai{background:rgba(255,255,255,0.07);border-left:4px solid #38bdf8;}
+    .chat-bubble-doubt{background:rgba(245,158,11,0.12);border-left:4px solid #f59e0b;}
+    .chat-bubble-rebuttal{background:rgba(225,29,72,0.12);border-left:4px solid #f43f5e;}
+    .chat-bubble-rage{background:rgba(153,27,27,0.42);border:1px solid #ef4444;border-left:5px solid #dc2626;}
+    .chat-bubble-humor{background:rgba(168,85,247,0.14);border-left:4px solid #c084fc;}
+    .chat-bubble-agree{background:rgba(16,185,129,0.14);border-left:4px solid #10b981;}
+    .chat-bubble-user{background:linear-gradient(135deg,#1d4ed8,#2563eb);border-radius:9px;padding:8px 11px;margin-bottom:7px;font-size:12.5px;}
+    .consensus-banner{background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #818cf8;border-radius:9px;padding:10px;margin-top:7px;font-size:12px;}
+    .consensus-section{background:rgba(255,255,255,0.07);border-left:3px solid #fbbf24;border-radius:5px;padding:6px 9px;margin-top:5px;}
+    .qa-answer-card{background:#fff!important;border:2px solid #3b82f6;border-left:6px solid #1d4ed8;border-radius:9px;padding:11px;margin-top:6px;font-size:12.5px!important;line-height:1.65!important;color:#0f172a!important;}
+    .qa-answer-card *{color:#0f172a!important;}
+    .qa-direct-box{background:#eff6ff!important;border:1px solid #93c5fd;border-left:4px solid #2563eb;padding:8px 10px;border-radius:6px;margin:5px 0;}
+    .qa-answer-card b{color:#1d4ed8!important;}
+    """
+    clean_css = " ".join(line.strip() for line in css_raw.splitlines() if line.strip())
+    st.markdown(f'<div id="page_top_anchor"></div><style>{clean_css}</style>', unsafe_allow_html=True)
 
-/* スタイリッシュ3連フローティングナビバー（重なり完全防止・ガラスモーフィズム） */
-div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor){
-    position:sticky!important;top:2.75rem!important;z-index:999!important;
-    max-width:440px!important;margin:0 auto 8px auto!important;
-    background:linear-gradient(135deg, rgba(15,23,42,0.88), rgba(30,41,59,0.88))!important;
-    backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important;
-    padding:5px 8px!important;border-radius:999px!important;
-    border:1px solid rgba(56,189,248,0.35)!important;
-    box-shadow:0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12)!important;
-}
-div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[data-testid="stPills"]{
-    margin:0!important;padding:0!important;
-}
-div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[role="tablist"],
-div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[data-baseweb="button-group"]{
-    display:grid!important;grid-template-columns:1fr 1fr 1.25fr!important;gap:6px!important;width:100%!important;
-}
-div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button{
-    width:100%!important;min-height:28px!important;height:28px!important;padding:0 8px!important;
-    border-radius:999px!important;background:rgba(255,255,255,0.06)!important;
-    color:#f1f5f9!important;border:1px solid rgba(148,163,184,0.22)!important;
-    font-size:11.5px!important;font-weight:800!important;letter-spacing:0.02em!important;
-    white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
-    display:flex!important;align-items:center!important;justify-content:center!important;
-    transition:all 0.18s cubic-bezier(0.4,0,0.2,1)!important;box-shadow:none!important;margin:0!important;
-}
-div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button:hover{
-    background: linear-gradient(135deg, rgba(56,189,248,0.28), rgba(37,99,235,0.28))!important;
-    border-color:#38bdf8!important;color:#fff!important;transform:translateY(-1px)!important;
-}
-div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button p{
-    font-size:11.5px!important;font-weight:800!important;margin:0!important;line-height:1!important;color:inherit!important;
-}
+inject_css()
 
-/* カード内タイピングアニメーション */
-@keyframes dotPulse{
-    0%, 60%, 100% { transform:translateY(0); opacity:0.3; }
-    30% { transform:translateY(-4px); opacity:1; }
-}
-.inline-typing-wrap{
-    display:inline-flex;align-items:center;gap:8px;padding:4px 10px;
-    background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.3);
-    border-radius:999px;margin-top:2px;
-}
-.inline-typing-label{font-size:11.5px;color:#7dd3fc!important;font-weight:700;letter-spacing:0.02em;}
-.inline-typing-dots{display:inline-flex;align-items:center;gap:4px;}
-.inline-typing-dots span{
-    width:5.5px;height:5.5px;background:#38bdf8;border-radius:50%;display:inline-block;
-    animation:dotPulse 1.25s infinite ease-in-out;
-}
-.inline-typing-dots span:nth-child(1){animation-delay:0s;}
-.inline-typing-dots span:nth-child(2){animation-delay:0.18s;}
-.inline-typing-dots span:nth-child(3){animation-delay:0.36s;}
-.inline-pause-wrap{
-    display:inline-flex;align-items:center;gap:6px;padding:3px 10px;
-    background:rgba(148,163,184,0.1);border:1px dashed rgba(148,163,184,0.3);
-    border-radius:999px;margin-top:2px;font-size:11px;color:#94a3b8!important;
-}
-
-div[data-testid="stPills"]{margin-top:-2px!important;margin-bottom:4px!important;}
-.compact-bar-label{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;color:#38bdf8;background:linear-gradient(90deg,#0f172a,#1e293b);padding:5px 12px;border-radius:8px;border-left:3px solid #38bdf8;margin-bottom:4px;}
-.company-logo-img{width:36px;height:36px;border-radius:8px;background:#fff;padding:2px;border:1px solid #e2e8f0;}
-.rank-card,.search-result-card{background:linear-gradient(180deg,#fff 0%,#f8fafc 100%)!important;color:#0f172a!important;border-radius:15px;padding:15px;margin-bottom:11px;box-shadow:0 5px 16px rgba(15,23,42,0.06);border:1px solid #e2e8f0;border-left:6px solid #e11d48;}
-.rank-card *,.search-result-card *{color:#0f172a;} .search-result-card{background:linear-gradient(180deg,#fffbeb 0%,#fef3c7 100%)!important;border-left-color:#d97706;}
-.prob-badge{font-size:23px;font-weight:800;color:#dc2626!important;}
-.rank-badge{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff!important;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700;margin-right:4px;}
-.score-badge{background:#0f172a;color:#f8fafc!important;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700;}
-.inst-badge{background:#1d4ed8;color:#fff!important;padding:3px 8px;border-radius:999px;font-size:11.5px;font-weight:700;margin-left:3px;}
-.board5ch-badge{background:#059669;color:#fff!important;padding:3px 8px;border-radius:999px;font-size:11.5px;font-weight:700;margin-left:3px;}
-.tokugai-badge{background:#d97706;color:#fff!important;padding:3px 8px;border-radius:999px;font-size:11.5px;font-weight:700;margin-left:3px;}
-.winrate-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;background:#fff1f2!important;border:1px solid #fecdd3;border-radius:9px;padding:6px 5px;margin-top:7px;text-align:center;}
-.signal-10tier-badge{display:flex;justify-content:space-between;padding:7px 12px;border-radius:9px;font-size:13px;font-weight:800;margin-bottom:7px;}
-.inst-box{background:#eff6ff!important;border:1px solid #bfdbfe;border-left:4px solid #2563eb;border-radius:8px;padding:6px 10px;margin-top:5px;font-size:12px;}
-.squeeze-box{background:#fff1f2!important;border:1px solid #fecdd3;border-left:4px solid #e11d48;border-radius:8px;padding:6px 10px;margin-top:5px;font-size:12px;}
-.pts-tokugai-box{background:#fffbeb!important;border:1px solid #fde68a;border-left:4px solid #d97706;border-radius:8px;padding:6px 10px;margin-top:5px;font-size:12px;}
-.board5ch-box{background:#ecfdf5!important;border:1px solid #a7f3d0;border-left:4px solid #059669;border-radius:8px;padding:6px 10px;margin-top:5px;font-size:12px;}
-.delicate-box{background:#f8fafc!important;border:1px solid #cbd5e1;border-left:4px solid #7c3aed;border-radius:8px;padding:7px 10px;margin-top:5px;font-size:12px;line-height:1.5;}
-.metrics-row{display:flex;flex-wrap:wrap;gap:5px 10px;margin-top:6px;font-size:11.5px;background:#f1f5f9!important;padding:6px 10px;border-radius:7px;}
-.trade-plan-box{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:6px;background:#fff!important;padding:7px 5px;border-radius:8px;border:1px solid #cbd5e1;text-align:center;}
-.sizing-box{background:#f0fdf4!important;border:1px solid #86efac;border-radius:8px;padding:6px 10px;margin-top:6px;font-size:12px;}
-.ai-council-box{background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc!important;border-radius:12px;padding:12px;margin-top:6px;margin-bottom:9px;border:1px solid rgba(56,189,248,0.35);}
-.ai-council-box *{color:#f8fafc;} .council-scroll-window{max-height:540px;overflow-y:auto;padding:10px;background:rgba(6,10,19,0.85);border:1px solid rgba(255,255,255,0.14);border-radius:9px;margin-bottom:8px;scroll-behavior:smooth;}
-.round-divider{text-align:center;margin:8px 0;padding:4px 8px;background:rgba(56,189,248,0.18);border-top:1px solid #38bdf8;border-bottom:1px solid #38bdf8;color:#7dd3fc!important;font-size:11.5px;font-weight:800;border-radius:5px;}
-.chat-bubble-ai,.chat-bubble-doubt,.chat-bubble-rebuttal,.chat-bubble-rage,.chat-bubble-humor,.chat-bubble-agree{border-radius:9px;padding:9px 12px;margin-bottom:8px;font-size:12.5px;line-height:1.65;}
-.chat-bubble-ai{background:rgba(255,255,255,0.07);border-left:4px solid #38bdf8;} .chat-bubble-doubt{background:rgba(245,158,11,0.12);border-left:4px solid #f59e0b;}
-.chat-bubble-rebuttal{background:rgba(225,29,72,0.12);border-left:4px solid #f43f5e;} .chat-bubble-rage{background:rgba(153,27,27,0.42);border:1px solid #ef4444;border-left:5px solid #dc2626;}
-.chat-bubble-humor{background:rgba(168,85,247,0.14);border-left:4px solid #c084fc;} .chat-bubble-agree{background:rgba(16,185,129,0.14);border-left:4px solid #10b981;}
-.chat-bubble-user{background:linear-gradient(135deg,#1d4ed8,#2563eb);border-radius:9px;padding:8px 11px;margin-bottom:7px;font-size:12.5px;}
-.consensus-banner{background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #818cf8;border-radius:9px;padding:10px;margin-top:7px;font-size:12px;}
-.consensus-section{background:rgba(255,255,255,0.07);border-left:3px solid #fbbf24;border-radius:5px;padding:6px 9px;margin-top:5px;}
-.qa-answer-card{background:#fff!important;border:2px solid #3b82f6;border-left:6px solid #1d4ed8;border-radius:9px;padding:11px;margin-top:6px;font-size:12.5px!important;line-height:1.65!important;color:#0f172a!important;}
-.qa-answer-card *{color:#0f172a!important;} .qa-direct-box{background:#eff6ff!important;border:1px solid #93c5fd;border-left:4px solid #2563eb;padding:8px 10px;border-radius:6px;margin:5px 0;} .qa-answer-card b{color:#1d4ed8!important;}
-</style>""", unsafe_allow_html=True)
-
-# --- 絶対に重ならない3連スタイリッシュ・フローティングピルバー ---
+# --- フローティングピルバー ---
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 lbl_top = "⬆️ トップ"
 lbl_back = "⬅️ 戻る"
@@ -831,7 +824,6 @@ def _fmt_turn(t: dict) -> str:
     return f'<div class="{b_cls}"><div style="font-weight:800;color:#38bdf8;font-size:12px;margin-bottom:3px;">{t["speaker"]}{sc}</div><div>{t["text"]}</div></div>'
 
 def _fmt_typing_card(t: dict, is_paused: bool = False, status_txt: str = "タイピング中...") -> str:
-    """回答カード（吹き出し）の内部にタイピングアニメーションまたは推敲中ポーズを表示"""
     b_cls = {"doubt": "chat-bubble-doubt", "rebuttal": "chat-bubble-rebuttal", "rage": "chat-bubble-rage", "humor": "chat-bubble-humor", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
     sc = f' <span style="background:rgba(56,189,248,0.18);color:#7dd3fc;padding:1px 6px;border-radius:999px;font-size:10.5px;">{t["score"]}点</span>' if "score" in t else ""
     if is_paused:
@@ -841,7 +833,6 @@ def _fmt_typing_card(t: dict, is_paused: bool = False, status_txt: str = "タイ
     return f'<div class="{b_cls}"><div style="font-weight:800;color:#38bdf8;font-size:12px;margin-bottom:4px;">{t["speaker"]}{sc}</div>{inner}</div>'
 
 def _scroll_council_bottom(wid: str, step_seed: int):
-    """ディベート窓のスクロール位置を常に最新の発言（最下部）へ自動追従させる"""
     components.html(
         f"""<script>/*scroll_{wid}_{step_seed}*/
         (function(){{
@@ -912,17 +903,11 @@ def render_council_sec(r, uk):
 
         for i, t in enumerate(turns):
             if "speaker" in t:
-                # ① 前の人の発言を読んでいる・考えている「無言の間」（まだタイピングが始まらないリアルな空白時間）
                 if i > 1:
-                    pre_think_gap = rng_stream.uniform(0.9, 2.3)
-                    time.sleep(pre_think_gap)
+                    time.sleep(rng_stream.uniform(0.9, 2.3))
 
                 tn = t.get("tone", "normal")
-                # ② 1回で打ち切るか、考えながら2〜3回に分けてタイピングするかをランダム決定
-                if tn in ["doubt", "humor", "agree"] or rng_stream.random() < 0.55:
-                    burst_count = rng_stream.choice([2, 3])
-                else:
-                    burst_count = 1
+                burst_count = rng_stream.choice([2, 3]) if (tn in ["doubt", "humor", "agree"] or rng_stream.random() < 0.55) else 1
 
                 for b_idx in range(burst_count):
                     step_counter += 1
@@ -932,7 +917,6 @@ def render_council_sec(r, uk):
                     _scroll_council_bottom(wid, step_counter)
                     time.sleep(rng_stream.uniform(1.5, 2.6))
 
-                    # 複数回に分けて打つ場合は、途中でピタッと手が止まる「推敲ポーズ（アニメーション停止）」を挟む
                     if b_idx < burst_count - 1:
                         step_counter += 1
                         pause_card_html = _fmt_typing_card(t, is_paused=True, status_txt="板気配と統計データを推敲中...")
@@ -940,7 +924,6 @@ def render_council_sec(r, uk):
                         _scroll_council_bottom(wid, step_counter)
                         time.sleep(rng_stream.uniform(0.8, 1.6))
 
-            # ③ 発言確定（カード内のタイピングアニメーションが消え、回答テキストが表示される）
             so_far.append(_fmt_turn(t))
             step_counter += 1
             v_blk = f'<div class="consensus-banner"><div style="font-weight:bold;color:#fde047;font-size:13.5px;">🏛️ 全エージェント合意の最終コンセンサス</div>{meta["verdict_html"]}</div>' if i == len(turns) - 1 else ""
@@ -999,23 +982,26 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
     ini = r["name"].replace(" (米)", "").strip()[0] if r["name"] else "📈"
     logo = f'<img src="https://ui-avatars.com/api/?name={urllib.parse.quote(ini)}&background=0f172a&color=fbbf24&bold=true&size=64" class="company-logo-img" />'
 
-    st.markdown(
+    # 表面は最重要情報のみスッキリ表示し、細かい4ボックス＋7指標は「詳細データを開く」アコーディオンに収納
+    card_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
-        f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]} !important;"><span>🎯 {r["tier_label"]}</span><span style="font-size:11.5px;">総合勝率 {r["total_win_rate"]}% ｜ Lv.{r["tier_num"]}/10</span></div>'
-        f'<div style="margin-bottom:7px;">{rk_h}<span class="score-badge">⚡ 総合指数: {r["ai_score"]}点</span><span class="inst-badge">🏦 機関VPIN: {r["inst_score"]}点</span><span class="board5ch-badge">🔥 5ch＆短期需給: {r["board5ch_score"]}点</span><span class="tokugai-badge">🚨 特買い: {r["tokugai_prob"]}%</span></div>'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;"><div style="display:flex;align-items:center;gap:9px;">{logo}<div><span style="font-size:17px;font-weight:800;">{r["name"]}</span> <span style="font-size:12.5px;color:#64748b;">({r["code"]} / {r["genre"]})</span><br><span style="font-size:14.5px;">現在値: <b>{r["price"]}</b> (<span style="color:{dc};font-weight:800;">{ds}{r["diff"]}%</span>)</span></div></div>'
-        f'<div style="text-align:right;"><span style="font-size:11px;color:#64748b;font-weight:700;">🎯 総合勝率</span><br><span class="prob-badge">{r["total_win_rate"]}%</span><div style="font-size:11px;color:#64748b;">(損益比 {r["payoff"]}倍 / 期待値 {r["edge"]:+.2f}%)</div></div></div>'
-        f'<div class="winrate-bar"><div><div style="font-size:10.5px;color:#881337;font-weight:700;">🏆 総合勝率</div><div style="font-size:14.5px;font-weight:900;color:#e11d48;">{r["total_win_rate"]}%</div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10.5px;color:#64748b;">🌅 翌朝GU勝率</div><div style="font-size:13.5px;font-weight:800;color:#dc2626;">{r["prob"]}% <span style="font-size:10px;">({r["count"]})</span></div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10.5px;color:#64748b;">☀️ 寄り後陽線</div><div style="font-size:13.5px;font-weight:800;color:#d97706;">{r["intraday_win_rate"]}%</div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10.5px;color:#64748b;">📈 順張り勝率</div><div style="font-size:13.5px;font-weight:800;color:#15803d;">{r["trend_win_rate"]}%</div></div></div>'
+        f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]} !important;"><span>🎯 {r["tier_label"]}</span><span style="font-size:11px;">Lv.{r["tier_num"]}/10</span></div>'
+        f'<div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:3px;">{rk_h}<span class="score-badge">⚡ 総合 {r["ai_score"]}点</span><span class="inst-badge">🏦 機関 {r["inst_score"]}点</span><span class="board5ch-badge">🔥 需給 {r["board5ch_score"]}点</span><span class="tokugai-badge">🚨 特買 {r["tokugai_prob"]}%</span></div>'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;"><div style="display:flex;align-items:center;gap:9px;">{logo}<div><span style="font-size:16.5px;font-weight:800;">{r["name"]}</span> <span style="font-size:12px;color:#64748b;">({r["code"]} / {r["genre"]})</span><br><span style="font-size:14px;">現在値: <b>{r["price"]}</b> (<span style="color:{dc};font-weight:800;">{ds}{r["diff"]}%</span>)</span></div></div>'
+        f'<div style="text-align:right;"><span style="font-size:10.5px;color:#64748b;font-weight:700;">🎯 総合勝率</span><br><span class="prob-badge">{r["total_win_rate"]}%</span><div style="font-size:10.5px;color:#64748b;">損益比 {r["payoff"]}倍 / 期待値 {r["edge"]:+.2f}%</div></div></div>'
+        f'<div class="winrate-bar"><div><div style="font-size:10px;color:#881337;font-weight:700;">🏆 総合勝率</div><div style="font-size:13.5px;font-weight:900;color:#e11d48;">{r["total_win_rate"]}%</div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10px;color:#64748b;">🌅 翌朝GU</div><div style="font-size:13px;font-weight:800;color:#dc2626;">{r["prob"]}%</div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10px;color:#64748b;">☀️ 寄り後陽線</div><div style="font-size:13px;font-weight:800;color:#d97706;">{r["intraday_win_rate"]}%</div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10px;color:#64748b;">📈 順張り</div><div style="font-size:13px;font-weight:800;color:#15803d;">{r["trend_win_rate"]}%</div></div></div>'
+        f'<div class="trade-plan-box"><div><div style="font-size:10px;color:#64748b;">🌅 夜間理論寄付き</div><div style="font-size:12.5px;font-weight:800;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid #cbd5e1;border-right:1px solid #cbd5e1;"><div style="font-size:10px;color:#15803d;font-weight:bold;">🎯 利確目標</div><div style="font-size:12.5px;font-weight:800;color:#15803d;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:10px;color:#b91c1c;font-weight:bold;">🛡️ 損切り逆指値</div><div style="font-size:12.5px;font-weight:800;color:#b91c1c;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
+        f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> (投資額 {lot["position_value"]:,.0f}円 / 許容損失 {lot["risk_amount"]:,.0f}円)</span><span style="font-size:11px;color:#15803d;font-weight:700;">VWAP基準: {r["vwap_price"]}</span></div>'
+        f'<details class="quant-detail-drawer"><summary>🔍 クオンツ需給・5ch実況・テクニカル詳細を開く（タップで開閉）</summary>'
         f'<div class="delicate-box">{r["delicate_narrative"]}</div>'
-        f'<div class="inst-box"><b>{r["inst_status"]}</b> ｜ 20日VWAP基準: <b>{r["vwap_price"]}</b></div>'
-        f'<div class="board5ch-box"><b>📢 {r["board5ch_status"]}</b> ｜ シグナル: <b>{r["signal"]}</b></div>'
-        f'<div class="pts-tokugai-box"><b>🌙 {r["tokugai_status"]}</b> ｜ 夜間理論気配: <b>{r["pts_est_price"]}</b> ({ps}{r["pts_gap_pct"]}%) ｜ 特買い線: <b>{r["tokugai_line"]}</b></div>'
-        f'<div class="squeeze-box"><b>{r["squeeze_type"]}</b> ｜ 踏み上げ突破ライン(20日高値): <b>{r["squeeze_trigger_price"]}</b> ({r["dist_to_high20"]:+.2f}%)</div>'
+        f'<div class="inst-box"><b>{r["inst_status"]}</b> ｜ 20日VWAP: <b>{r["vwap_price"]}</b></div>'
+        f'<div class="board5ch-box"><b>📢 {r["board5ch_status"]}</b> ｜ {r["signal"]}</div>'
+        f'<div class="pts-tokugai-box"><b>🌙 {r["tokugai_status"]}</b> ｜ 特買いライン: <b>{r["tokugai_line"]}</b></div>'
+        f'<div class="squeeze-box"><b>{r["squeeze_type"]}</b> ｜ 20日高値: <b>{r["squeeze_trigger_price"]}</b> ({r["dist_to_high20"]:+.2f}%)</div>'
         f'<div class="metrics-row"><span>🏦 <b>VPIN:</b> {r["vpin"]:+.2f}</span><span>🧬 <b>Hurst:</b> {r["hurst"]}</span><span>🎯 <b>Kalman:</b> {r["kalman_bull_pct"]:+.2f}%</span><span>📐 <b>BB:</b> {r["bb_z"]:+.2f}σ</span><span>📊 <b>RSI:</b> {r["rsi"]}</span><span>📈 <b>MACD:</b> {r["macd_state"]}</span><span>🔊 <b>出来高:</b> {r["vol_ratio"]}倍</span></div>'
-        f'<div class="trade-plan-box"><div><div style="font-size:10.5px;color:#64748b;">🌅 夜間理論寄付き</div><div style="font-size:13px;font-weight:800;">{r["pts_est_price"]}</div></div><div style="border-left:1px solid #cbd5e1;border-right:1px solid #cbd5e1;"><div style="font-size:10.5px;color:#15803d;font-weight:bold;">🎯 利確目標</div><div style="font-size:13px;font-weight:800;color:#15803d;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:10.5px;color:#b91c1c;font-weight:bold;">🛡️ 損切り逆指値</div><div style="font-size:13px;font-weight:800;color:#b91c1c;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
-        f'<div class="sizing-box">📦 <b>推奨ロット: {lot["shares"]:,}株</b> (投資額: <b>{lot["position_value"]:,.0f}円</b> / 最大損失リスク: <b>{lot["risk_amount"]:,.0f}円</b>)</div></div>',
-        unsafe_allow_html=True
+        f'</details></div>'
     )
+    st.markdown(card_html, unsafe_allow_html=True)
     render_council_sec(r, f"{kp}_{r['code']}")
 
 # ==========================================
