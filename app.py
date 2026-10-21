@@ -121,38 +121,37 @@ check_auth()
 for k, v in [("active_debates", {}), ("streamed_keys", set()), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("exhausted_models", set()), ("nav_history", []), ("scroll_target", None), ("scroll_top_trig", 0), ("top_nav_key", 0)]:
     if k not in st.session_state: st.session_state[k] = v
 
-# --- CSS生出力バグを防ぐ安全なスタイル注入 ---
+# --- スタイル注入（半透明の水色の外枠を完全撤去し、シンプルで洗練された横一列ナビに修正） ---
 def inject_css():
     css_raw = """
     html,body,[class*="css"]{font-size:15px;}
-    .block-container{padding-top:2.4rem!important;padding-bottom:3rem!important;max-width:820px!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor){
+    .block-container{padding-top:2.2rem!important;padding-bottom:3rem!important;max-width:820px!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker){
         position:sticky!important;top:2.75rem!important;z-index:999!important;
-        max-width:440px!important;margin:0 auto 8px auto!important;
-        background:linear-gradient(135deg, rgba(15,23,42,0.92), rgba(30,41,59,0.92))!important;
-        backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important;
-        padding:5px 8px!important;border-radius:999px!important;
-        border:1px solid rgba(56,189,248,0.35)!important;
-        box-shadow:0 8px 24px rgba(0,0,0,0.35)!important;
+        background:transparent!important;border:none!important;box-shadow:none!important;
+        backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+        padding:2px 0!important;margin:0 0 8px 0!important;
     }
-    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[data-testid="stPills"]{margin:0!important;padding:0!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[role="tablist"],
-    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[data-baseweb="button-group"]{
-        display:grid!important;grid-template-columns:1fr 1fr 1.25fr!important;gap:6px!important;width:100%!important;
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stHorizontalBlock"]{
+        display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;
+        align-items:center!important;justify-content:center!important;gap:12px!important;width:100%!important;
     }
-    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button{
-        width:100%!important;min-height:28px!important;height:28px!important;padding:0 8px!important;
-        border-radius:999px!important;background:rgba(255,255,255,0.06)!important;
-        color:#f1f5f9!important;border:1px solid rgba(148,163,184,0.22)!important;
-        font-size:11.5px!important;font-weight:800!important;white-space:nowrap!important;
-        display:flex!important;align-items:center!important;justify-content:center!important;margin:0!important;
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="column"],
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stColumn"]{
+        min-width:0!important;width:auto!important;flex:1 1 auto!important;
     }
-    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button:hover{
-        background:linear-gradient(135deg, rgba(56,189,248,0.28), rgba(37,99,235,0.28))!important;
-        border-color:#38bdf8!important;color:#fff!important;
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button{
+        width:100%!important;min-height:34px!important;height:34px!important;padding:0 12px!important;
+        border-radius:8px!important;background:#1e293b!important;color:#f8fafc!important;
+        border:1px solid #334155!important;box-shadow:0 2px 6px rgba(0,0,0,0.2)!important;
+        transition:all 0.15s ease!important;
     }
-    div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button p{
-        font-size:11.5px!important;font-weight:800!important;margin:0!important;line-height:1!important;color:inherit!important;
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button:hover{
+        background:#334155!important;border-color:#64748b!important;color:#ffffff!important;
+    }
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button p{
+        font-size:13px!important;font-weight:700!important;letter-spacing:0.03em!important;
+        margin:0!important;white-space:nowrap!important;color:inherit!important;
     }
     @keyframes dotPulse{0%,60%,100%{transform:translateY(0);opacity:0.3;}30%{transform:translateY(-4px);opacity:1;}}
     .inline-typing-wrap{display:inline-flex;align-items:center;gap:8px;padding:4px 10px;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.3);border-radius:999px;margin-top:2px;}
@@ -212,48 +211,29 @@ def inject_css():
 
 inject_css()
 
-# --- フローティングピルバー ---
+# --- 上部シンプル横並びナビゲーション（トップ / 合議タブ全て閉じる / 戻る） ---
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
-lbl_top = "⬆️ トップ"
-lbl_back = "⬅️ 戻る"
-lbl_close = f"🔽 合議を閉じる({open_cnt})" if open_cnt else "🔽 合議全て閉じる"
+lbl_close = f"合議タブ全て閉じる({open_cnt})" if open_cnt else "合議タブ全て閉じる"
 
 with st.container():
-    st.markdown('<div class="floating-nav-anchor"></div>', unsafe_allow_html=True)
-    if hasattr(st, "pills"):
-        nav_act = st.pills(
-            "クイックナビ",
-            [lbl_top, lbl_back, lbl_close],
-            selection_mode="single",
-            default=None,
-            key=f"floating_nav_{st.session_state['top_nav_key']}",
-            label_visibility="collapsed"
-        )
-        if nav_act:
-            st.session_state["top_nav_key"] += 1
-            if nav_act == lbl_top:
-                st.session_state["scroll_top_trig"] += 1
-                st.rerun()
-            elif nav_act == lbl_back:
-                if st.session_state.get("custom_search_code"): st.session_state["custom_search_code"] = ""
-                elif st.session_state.get("navigation_page") != "TOP": st.session_state["navigation_page"] = "TOP"
-                elif st.session_state["nav_history"]: st.session_state["active_category"] = st.session_state["nav_history"].pop()
-                else: st.session_state["active_category"] = "🏆 総合TOP5"
-                st.rerun()
-            elif nav_act == lbl_close:
-                st.session_state["active_debates"] = {}
-                st.rerun()
-    else:
-        nc1, nc2, nc3 = st.columns(3)
-        if nc1.button(lbl_top, key="sticky_top_btn", use_container_width=True): st.session_state["scroll_top_trig"] += 1
-        if nc2.button(lbl_back, key="sticky_back_btn", use_container_width=True):
-            if st.session_state.get("custom_search_code"): st.session_state["custom_search_code"] = ""
-            elif st.session_state.get("navigation_page") != "TOP": st.session_state["navigation_page"] = "TOP"
-            elif st.session_state["nav_history"]: st.session_state["active_category"] = st.session_state["nav_history"].pop()
-            else: st.session_state["active_category"] = "🏆 総合TOP5"
-            st.rerun()
-        if nc3.button(lbl_close, key="sticky_close_all", use_container_width=True):
-            st.session_state["active_debates"] = {}; st.rerun()
+    st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
+    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.45, 1])
+    if nav_c1.button("トップ", key="top_nav_btn_top", use_container_width=True):
+        st.session_state["scroll_top_trig"] += 1
+        st.rerun()
+    if nav_c2.button(lbl_close, key="top_nav_btn_close", use_container_width=True):
+        st.session_state["active_debates"] = {}
+        st.rerun()
+    if nav_c3.button("戻る", key="top_nav_btn_back", use_container_width=True):
+        if st.session_state.get("custom_search_code"):
+            st.session_state["custom_search_code"] = ""
+        elif st.session_state.get("navigation_page") != "TOP":
+            st.session_state["navigation_page"] = "TOP"
+        elif st.session_state["nav_history"]:
+            st.session_state["active_category"] = st.session_state["nav_history"].pop()
+        else:
+            st.session_state["active_category"] = "🏆 総合TOP5"
+        st.rerun()
 
 if st.session_state["scroll_top_trig"] > 0:
     components.html(f"<script>/*{st.session_state['scroll_top_trig']}*/window.parent.document.getElementById('page_top_anchor')?.scrollIntoView({{behavior:'smooth'}});window.parent.scrollTo({{top:0,behavior:'smooth'}});</script>", height=0)
@@ -982,7 +962,6 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
     ini = r["name"].replace(" (米)", "").strip()[0] if r["name"] else "📈"
     logo = f'<img src="https://ui-avatars.com/api/?name={urllib.parse.quote(ini)}&background=0f172a&color=fbbf24&bold=true&size=64" class="company-logo-img" />'
 
-    # 表面は最重要情報のみスッキリ表示し、細かい4ボックス＋7指標は「詳細データを開く」アコーディオンに収納
     card_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]} !important;"><span>🎯 {r["tier_label"]}</span><span style="font-size:11px;">Lv.{r["tier_num"]}/10</span></div>'
