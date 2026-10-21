@@ -32,7 +32,7 @@ def generate_member_passcode(email: str) -> str:
 def generate_admin_action_token(email: str, action: str) -> str:
     return hashlib.sha256(f"{email.strip().lower()}:{action}:{SECRET_MASTER_KEY}".encode()).hexdigest()[:16]
 
-def load_json_file(path: str, default: dict) -> dict:
+def load_ json_file(path: str, default: dict) -> dict:
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
