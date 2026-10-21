@@ -118,22 +118,72 @@ def check_auth():
 
 check_auth()
 
-for k, v in [("active_debates", {}), ("streamed_keys", set()), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("exhausted_models", set()), ("nav_history", []), ("scroll_target", None), ("scroll_top_trig", 0)]:
+for k, v in [("active_debates", {}), ("streamed_keys", set()), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("exhausted_models", set()), ("nav_history", []), ("scroll_target", None), ("scroll_top_trig", 0), ("top_nav_key", 0)]:
     if k not in st.session_state: st.session_state[k] = v
 
-# --- 極細スマート追従ミニナビバー＆リアルタイピングアニメーションCSS ---
+# --- モダン3連フローティング・ピルバー ＆ カード内タイピングアニメーションCSS ---
 st.markdown("""<div id="page_top_anchor"></div><style>
-html,body,[class*="css"]{font-size:15px;} .block-container{padding-top:2.9rem!important;padding-bottom:3rem!important;max-width:840px!important;}
-div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker){position:sticky!important;top:2.75rem!important;z-index:990!important;max-width:390px!important;margin:0 auto 6px auto!important;background:rgba(15,23,42,0.82)!important;backdrop-filter:blur(12px)!important;padding:2px 8px!important;border-radius:999px!important;border:1px solid rgba(148,163,184,0.28)!important;box-shadow:0 3px 12px rgba(0,0,0,0.22)!important;}
-div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker) [data-testid="stHorizontalBlock"]{gap:4px!important;flex-wrap:nowrap!important;align-items:center!important;}
-div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker) [data-testid="column"]{min-width:0!important;width:auto!important;flex:1 1 0!important;}
-div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker) button{background:transparent!important;color:#e2e8f0!important;border:none!important;border-radius:999px!important;height:24px!important;min-height:24px!important;padding:0 6px!important;font-size:11px!important;font-weight:700!important;line-height:1!important;white-space:nowrap!important;box-shadow:none!important;transition:all 0.15s ease!important;}
-div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker) button:hover{background:rgba(56,189,248,0.22)!important;color:#38bdf8!important;}
-@keyframes typingBounce{0%,80%,100%{transform:translateY(0);opacity:0.35;}40%{transform:translateY(-4px);opacity:1;}}
-.typing-indicator-box{display:inline-flex;align-items:center;gap:8px;background:rgba(15,23,42,0.94);border:1px solid rgba(56,189,248,0.45);padding:6px 13px;border-radius:999px;color:#7dd3fc;font-size:11.5px;font-weight:700;margin:4px 0 8px 0;box-shadow:0 4px 12px rgba(0,0,0,0.25);}
-.typing-dots{display:inline-flex;align-items:center;gap:3px;}
-.typing-dots span{width:5px;height:5px;background:#38bdf8;border-radius:50%;display:inline-block;animation:typingBounce 1.3s infinite ease-in-out both;}
-.typing-dots span:nth-child(1){animation-delay:-0.32s;} .typing-dots span:nth-child(2){animation-delay:-0.16s;}
+html,body,[class*="css"]{font-size:15px;} .block-container{padding-top:2.8rem!important;padding-bottom:3rem!important;max-width:840px!important;}
+
+/* スタイリッシュ3連フローティングナビバー（重なり完全防止・ガラスモーフィズム） */
+div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor){
+    position:sticky!important;top:2.75rem!important;z-index:999!important;
+    max-width:440px!important;margin:0 auto 8px auto!important;
+    background:linear-gradient(135deg, rgba(15,23,42,0.88), rgba(30,41,59,0.88))!important;
+    backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important;
+    padding:5px 8px!important;border-radius:999px!important;
+    border:1px solid rgba(56,189,248,0.35)!important;
+    box-shadow:0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12)!important;
+}
+div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[data-testid="stPills"]{
+    margin:0!important;padding:0!important;
+}
+div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[role="tablist"],
+div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) div[data-baseweb="button-group"]{
+    display:grid!important;grid-template-columns:1fr 1fr 1.25fr!important;gap:6px!important;width:100%!important;
+}
+div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button{
+    width:100%!important;min-height:28px!important;height:28px!important;padding:0 8px!important;
+    border-radius:999px!important;background:rgba(255,255,255,0.06)!important;
+    color:#f1f5f9!important;border:1px solid rgba(148,163,184,0.22)!important;
+    font-size:11.5px!important;font-weight:800!important;letter-spacing:0.02em!important;
+    white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
+    display:flex!important;align-items:center!important;justify-content:center!important;
+    transition:all 0.18s cubic-bezier(0.4,0,0.2,1)!important;box-shadow:none!important;margin:0!important;
+}
+div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button:hover{
+    background: linear-gradient(135deg, rgba(56,189,248,0.28), rgba(37,99,235,0.28))!important;
+    border-color:#38bdf8!important;color:#fff!important;transform:translateY(-1px)!important;
+}
+div[data-testid="stVerticalBlock"] > div:has(div.floating-nav-anchor) button p{
+    font-size:11.5px!important;font-weight:800!important;margin:0!important;line-height:1!important;color:inherit!important;
+}
+
+/* カード内タイピングアニメーション */
+@keyframes dotPulse{
+    0%, 60%, 100% { transform:translateY(0); opacity:0.3; }
+    30% { transform:translateY(-4px); opacity:1; }
+}
+.inline-typing-wrap{
+    display:inline-flex;align-items:center;gap:8px;padding:4px 10px;
+    background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.3);
+    border-radius:999px;margin-top:2px;
+}
+.inline-typing-label{font-size:11.5px;color:#7dd3fc!important;font-weight:700;letter-spacing:0.02em;}
+.inline-typing-dots{display:inline-flex;align-items:center;gap:4px;}
+.inline-typing-dots span{
+    width:5.5px;height:5.5px;background:#38bdf8;border-radius:50%;display:inline-block;
+    animation:dotPulse 1.25s infinite ease-in-out;
+}
+.inline-typing-dots span:nth-child(1){animation-delay:0s;}
+.inline-typing-dots span:nth-child(2){animation-delay:0.18s;}
+.inline-typing-dots span:nth-child(3){animation-delay:0.36s;}
+.inline-pause-wrap{
+    display:inline-flex;align-items:center;gap:6px;padding:3px 10px;
+    background:rgba(148,163,184,0.1);border:1px dashed rgba(148,163,184,0.3);
+    border-radius:999px;margin-top:2px;font-size:11px;color:#94a3b8!important;
+}
+
 div[data-testid="stPills"]{margin-top:-2px!important;margin-bottom:4px!important;}
 .compact-bar-label{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;color:#38bdf8;background:linear-gradient(90deg,#0f172a,#1e293b);padding:5px 12px;border-radius:8px;border-left:3px solid #38bdf8;margin-bottom:4px;}
 .company-logo-img{width:36px;height:36px;border-radius:8px;background:#fff;padding:2px;border:1px solid #e2e8f0;}
@@ -156,9 +206,9 @@ div[data-testid="stPills"]{margin-top:-2px!important;margin-bottom:4px!important
 .trade-plan-box{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:6px;background:#fff!important;padding:7px 5px;border-radius:8px;border:1px solid #cbd5e1;text-align:center;}
 .sizing-box{background:#f0fdf4!important;border:1px solid #86efac;border-radius:8px;padding:6px 10px;margin-top:6px;font-size:12px;}
 .ai-council-box{background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc!important;border-radius:12px;padding:12px;margin-top:6px;margin-bottom:9px;border:1px solid rgba(56,189,248,0.35);}
-.ai-council-box *{color:#f8fafc;} .council-scroll-window{max-height:580px;overflow-y:auto;padding:9px;background:rgba(6,10,19,0.82);border:1px solid rgba(255,255,255,0.14);border-radius:9px;margin-bottom:8px;}
+.ai-council-box *{color:#f8fafc;} .council-scroll-window{max-height:540px;overflow-y:auto;padding:10px;background:rgba(6,10,19,0.85);border:1px solid rgba(255,255,255,0.14);border-radius:9px;margin-bottom:8px;scroll-behavior:smooth;}
 .round-divider{text-align:center;margin:8px 0;padding:4px 8px;background:rgba(56,189,248,0.18);border-top:1px solid #38bdf8;border-bottom:1px solid #38bdf8;color:#7dd3fc!important;font-size:11.5px;font-weight:800;border-radius:5px;}
-.chat-bubble-ai,.chat-bubble-doubt,.chat-bubble-rebuttal,.chat-bubble-rage,.chat-bubble-humor,.chat-bubble-agree{border-radius:9px;padding:8px 11px;margin-bottom:7px;font-size:12.5px;line-height:1.65;}
+.chat-bubble-ai,.chat-bubble-doubt,.chat-bubble-rebuttal,.chat-bubble-rage,.chat-bubble-humor,.chat-bubble-agree{border-radius:9px;padding:9px 12px;margin-bottom:8px;font-size:12.5px;line-height:1.65;}
 .chat-bubble-ai{background:rgba(255,255,255,0.07);border-left:4px solid #38bdf8;} .chat-bubble-doubt{background:rgba(245,158,11,0.12);border-left:4px solid #f59e0b;}
 .chat-bubble-rebuttal{background:rgba(225,29,72,0.12);border-left:4px solid #f43f5e;} .chat-bubble-rage{background:rgba(153,27,27,0.42);border:1px solid #ef4444;border-left:5px solid #dc2626;}
 .chat-bubble-humor{background:rgba(168,85,247,0.14);border-left:4px solid #c084fc;} .chat-bubble-agree{background:rgba(16,185,129,0.14);border-left:4px solid #10b981;}
@@ -169,21 +219,48 @@ div[data-testid="stPills"]{margin-top:-2px!important;margin-bottom:4px!important
 .qa-answer-card *{color:#0f172a!important;} .qa-direct-box{background:#eff6ff!important;border:1px solid #93c5fd;border-left:4px solid #2563eb;padding:8px 10px;border-radius:6px;margin:5px 0;} .qa-answer-card b{color:#1d4ed8!important;}
 </style>""", unsafe_allow_html=True)
 
+# --- 絶対に重ならない3連スタイリッシュ・フローティングピルバー ---
+open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
+lbl_top = "⬆️ トップ"
+lbl_back = "⬅️ 戻る"
+lbl_close = f"🔽 合議を閉じる({open_cnt})" if open_cnt else "🔽 合議全て閉じる"
+
 with st.container():
-    st.markdown('<div class="smart-sticky-marker"></div>', unsafe_allow_html=True)
-    nc1, nc2, nc3 = st.columns(3)
-    if nc1.button("⬆️ トップ", key="sticky_top_btn", use_container_width=True):
-        st.session_state["scroll_top_trig"] += 1
-    if nc2.button("⬅️ 戻る", key="sticky_back_btn", use_container_width=True):
-        if st.session_state.get("custom_search_code"): st.session_state["custom_search_code"] = ""
-        elif st.session_state.get("navigation_page") != "TOP": st.session_state["navigation_page"] = "TOP"
-        elif st.session_state["nav_history"]: st.session_state["active_category"] = st.session_state["nav_history"].pop()
-        else: st.session_state["active_category"] = "🏆 総合TOP5"
-        st.rerun()
-    open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
-    if nc3.button(f"🔽 合議を閉じる({open_cnt})" if open_cnt else "🔽 合議を閉じる", key="sticky_close_all", use_container_width=True):
-        st.session_state["active_debates"] = {}
-        st.rerun()
+    st.markdown('<div class="floating-nav-anchor"></div>', unsafe_allow_html=True)
+    if hasattr(st, "pills"):
+        nav_act = st.pills(
+            "クイックナビ",
+            [lbl_top, lbl_back, lbl_close],
+            selection_mode="single",
+            default=None,
+            key=f"floating_nav_{st.session_state['top_nav_key']}",
+            label_visibility="collapsed"
+        )
+        if nav_act:
+            st.session_state["top_nav_key"] += 1
+            if nav_act == lbl_top:
+                st.session_state["scroll_top_trig"] += 1
+                st.rerun()
+            elif nav_act == lbl_back:
+                if st.session_state.get("custom_search_code"): st.session_state["custom_search_code"] = ""
+                elif st.session_state.get("navigation_page") != "TOP": st.session_state["navigation_page"] = "TOP"
+                elif st.session_state["nav_history"]: st.session_state["active_category"] = st.session_state["nav_history"].pop()
+                else: st.session_state["active_category"] = "🏆 総合TOP5"
+                st.rerun()
+            elif nav_act == lbl_close:
+                st.session_state["active_debates"] = {}
+                st.rerun()
+    else:
+        nc1, nc2, nc3 = st.columns(3)
+        if nc1.button(lbl_top, key="sticky_top_btn", use_container_width=True): st.session_state["scroll_top_trig"] += 1
+        if nc2.button(lbl_back, key="sticky_back_btn", use_container_width=True):
+            if st.session_state.get("custom_search_code"): st.session_state["custom_search_code"] = ""
+            elif st.session_state.get("navigation_page") != "TOP": st.session_state["navigation_page"] = "TOP"
+            elif st.session_state["nav_history"]: st.session_state["active_category"] = st.session_state["nav_history"].pop()
+            else: st.session_state["active_category"] = "🏆 総合TOP5"
+            st.rerun()
+        if nc3.button(lbl_close, key="sticky_close_all", use_container_width=True):
+            st.session_state["active_debates"] = {}; st.rerun()
 
 if st.session_state["scroll_top_trig"] > 0:
     components.html(f"<script>/*{st.session_state['scroll_top_trig']}*/window.parent.document.getElementById('page_top_anchor')?.scrollIntoView({{behavior:'smooth'}});window.parent.scrollTo({{top:0,behavior:'smooth'}});</script>", height=0)
@@ -286,7 +363,6 @@ def call_api_seamless(sys_p: str, usr_p: str, temp: float = 0.75) -> tuple:
     return None, "内蔵クオンツ動的推論AI (429バイパス)"
 
 def build_quant_debate(r: dict, smap: dict, fs: int, vref: str, lp1: int, lp2: int, lp3: int, style: str, seed: int) -> dict:
-    """銘柄コード×シードから毎回異なる8〜10ターンの乱雑なプロ掛け合いを生成（ブチ切れは1%の確率で段階的に発生）"""
     h_val = int(hashlib.md5(f"{r['code']}_{seed}_{r['price']}_{style}".encode()).hexdigest()[:8], 16)
     rng = random.Random(h_val)
     is_rage_event = (rng.randint(1, 100) == 1)
@@ -754,6 +830,39 @@ def _fmt_turn(t: dict) -> str:
     sc = f' <span style="background:rgba(56,189,248,0.18);color:#7dd3fc;padding:1px 6px;border-radius:999px;font-size:10.5px;">{t["score"]}点</span>' if "score" in t else ""
     return f'<div class="{b_cls}"><div style="font-weight:800;color:#38bdf8;font-size:12px;margin-bottom:3px;">{t["speaker"]}{sc}</div><div>{t["text"]}</div></div>'
 
+def _fmt_typing_card(t: dict, is_paused: bool = False, status_txt: str = "タイピング中...") -> str:
+    """回答カード（吹き出し）の内部にタイピングアニメーションまたは推敲中ポーズを表示"""
+    b_cls = {"doubt": "chat-bubble-doubt", "rebuttal": "chat-bubble-rebuttal", "rage": "chat-bubble-rage", "humor": "chat-bubble-humor", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
+    sc = f' <span style="background:rgba(56,189,248,0.18);color:#7dd3fc;padding:1px 6px;border-radius:999px;font-size:10.5px;">{t["score"]}点</span>' if "score" in t else ""
+    if is_paused:
+        inner = f'<div class="inline-pause-wrap"><span>🤔 {status_txt}</span></div>'
+    else:
+        inner = f'<div class="inline-typing-wrap"><span class="inline-typing-label">✍️ {status_txt}</span><span class="inline-typing-dots"><span></span><span></span><span></span></span></div>'
+    return f'<div class="{b_cls}"><div style="font-weight:800;color:#38bdf8;font-size:12px;margin-bottom:4px;">{t["speaker"]}{sc}</div>{inner}</div>'
+
+def _scroll_council_bottom(wid: str, step_seed: int):
+    """ディベート窓のスクロール位置を常に最新の発言（最下部）へ自動追従させる"""
+    components.html(
+        f"""<script>/*scroll_{wid}_{step_seed}*/
+        (function(){{
+            const scrollDown = () => {{
+                const el = window.parent.document.getElementById('{wid}');
+                if (el) {{
+                    el.scrollTo({{ top: el.scrollHeight, behavior: 'smooth' }});
+                    const lastChild = el.lastElementChild;
+                    if (lastChild) {{
+                        lastChild.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
+                    }}
+                }}
+            }};
+            scrollDown();
+            setTimeout(scrollDown, 80);
+            setTimeout(scrollDown, 220);
+        }})();
+        </script>""",
+        height=0
+    )
+
 @frag_dec
 def render_council_sec(r, uk):
     is_open = st.session_state["active_debates"].get(uk, False)
@@ -797,30 +906,49 @@ def render_council_sec(r, uk):
 
     if live_stream_mode and (first_run or uk not in st.session_state["streamed_keys"]):
         st.session_state["streamed_keys"].add(uk)
-        lbox, sbar, so_far = st.empty(), st.empty(), []
-        rng_stream = random.Random(int(hashlib.md5(f"{uk}_{len(turns)}".encode()).hexdigest()[:6], 16))
+        lbox, so_far = st.empty(), []
+        rng_stream = random.Random(int(hashlib.md5(f"{uk}_{len(turns)}_{time.time()}".encode()).hexdigest()[:8], 16))
+        step_counter = 0
+
         for i, t in enumerate(turns):
             if "speaker" in t:
+                # ① 前の人の発言を読んでいる・考えている「無言の間」（まだタイピングが始まらないリアルな空白時間）
+                if i > 1:
+                    pre_think_gap = rng_stream.uniform(0.9, 2.3)
+                    time.sleep(pre_think_gap)
+
                 tn = t.get("tone", "normal")
-                # 熟考ターン（懐疑・バックテスト照合・最終総括・ランダム長考）は約4.5〜5.2秒、通常掛け合いは約2.2〜3.4秒
-                is_deep_think = (tn in ["doubt", "humor", "agree"]) or (rng_stream.random() < 0.35)
-                if is_deep_think:
-                    w_think = rng_stream.uniform(2.0, 2.5)
-                    w_type = rng_stream.uniform(2.5, 2.7)
-                    sbar.markdown(f'<div class="typing-indicator-box"><span>🤔 <b>{t["speaker"]}</b> が板データ・統計波形を長考中</span><span class="typing-dots"><span></span><span></span><span></span></span></div>', unsafe_allow_html=True)
-                    time.sleep(w_think)
-                    sbar.markdown(f'<div class="typing-indicator-box"><span>✍️ <b>{t["speaker"]}</b> がメッセージを入力しています</span><span class="typing-dots"><span></span><span></span><span></span></span></div>', unsafe_allow_html=True)
-                    time.sleep(w_type)
+                # ② 1回で打ち切るか、考えながら2〜3回に分けてタイピングするかをランダム決定
+                if tn in ["doubt", "humor", "agree"] or rng_stream.random() < 0.55:
+                    burst_count = rng_stream.choice([2, 3])
                 else:
-                    w_type = rng_stream.uniform(2.2, 3.4)
-                    sbar.markdown(f'<div class="typing-indicator-box"><span>💬 <b>{t["speaker"]}</b> がメッセージを入力しています</span><span class="typing-dots"><span></span><span></span><span></span></span></div>', unsafe_allow_html=True)
-                    time.sleep(w_type)
+                    burst_count = 1
+
+                for b_idx in range(burst_count):
+                    step_counter += 1
+                    lbl_typing = "入力中..." if b_idx == 0 else ("数値を照合して再入力中..." if b_idx == 1 else "結論をまとめて入力中...")
+                    typing_card_html = _fmt_typing_card(t, is_paused=False, status_txt=lbl_typing)
+                    lbox.markdown(f'<div class="ai-council-box"><div id="{wid}" class="council-scroll-window">{"".join(so_far) + typing_card_html}</div></div>', unsafe_allow_html=True)
+                    _scroll_council_bottom(wid, step_counter)
+                    time.sleep(rng_stream.uniform(1.5, 2.6))
+
+                    # 複数回に分けて打つ場合は、途中でピタッと手が止まる「推敲ポーズ（アニメーション停止）」を挟む
+                    if b_idx < burst_count - 1:
+                        step_counter += 1
+                        pause_card_html = _fmt_typing_card(t, is_paused=True, status_txt="板気配と統計データを推敲中...")
+                        lbox.markdown(f'<div class="ai-council-box"><div id="{wid}" class="council-scroll-window">{"".join(so_far) + pause_card_html}</div></div>', unsafe_allow_html=True)
+                        _scroll_council_bottom(wid, step_counter)
+                        time.sleep(rng_stream.uniform(0.8, 1.6))
+
+            # ③ 発言確定（カード内のタイピングアニメーションが消え、回答テキストが表示される）
             so_far.append(_fmt_turn(t))
+            step_counter += 1
             v_blk = f'<div class="consensus-banner"><div style="font-weight:bold;color:#fde047;font-size:13.5px;">🏛️ 全エージェント合意の最終コンセンサス</div>{meta["verdict_html"]}</div>' if i == len(turns) - 1 else ""
             lbox.markdown(f'<div class="ai-council-box"><div id="{wid}" class="council-scroll-window">{"".join(so_far)}</div>{v_blk}</div>', unsafe_allow_html=True)
-        sbar.empty()
+            _scroll_council_bottom(wid, step_counter)
     else:
         st.markdown(f'<div class="ai-council-box"><div id="{wid}" class="council-scroll-window">{"".join(_fmt_turn(t) for t in turns)}</div><div class="consensus-banner"><div style="font-weight:bold;color:#fde047;font-size:13.5px;">🏛️ 全エージェント合意の最終コンセンサス</div>{meta["verdict_html"]}</div></div>', unsafe_allow_html=True)
+        _scroll_council_bottom(wid, 999)
 
     if st.button("🔄 別の切り口で再ディベート", key=f"rs_{uk}", use_container_width=True):
         st.session_state["debate_round_seed"][uk] = st.session_state["debate_round_seed"].get(uk, 0) + 1
@@ -831,7 +959,9 @@ def render_council_sec(r, uk):
         uop = jc1.text_input("発言", placeholder="ディベートに割り込む（例：朝から行くべき？ / 上ヒゲが怖い / 現在の株価は？）", label_visibility="collapsed")
         if jc2.form_submit_button("💬 発言を投下", use_container_width=True) and uop.strip():
             st.session_state["council_threads"][uk].append({"is_user": True, "text": uop.strip()})
-            st.session_state["council_threads"][uk].extend(gen_user_reply(uop.strip(), r, m5)); st.rerun()
+            st.session_state["council_threads"][uk].extend(gen_user_reply(uop.strip(), r, m5))
+            st.session_state["streamed_keys"].discard(uk)
+            st.rerun()
 
     qc1, qc2 = st.columns(2)
     for col, lbl, qtxt, k_s in [
