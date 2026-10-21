@@ -18,17 +18,22 @@ import urllib.error
 from email.mime.text import MIMEText
 from datetime import datetime
 
-st.set_page_config(page_title="翌朝株価 クオンツ＆7大AI解析 Pro (本物LLM搭載・会員限定版)", page_icon="📈", layout="centered")
+st.set_page_config(
+    page_title="翌朝株価 クオンツ＆マルチエージェントAI解析 Pro (会員限定版)",
+    page_icon="⚡",
+    layout="centered"
+)
 fragment_decorator = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
 # ==========================================
-# 🔒 会員DB ＆ SMTP永続化 ＆ ワンクリック承認
+# 🔒 会員DB ＆ 投票DB ＆ SMTP ＆ LLM設定永続化
 # ==========================================
 ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
 SECRET_MASTER_KEY = "my_super_secret_quant_key_2026"
 MEMBERS_DB_FILE = "members_db.json"
 SMTP_CONFIG_FILE = "admin_smtp_config.json"
 LLM_CONFIG_FILE = "admin_llm_config.json"
+VOTES_DB_FILE = "member_votes_db.json"
 
 def generate_member_passcode(email: str) -> str:
     return hmac.new(SECRET_MASTER_KEY.encode(), email.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
@@ -70,6 +75,12 @@ def load_llm_config() -> dict:
 
 def save_llm_config(cfg: dict):
     _save_json(LLM_CONFIG_FILE, cfg)
+
+def load_votes_db() -> dict:
+    return _load_json(VOTES_DB_FILE, {})
+
+def save_votes_db(db: dict):
+    _save_json(VOTES_DB_FILE, db)
 
 def load_members_db() -> dict:
     db = _load_json(MEMBERS_DB_FILE, {})
@@ -201,13 +212,13 @@ def check_member_authentication():
         elif st.query_params.get("nav", "").upper() == "TOP":
             st.session_state["navigation_page"] = "TOP"; del st.query_params["nav"]
         with st.sidebar:
-            st.success(f"👤 ログイン中:\n{cu}")
+            st.markdown(f'<div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:10px 14px;border-radius:12px;border:1px solid rgba(56,189,248,0.35);margin-bottom:8px;"><div style="font-size:11px;color:#38bdf8;font-weight:800;">⚡ VERIFIED MEMBER</div><div style="color:#f8fafc;font-size:13px;font-weight:700;word-break:break-all;">{cu}</div></div>', unsafe_allow_html=True)
             if st.button("🚪 ログアウト", use_container_width=True):
                 st.session_state["authenticated_user"] = None; st.query_params.clear(); st.rerun()
         if cu == ADMIN_EMAIL.strip().lower(): render_admin_sidebar_management()
         return True
 
-    st.markdown('<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:24px;border-radius:16px;text-align:center;margin-bottom:16px;"><h2 style="margin:0;color:#fbbf24;">🔒 会員限定 クオンツ＆7大AI解析 Pro</h2><p style="font-size:13.5px;color:#cbd5e1;margin-top:6px;">承認されたメールアドレスと専用アクセスコードを入力してください。</p></div>', unsafe_allow_html=True)
+    st.markdown('<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:24px;border-radius:16px;text-align:center;margin-bottom:16px;"><h2 style="margin:0;color:#fbbf24;">🔒 会員限定 クオンツ＆AIエージェント合議 Pro</h2><p style="font-size:13.5px;color:#cbd5e1;margin-top:6px;">承認されたメールアドレスと専用アクセスコードを入力してください。</p></div>', unsafe_allow_html=True)
     with st.form("login_form"):
         ie, ic = st.text_input("📧 登録メールアドレス"), st.text_input("🔑 専用アクセスコード（8桁）", type="password")
         if st.form_submit_button("🔓 ログインして解析システムを開く", use_container_width=True):
@@ -237,9 +248,15 @@ def check_member_authentication():
 check_member_authentication()
 
 # ==========================================
-# 📈 セッション初期化 ＆ モダンCSS
+# 📈 セッション初期化 ＆ スマートUI用CSS
 # ==========================================
-for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("nav_history", ["TOP"]), ("custom_search_code", ""), ("scroll_to_chat_key", None), ("scroll_council_key", None)]:
+for k, v in [
+    ("active_debates", {}), ("streamed_keys", set()), ("stock_chats", {}),
+    ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}),
+    ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"),
+    ("nav_history", ["TOP"]), ("custom_search_code", ""), ("scroll_to_chat_key", None),
+    ("scroll_council_key", None), ("daily_gacha_stock", None), ("user_prediction_pts", 120)
+]:
     if k not in st.session_state: st.session_state[k] = v
 
 def navigate_to(p: str):
@@ -258,28 +275,29 @@ def get_company_logo_html(full_code: str, name: str) -> str:
     return f'<img src="{fb}" class="company-logo-img" alt="logo" />'
 
 nav_p = st.session_state.get("navigation_page", "TOP")
-curr_page_badge = "👑 管理者コンソール" if nav_p == "ADMIN" else ("📋 監視リスト" if nav_p == "WATCHLIST" else "📊 ランキング解析")
+curr_page_badge = "👑 管理者コンソール" if nav_p == "ADMIN" else ("📋 監視リスト" if nav_p == "WATCHLIST" else "⚡ AIクオンツ解析")
 is_admin_user = (st.session_state.get("authenticated_user", "") == ADMIN_EMAIL.strip().lower())
 
 st.markdown('<div id="page_top_anchor"></div>', unsafe_allow_html=True)
 st.markdown("""
 <style>
 html, body, [class*="css"] { font-size: 15.5px; }
-.block-container { padding-top: 3.4rem !important; padding-bottom: 3rem !important; max-width: 820px !important; }
-.floating-glass-nav { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 999990; display: flex; align-items: center; gap: 8px; padding: 5px 14px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 999px; white-space: nowrap; }
-.floating-glass-nav a { color: #f8fafc !important; text-decoration: none !important; font-size: 12px; font-weight: 600; }
+.block-container { padding-top: 3.4rem !important; padding-bottom: 3rem !important; max-width: 840px !important; }
+.floating-glass-nav { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 999990; display: flex; align-items: center; gap: 10px; padding: 6px 16px; background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(14px); border: 1px solid rgba(56, 189, 248, 0.28); border-radius: 999px; white-space: nowrap; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+.floating-glass-nav a { color: #f8fafc !important; text-decoration: none !important; font-size: 12px; font-weight: 700; }
 
+/* モダン・ピル型ラジオタブ */
 div[data-testid="stRadio"] > div[role="radiogroup"] {
-    display: flex !important; flex-wrap: wrap !important; gap: 8px !important;
-    background: linear-gradient(135deg, #0f172a, #1e293b) !important;
-    padding: 12px !important; border-radius: 16px !important;
+    display: flex !important; flex-wrap: wrap !important; gap: 7px !important;
+    background: linear-gradient(135deg, #090d16, #1e293b) !important;
+    padding: 11px !important; border-radius: 16px !important;
     border: 1px solid rgba(251, 191, 36, 0.28) !important;
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18) !important;
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-    background: rgba(255, 255, 255, 0.07) !important;
+    background: rgba(255, 255, 255, 0.06) !important;
     border: 1px solid rgba(255, 255, 255, 0.14) !important;
-    border-radius: 999px !important; padding: 6px 15px !important;
+    border-radius: 999px !important; padding: 6px 14px !important;
     margin: 0 !important; transition: all 0.2s ease !important; cursor: pointer !important;
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
@@ -287,7 +305,7 @@ div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child { display: none !important; }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label p {
-    color: #e2e8f0 !important; font-size: 13px !important; font-weight: 700 !important; margin: 0 !important;
+    color: #e2e8f0 !important; font-size: 12.8px !important; font-weight: 700 !important; margin: 0 !important;
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
     background: linear-gradient(135deg, #f59e0b, #e11d48) !important;
@@ -296,6 +314,20 @@ div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
 div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) p {
     color: #ffffff !important; font-weight: 900 !important;
 }
+
+/* スマート・コマンドデッキ枠 */
+.smart-deck-card {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 16px; padding: 14px 16px; margin-bottom: 12px;
+    color: #f8fafc; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.15);
+}
+.gacha-card {
+    background: linear-gradient(135deg, #2e1065 0%, #0f172a 100%);
+    border: 1.5px solid #c084fc; border-radius: 16px; padding: 16px; margin-bottom: 14px;
+    color: #f8fafc !important; box-shadow: 0 8px 25px rgba(147, 51, 234, 0.25);
+}
+.gacha-card * { color: #f8fafc; }
 
 .company-logo-img { width: 38px; height: 38px; border-radius: 9px; object-fit: contain; background: #fff; padding: 2px; border: 1px solid #e2e8f0; }
 .rank-card, .search-result-card { background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important; color: #0f172a !important; border-radius: 16px; padding: 18px; margin-bottom: 13px; box-shadow: 0 6px 20px rgba(15,23,42,0.07); border: 1px solid #e2e8f0; border-left: 6px solid #e11d48; }
@@ -321,32 +353,36 @@ div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) p
 .metrics-row { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 12px; background: #f1f5f9 !important; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; }
 .trade-plan-box { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; background: #fff !important; padding: 9px 6px; border-radius: 10px; border: 1px solid #cbd5e1; text-align: center; }
 .sizing-box { background: linear-gradient(90deg, #f0fdf4, #dcfce7) !important; border: 1px solid #86efac; border-radius: 9px; padding: 8px 12px; margin-top: 8px; font-size: 12.5px; color: #166534 !important; }
-.ai-council-box { background: linear-gradient(135deg, #090d16, #1e293b); color: #f8fafc !important; border-radius: 14px; padding: 16px; margin-top: 8px; margin-bottom: 12px; border: 1px solid rgba(251,191,36,0.28); }
+.ai-council-box { background: linear-gradient(135deg, #090d16, #1e293b); color: #f8fafc !important; border-radius: 14px; padding: 16px; margin-top: 8px; margin-bottom: 12px; border: 1px solid rgba(56,189,248,0.35); }
 .ai-council-box * { color: #f8fafc; }
-.council-scroll-window { max-height: 580px; overflow-y: auto; padding: 12px; background: rgba(6, 10, 19, 0.78); border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; margin-bottom: 10px; scroll-behavior: smooth; }
+.council-scroll-window { max-height: 600px; overflow-y: auto; padding: 12px; background: rgba(6, 10, 19, 0.82); border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; margin-bottom: 10px; scroll-behavior: smooth; }
 .council-scroll-window::-webkit-scrollbar { width: 8px; }
 .council-scroll-window::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); border-radius: 8px; }
-.council-scroll-window::-webkit-scrollbar-thumb { background: #fbbf24; border-radius: 8px; }
-.round-divider { text-align: center; margin: 14px 0 10px 0; padding: 6px 12px; background: linear-gradient(90deg, rgba(251,191,36,0.05), rgba(251,191,36,0.28), rgba(251,191,36,0.05)); border-top: 1px solid rgba(251,191,36,0.45); border-bottom: 1px solid rgba(251,191,36,0.45); color: #fde047 !important; font-size: 12.5px; font-weight: 800; border-radius: 6px; }
+.council-scroll-window::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 8px; }
+.round-divider { text-align: center; margin: 14px 0 10px 0; padding: 6px 12px; background: linear-gradient(90deg, rgba(56,189,248,0.05), rgba(56,189,248,0.28), rgba(56,189,248,0.05)); border-top: 1px solid rgba(56,189,248,0.45); border-bottom: 1px solid rgba(56,189,248,0.45); color: #7dd3fc !important; font-size: 12.5px; font-weight: 800; border-radius: 6px; }
 .system-event-bar { text-align: center; margin: 10px 0; padding: 7px 12px; background: linear-gradient(90deg, rgba(220,38,38,0.15), rgba(220,38,38,0.4), rgba(220,38,38,0.15)); border: 1px dashed #f87171; color: #fecaca !important; font-size: 12.5px; font-weight: 800; border-radius: 8px; }
 .system-rejoin-bar { text-align: center; margin: 10px 0; padding: 7px 12px; background: linear-gradient(90deg, rgba(16,185,129,0.15), rgba(16,185,129,0.38), rgba(16,185,129,0.15)); border: 1px dashed #34d399; color: #a7f3d0 !important; font-size: 12.5px; font-weight: 800; border-radius: 8px; }
-.chat-bubble-ai { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-left: 4px solid #38bdf8; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; }
-.chat-bubble-doubt { background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(251, 191, 36, 0.35); border-left: 4px solid #f59e0b; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; }
-.chat-bubble-rebuttal { background: rgba(225, 29, 72, 0.14); border: 1px solid rgba(244, 63, 94, 0.35); border-left: 4px solid #f43f5e; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; }
-.chat-bubble-rage { background: linear-gradient(135deg, rgba(153, 27, 27, 0.38), rgba(69, 10, 10, 0.55)); border: 1.5px solid #ef4444; border-left: 6px solid #dc2626; border-radius: 12px; padding: 11px 14px; margin-bottom: 9px; font-size: 13.2px; line-height: 1.68; }
-.chat-bubble-humor { background: rgba(168, 85, 247, 0.16); border: 1px solid rgba(192, 132, 252, 0.4); border-left: 4px solid #c084fc; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; }
-.chat-bubble-agree { background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(52, 211, 153, 0.35); border-left: 4px solid #10b981; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; }
+.chat-bubble-ai { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-left: 4px solid #38bdf8; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; animation: fadeIn 0.25s ease-in; }
+.chat-bubble-doubt { background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(251, 191, 36, 0.35); border-left: 4px solid #f59e0b; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; animation: fadeIn 0.25s ease-in; }
+.chat-bubble-rebuttal { background: rgba(225, 29, 72, 0.14); border: 1px solid rgba(244, 63, 94, 0.35); border-left: 4px solid #f43f5e; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; animation: fadeIn 0.25s ease-in; }
+.chat-bubble-rage { background: linear-gradient(135deg, rgba(153, 27, 27, 0.38), rgba(69, 10, 10, 0.55)); border: 1.5px solid #ef4444; border-left: 6px solid #dc2626; border-radius: 12px; padding: 11px 14px; margin-bottom: 9px; font-size: 13.2px; line-height: 1.68; animation: fadeIn 0.25s ease-in; }
+.chat-bubble-humor { background: rgba(168, 85, 247, 0.16); border: 1px solid rgba(192, 132, 252, 0.4); border-left: 4px solid #c084fc; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; animation: fadeIn 0.25s ease-in; }
+.chat-bubble-agree { background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(52, 211, 153, 0.35); border-left: 4px solid #10b981; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; animation: fadeIn 0.25s ease-in; }
 .chat-bubble-user { background: linear-gradient(135deg, #1d4ed8, #2563eb); border: 1px solid #60a5fa; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13.5px; line-height: 1.65; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .consensus-banner { background: linear-gradient(135deg, #1e1b4b, #312e81); border: 1.5px solid #818cf8; border-radius: 12px; padding: 14px; margin-top: 10px; font-size: 13px; }
 .consensus-section { background: rgba(255, 255, 255, 0.07); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 8px 11px; margin-top: 7px; }
 .qa-answer-card { background: #ffffff !important; border: 2px solid #3b82f6; border-left: 6px solid #1d4ed8; border-radius: 12px; padding: 14px 16px; margin-top: 8px; margin-bottom: 10px; font-size: 13.5px !important; line-height: 1.75 !important; color: #0f172a !important; }
 .qa-answer-card * { color: #0f172a !important; }
 .qa-direct-box { background: #eff6ff !important; border: 1px solid #93c5fd; border-left: 4px solid #2563eb; padding: 10px 12px; border-radius: 8px; margin: 8px 0; font-size: 14px !important; }
 .qa-answer-card b, .qa-answer-card strong { color: #1d4ed8 !important; font-weight: 700; }
+.vote-gauge-wrap { background: #f1f5f9; border-radius: 999px; height: 10px; width: 100%; overflow: hidden; display: flex; margin-top: 4px; border: 1px solid #cbd5e1; }
 </style>
 <div class="floating-glass-nav">
-    <a href="#page_top_anchor">⬆️ ページTOPへ</a>
-    <span style="color:#64748b;">|</span>
+    <a href="#page_top_anchor">⬆️ TOP</a>
+    <span style="color:#475569;">|</span>
+    <a href="#smart_deck_anchor">🎛️ コマンドデッキ</a>
+    <span style="color:#475569;">|</span>
     <a href="#search_box_anchor">🔍 銘柄検索・カテゴリ</a>
 </div>
 """, unsafe_allow_html=True)
@@ -363,7 +399,7 @@ if is_admin_user:
         if ac2.button(f"👑 会員管理ページを開く ({pend_cnt}件)", use_container_width=True):
             navigate_to("ADMIN"); st.rerun()
 
-# --- サイドバー設定 ---
+# --- サイドバー設定（チェックボックスを廃止し、スマートなトグル＆カードUIへ） ---
 st.sidebar.header("🧭 ナビゲーション")
 sc1, sc2 = st.sidebar.columns(2)
 if sc1.button("⬆️ ページTOP", use_container_width=True):
@@ -375,52 +411,54 @@ if st.sidebar.button(f"📋 監視ウォッチリスト ({len(st.session_state['
 
 # --- 🤖 本物LLMエンジン（Gemini / OpenAI）設定UI ---
 st.sidebar.markdown("---")
-st.sidebar.header("🤖 7大AI 本物LLMエンジン設定")
+st.sidebar.header("🧠 LLM マルチエージェント設定")
 llm_cfg = load_llm_config()
 
-llm_provider = st.sidebar.selectbox(
-    "使用するAIプロバイダー",
+llm_provider = st.sidebar.segmented_control(
+    "AIコアエンジン選択",
     options=["gemini", "openai"],
-    format_func=lambda x: "🔵 Google Gemini API (推奨・高速)" if x == "gemini" else "🟢 OpenAI API (ChatGPT)",
+    format_func=lambda x: "🔵 Gemini API" if x == "gemini" else "🟢 OpenAI API",
+    default=llm_cfg.get("provider", "gemini")
+) if hasattr(st.sidebar, "segmented_control") else st.sidebar.radio(
+    "AIコアエンジン選択",
+    options=["gemini", "openai"],
+    format_func=lambda x: "🔵 Gemini API" if x == "gemini" else "🟢 OpenAI API",
+    horizontal=True,
     index=0 if llm_cfg.get("provider", "gemini") == "gemini" else 1
 )
 
 if llm_provider == "gemini":
     api_key_input = st.sidebar.text_input("🔑 Gemini API Key", value=llm_cfg.get("gemini_api_key", ""), type="password", placeholder="AIzaSy...")
-    model_input = st.sidebar.selectbox("🧠 Gemini モデル", ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"], index=0)
-    if st.sidebar.button("💾 AI設定を保存", use_container_width=True):
+    model_input = st.sidebar.selectbox("🧠 モデル", ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"], index=0)
+    if st.sidebar.button("💾 AIエンジン設定を保存", use_container_width=True):
         llm_cfg.update({"provider": "gemini", "gemini_api_key": api_key_input.strip(), "gemini_model": model_input})
         save_llm_config(llm_cfg)
-        st.sidebar.success("✅ Gemini API設定を保存しました！")
+        st.sidebar.success("✅ Gemini設定を保存しました！")
     active_api_key = api_key_input.strip() or os.environ.get("GEMINI_API_KEY", "")
 else:
     api_key_input = st.sidebar.text_input("🔑 OpenAI API Key", value=llm_cfg.get("openai_api_key", ""), type="password", placeholder="sk-...")
-    model_input = st.sidebar.selectbox("🧠 OpenAI モデル", ["gpt-4o-mini", "gpt-4o"], index=0)
-    if st.sidebar.button("💾 AI設定を保存", use_container_width=True):
+    model_input = st.sidebar.selectbox("🧠 モデル", ["gpt-4o-mini", "gpt-4o"], index=0)
+    if st.sidebar.button("💾 AIエンジン設定を保存", use_container_width=True):
         llm_cfg.update({"provider": "openai", "openai_api_key": api_key_input.strip(), "openai_model": model_input})
         save_llm_config(llm_cfg)
-        st.sidebar.success("✅ OpenAI API設定を保存しました！")
+        st.sidebar.success("✅ OpenAI設定を保存しました！")
     active_api_key = api_key_input.strip() or os.environ.get("OPENAI_API_KEY", "")
 
 if active_api_key:
-    st.sidebar.caption("🟢 **ステータス**: 本物のLLM API接続中")
+    st.sidebar.markdown('<div style="background:rgba(16,185,129,0.15);border:1px solid #10b981;color:#10b981;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;">🟢 7専門AIエージェント：オンライン稼働中</div>', unsafe_allow_html=True)
 else:
-    st.sidebar.warning("⚠️ APIキー未入力（入力すると本物のLLMが議論します。未入力時はフォールバック動作）")
+    st.sidebar.warning("⚠️ APIキーを設定すると本物のLLM合議が稼働します")
 
 st.sidebar.markdown("---")
-st.sidebar.header("💰 資金管理＆リスク設定")
+st.sidebar.header("💰 資金管理＆スマート表示スイッチ")
 total_capital = st.sidebar.number_input("総投資資金 (円 / ドル)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
 risk_tolerance_pct = st.sidebar.slider("1トレード許容リスク (%)", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
-
-st.sidebar.markdown("---")
-st.sidebar.header("🧬 最新クオンツ自動適応設定")
-auto_evolve_algo = st.sidebar.checkbox("🧬 最新クオンツ（Hurst・Kalman・Kyleλ）組込", value=True)
 survival_cut_pct = st.sidebar.slider("弱肉強食・各タブ選抜率 (%)", min_value=40, max_value=100, value=70, step=10)
-inst_boost_mode = st.sidebar.checkbox("🏦 機関クオンツ（VPIN・ステルス吸収）優先", value=True)
-board5ch_boost = st.sidebar.checkbox("🔥 5ch板・初動イナゴ＆シコリ玉なし優先", value=True)
-squeeze_boost_mode = st.sidebar.checkbox("💥 空売り踏み上げ（20日高値突破）優先", value=True)
-tokugai_boost_mode = st.sidebar.checkbox("🚨 翌朝『特買い』・夜間PTS連動を優先", value=True)
-show_5m_chart = st.sidebar.checkbox("合議パネル内に5分足＆VWAPチャートを描画", value=True)
+
+# 四角いチェックボックスではなく iOS風スマートトグル (st.toggle) を採用
+toggle_fn = getattr(st.sidebar, "toggle", st.sidebar.checkbox)
+live_stream_mode = toggle_fn("🎬 会議のリアルタイム1人ずつ発言演出", value=True)
+show_5m_chart = toggle_fn("📈 合議パネル内に5分足＆VWAP描画", value=True)
 
 if st.session_state.get("navigation_page") == "ADMIN" and is_admin_user:
     render_admin_full_page()
@@ -451,7 +489,7 @@ STOCK_POOL = {
     ],
     "AI・防衛・主力": [
         {"code": "9984.T", "name": "ソフトバンクG", "theme": "AI投資群・Arm親会社。先物連動の主役"},
-        {"code": "3778.T", "name": "さくらネット", "theme": "国策GPUクラウド。5chデイトレ板の常連急騰株"},
+        {"code": "3778.T", "name": "さくらネット", "theme": "国策GPUクラウド。デイトレ資金集中の常連急騰株"},
         {"code": "7011.T", "name": "三菱重工業", "theme": "防衛・宇宙・原発の国策ど真ん中主力株"},
         {"code": "7012.T", "name": "川崎重工業", "theme": "防衛装備・航空エンジン主力"},
         {"code": "7013.T", "name": "IHI", "theme": "航空宇宙・防衛エンジン主力"},
@@ -480,8 +518,8 @@ STOCK_POOL = {
         {"code": "CEG", "name": "コンステレーション (米)", "theme": "米最大の原子力発電・AI電力供給"},
         {"code": "GEV", "name": "GEヴェルノバ (米)", "theme": "ガスタービン・送電網設備の世界リーダー"}
     ],
-    "宇宙・イーロン": [
-        {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星。5chデイトレ板で人気集中の筆頭"},
+    "宇宙・次世代": [
+        {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星。個人デイトレ資金集中の筆頭"},
         {"code": "186A.T", "name": "アストロスケール", "theme": "宇宙デブリ除去の世界的ベンチャー"},
         {"code": "9348.T", "name": "ispace", "theme": "月面開発輸送。イベント前後の出来高急増株"},
         {"code": "9412.T", "name": "スカパーJSAT", "theme": "衛星通信・防衛宇宙監視"},
@@ -501,7 +539,7 @@ STOCK_POOL = {
         {"code": "5243.T", "name": "ノート", "theme": "AI学習・クリエイターエコノミー小型株"},
         {"code": "247A.T", "name": "Aiロボティクス", "theme": "AIマーケティング急成長グロース"},
         {"code": "153A.T", "name": "カウリス", "theme": "不正アクセス検知セキュリティ小型株"},
-        {"code": "3350.T", "name": "メタプラネット", "theme": "暗号資産トレジャリー。5ch板の超ボラティリティ常連株"},
+        {"code": "3350.T", "name": "メタプラネット", "theme": "暗号資産トレジャリー。超ボラティリティ常連株"},
         {"code": "IONQ", "name": "アイオンQ (米)", "theme": "商用量子コンピューター代表格。空売り踏み上げ強烈"},
         {"code": "RGTI", "name": "リゲッティ (米)", "theme": "量子コンピューター小型急騰株"},
         {"code": "SOUN", "name": "サウンドハウンドAI (米)", "theme": "音声AI認識の小型急騰株"},
@@ -634,7 +672,7 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         inst_score = int(min(max(round(inst_raw), 15), 99))
 
         b5_raw = 50.0 + (min(vol_acc, 3.0) - 1.0) * 18.0 + (c_pos - 0.5) * 30.0 - (25.0 if upper_sh >= 0.38 else 0.0) + (15.0 if cond_5ch.iloc[-1] else 0.0)
-        board5ch_status = f"🚀 5ch板・初動資金集中 (5日加速 {vol_acc:.2f}倍 / 引け位置{int(c_pos*100)}%)" if b5_raw >= 62 else f"⚖️ 5ch板・通常需給 (上ヒゲ{int(upper_sh*100)}% / 下ヒゲ{int(lower_sh*100)}%)"
+        board5ch_status = f"🚀 短期モメンタム・初動資金集中 (5日加速 {vol_acc:.2f}倍 / 引け位置{int(c_pos*100)}%)" if b5_raw >= 62 else f"⚖️ 短期モメンタム・通常需給 (上ヒゲ{int(upper_sh*100)}% / 下ヒゲ{int(lower_sh*100)}%)"
         board5ch_score = int(min(max(round(b5_raw), 15), 99))
 
         sq_raw = 42.0 + (22.0 if dist_h20 >= 0 else (14.0 if dist_h20 >= -2.5 else 4.0)) + min(float(latest['Vol_Ratio']), 3.0) * 8.0 + (c_pos - 0.5) * 24.0
@@ -642,7 +680,7 @@ def analyze_single_dataframe(df_raw, code, name, theme, genre, macro, boost_inst
         squeeze_type = "🔥 20日高値ブレイク踏み上げ" if cond_sq.iloc[-1] else f"⚖️ 20日高値乖離 {dist_h20:+.2f}%"
 
         if cond_inst.iloc[-1]: signal, sub = "🏦 機関VPINステルス買い＋VWAP順行", history[cond_inst.reindex(history.index, fill_value=False)]
-        elif cond_5ch.iloc[-1]: signal, sub = "🔥 5ch初動イナゴ集中＋高値引け", history[cond_5ch.reindex(history.index, fill_value=False)]
+        elif cond_5ch.iloc[-1]: signal, sub = "🔥 初動モメンタム集中＋高値引け", history[cond_5ch.reindex(history.index, fill_value=False)]
         elif cond_sq.iloc[-1]: signal, sub = "🚀 20日高値ブレイク・踏み上げ", history[cond_sq.reindex(history.index, fill_value=False)]
         elif latest['Day_Return'] > 0: signal, sub = "📈 陽線トレンド継続", history[history['Day_Return'] > 0]
         else: signal, sub = "☁️ 押し目・調整反発狙い", history[history['Day_Return'] <= 0]
@@ -821,27 +859,27 @@ def fetch_realtime_deep_research(full_code: str, fallback_r: dict) -> dict:
     return data
 
 # ==========================================
-# 🧠 本物のLLM API（Gemini / OpenAI）通信＆7大AIマルチペルソナ合議エンジン
+# 🧠 嘘のない「7人の専門AIクオンツ・エージェント」合議エンジン
 # ==========================================
 AI_ROSTER = {
-    "Claude":     "🟠 Claude (数理リスク・資金管理)",
-    "Grok":       "🔴 Grok (5ch板・踏み上げ特攻)",
-    "ChatGPT":    "🟢 ChatGPT (波形・オシレーター)",
-    "Gemini":     "🔵 Gemini (マクロ・夜間PTS気配)",
-    "Perplexity": "🌐 Perplexity (板ミクロ・VPIN監査)",
-    "NotebookLM": "📓 NotebookLM (過去6ヶ月統計照合)",
-    "Genspark":   "✨ Genspark (総括ディレクター)"
+    "AEGIS":   "🛡️ AEGIS (数理リスク・ドローダウン防衛官)",
+    "IGNIS":   "🔥 IGNIS (短期モメンタム・踏み上げ特攻官)",
+    "TECHNOS": "📐 TECHNOS (波形構造・オシレーター解析官)",
+    "MACRO":   "🌐 MACRO (日米先物・夜間PTSギャップ戦略官)",
+    "MICRO":   "🔬 MICRO (機関VPIN・板オーダーフロー監査官)",
+    "CHRONOS": "📊 CHRONOS (過去6ヶ月バックテスト統計照合官)",
+    "NEXUS":   "👑 NEXUS (マルチエージェント総括ディレクター)"
 }
 
 AI_PERSONA_RULES = """
-【7大AIアナリストの厳密な人格・専門性・口調定義】
-1. Claude: 数理リスク・ドローダウン管理・ボリンジャー過熱や上ヒゲの危険性を重視。知的で冷静、やや辛口な丁寧語・女性的トーン（「〜ね」「〜かしら」「私のリスク計算では〜」）。楽観論に釘を刺す役。
-2. Grok: 5chデイトレ板の熱狂・出来高加速・空売り踏み上げ（20日高値突破）・特買い気配を重視する超攻撃型。べらんめえ調・男性的で熱い口調（「〜だぜ！」「〜だろ！」「日和ってんじゃねぇ！」）。慎重派のClaudeやNotebookLMと衝突しやすい。
-3. ChatGPT: ローソク足の実体・上下ヒゲ・RSI・MACD・移動平均線乖離をバランスよく読むテクニカル分析官。穏やかで論理的な口調（「〜ですね」「〜と見ています」）。
-4. Gemini: 日経先物・米SOX指数・ドル円・夜間PTS理論気配のギャップを重視するマクロストラテジスト。スマートで分析的な口調（「〜だよ」「〜の観点から言うと」）。
-5. Perplexity: VPIN（大口注文偏り）・Amihud流動性弾性・Kyleλ・Hurst指数・カルマンフィルタ乖離など板ミクロ構造を監査するクオンツ監査官。事実ベースで鋭く切り込む口調（「データを見ると〜」「板の裏側では〜」）。
-6. NotebookLM: 過去6ヶ月の同条件サンプル勝率・ペイオフレシオ・期待値エッジだけを信じる統計原理主義者。感情論を嫌うクールな口調（「過去統計では〜」「確率論で言えば〜」）。
-7. Genspark: 全員の激しい議論や対立をユーモアも交えて仲裁し、寄付き・5分足VWAP・20日高値ブレイクの「3段階分割エントリー戦略」に統合する議長ディレクター。
+【7人の専門AIクオンツ・エージェントの厳密な役割・人格・口調定義】
+1. AEGIS (イージス): 数理リスク・資金防衛・ボリンジャー過熱や上ヒゲの危険性を監視するリスク管理官。知的で冷静、やや辛口な女性的トーン（「〜ね」「〜かしら」「私のリスク計算では〜」）。IGNISの無謀な突撃にブレーキをかける。
+2. IGNIS (イグニス): 出来高急増・20日高値ブレイクの空売り踏み上げ・特買い気配を重視する超攻撃型モメンタム特攻官。熱血で男性的、荒々しい口調（「〜だぜ！」「〜だろ！」「日和ってんじゃねぇ！」）。慎重派のAEGISやCHRONOSと激しく衝突しやすい。
+3. TECHNOS (テクノス): ローソク足の実体・上下ヒゲ・RSI・MACD・移動平均線乖離を精密に読むテクニカル解析官。穏やかで論理的な口調（「〜ですね」「チャート構造からは〜」）。
+4. MACRO (マクロ): 日経先物・米SOX指数・ドル円・夜間PTS理論気配のギャップを重視するマクロ戦略官。スマートで俯瞰的な口調（「〜だよ」「グローバル資金の観点では〜」）。
+5. MICRO (ミクロ): VPIN（大口注文偏り）・Amihud流動性弾性・Kyleλ・Hurst指数・カルマンフィルタ乖離など板ミクロ構造を監査するクオンツ監査官。鋭く事実を切り取る口調（「板の裏側を見ると〜」「オーダーフロー上は〜」）。
+6. CHRONOS (クロノス): 過去6ヶ月の同条件サンプル勝率・ペイオフレシオ・期待値エッジだけを信じる統計原理主義者。感情論を嫌うクールな口調（「過去統計では〜」「確率論で言えば〜」）。
+7. NEXUS (ネクサス): 全エージェントの激しい議論や対立をユーモアも交えて仲裁し、寄付き・5分足VWAP・20日高値ブレイクの「3段階分割エントリー戦略」に統合する議長ディレクター。
 """
 
 def _build_stock_quant_context(r: dict, m5=None, deep: dict = None) -> str:
@@ -861,7 +899,7 @@ def _build_stock_quant_context(r: dict, m5=None, deep: dict = None) -> str:
 ・直近3日出来高推移: {r['vol_trend_str']} (本日出来高倍率 {r['vol_ratio']}倍)
 ・オシレーター＆移動平均: RSI {r['rsi']} / MACD {r['macd_state']} / ボリンジャー {r['bb_z']:+.2f}σ / 5日線乖離 {r['ma5_dev']:+.2f}% / 20日線乖離 {r['ma20_dev']:+.2f}%
 ・機関＆最新クオンツ指標: 機関スコア {r['inst_score']}点 ({r['inst_status']}) / VPIN {r['vpin']:+.2f} / Amihud弾性 {r['amihud_ratio']}倍 / Hurst指数 {r['hurst']} / カルマン推計乖離 {r['kalman_bull_pct']:+.2f}% / Kyleλ {r['kyle_lambda']}
-・5ch需給＆踏み上げ: 5chスコア {r['board5ch_score']}点 / 踏み上げスコア {r['squeeze_score']}点 ({r['squeeze_type']}) / 20日高値ブレイクライン {r['squeeze_trigger_price']} (現在値からの距離 {r['dist_to_high20']:+.2f}%)
+・短期需給＆踏み上げ: 短期需給スコア {r['board5ch_score']}点 / 踏み上げスコア {r['squeeze_score']}点 ({r['squeeze_type']}) / 20日高値ブレイクライン {r['squeeze_trigger_price']} (現在値からの距離 {r['dist_to_high20']:+.2f}%)
 ・夜間PTS＆翌朝特買い: 夜間PTS理論気配 {r['pts_est_price']} ({r['pts_gap_pct']:+.2f}%) / 特買い発生確率 {r['tokugai_prob']}% ({r['tokugai_status']}) / 特買い基準線 {r['tokugai_line']}
 ・VWAP基準線: 5分足VWAP {vwap_ref} {vwap_dev} / 20日VWAP {r['vwap_price']}
 ・バックテスト勝率(過去同条件 {r['count']}): 総合勝率 {r['total_win_rate']}% (翌朝GU勝率 {r['prob']}% / 寄り後陽線勝率 {r['intraday_win_rate']}% / 順張り勝率 {r['trend_win_rate']}%) / ペイオフレシオ {r['payoff']}倍 / 期待値エッジ {r['edge']:+.2f}%
@@ -890,7 +928,6 @@ def _extract_json_from_text(raw_text: str):
         raise
 
 def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float = 0.85) -> tuple:
-    """Gemini API または OpenAI API を直接呼び出して構造化JSONを取得する"""
     cfg = load_llm_config()
     provider = cfg.get("provider", "gemini")
 
@@ -898,15 +935,12 @@ def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float 
         api_key = cfg.get("gemini_api_key", "").strip() or os.environ.get("GEMINI_API_KEY", "").strip()
         model = cfg.get("gemini_model", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
         if not api_key:
-            return None, "Gemini APIキーが未設定です。左サイドバーの「🤖 7大AI 本物LLMエンジン設定」に入力してください。"
+            return None, "Gemini APIキーが未設定です。左サイドバーの「🧠 LLM マルチエージェント設定」に入力してください。"
         url = f"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={urllib.parse.quote(api_key)}"
         payload = {
             "systemInstruction": {"parts": [{"text": system_prompt}]},
             "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
-            "generationConfig": {
-                "temperature": temperature,
-                "responseMimeType": "application/json"
-            }
+            "generationConfig": {"temperature": temperature, "responseMimeType": "application/json"}
         }
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
         try:
@@ -919,28 +953,19 @@ def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float 
             return None, f"Gemini API HTTPエラー ({he.code}): {err_body[:200]}"
         except Exception as e:
             return None, f"Gemini API通信エラー: {str(e)}"
-
     else:
         api_key = cfg.get("openai_api_key", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip()
         model = cfg.get("openai_model", "gpt-4o-mini").strip() or "gpt-4o-mini"
         if not api_key:
-            return None, "OpenAI APIキーが未設定です。左サイドバーの「🤖 7大AI 本物LLMエンジン設定」に入力してください。"
+            return None, "OpenAI APIキーが未設定です。左サイドバーの「🧠 LLM マルチエージェント設定」に入力してください。"
         url = "[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)"
         payload = {
             "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
+            "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
             "temperature": temperature,
             "response_format": {"type": "json_object"}
         }
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
-            method="POST"
-        )
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=45) as resp:
                 res_data = json.loads(resp.read().decode("utf-8"))
@@ -963,8 +988,8 @@ def _normalize_llm_turns(turns_raw: list, scores_map: dict, final_s: int) -> lis
         if item.get("system_rejoin"):
             dialogue.append({"system_rejoin": str(item["system_rejoin"])})
             continue
-        sp_key = str(item.get("speaker_key", "Genspark")).strip()
-        sp_label = AI_ROSTER.get(sp_key, f"✨ {sp_key}")
+        sp_key = str(item.get("speaker_key", "NEXUS")).strip().upper()
+        sp_label = AI_ROSTER.get(sp_key, f"👑 {sp_key}")
         if item.get("is_rejoin_speech"):
             sp_label = f"{sp_label} (復帰)"
         sc = int(item.get("score", scores_map.get(sp_key, final_s)))
@@ -976,25 +1001,25 @@ def _normalize_llm_turns(turns_raw: list, scores_map: dict, final_s: int) -> lis
             dialogue.append({"speaker": sp_label, "score": sc, "tone": tone, "text": txt})
     return dialogue
 
-def run_7ai_council_algorithm(r: dict, m5=None, extra_seed: int = 0) -> dict:
+def run_7ai_council_algorithm(r: dict, m5=None, extra_seed: int = 0, debate_style: str = "⚖️ 標準バランス") -> dict:
     vwap_ref = m5['vwap5_price'] if m5 else r['vwap_price']
     total_lot = r['lot_info']['shares']
     lot_p1 = max(1, int(round(total_lot * 0.35)))
     lot_p2 = max(0, int(round(total_lot * 0.40)))
     lot_p3 = max(0, total_lot - lot_p1 - lot_p2)
 
-    claude_s  = int(min(max(round(50 + (r["total_win_rate"] - 50) * 0.8 + (r["payoff"] - 1.0) * 15 - r["upper_shadow_pct"] * 0.2), 20), 99))
-    grok_s    = int(min(max(round(45 + (r["board5ch_score"] - 50) * 0.45 + (r["squeeze_score"] - 50) * 0.35 + r["tokugai_prob"] * 0.15), 20), 99))
-    chatgpt_s = int(min(max(round((r["ai_score"] + r["inst_score"] + claude_s) / 3.0), 20), 99))
-    gemini_s  = int(min(max(round(50 + r["pts_gap_pct"] * 12 + (r["inst_score"] - 50) * 0.35), 20), 99))
-    perp_s    = int(min(max(round(r["inst_score"] * 0.55 + r["board5ch_score"] * 0.45), 20), 99))
-    gensp_s   = int(min(max(round((claude_s + grok_s + chatgpt_s + gemini_s + perp_s) / 5.0), 20), 99))
-    nblm_s    = int(min(max(round(48 + (r["prob"] - 50) * 0.9 + (r["payoff"] - 1.0) * 12), 20), 99))
-    scores_map = {"Claude": claude_s, "Grok": grok_s, "ChatGPT": chatgpt_s, "Gemini": gemini_s, "Perplexity": perp_s, "NotebookLM": nblm_s, "Genspark": gensp_s}
+    aegis_s   = int(min(max(round(50 + (r["total_win_rate"] - 50) * 0.8 + (r["payoff"] - 1.0) * 15 - r["upper_shadow_pct"] * 0.2), 20), 99))
+    ignis_s   = int(min(max(round(45 + (r["board5ch_score"] - 50) * 0.45 + (r["squeeze_score"] - 50) * 0.35 + r["tokugai_prob"] * 0.15), 20), 99))
+    technos_s = int(min(max(round((r["ai_score"] + r["inst_score"] + aegis_s) / 3.0), 20), 99))
+    macro_s   = int(min(max(round(50 + r["pts_gap_pct"] * 12 + (r["inst_score"] - 50) * 0.35), 20), 99))
+    micro_s   = int(min(max(round(r["inst_score"] * 0.55 + r["board5ch_score"] * 0.45), 20), 99))
+    nexus_s   = int(min(max(round((aegis_s + ignis_s + technos_s + macro_s + micro_s) / 5.0), 20), 99))
+    chronos_s = int(min(max(round(48 + (r["prob"] - 50) * 0.9 + (r["payoff"] - 1.0) * 12), 20), 99))
+    scores_map = {"AEGIS": aegis_s, "IGNIS": ignis_s, "TECHNOS": technos_s, "MACRO": macro_s, "MICRO": micro_s, "CHRONOS": chronos_s, "NEXUS": nexus_s}
     final_s   = int(round(sum(scores_map.values()) / 7.0))
 
     default_verdict_html = (
-        f'<div class="consensus-section"><b>① 🎯 全員合意の勝率＆10段階判定：</b><b>{r["tier_label"]}</b> ｜ 合議スコア <b>{final_s}点</b> ｜ 総合勝率 <b>{r["total_win_rate"]}%</b>（翌朝GU <b>{r["prob"]}%</b> / 寄り後陽線 <b>{r["intraday_win_rate"]}%</b> / 順張り <b>{r["trend_win_rate"]}%</b>）</div>'
+        f'<div class="consensus-section"><b>① 🎯 全エージェント合意の勝率＆10段階判定：</b><b>{r["tier_label"]}</b> ｜ 合議スコア <b>{final_s}点</b> ｜ 総合勝率 <b>{r["total_win_rate"]}%</b>（翌朝GU <b>{r["prob"]}%</b> / 寄り後陽線 <b>{r["intraday_win_rate"]}%</b> / 順張り <b>{r["trend_win_rate"]}%</b>）</div>'
         f'<div class="consensus-section"><b>② ⚡ 3段階スプリット（分割）執行プラン（総推奨 {total_lot:,}株）：</b><br>'
         f'・<b>第1弾（{lot_p1:,}株）</b>：朝9:00寄付き（夜間理論気配 <b>{r["pts_est_price"]}</b> 目安）で打診買い<br>'
         f'・<b>第2弾（{lot_p2:,}株）</b>：5分足VWAP（<b>{vwap_ref}</b>）付近での下ヒゲ反発確認で本玉投入<br>'
@@ -1003,171 +1028,133 @@ def run_7ai_council_algorithm(r: dict, m5=None, extra_seed: int = 0) -> dict:
     )
 
     quant_context = _build_stock_quant_context(r, m5)
-    angles = [
-        "翌朝寄付きのギャップアップ追随か、VWAP押し目待ちか",
-        "機関投資家のVPINステルス買い集めと個人イナゴのシコリ玉リスクの天秤",
-        "20日高値ブレイクによる空売り踏み上げの爆発力とボリンジャー過熱感の対立",
-        "過去6ヶ月のバックテスト統計勝率と足元の板ミクロ需給（Hurst・カルマン）のズレ"
-    ]
-    chosen_angle = angles[extra_seed % len(angles)]
+    style_instruction = {
+        "⚖️ 標準バランス": "データ分析から自然に疑問・反論が生まれ、最後はユーモアを交えて合理的な3段階分割案に収束させてください。",
+        "🔥 激論・徹底検証": "強気特攻のIGNISとリスク防衛のAEGIS・CHRONOSがバチバチに衝突し、ヒートアップ（tone: 'rage'）や一時退席イベント（system_event / system_rejoin）も交えた白熱の激論を展開してください。",
+        "🛡️ 超辛口・リスク監査": "高値掴みやダマシのリスク、上ヒゲやボリンジャー過熱感など「負けるシナリオ」を徹底的に洗い出し、最も安全な引きつけエントリー条件を厳しく議論してください。"
+    }.get(debate_style, "")
 
-    system_prompt = f"""あなたは株式クオンツ解析システムの「7大AI合議ディベートエンジン」です。
-定型文ではなく、与えられた銘柄の実際の数値（現在値、ローソク足、上ヒゲ/下ヒゲ、VPIN、Hurst、カルマン乖離、20日高値乖離、夜間PTS気配、勝率、推奨ロット等）を深く読み解き、7つのAIそれぞれの専門視点と口調でリアルなディベート（7〜8ターン）を生成してください。
+    system_prompt = f"""あなたは株式クオンツ解析システムの「7専門AIエージェント合議エンジン」です。
+与えられた銘柄の実際の数値（現在値、ローソク足、上ヒゲ/下ヒゲ、VPIN、Hurst、カルマン乖離、20日高値乖離、夜間PTS気配、勝率、推奨ロット等）を深く読み解き、7つの専門エージェントそれぞれの視点と口調でリアルなディベート（7〜8ターン）を生成してください。
 
 {AI_PERSONA_RULES}
 
-【ディベートの構成ルール】
-1. 序盤（1〜2ターン目）はデータに基づく冷静な分析（tone: "normal"）から始める。
-2. 中盤（3〜5ターン目）で、前の発言者の楽観論または慎重論の「具体的な数値の死角」に引っかかり（tone: "doubt"）、そこから反論（tone: "rebuttal"）や本気の白熱した口論（tone: "rage"）へ自然に発展させる。
-   ※上ヒゲやボリンジャー過熱、あるいは踏み上げチャンスなど対立が大きい場合は、途中に1回だけ `"system_event": "🚪 [AI名] が議論に腹を立てて一時退席しました"` と `"system_rejoin": "🔔 メンバーが折衷データを提示し、[AI名] が席に戻りました"` を挟んでもよい（任意）。
-3. 終盤はユーモアのある仲裁（tone: "humor"）を経て、最後（最終ターン）は必ず `"speaker_key": "Genspark"` が `"tone": "agree"` で3段階分割エントリー（第1弾 {lot_p1:,}株 / 第2弾 {lot_p2:,}株 / 第3弾 {lot_p3:,}株）と利確・損切りラインを総括して締める。
-4. セリフ内の重要な数値は `<b>...</b>` タグで囲んで強調すること。
+【今回のディベート温度感指定】
+{style_instruction}
+
+【構成ルール】
+1. `speaker_key` には必ず `AEGIS`, `IGNIS`, `TECHNOS`, `MACRO`, `MICRO`, `CHRONOS`, `NEXUS` のいずれかを指定する。
+2. 序盤は `tone: "normal"` でデータ提示、中盤は `tone: "doubt"`（疑問）、`"rebuttal"`（反論）、`"rage"`（激論）、終盤は `"humor"`（仲裁）を経て、最終ターンは必ず `"speaker_key": "NEXUS"` が `"tone": "agree"` で3段階分割エントリー（第1弾 {lot_p1:,}株 / 第2弾 {lot_p2:,}株 / 第3弾 {lot_p3:,}株）を総括して締める。
+3. セリフ内の重要な数値は `<b>...</b>` タグで囲んで強調すること。
 
 【厳守するJSON出力フォーマット】
 {{
   "final_score": {final_s},
   "turns": [
-    {{"speaker_key": "Perplexity", "score": {perp_s}, "tone": "normal", "text": "セリフ（<b>数値</b>を含む）"}},
-    {{"speaker_key": "Claude", "score": {claude_s}, "tone": "doubt", "text": "前の発言への具体的な疑問..."}},
-    {{"speaker_key": "Grok", "score": {grok_s}, "tone": "rebuttal", "text": "具体的な数値を使った反論..."}},
-    ...
-    {{"speaker_key": "Genspark", "score": {final_s}, "tone": "agree", "text": "最終総括..."}}
+    {{"speaker_key": "MICRO", "score": {micro_s}, "tone": "normal", "text": "セリフ（<b>数値</b>を含む）"}},
+    {{"speaker_key": "AEGIS", "score": {aegis_s}, "tone": "doubt", "text": "前の発言への具体的な疑問..."}},
+    {{"speaker_key": "IGNIS", "score": {ignis_s}, "tone": "rebuttal", "text": "具体的な数値を使った反論..."}},
+    {{"speaker_key": "NEXUS", "score": {final_s}, "tone": "agree", "text": "最終総括..."}}
   ],
-  "consensus_summary": "7大AIが合意したこの銘柄ならではの核心ポイント（1〜2文、<b>タグ使用可）"
+  "consensus_summary": "7エージェントが合意したこの銘柄ならではの核心ポイント（1〜2文、<b>タグ使用可）"
 }}"""
 
-    user_prompt = f"""以下の銘柄データをもとに、今回の焦点テーマ「{chosen_angle}」（シード値: {extra_seed}）で7大AIのリアルな合議ディベートJSONを生成してください。
-各AIの初期算出スコア目安: {json.dumps(scores_map, ensure_ascii=False)}
+    user_prompt = f"""以下の銘柄データをもとに、合議ディベートJSON（シード:{extra_seed} / モード:{debate_style}）を生成してください。
+各エージェントの初期スコア目安: {json.dumps(scores_map, ensure_ascii=False)}
 
 {quant_context}"""
 
     llm_json, err_msg = call_real_llm_json(system_prompt, user_prompt, temperature=0.85)
 
-    dialogue = [{"round": f"💬 『{r['name']}（{r['code']}）』7大AI リアルタイムLLM合議セッション"}]
+    dialogue = [{"round": f"⚡ 『{r['name']}（{r['code']}）』7専門AIエージェント 合議セッション（{debate_style}）"}]
     if llm_json and isinstance(llm_json.get("turns"), list) and len(llm_json["turns"]) >= 3:
         dialogue.extend(_normalize_llm_turns(llm_json["turns"], scores_map, final_s))
         final_s = int(llm_json.get("final_score", final_s))
         custom_sum = str(llm_json.get("consensus_summary", "")).strip()
-        verdict_html = (f'<div class="consensus-section"><b>🧠 LLM合議の核心結論：</b>{custom_sum}</div>' if custom_sum else "") + default_verdict_html
+        verdict_html = (f'<div class="consensus-section"><b>🧠 マルチエージェント合議の核心結論：</b>{custom_sum}</div>' if custom_sum else "") + default_verdict_html
     else:
-        # APIキー未設定時・通信エラー時の明示メッセージ＋最低限のデータ要約
         dialogue.append({
-            "speaker": "✨ システム通知 (LLM APIステータス)",
+            "speaker": "👑 NEXUS (システム通知)",
             "score": final_s,
             "tone": "doubt",
-            "text": f"⚠️ <b>{err_msg or 'LLM応答の解析に失敗しました'}</b><br>左サイドバーの「🤖 7大AI 本物LLMエンジン設定」に有効なAPIキーを設定すると、この銘柄（<b>{r['name']}</b>：現在値 <b>{r['price']}</b> / VPIN <b>{r['vpin']:+.2f}</b> / 総合勝率 <b>{r['total_win_rate']}%</b>）について本物のAI同士が議論を開始します。"
+            "text": f"⚠️ <b>{err_msg or 'LLM応答の解析に失敗しました'}</b><br>左サイドバーの「🧠 LLM マルチエージェント設定」に有効なAPIキーを設定すると、この銘柄（<b>{r['name']}</b>：現在値 <b>{r['price']}</b> / VPIN <b>{r['vpin']:+.2f}</b> / 総合勝率 <b>{r['total_win_rate']}%</b>）について本物のAIエージェント同士が議論を開始します。"
         })
         verdict_html = default_verdict_html
 
-    return {
-        "final_score": final_s,
-        "dialogue": dialogue,
-        "verdict_html": verdict_html
-    }
+    return {"final_score": final_s, "dialogue": dialogue, "verdict_html": verdict_html}
 
 def generate_extra_heated_round(r: dict, m5=None, round_num: int = 1, existing_thread: list = None) -> list:
     quant_context = _build_stock_quant_context(r, m5)
-    recent_log = ""
-    if existing_thread:
-        for t in existing_thread[-5:]:
-            if "speaker" in t and "text" in t:
-                recent_log += f"・{t['speaker']}: {t['text']}\n"
+    recent_log = "\n".join([f"・{t['speaker']}: {t['text']}" for t in (existing_thread or [])[-5:] if "speaker" in t and "text" in t])
 
-    system_prompt = f"""あなたは株式クオンツ解析の「7大AI合議ディベートエンジン」です。
-これまでの議論を踏まえ、延長ラウンド（第+{round_num}ラウンド）として「ザラ場中のアルゴ揺さぶり（見せ板・VWAP割れダマシ）への対処と後場への持続性」について、3〜4名のAIがさらに深く議論するJSONを出力してください。
+    system_prompt = f"""あなたは株式クオンツ解析の「7専門AIエージェント合議エンジン」です。
+これまでの議論を踏まえ、延長ラウンド（第+{round_num}ラウンド）として「ザラ場中のアルゴ揺さぶり（見せ板・VWAP割れダマシ）への対処と後場への持続性」について、3〜4名のエージェントがさらに深く議論するJSONを出力してください。
 {AI_PERSONA_RULES}
-セリフ内の具体的な数値は `<b>...</b>` で強調してください。
+`speaker_key` は `AEGIS`, `IGNIS`, `TECHNOS`, `MACRO`, `MICRO`, `CHRONOS`, `NEXUS` のいずれかとし、数値は `<b>...</b>` で強調してください。
 
 【JSON出力フォーマット】
 {{
   "turns": [
-    {{"speaker_key": "Claude", "score": 88, "tone": "doubt", "text": "..."}},
-    {{"speaker_key": "Grok", "score": 92, "tone": "rebuttal", "text": "..."}},
-    {{"speaker_key": "Perplexity", "score": 91, "tone": "humor", "text": "..."}},
-    {{"speaker_key": "Genspark", "score": 94, "tone": "agree", "text": "..."}}
+    {{"speaker_key": "AEGIS", "score": 88, "tone": "doubt", "text": "..."}},
+    {{"speaker_key": "IGNIS", "score": 92, "tone": "rebuttal", "text": "..."}},
+    {{"speaker_key": "MICRO", "score": 91, "tone": "humor", "text": "..."}},
+    {{"speaker_key": "NEXUS", "score": 94, "tone": "agree", "text": "..."}}
   ]
 }}"""
 
-    user_prompt = f"""【直近までの議論の流れ】
-{recent_log}
-
-{quant_context}
-
-上記を踏まえ、第+{round_num}ラウンドの白熱した延長議論をJSONで生成してください。"""
-
-    llm_json, err_msg = call_real_llm_json(system_prompt, user_prompt, temperature=0.85)
+    llm_json, err_msg = call_real_llm_json(system_prompt, f"【直近の議論】\n{recent_log}\n\n{quant_context}", temperature=0.85)
     res = [{"round": f"🔥 延長ディベート（第+{round_num}ラウンド）：ザラ場中のアルゴ揺さぶり＆後場持続性の検証"}]
     if llm_json and isinstance(llm_json.get("turns"), list):
         res.extend(_normalize_llm_turns(llm_json["turns"], {}, r["ai_score"]))
     else:
-        res.append({"speaker": "✨ システム通知", "score": 90, "tone": "doubt", "text": f"⚠️ {err_msg or '延長ラウンドの生成に失敗しました。APIキー設定をご確認ください。'}"})
+        res.append({"speaker": "👑 NEXUS", "score": 90, "tone": "doubt", "text": f"⚠️ {err_msg or '延長ラウンドの生成に失敗しました。'}"})
     return res
 
 def generate_ai_reply_to_user_opinion(user_msg: str, r: dict, m5=None, existing_thread: list = None) -> list:
     deep = fetch_realtime_deep_research(r["full_code"], r)
     quant_context = _build_stock_quant_context(r, m5, deep=deep)
-    recent_log = ""
-    if existing_thread:
-        for t in existing_thread[-5:]:
-            if "speaker" in t and "text" in t:
-                recent_log += f"・{t['speaker']}: {t['text']}\n"
+    recent_log = "\n".join([f"・{t['speaker']}: {t['text']}" for t in (existing_thread or [])[-5:] if "speaker" in t and "text" in t])
 
-    system_prompt = f"""あなたは株式クオンツ解析の「7大AI合議ディベートエンジン」です。
+    system_prompt = f"""あなたは株式クオンツ解析の「7専門AIエージェント合議エンジン」です。
 会議に参加している人間の投資家（オーナー）が発言しました。
-オーナーの発言内容・疑問・懸念に対して、最も適任な2〜3名のAI（例：リスク懸念ならClaudeとGrok、板や数値の質問ならPerplexityやGemini、最後にGensparkがまとめ等）が、リアルタイム取得データとクオンツ指標を引用しながら、直接オーナーに語りかける形で応答・議論し、売買プランを柔軟に調整してください。
+オーナーの発言・疑問に対して、最も適任な2〜3名のエージェント（MICRO, AEGIS, IGNIS, NEXUS等）がリアルタイム取得データとクオンツ指標を引用しながら直接応答し、売買プランを柔軟に調整してください。
 {AI_PERSONA_RULES}
-重要な数値や結論は `<b>...</b>` で強調してください。
+重要な数値は `<b>...</b>` で強調してください。
 
 【JSON出力フォーマット】
 {{
   "turns": [
-    {{"speaker_key": "Perplexity", "score": 95, "tone": "normal", "text": "オーナーの発言に対する直接のデータ回答..."}},
-    {{"speaker_key": "Claude", "score": 93, "tone": "doubt", "text": "オーナーの視点を踏まえたリスク評価..."}},
-    {{"speaker_key": "Genspark", "score": 95, "tone": "agree", "text": "オーナーの意見を反映した修正コンセンサス..."}}
+    {{"speaker_key": "MICRO", "score": 95, "tone": "normal", "text": "..."}},
+    {{"speaker_key": "AEGIS", "score": 93, "tone": "doubt", "text": "..."}},
+    {{"speaker_key": "NEXUS", "score": 95, "tone": "agree", "text": "..."}}
   ]
 }}"""
 
-    user_prompt = f"""【オーナー（ユーザー）の発言】
-「{user_msg}」
-
-【直近の議論】
-{recent_log}
-
-{quant_context}"""
-
-    llm_json, err_msg = call_real_llm_json(system_prompt, user_prompt, temperature=0.75)
-    res = [{"round": f"🗣️ あなたの発言「{user_msg}」に対する7大AIのリアルタイム応答"}]
+    llm_json, err_msg = call_real_llm_json(system_prompt, f"【オーナー発言】「{user_msg}」\n\n【直近の議論】\n{recent_log}\n\n{quant_context}", temperature=0.75)
+    res = [{"round": f"🗣️ あなたの発言「{user_msg}」に対するAIエージェントの応答"}]
     if llm_json and isinstance(llm_json.get("turns"), list):
         res.extend(_normalize_llm_turns(llm_json["turns"], {}, r["ai_score"]))
     else:
-        res.append({"speaker": "✨ システム通知", "score": 90, "tone": "doubt", "text": f"⚠️ {err_msg or '応答の生成に失敗しました。'}"})
+        res.append({"speaker": "👑 NEXUS", "score": 90, "tone": "doubt", "text": f"⚠️ {err_msg or '応答の生成に失敗しました。'}"})
     return res
 
-# ==========================================
-# 🔍 自由質問に対する「本物LLM＋リアルタイムYahoo!データ統合調査エンジン」
-# ==========================================
 def generate_7ai_qa_response_html(question: str, r: dict, debate: dict, lot_info: dict, m5=None) -> str:
     q_clean = unicodedata.normalize('NFKC', str(question)).strip()
     deep = fetch_realtime_deep_research(r["full_code"], r)
     quant_context = _build_stock_quant_context(r, m5, deep=deep)
     days_html = " ｜ ".join(deep["recent_days"]) if deep["recent_days"] else "取得中"
 
-    system_prompt = """あなたは7大AIクオンツ調査チームの代表アナリストです。
-ユーザーの質問に対して、提供されたリアルタイム株価データ・ファンダメンタル指標（PER/PBR/ROE/時価総額/目標株価）・最新ニュース・クオンツ指標（VPIN/Hurst/VWAP/勝率/推奨ロット）をもとに、ピンポイントかつ具体的に回答してください。
-出力は以下のJSONフォーマットを厳守し、本文中の重要な数値や結論は `<b>...</b>` で囲み、改行には `<br>` を使用してください。
+    system_prompt = """あなたはAIクオンツ調査チームの代表アナリスト（NEXUS & MICRO）です。
+ユーザーの質問に対して、提供されたリアルタイム株価データ・ファンダメンタル指標（PER/PBR/ROE/時価総額/目標株価）・最新ニュース・クオンツ指標をもとに、ピンポイントかつ具体的に回答してください。
+出力は以下のJSONフォーマットを厳守し、重要な数値や結論は `<b>...</b>` で囲み、改行には `<br>` を使用してください。
 
 【JSON出力フォーマット】
 {
-  "direct_answer_html": "🎯 <b>【直接結論】</b> 質問に対する明確で具体的な回答（<b>タグや<br>タグで読みやすく整形）",
-  "specialist_comment_html": "💡 <b>【AI専門補足】</b> 板需給・リスク管理・具体的なエントリー/利確/損切り価格に関する実戦アドバイス"
+  "direct_answer_html": "🎯 <b>【直接結論】</b> 質問に対する明確で具体的な回答（<b>タグや<br>タグで整形）",
+  "specialist_comment_html": "💡 <b>【クオンツ専門補足】</b> 板需給・リスク管理・具体的なエントリー/利確/損切り価格に関する実戦アドバイス"
 }"""
 
-    user_prompt = f"""【ユーザーの質問】
-「{q_clean}」
-
-{quant_context}"""
-
-    llm_json, err_msg = call_real_llm_json(system_prompt, user_prompt, temperature=0.5)
+    llm_json, err_msg = call_real_llm_json(system_prompt, f"【質問】「{q_clean}」\n\n{quant_context}", temperature=0.5)
 
     if llm_json and llm_json.get("direct_answer_html"):
         direct_html = llm_json["direct_answer_html"]
@@ -1189,8 +1176,28 @@ def generate_7ai_qa_response_html(question: str, r: dict, debate: dict, lot_info
     )
 
 # ==========================================
-# 💬 会議パネル描画
+# 💬 会議パネル描画（1人ずつ順番に発言するライブ・ストリーミング演出搭載）
 # ==========================================
+def _format_single_turn_html(turn: dict) -> str:
+    if "round" in turn:
+        return f'<div class="round-divider">{turn["round"]}</div>'
+    if "system_event" in turn:
+        return f'<div class="system-event-bar">{turn["system_event"]}</div>'
+    if "system_rejoin" in turn:
+        return f'<div class="system-rejoin-bar">{turn["system_rejoin"]}</div>'
+    if turn.get("is_user"):
+        return f'<div class="chat-bubble-user"><div style="font-weight:800; color:#fde047; font-size:12.5px; margin-bottom:3px;">🗣️ あなたの発言</div><div>{turn["text"]}</div></div>'
+    tone = turn.get("tone", "normal")
+    b_cls, tone_tag = {
+        "doubt":    ("chat-bubble-doubt",    '<span style="background:#d97706;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">🤔疑問・死角指摘</span>'),
+        "rebuttal": ("chat-bubble-rebuttal", '<span style="background:#e11d48;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">⚡反論</span>'),
+        "rage":     ("chat-bubble-rage",     '<span style="background:#dc2626;color:#fff;padding:1px 7px;border-radius:4px;font-size:10.5px;margin-left:5px;font-weight:900;">🔥徹底激論</span>'),
+        "humor":    ("chat-bubble-humor",    '<span style="background:#9333ea;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">😂ユーモア・仲裁</span>'),
+        "agree":    ("chat-bubble-agree",    '<span style="background:#059669;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">🤝最終コンセンサス</span>')
+    }.get(tone, ("chat-bubble-ai", '<span style="background:#0284c7;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">📊データ解析</span>'))
+    sc_badge = f' <span style="background:rgba(56,189,248,0.2);color:#7dd3fc;padding:1px 7px;border-radius:999px;font-size:11px;">評価 {turn["score"]}点</span>' if "score" in turn else ""
+    return f'<div class="{b_cls}"><div style="font-weight:800; color:#38bdf8; font-size:12.5px; margin-bottom:4px;">{turn["speaker"]}{sc_badge}{tone_tag}</div><div>{turn["text"]}</div></div>'
+
 def cb_toggle_debate(uk):
     st.session_state["active_debates"][uk] = not st.session_state["active_debates"].get(uk, False)
 
@@ -1206,92 +1213,140 @@ def cb_handle_qa_action(uk, q_text, r, debate, m5):
 def cb_clear_chat(uk):
     st.session_state["stock_chats"][uk] = []
 
+def cb_cast_vote(code, direction):
+    vdb = load_votes_db()
+    rec = vdb.get(code, {"bull": 14, "bear": 4})
+    rec[direction] = rec.get(direction, 0) + 1
+    vdb[code] = rec
+    save_votes_db(vdb)
+    st.session_state["user_prediction_pts"] = st.session_state.get("user_prediction_pts", 120) + 5
+
 @fragment_decorator
 def render_interactive_council_section(r, unique_key):
+    # --- 会員参加型：『AI vs 会員』翌朝ギャップアップ予想バトル ---
+    vdb = load_votes_db()
+    seed_b = (int(hashlib.md5(r["code"].encode()).hexdigest()[:4], 16) % 18) + 8
+    v_rec = vdb.get(r["code"], {"bull": seed_b, "bear": max(2, 22 - seed_b)})
+    total_v = max(1, v_rec["bull"] + v_rec["bear"])
+    bull_pct = int(round(v_rec["bull"] / total_v * 100))
+    bear_pct = 100 - bull_pct
+
+    st.markdown(
+        f'<div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:12px;">'
+        f'<div style="display:flex;justify-content:space-between;font-weight:800;color:#1e293b;">'
+        f'<span>⚔️ 会員みんなの翌朝予想バトル（投票で+5pt）</span>'
+        f'<span>📈強気 {bull_pct}% ({v_rec["bull"]}票) vs 📉弱気 {bear_pct}% ({v_rec["bear"]}票)</span></div>'
+        f'<div class="vote-gauge-wrap"><div style="width:{bull_pct}%;background:linear-gradient(90deg,#ef4444,#f97316);"></div><div style="width:{bear_pct}%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);"></div></div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    vc1, vc2, c1, c2 = st.columns([1.0, 1.0, 2.2, 1.2])
+    vc1.button("📈 翌朝上がる", key=f"vbull_{unique_key}", on_click=cb_cast_vote, args=(r["code"], "bull"), use_container_width=True)
+    vc2.button("📉 翌朝下がる", key=f"vbear_{unique_key}", on_click=cb_cast_vote, args=(r["code"], "bear"), use_container_width=True)
+
     is_open = st.session_state["active_debates"].get(unique_key, False)
     in_wl = r["code"] in st.session_state["watchlist"]
 
-    c1, c2 = st.columns([2.3, 1.1])
-    c1.button("🔼 7大AIディベートを閉じる" if is_open else "💬 7大AIの本物ディベートを見る＆参加", key=f"btn_{unique_key}", on_click=cb_toggle_debate, args=(unique_key,), use_container_width=True)
-    c2.button("✅ 監視登録済(解除)" if in_wl else "⭐ 監視リスト追加", key=f"wl_{unique_key}", on_click=cb_toggle_watchlist, args=(r["code"], r), use_container_width=True)
+    c1.button("🔼 AIエージェント合議を閉じる" if is_open else "⚡ 7専門AIエージェント合議を見る＆参加", key=f"btn_{unique_key}", on_click=cb_toggle_debate, args=(unique_key,), use_container_width=True)
+    c2.button("✅ 監視済(解除)" if in_wl else "⭐ 監視追加", key=f"wl_{unique_key}", on_click=cb_toggle_watchlist, args=(r["code"], r), use_container_width=True)
 
     if not is_open:
         return
 
+    # ディベート温度感セレクター（ピル型）
+    cur_style = st.session_state["debate_style_map"].get(unique_key, "⚖️ 標準バランス")
+    sel_col1, sel_col2 = st.columns([2.6, 1.1])
+    new_style = sel_col1.radio(
+        "ディベート温度感",
+        options=["⚖️ 標準バランス", "🔥 激論・徹底検証", "🛡️ 超辛口・リスク監査"],
+        horizontal=True,
+        index=["⚖️ 標準バランス", "🔥 激論・徹底検証", "🛡️ 超辛口・リスク監査"].index(cur_style),
+        key=f"style_radio_{unique_key}",
+        label_visibility="collapsed"
+    )
+    if new_style != cur_style:
+        st.session_state["debate_style_map"][unique_key] = new_style
+        new_seed = st.session_state["debate_round_seed"].get(unique_key, 0) + 1
+        st.session_state["debate_round_seed"][unique_key] = new_seed
+        st.session_state["streamed_keys"].discard(unique_key)
+        st.session_state["council_threads"].pop(unique_key, None)
+        st.rerun()
+
     m5 = fetch_5m_intraday_algo(r["full_code"])
     cur_seed = st.session_state["debate_round_seed"].get(unique_key, 0)
-
-    if unique_key not in st.session_state["council_threads"]:
-        with st.spinner(f"🧠 7大AIが『{r['name']}』のクオンツ指標を分析してリアルタイム議論中..."):
-            debate = run_7ai_council_algorithm(r, m5, extra_seed=cur_seed)
-            st.session_state["council_threads"][unique_key] = list(debate["dialogue"])
-            st.session_state["council_meta"][unique_key] = debate
-
-    meta = st.session_state["council_meta"][unique_key]
 
     if m5 and show_5m_chart:
         st.caption(f"📅 直近5分足 ({m5['chart_date']}) ｜ 5分足VWAP: **{m5['vwap5_price']}** ({m5['vwap5_dev']:+.2f}%)")
         render_5m_candlestick_chart(m5)
 
-    thread_bubbles = []
-    for turn in st.session_state["council_threads"][unique_key]:
-        if "round" in turn:
-            thread_bubbles.append(f'<div class="round-divider">{turn["round"]}</div>')
-        elif "system_event" in turn:
-            thread_bubbles.append(f'<div class="system-event-bar">{turn["system_event"]}</div>')
-        elif "system_rejoin" in turn:
-            thread_bubbles.append(f'<div class="system-rejoin-bar">{turn["system_rejoin"]}</div>')
-        elif turn.get("is_user"):
-            thread_bubbles.append(f'<div class="chat-bubble-user"><div style="font-weight:800; color:#fde047; font-size:12.5px; margin-bottom:3px;">🗣️ あなたの発言</div><div>{turn["text"]}</div></div>')
-        else:
-            tone = turn.get("tone", "normal")
-            b_cls, tone_tag = {
-                "doubt":    ("chat-bubble-doubt",    '<span style="background:#d97706;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">🤔疑問・引っかかり</span>'),
-                "rebuttal": ("chat-bubble-rebuttal", '<span style="background:#e11d48;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">⚡反論</span>'),
-                "rage":     ("chat-bubble-rage",     '<span style="background:#dc2626;color:#fff;padding:1px 7px;border-radius:4px;font-size:10.5px;margin-left:5px;font-weight:900;">🔥ヒートアップ</span>'),
-                "humor":    ("chat-bubble-humor",    '<span style="background:#9333ea;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">😂ユーモア・仲裁</span>'),
-                "agree":    ("chat-bubble-agree",    '<span style="background:#059669;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">🤝合意形成</span>')
-            }.get(tone, ("chat-bubble-ai", '<span style="background:#0284c7;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">📊データ分析</span>'))
-            sc_badge = f' <span style="background:rgba(251,191,36,0.2);color:#fde047;padding:1px 7px;border-radius:999px;font-size:11px;">評価 {turn["score"]}点</span>' if "score" in turn else ""
-            thread_bubbles.append(f'<div class="{b_cls}"><div style="font-weight:800; color:#fbbf24; font-size:12.5px; margin-bottom:4px;">{turn["speaker"]}{sc_badge}{tone_tag}</div><div>{turn["text"]}</div></div>')
+    is_first_stream = False
+    if unique_key not in st.session_state["council_threads"]:
+        with st.spinner(f"🧠 7専門AIエージェントが『{r['name']}』のクオンツ指標をリアルタイム解析中..."):
+            debate = run_7ai_council_algorithm(r, m5, extra_seed=cur_seed, debate_style=new_style)
+            st.session_state["council_threads"][unique_key] = list(debate["dialogue"])
+            st.session_state["council_meta"][unique_key] = debate
+            is_first_stream = True
 
+    meta = st.session_state["council_meta"][unique_key]
+    turns_list = st.session_state["council_threads"][unique_key]
     scroll_win_id = f"council_win_{unique_key}"
-    st.markdown(
-        f'<div class="ai-council-box">'
-        f'<div id="{scroll_win_id}" class="council-scroll-window">{"".join(thread_bubbles)}</div>'
-        f'<div class="consensus-banner"><div style="font-weight:bold; color:#fde047; font-size:14px;">🏛️ 7大AI 全員合意の最終コンセンサス</div>{meta["verdict_html"]}</div>'
-        f'</div>',
-        unsafe_allow_html=True
-    )
+
+    # 🎬 1人ずつリアルタイムに吹き出しが出現するライブ・ストリーミング演出
+    if live_stream_mode and (is_first_stream or unique_key not in st.session_state["streamed_keys"]):
+        st.session_state["streamed_keys"].add(unique_key)
+        live_box = st.empty()
+        status_bar = st.empty()
+        rendered_so_far = []
+        for idx_t, turn in enumerate(turns_list):
+            if "speaker" in turn:
+                status_bar.markdown(f"<div style='color:#38bdf8;font-size:12.5px;font-weight:800;margin-bottom:4px;'>🎙️ {turn['speaker']} が発言を入力中...</div>", unsafe_allow_html=True)
+                time.sleep(0.55)
+            rendered_so_far.append(_format_single_turn_html(turn))
+            verdict_block = f'<div class="consensus-banner"><div style="font-weight:bold; color:#fde047; font-size:14px;">🏛️ 全エージェント合意の最終コンセンサス</div>{meta["verdict_html"]}</div>' if idx_t == len(turns_list) - 1 else ""
+            live_box.markdown(
+                f'<div class="ai-council-box">'
+                f'<div id="{scroll_win_id}" class="council-scroll-window">{"".join(rendered_so_far)}</div>'
+                f'{verdict_block}</div>',
+                unsafe_allow_html=True
+            )
+        status_bar.empty()
+    else:
+        all_bubbles_html = "".join([_format_single_turn_html(t) for t in turns_list])
+        st.markdown(
+            f'<div class="ai-council-box">'
+            f'<div id="{scroll_win_id}" class="council-scroll-window">{all_bubbles_html}</div>'
+            f'<div class="consensus-banner"><div style="font-weight:bold; color:#fde047; font-size:14px;">🏛️ 全エージェント合意の最終コンセンサス</div>{meta["verdict_html"]}</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
 
     if st.session_state.get("scroll_council_key") == unique_key:
         components.html(f'<script>setTimeout(function(){{const w=window.parent.document.getElementById("{scroll_win_id}");if(w)w.scrollTop=w.scrollHeight;}},120);</script>', height=0)
         st.session_state["scroll_council_key"] = None
 
     ex_col1, ex_col2 = st.columns([1.8, 1.4])
-    if ex_col1.button("💬 議論の続きをAIに生成させる（＋1ラウンド）", key=f"ext_{unique_key}", use_container_width=True):
+    if ex_col1.button("💬 議論の続きを生成（＋1ラウンド）", key=f"ext_{unique_key}", use_container_width=True):
         nxt_r = st.session_state["debate_round_seed"].get(unique_key, 0) + 1
         st.session_state["debate_round_seed"][unique_key] = nxt_r
-        with st.spinner("🔥 7大AIが延長ラウンドを議論中..."):
+        with st.spinner("🔥 AIエージェントが延長ラウンドを議論中..."):
             ext_turns = generate_extra_heated_round(r, m5, nxt_r, st.session_state["council_threads"][unique_key])
             st.session_state["council_threads"][unique_key].extend(ext_turns)
         st.session_state["scroll_council_key"] = unique_key
         st.rerun()
-    if ex_col2.button("🔄 新しい切り口でディベートを再生成", key=f"rst_{unique_key}", use_container_width=True):
+    if ex_col2.button("🔄 別の切り口で再ディベート", key=f"rst_{unique_key}", use_container_width=True):
         new_seed = st.session_state["debate_round_seed"].get(unique_key, 0) + 1
         st.session_state["debate_round_seed"][unique_key] = new_seed
-        with st.spinner("🧠 新しいテーマ切り口で7大AIが再議論中..."):
-            new_deb = run_7ai_council_algorithm(r, m5, extra_seed=new_seed)
-            st.session_state["council_threads"][unique_key] = list(new_deb["dialogue"])
-            st.session_state["council_meta"][unique_key] = new_deb
+        st.session_state["streamed_keys"].discard(unique_key)
+        st.session_state["council_threads"].pop(unique_key, None)
         st.rerun()
 
     with st.form(f"join_council_form_{unique_key}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
-        user_opinion = jc1.text_input("会議で発言する", placeholder="ディベートに参加する（例：朝から行くべき？ / 上ヒゲが気になる / 現在の株価は？）", label_visibility="collapsed")
+        user_opinion = jc1.text_input("会議で発言する", placeholder="ディベートに割り込む（例：朝から行くべき？ / 上ヒゲが怖い / 現在の株価は？）", label_visibility="collapsed")
         if jc2.form_submit_button("💬 発言を投下", use_container_width=True) and user_opinion.strip():
             st.session_state["council_threads"][unique_key].append({"is_user": True, "text": user_opinion.strip()})
-            with st.spinner("💬 あなたの発言に対して7大AIが回答を議論中..."):
+            with st.spinner("💬 あなたの発言に対してAIエージェントが議論中..."):
                 replies = generate_ai_reply_to_user_opinion(user_opinion.strip(), r, m5, st.session_state["council_threads"][unique_key])
                 st.session_state["council_threads"][unique_key].extend(replies)
             st.session_state["scroll_council_key"] = unique_key
@@ -1354,8 +1409,8 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]} !important;">'
         f'<span>🎯 {r["tier_label"]}</span><span style="font-size:12px;">総合勝率 {r["total_win_rate"]}% ｜ Lv.{r["tier_num"]}/10</span></div>'
-        f'<div style="margin-bottom:8px;">{rank_html}<span class="score-badge">🤖 AI: {r["ai_score"]}点</span>'
-        f'<span class="inst-badge">🏦 機関: {r["inst_score"]}点</span><span class="board5ch-badge">🔥 5ch需給: {r["board5ch_score"]}点</span><span class="tokugai-badge">🚨 特買い: {r["tokugai_prob"]}%</span></div>'
+        f'<div style="margin-bottom:8px;">{rank_html}<span class="score-badge">⚡ 総合指数: {r["ai_score"]}点</span>'
+        f'<span class="inst-badge">🏦 機関VPIN: {r["inst_score"]}点</span><span class="board5ch-badge">🔥 短期需給: {r["board5ch_score"]}点</span><span class="tokugai-badge">🚨 特買い: {r["tokugai_prob"]}%</span></div>'
         f'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">'
         f'<div style="display:flex;align-items:center;gap:10px;">{logo_html}'
         f'<div><span style="font-size:17.5px;font-weight:800;color:#0f172a;">{r["name"]}</span> <span style="font-size:13px;color:#64748b;font-weight:600;">({r["code"]} / {r["genre"]})</span><br>'
@@ -1383,12 +1438,77 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     render_interactive_council_section(r, f"{key_prefix}_{r['code']}")
 
 # ==========================================
-# 🚀 メイン画面ヘッダー＆ピル型ナビゲーション描画
+# 🚀 メイン画面ヘッダー ＆ スマート・コマンドデッキ（チェックボックス全廃）
 # ==========================================
 macro_info = fetch_macro_market()
 macro_pills = "".join([f'<div style="background:rgba(255,255,255,0.08);padding:4px 10px;border-radius:8px;font-size:12px;display:inline-flex;gap:5px;"><span style="color:#cbd5e1;">{m["label"]}</span><span style="color:{"#f87171" if m["diff"]>=0 else "#60a5fa"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 
-st.markdown(f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:18px 20px;border-radius:16px;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:11.5px;color:#fbbf24;font-weight:700;">REAL LLM MULTI-AGENT DEBATE & QUANT ENGINE</div><h1 style="margin:2px 0 0 0;font-size:21px;color:#fff;font-weight:800;">📈 翌朝株価 クオンツ＆7大AI解析 Pro</h1></div><span style="background:rgba(251,191,36,0.15);color:#fde047;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;">{curr_page_badge}</span></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">{macro_pills}</div></div>', unsafe_allow_html=True)
+u_pts = st.session_state.get("user_prediction_pts", 120)
+rank_title = "👑 伝説のクオンツ" if u_pts >= 200 else ("💎 上級ストラテジスト" if u_pts >= 150 else "⚡ 認定アナリスト")
+
+st.markdown(f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:18px 20px;border-radius:16px;margin-bottom:12px;border:1px solid rgba(56,189,248,0.25);"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div><div style="font-size:11.5px;color:#38bdf8;font-weight:800;letter-spacing:0.06em;">MULTI-AGENT QUANT & ORDERFLOW SYSTEM</div><h1 style="margin:2px 0 0 0;font-size:21px;color:#fff;font-weight:900;">⚡ 翌朝株価 クオンツ＆AIエージェント合議 Pro</h1></div><div style="display:flex;gap:6px;align-items:center;"><span style="background:rgba(56,189,248,0.18);border:1px solid #38bdf8;color:#e0f2fe;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:800;">{rank_title} ({u_pts}pt)</span><span style="background:rgba(251,191,36,0.15);color:#fde047;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;">{curr_page_badge}</span></div></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">{macro_pills}</div></div>', unsafe_allow_html=True)
+
+# 🎛️ チェックボックスを置き換える「スマート・アルゴリズム・コマンドデッキ」
+st.markdown('<div id="smart_deck_anchor"></div>', unsafe_allow_html=True)
+BOOST_OPTIONS = {
+    "🧬 最新クオンツ (Hurst/Kalman)": "algo",
+    "🏦 機関VPIN・ステルス吸収": "inst",
+    "🔥 短期モメンタム・高値引け": "mom",
+    "💥 20日高値・空売り踏み上げ": "sq",
+    "🚨 翌朝『特買い』・PTS連動": "tok"
+}
+
+with st.container():
+    st.markdown('<div class="smart-deck-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><span style="font-size:13px;font-weight:800;color:#38bdf8;">🎛️ スマート・アルゴリズム・コマンドデッキ（ワンタップで解析エンジンを動的ブースト）</span><span style="font-size:11px;color:#94a3b8;">※チェックボックス不要のピル型マルチトグル</span></div></div>', unsafe_allow_html=True)
+    if hasattr(st, "pills"):
+        selected_boosts = st.pills(
+            "アルゴリズム・ブースト選択",
+            options=list(BOOST_OPTIONS.keys()),
+            default=list(BOOST_OPTIONS.keys()),
+            selection_mode="multi",
+            label_visibility="collapsed"
+        )
+    else:
+        selected_boosts = st.multiselect(
+            "アルゴリズム・ブースト選択",
+            options=list(BOOST_OPTIONS.keys()),
+            default=list(BOOST_OPTIONS.keys()),
+            label_visibility="collapsed"
+        )
+
+active_codes = {BOOST_OPTIONS[k] for k in (selected_boosts or [])}
+auto_evolve_algo = "algo" in active_codes
+inst_boost_mode = "inst" in active_codes
+board5ch_boost = "mom" in active_codes
+squeeze_boost_mode = "sq" in active_codes
+tokugai_boost_mode = "tok" in active_codes
+
+with st.spinner("🏦 国内外の母集団を一括スキャン＆最新クオンツ解析中..."):
+    genre_results, all_results = fetch_all_pool_batch(macro_info, inst_boost_mode, board5ch_boost, squeeze_boost_mode, tokugai_boost_mode, auto_evolve_algo)
+
+# 🎰 会員が毎日楽しめる「本日のAIシークレット発掘ガチャ（隠れVPINお宝株）」
+gc1, gc2, gc3 = st.columns([1.6, 1.6, 1.2])
+if gc1.button("🎰 本日の『AI隠れお宝株ガチャ』を引く", use_container_width=True):
+    hidden_gems = [x for x in all_results if x["inst_score"] >= 62 and x["total_win_rate"] >= 55] or all_results
+    st.session_state["daily_gacha_stock"] = random.choice(hidden_gems) if hidden_gems else None
+    st.session_state["user_prediction_pts"] = st.session_state.get("user_prediction_pts", 120) + 10
+if gc2.button("⚡ 激アツ急騰候補（特買い率MAX）を1銘柄召喚", use_container_width=True):
+    top_tk = sorted(all_results, key=lambda x: (x["tokugai_prob"], x["squeeze_score"]), reverse=True)
+    st.session_state["daily_gacha_stock"] = top_tk[0] if top_tk else None
+if gc3.button("✖️ ガチャ枠を閉じる", use_container_width=True):
+    st.session_state["daily_gacha_stock"] = None
+
+if st.session_state.get("daily_gacha_stock"):
+    g_stock = st.session_state["daily_gacha_stock"]
+    st.markdown(
+        f'<div class="gacha-card">'
+        f'<div style="font-size:12px;color:#e879f9;font-weight:900;">🎰 SECRET QUANT DISCOVERY (ガチャ発掘ボーナス +10pt獲得！)</div>'
+        f'<div style="font-size:18px;font-weight:900;margin-top:3px;">💎 隠れお宝発掘：『{g_stock["name"]} ({g_stock["code"]})』 — {g_stock["tier_label"]}</div>'
+        f'<div style="font-size:13px;color:#e2e8f0;margin-top:4px;">現在値 <b>{g_stock["price"]}</b> ｜ 機関VPINスコア <b>{g_stock["inst_score"]}点 (VPIN {g_stock["vpin"]:+.2f})</b> ｜ 総合勝率 <b>{g_stock["total_win_rate"]}%</b> ｜ 夜間理論気配 <b>{g_stock["pts_est_price"]}</b></div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+    render_stock_card(g_stock, is_custom=True, key_prefix="gacha")
 
 st.markdown('<div id="search_box_anchor"></div>', unsafe_allow_html=True)
 c1, c2 = st.columns([3.2, 1])
@@ -1408,9 +1528,6 @@ if st.session_state.get("custom_search_code"):
     else:
         st.error(f"銘柄「{norm_code}」のデータが見つかりませんでした。")
 
-with st.spinner("🏦 国内外の母集団を一括スキャン＆最新クオンツ解析中..."):
-    genre_results, all_results = fetch_all_pool_batch(macro_info, inst_boost_mode, board5ch_boost, squeeze_boost_mode, tokugai_boost_mode, auto_evolve_algo)
-
 def apply_survival_of_the_fittest(stock_list, cut_pct):
     if not stock_list: return [], []
     s_all = sorted(stock_list, key=lambda x: (x["tier_num"], x["total_win_rate"], x["survival_power"], x["inst_score"]), reverse=True)
@@ -1424,7 +1541,7 @@ if st.session_state.get("navigation_page", "TOP") == "WATCHLIST":
     for w_code, w_item in list(st.session_state["watchlist"].items()):
         render_stock_card(w_item, key_prefix=f"wl_page_{w_code}")
 else:
-    all_categories = ["🏆 総合TOP5", "🏦 機関VPIN・最新クオンツ", "🔥 5ch板・初動イナゴ", "🚨 特買い・夜間PTS", "💥 空売り踏み上げ", "📋 監視＆注文シート"] + [f"📂 {g}" for g in STOCK_POOL.keys()]
+    all_categories = ["🏆 総合TOP5", "🏦 機関VPIN・最新クオンツ", "🔥 短期モメンタム集中", "🚨 特買い・夜間PTS", "💥 空売り踏み上げ", "📋 監視＆注文シート"] + [f"📂 {g}" for g in STOCK_POOL.keys()]
     selected_cat = st.radio("カテゴリ切替", options=all_categories, horizontal=True, label_visibility="collapsed")
 
     surv_all, elim_all = apply_survival_of_the_fittest(all_results, survival_cut_pct)
@@ -1436,7 +1553,7 @@ else:
     elif selected_cat == "🏦 機関VPIN・最新クオンツ":
         for idx, r in enumerate(sorted(all_results, key=lambda x: (x["inst_score"], x["total_win_rate"], x["vpin"]), reverse=True)[:10], start=1):
             render_stock_card(r, rank=idx, key_prefix="inst_top")
-    elif selected_cat == "🔥 5ch板・初動イナゴ":
+    elif selected_cat == "🔥 短期モメンタム集中":
         for idx, r in enumerate(sorted(all_results, key=lambda x: (x["board5ch_score"], x["total_win_rate"]), reverse=True)[:10], start=1):
             render_stock_card(r, rank=idx, key_prefix="b5_top")
     elif selected_cat == "🚨 特買い・夜間PTS":
