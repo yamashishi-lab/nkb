@@ -121,12 +121,19 @@ check_auth()
 for k, v in [("active_debates", {}), ("streamed_keys", set()), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("exhausted_models", set()), ("nav_history", []), ("scroll_target", None), ("scroll_top_trig", 0)]:
     if k not in st.session_state: st.session_state[k] = v
 
-# --- サイドバーと絶対被らないスマート追従トップバー＆CSS ---
+# --- 極細スマート追従ミニナビバー＆リアルタイピングアニメーションCSS ---
 st.markdown("""<div id="page_top_anchor"></div><style>
-html,body,[class*="css"]{font-size:15px;} .block-container{padding-top:3.8rem!important;padding-bottom:3rem!important;max-width:840px!important;}
-div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker){position:sticky!important;top:2.85rem!important;z-index:9990!important;background:rgba(15,23,42,0.88)!important;backdrop-filter:blur(14px)!important;padding:6px 12px!important;border-radius:12px!important;border:1px solid rgba(56,189,248,0.35)!important;box-shadow:0 6px 20px rgba(0,0,0,0.35)!important;margin-bottom:8px!important;}
-div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker) button{background:linear-gradient(135deg,#1e293b,#0f172a)!important;color:#f8fafc!important;border:1px solid rgba(56,189,248,0.4)!important;border-radius:999px!important;height:2.1rem!important;min-height:2.1rem!important;padding:0 10px!important;font-size:12px!important;font-weight:800!important;transition:all 0.2s!important;}
-div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker) button:hover{border-color:#38bdf8!important;background:linear-gradient(135deg,#0284c7,#1d4ed8)!important;transform:translateY(-1px);}
+html,body,[class*="css"]{font-size:15px;} .block-container{padding-top:2.9rem!important;padding-bottom:3rem!important;max-width:840px!important;}
+div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker){position:sticky!important;top:2.75rem!important;z-index:990!important;max-width:390px!important;margin:0 auto 6px auto!important;background:rgba(15,23,42,0.82)!important;backdrop-filter:blur(12px)!important;padding:2px 8px!important;border-radius:999px!important;border:1px solid rgba(148,163,184,0.28)!important;box-shadow:0 3px 12px rgba(0,0,0,0.22)!important;}
+div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker) [data-testid="stHorizontalBlock"]{gap:4px!important;flex-wrap:nowrap!important;align-items:center!important;}
+div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker) [data-testid="column"]{min-width:0!important;width:auto!important;flex:1 1 0!important;}
+div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker) button{background:transparent!important;color:#e2e8f0!important;border:none!important;border-radius:999px!important;height:24px!important;min-height:24px!important;padding:0 6px!important;font-size:11px!important;font-weight:700!important;line-height:1!important;white-space:nowrap!important;box-shadow:none!important;transition:all 0.15s ease!important;}
+div[data-testid="stVerticalBlock"] > div:has(div.smart-sticky-marker) button:hover{background:rgba(56,189,248,0.22)!important;color:#38bdf8!important;}
+@keyframes typingBounce{0%,80%,100%{transform:translateY(0);opacity:0.35;}40%{transform:translateY(-4px);opacity:1;}}
+.typing-indicator-box{display:inline-flex;align-items:center;gap:8px;background:rgba(15,23,42,0.94);border:1px solid rgba(56,189,248,0.45);padding:6px 13px;border-radius:999px;color:#7dd3fc;font-size:11.5px;font-weight:700;margin:4px 0 8px 0;box-shadow:0 4px 12px rgba(0,0,0,0.25);}
+.typing-dots{display:inline-flex;align-items:center;gap:3px;}
+.typing-dots span{width:5px;height:5px;background:#38bdf8;border-radius:50%;display:inline-block;animation:typingBounce 1.3s infinite ease-in-out both;}
+.typing-dots span:nth-child(1){animation-delay:-0.32s;} .typing-dots span:nth-child(2){animation-delay:-0.16s;}
 div[data-testid="stPills"]{margin-top:-2px!important;margin-bottom:4px!important;}
 .compact-bar-label{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;color:#38bdf8;background:linear-gradient(90deg,#0f172a,#1e293b);padding:5px 12px;border-radius:8px;border-left:3px solid #38bdf8;margin-bottom:4px;}
 .company-logo-img{width:36px;height:36px;border-radius:8px;background:#fff;padding:2px;border:1px solid #e2e8f0;}
@@ -174,7 +181,7 @@ with st.container():
         else: st.session_state["active_category"] = "🏆 総合TOP5"
         st.rerun()
     open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
-    if nc3.button(f"🔽 合議全て閉じる ({open_cnt})" if open_cnt else "🔽 合議全て閉じる", key="sticky_close_all", use_container_width=True):
+    if nc3.button(f"🔽 合議を閉じる({open_cnt})" if open_cnt else "🔽 合議を閉じる", key="sticky_close_all", use_container_width=True):
         st.session_state["active_debates"] = {}
         st.rerun()
 
@@ -791,10 +798,23 @@ def render_council_sec(r, uk):
     if live_stream_mode and (first_run or uk not in st.session_state["streamed_keys"]):
         st.session_state["streamed_keys"].add(uk)
         lbox, sbar, so_far = st.empty(), st.empty(), []
+        rng_stream = random.Random(int(hashlib.md5(f"{uk}_{len(turns)}".encode()).hexdigest()[:6], 16))
         for i, t in enumerate(turns):
             if "speaker" in t:
-                sbar.markdown(f"<div style='color:#38bdf8;font-size:12px;font-weight:800;'>💬 {t['speaker']} が発言を入力中...</div>", unsafe_allow_html=True)
-                time.sleep(min(1.4, max(0.95, len(t.get("text", "")) * 0.007)))
+                tn = t.get("tone", "normal")
+                # 熟考ターン（懐疑・バックテスト照合・最終総括・ランダム長考）は約4.5〜5.2秒、通常掛け合いは約2.2〜3.4秒
+                is_deep_think = (tn in ["doubt", "humor", "agree"]) or (rng_stream.random() < 0.35)
+                if is_deep_think:
+                    w_think = rng_stream.uniform(2.0, 2.5)
+                    w_type = rng_stream.uniform(2.5, 2.7)
+                    sbar.markdown(f'<div class="typing-indicator-box"><span>🤔 <b>{t["speaker"]}</b> が板データ・統計波形を長考中</span><span class="typing-dots"><span></span><span></span><span></span></span></div>', unsafe_allow_html=True)
+                    time.sleep(w_think)
+                    sbar.markdown(f'<div class="typing-indicator-box"><span>✍️ <b>{t["speaker"]}</b> がメッセージを入力しています</span><span class="typing-dots"><span></span><span></span><span></span></span></div>', unsafe_allow_html=True)
+                    time.sleep(w_type)
+                else:
+                    w_type = rng_stream.uniform(2.2, 3.4)
+                    sbar.markdown(f'<div class="typing-indicator-box"><span>💬 <b>{t["speaker"]}</b> がメッセージを入力しています</span><span class="typing-dots"><span></span><span></span><span></span></span></div>', unsafe_allow_html=True)
+                    time.sleep(w_type)
             so_far.append(_fmt_turn(t))
             v_blk = f'<div class="consensus-banner"><div style="font-weight:bold;color:#fde047;font-size:13.5px;">🏛️ 全エージェント合意の最終コンセンサス</div>{meta["verdict_html"]}</div>' if i == len(turns) - 1 else ""
             lbox.markdown(f'<div class="ai-council-box"><div id="{wid}" class="council-scroll-window">{"".join(so_far)}</div>{v_blk}</div>', unsafe_allow_html=True)
