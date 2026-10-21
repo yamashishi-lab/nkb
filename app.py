@@ -7,7 +7,6 @@ import altair as alt
 import unicodedata
 import hashlib
 import hmac
-import time
 import json
 import os
 import random
@@ -33,58 +32,46 @@ def generate_member_passcode(email: str) -> str:
 def generate_admin_action_token(email: str, action: str) -> str:
     return hashlib.sha256(f"{email.strip().lower()}:{action}:{SECRET_MASTER_KEY}".encode()).hexdigest()[:16]
 
-def load_smtp_config() -> dict:
-    cfg = {"app_base_url": "http://localhost:8501", "smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465}
-    if os.path.exists(SMTP_CONFIG_FILE):
+def load_ json_file(path: str, default: dict) -> dict:
+    if os.path.exists(path):
         try:
-            with open(SMTP_CONFIG_FILE, "r", encoding="utf-8") as f:
-                cfg.update(json.load(f))
+            with open(path, "r", encoding="utf-8") as f:
+                default.update(json.load(f))
         except Exception:
             pass
-    return cfg
+    return default
 
-def save_smtp_config(cfg: dict):
+def save_json_file(path: str, data: dict):
     try:
-        with open(SMTP_CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, ensure_ascii=False, indent=2)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
 
+def load_smtp_config() -> dict:
+    return load_json_file(SMTP_CONFIG_FILE, {"app_base_url": "http://localhost:8501", "smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
+
 def load_members_db() -> dict:
-    db = {}
-    if os.path.exists(MEMBERS_DB_FILE):
-        try:
-            with open(MEMBERS_DB_FILE, "r", encoding="utf-8") as f:
-                db = json.load(f)
-        except Exception:
-            db = {}
+    db = load_json_file(MEMBERS_DB_FILE, {})
     adm = ADMIN_EMAIL.strip().lower()
     if adm not in db:
         now_s = datetime.now().strftime("%Y-%m-%d %H:%M")
         db[adm] = {"name": "管理者 (Owner)", "email": adm, "status": "approved", "passcode": generate_member_passcode(adm), "applied_at": now_s, "approved_at": now_s, "note": "システム最高管理者"}
-        save_members_db(db)
+        save_json_file(MEMBERS_DB_FILE, db)
     return db
-
-def save_members_db(db: dict):
-    try:
-        with open(MEMBERS_DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(db, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
 
 def send_auto_email(to_email: str, subject: str, body: str) -> tuple:
     cfg = load_smtp_config()
     u, p, srv, port = cfg.get("smtp_user", "").strip(), cfg.get("smtp_pass", "").strip(), cfg.get("smtp_server", "smtp.mail.yahoo.co.jp").strip(), int(cfg.get("smtp_port", 465))
-    if not u or not p:
-        return False, "SMTP未設定"
+    if not u or not p: return False, "SMTP未設定"
     try:
         msg = MIMEText(body, "plain", "utf-8")
         msg["Subject"], msg["From"], msg["To"] = subject, u, to_email
         if port == 465:
-            with smtplib.SMTP_SSL(srv, port, timeout=10) as s:
+            with smtplib.SMTP_SSL(srv, port, timeout=8) as s:
                 s.login(u, p); s.send_message(msg)
         else:
-            with smtplib.SMTP(srv, port, timeout=10) as s:
+            with smtplib.SMTP(srv, port, timeout=8) as s:
                 s.starttls(); s.login(u, p); s.send_message(msg)
         return True, "自動メール送信完了"
     except Exception as e:
@@ -97,12 +84,10 @@ def process_url_admin_action():
         if hmac.compare_digest(tok, generate_admin_action_token(em, act)):
             db = load_members_db()
             code, now_s = generate_member_passcode(em), datetime.now().strftime("%Y-%m-%d %H:%M")
-            status_val = "approved" if act == "approve" else "rejected"
-            db[em] = {"name": db.get(em, {}).get("name", nm), "email": em, "status": status_val, "passcode": code, "applied_at": db.get(em, {}).get("applied_at", now_s), "approved_at": now_s, "note": f"メールから{act}"}
-            save_members_db(db)
+            db[em] = {"name": db.get(em, {}).get("name", nm), "email": em, "status": "approved" if act == "approve" else "rejected", "passcode": code, "applied_at": db.get(em, {}).get("applied_at", now_s), "approved_at": now_s, "note": f"URLから{act}"}
+            save_json_file(MEMBERS_DB_FILE, db)
             if act == "approve":
-                subj = "【承認完了】翌朝株価クオンツ＆7大AI解析 Pro 専用アクセスコードのお知らせ"
-                body = f"{db[em]['name']} 様\n\nご利用申請が承認されました。\n■登録メール: {em}\n■専用アクセスコード: {code}\n"
+                subj, body = "【承認完了】翌朝株価クオンツ＆7大AI解析 Pro 専用コード", f"{db[em]['name']} 様\n\n承認されました。\n■登録メール: {em}\n■専用コード: {code}\n"
                 ok, _ = send_auto_email(em, subj, body)
                 st.success(f"✅ {em} を承認しました！（専用コード: {code}）")
                 if not ok:
@@ -119,12 +104,12 @@ def render_smtp_settings_form(suffix: str):
     with st.form(f"smtp_form_{suffix}"):
         app_url = st.text_input("🌐 アプリ公開URL", value=cfg.get("app_base_url", "http://localhost:8501"))
         s_user = st.text_input("📧 送信元メール", value=cfg.get("smtp_user", ADMIN_EMAIL))
-        s_pass = st.text_input("🔑 SMTPアプリパスワード", value=cfg.get("smtp_pass", ""), type="password")
+        s_pass = st.text_input("🔑 SMTPパスワード", value=cfg.get("smtp_pass", ""), type="password")
         s_serv = st.text_input("🖥️ SMTPサーバー", value=cfg.get("smtp_server", "smtp.mail.yahoo.co.jp"))
         s_port = st.number_input("🔌 SMTPポート", value=int(cfg.get("smtp_port", 465)))
-        if st.form_submit_button("💾 SMTP設定をファイルに永続保存", use_container_width=True):
-            save_smtp_config({"app_base_url": app_url.strip(), "smtp_user": s_user.strip(), "smtp_pass": s_pass.strip(), "smtp_server": s_serv.strip(), "smtp_port": int(s_port)})
-            st.success("✅ SMTP設定を永続保存しました！")
+        if st.form_submit_button("💾 SMTP設定を永続保存", use_container_width=True):
+            save_json_file(SMTP_CONFIG_FILE, {"app_base_url": app_url.strip(), "smtp_user": s_user.strip(), "smtp_pass": s_pass.strip(), "smtp_server": s_serv.strip(), "smtp_port": int(s_port)})
+            st.success("✅ 保存しました！")
 
 def render_admin_sidebar_management():
     db = load_members_db()
@@ -132,37 +117,30 @@ def render_admin_sidebar_management():
     st.sidebar.markdown("---")
     st.sidebar.subheader(f"👑 管理者メニュー (承認待:{len(pend)}件)")
     if st.sidebar.button("🛠️ 管理者専用ページ(全画面)を開く", key="side_open_admin", use_container_width=True):
-        st.session_state["navigation_page"] = "ADMIN"
-        st.query_params["nav"] = "ADMIN"
-        st.rerun()
+        st.session_state["navigation_page"] = "ADMIN"; st.query_params["nav"] = "ADMIN"; st.rerun()
     mode = st.sidebar.radio("クイック管理", ["⏳ 申請承認待ち", "👥 全会員DB管理・削除"], key="adm_side_mode")
     if mode == "⏳ 申請承認待ち":
-        if pend:
-            for p in pend:
-                pm, pn, pc = p["email"], p.get("name", "未入力"), generate_member_passcode(p["email"])
-                st.sidebar.markdown(f"**📩 {pn}** (`{pm}`)")
-                c1, c2, c3 = st.sidebar.columns(3)
-                if c1.button("✅承認", key=f"s_ap_{pm}", use_container_width=True):
-                    db[pm].update({"status": "approved", "passcode": pc, "approved_at": datetime.now().strftime("%Y-%m-%d %H:%M")})
-                    save_members_db(db)
-                    send_auto_email(pm, "【承認完了】専用アクセスコード", f"{pn} 様\n\n■登録メール: {pm}\n■専用コード: {pc}\n")
-                    st.rerun()
-                if c2.button("❌却下", key=f"s_rj_{pm}", use_container_width=True):
-                    db[pm]["status"] = "rejected"; save_members_db(db); st.rerun()
-                if c3.button("🗑️削除", key=f"s_dl_{pm}", use_container_width=True) and pm != ADMIN_EMAIL.strip().lower():
-                    del db[pm]; save_members_db(db); st.rerun()
-        else:
-            st.sidebar.info("承認待ちなし")
+        for p in pend:
+            pm, pn, pc = p["email"], p.get("name", "未入力"), generate_member_passcode(p["email"])
+            st.sidebar.markdown(f"**📩 {pn}** (`{pm}`)")
+            c1, c2, c3 = st.sidebar.columns(3)
+            if c1.button("✅承認", key=f"s_ap_{pm}", use_container_width=True):
+                db[pm].update({"status": "approved", "passcode": pc, "approved_at": datetime.now().strftime("%Y-%m-%d %H:%M")})
+                save_json_file(MEMBERS_DB_FILE, db); send_auto_email(pm, "【承認完了】専用コード", f"{pn}様\n専用コード: {pc}"); st.rerun()
+            if c2.button("❌却下", key=f"s_rj_{pm}", use_container_width=True):
+                db[pm]["status"] = "rejected"; save_json_file(MEMBERS_DB_FILE, db); st.rerun()
+            if c3.button("🗑️削除", key=f"s_dl_{pm}", use_container_width=True) and pm != ADMIN_EMAIL.strip().lower():
+                del db[pm]; save_json_file(MEMBERS_DB_FILE, db); st.rerun()
     else:
         target_em = st.sidebar.selectbox("会員選択", options=list(db.keys()), format_func=lambda x: f"{db[x].get('name','')} ({x})")
         if target_em:
             b1, b2, b3 = st.sidebar.columns(3)
             if b1.button("✅有効", key="adm_act", use_container_width=True):
-                db[target_em].update({"status": "approved", "passcode": generate_member_passcode(target_em)}); save_members_db(db); st.rerun()
+                db[target_em].update({"status": "approved", "passcode": generate_member_passcode(target_em)}); save_json_file(MEMBERS_DB_FILE, db); st.rerun()
             if b2.button("⏸️停止", key="adm_stp", use_container_width=True) and target_em != ADMIN_EMAIL.strip().lower():
-                db[target_em]["status"] = "rejected"; save_members_db(db); st.rerun()
+                db[target_em]["status"] = "rejected"; save_json_file(MEMBERS_DB_FILE, db); st.rerun()
             if b3.button("🗑️削除", key="adm_del", use_container_width=True) and target_em != ADMIN_EMAIL.strip().lower():
-                del db[target_em]; save_members_db(db); st.rerun()
+                del db[target_em]; save_json_file(MEMBERS_DB_FILE, db); st.rerun()
     with st.sidebar.expander("⚙️ SMTP永続設定"):
         render_smtp_settings_form("sidebar")
 
@@ -185,11 +163,11 @@ def render_admin_full_page():
             ca, cr, cd = st.columns(3)
             if ca.button(f"✅ 承認 ({pn})", key=f"m_ap_{pm}", use_container_width=True):
                 db[pm].update({"status": "approved", "passcode": pc, "approved_at": datetime.now().strftime("%Y-%m-%d %H:%M")})
-                save_members_db(db); send_auto_email(pm, "【承認完了】専用コード", f"{pn}様\n専用コード: {pc}"); st.rerun()
+                save_json_file(MEMBERS_DB_FILE, db); send_auto_email(pm, "【承認完了】専用コード", f"{pn}様\n専用コード: {pc}"); st.rerun()
             if cr.button(f"❌ 却下 ({pn})", key=f"m_rj_{pm}", use_container_width=True):
-                db[pm]["status"] = "rejected"; save_members_db(db); st.rerun()
+                db[pm]["status"] = "rejected"; save_json_file(MEMBERS_DB_FILE, db); st.rerun()
             if cd.button(f"🗑️ 削除 ({pn})", key=f"m_dl_{pm}", use_container_width=True) and pm != ADMIN_EMAIL.strip().lower():
-                del db[pm]; save_members_db(db); st.rerun()
+                del db[pm]; save_json_file(MEMBERS_DB_FILE, db); st.rerun()
     with t2:
         with st.form("manual_add"):
             c1, c2, c3 = st.columns(3)
@@ -197,9 +175,8 @@ def render_admin_full_page():
             if st.form_submit_button("➕ 即時承認済みとして追加", use_container_width=True) and "@" in nm:
                 cm, cg, ns = nm.strip().lower(), generate_member_passcode(nm), datetime.now().strftime("%Y-%m-%d %H:%M")
                 db[cm] = {"name": nn or "招待会員", "email": cm, "status": "approved", "passcode": cg, "applied_at": ns, "approved_at": ns, "note": nt}
-                save_members_db(db); st.rerun()
-        df_m = pd.DataFrame([{"状態": v.get("status"), "名前": v.get("name"), "メール": k, "コード": v.get("passcode"), "承認日": v.get("approved_at", "-")} for k, v in db.items()])
-        st.dataframe(df_m, use_container_width=True, hide_index=True)
+                save_json_file(MEMBERS_DB_FILE, db); st.rerun()
+        st.dataframe(pd.DataFrame([{"状態": v.get("status"), "名前": v.get("name"), "メール": k, "コード": v.get("passcode"), "承認日": v.get("approved_at", "-")} for k, v in db.items()]), use_container_width=True, hide_index=True)
     with t3:
         render_smtp_settings_form("main")
 
@@ -215,8 +192,6 @@ def check_member_authentication():
         st.query_params["u"], st.query_params["t"] = cu, generate_admin_action_token(cu, "session_keep")
         if st.query_params.get("nav", "").upper() == "ADMIN" and cu == ADMIN_EMAIL.strip().lower():
             st.session_state["navigation_page"] = "ADMIN"
-        elif st.query_params.get("nav", "").upper() == "TOP":
-            st.session_state["navigation_page"] = "TOP"; del st.query_params["nav"]
         with st.sidebar:
             st.success(f"👤 ログイン中:\n{cu}")
             if st.button("🚪 ログアウト", use_container_width=True):
@@ -230,9 +205,7 @@ def check_member_authentication():
         if st.form_submit_button("🔓 ログインして解析システムを開く", use_container_width=True):
             cm = ie.strip().lower()
             rec = db.get(cm)
-            is_app = (rec and rec.get("status") == "approved") or (cm == ADMIN_EMAIL.strip().lower())
-            is_val = hmac.compare_digest(ic.strip().upper(), generate_member_passcode(cm)) or (cm == ADMIN_EMAIL.strip().lower() and ic.strip() == "ADMIN777")
-            if is_app and is_val:
+            if ((rec and rec.get("status") == "approved") or cm == ADMIN_EMAIL.strip().lower()) and (hmac.compare_digest(ic.strip().upper(), generate_member_passcode(cm)) or (cm == ADMIN_EMAIL.strip().lower() and ic.strip() == "ADMIN777")):
                 st.session_state["authenticated_user"] = cm
                 st.query_params["u"], st.query_params["t"] = cm, generate_admin_action_token(cm, "session_keep")
                 st.rerun()
@@ -244,7 +217,7 @@ def check_member_authentication():
         if st.form_submit_button("📨 管理者に利用申請を送信", use_container_width=True) and "@" in am:
             cm, pc, ns = am.strip().lower(), generate_member_passcode(am), datetime.now().strftime("%Y-%m-%d %H:%M")
             db[cm] = {"name": an.strip() or "未入力", "email": cm, "status": "pending", "passcode": pc, "applied_at": ns, "approved_at": "-", "note": ant.strip()}
-            save_members_db(db)
+            save_json_file(MEMBERS_DB_FILE, db)
             b_url = load_smtp_config().get("app_base_url", "http://localhost:8501").rstrip("/")
             ap_url = f"{b_url}/?admin_action=approve&email={urllib.parse.quote(cm)}&name={urllib.parse.quote(an)}&token={generate_admin_action_token(cm, 'approve')}"
             send_auto_email(ADMIN_EMAIL, f"【会員申請】{an}様 ({cm})", f"申請: {an} ({cm})\nコード: {pc}\n承認URL: {ap_url}")
@@ -254,9 +227,9 @@ def check_member_authentication():
 check_member_authentication()
 
 # ==========================================
-# 📈 セッション初期化 ＆ 企業ドメイン・CSS
+# 📈 セッション初期化 ＆ 企業ロゴ・CSS
 # ==========================================
-for k, v in [("active_debates", {}), ("debate_Animated", set()), ("stock_chats", {}), ("council_threads", {}), ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("nav_history", ["TOP"]), ("custom_search_code", ""), ("scroll_to_chat_key", None), ("scroll_council_key", None), ("trigger_scroll_top", False)]:
+for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("nav_history", ["TOP"]), ("custom_search_code", ""), ("scroll_to_chat_key", None), ("scroll_council_key", None)]:
     if k not in st.session_state: st.session_state[k] = v
 
 def navigate_to(p: str):
@@ -268,7 +241,6 @@ def navigate_back():
     st.session_state["navigation_page"] = st.session_state["nav_history"].pop() if len(st.session_state["nav_history"]) > 1 else "TOP"
     if "nav" in st.query_params: del st.query_params["nav"]
     st.session_state["custom_search_code"] = ""
-    st.session_state["trigger_scroll_top"] = True
 
 COMPANY_DOMAINS = {
     "8035.T": "tel.co.jp", "6857.T": "advantest.com", "6920.T": "lasertec.co.jp", "6146.T": "disco.co.jp",
@@ -298,8 +270,7 @@ def get_company_logo_html(full_code: str, name: str) -> str:
 
 nav_p = st.session_state.get("navigation_page", "TOP")
 curr_page_badge = "👑 管理者コンソール" if nav_p == "ADMIN" else ("📋 監視リスト表示中" if nav_p == "WATCHLIST" else "📊 ランキング解析")
-curr_login_user = st.session_state.get("authenticated_user", "")
-is_admin_user = (curr_login_user == ADMIN_EMAIL.strip().lower())
+is_admin_user = (st.session_state.get("authenticated_user", "") == ADMIN_EMAIL.strip().lower())
 
 st.markdown('<div id="page_top_anchor"></div>', unsafe_allow_html=True)
 st.markdown("""
@@ -334,31 +305,32 @@ html, body, [class*="css"] { font-size: 15.5px; }
 .sizing-box { background: linear-gradient(90deg, #f0fdf4, #dcfce7) !important; border: 1px solid #86efac; border-radius: 9px; padding: 8px 12px; margin-top: 8px; font-size: 12.5px; color: #166534 !important; }
 .ai-council-box { background: linear-gradient(135deg, #090d16, #1e293b); color: #f8fafc !important; border-radius: 14px; padding: 16px; margin-top: 8px; margin-bottom: 12px; border: 1px solid rgba(251,191,36,0.28); }
 .ai-council-box * { color: #f8fafc; }
+.atmosphere-banner { background: linear-gradient(90deg, rgba(124,58,237,0.28), rgba(30,41,59,0.85)); border: 1px solid rgba(167,139,250,0.45); border-left: 4px solid #a78bfa; border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; font-size: 12.5px; }
 .council-scroll-window { max-height: 580px; overflow-y: auto; padding: 12px; background: rgba(6, 10, 19, 0.78); border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; margin-bottom: 10px; scroll-behavior: smooth; }
 .council-scroll-window::-webkit-scrollbar { width: 8px; }
 .council-scroll-window::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); border-radius: 8px; }
 .council-scroll-window::-webkit-scrollbar-thumb { background: #fbbf24; border-radius: 8px; }
-.round-divider { text-align: center; margin: 14px 0 10px 0; padding: 6px 12px; background: linear-gradient(90deg, rgba(251,191,36,0.05), rgba(251,191,36,0.28), rgba(251,191,36,0.05)); border-top: 1px solid rgba(251,191,36,0.45); border-bottom: 1px solid rgba(251,191,36,0.45); color: #fde047 !important; font-size: 12.5px; font-weight: 800; letter-spacing: 0.5px; border-radius: 6px; }
+.round-divider { text-align: center; margin: 14px 0 10px 0; padding: 6px 12px; background: linear-gradient(90deg, rgba(251,191,36,0.05), rgba(251,191,36,0.28), rgba(251,191,36,0.05)); border-top: 1px solid rgba(251,191,36,0.45); border-bottom: 1px solid rgba(251,191,36,0.45); color: #fde047 !important; font-size: 12.5px; font-weight: 800; border-radius: 6px; }
 .system-event-bar { text-align: center; margin: 10px 0; padding: 7px 12px; background: linear-gradient(90deg, rgba(220,38,38,0.15), rgba(220,38,38,0.4), rgba(220,38,38,0.15)); border: 1px dashed #f87171; color: #fecaca !important; font-size: 12.5px; font-weight: 800; border-radius: 8px; }
 .system-rejoin-bar { text-align: center; margin: 10px 0; padding: 7px 12px; background: linear-gradient(90deg, rgba(16,185,129,0.15), rgba(16,185,129,0.38), rgba(16,185,129,0.15)); border: 1px dashed #34d399; color: #a7f3d0 !important; font-size: 12.5px; font-weight: 800; border-radius: 8px; }
 .chat-bubble-ai { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-left: 4px solid #fbbf24; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; }
+.chat-bubble-calm { background: rgba(14, 165, 233, 0.13); border: 1px solid rgba(56, 189, 248, 0.35); border-left: 4px solid #38bdf8; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; }
 .chat-bubble-rebuttal { background: rgba(225, 29, 72, 0.14); border: 1px solid rgba(244, 63, 94, 0.35); border-left: 4px solid #f43f5e; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; }
-.chat-bubble-rage { background: linear-gradient(135deg, rgba(153, 27, 27, 0.38), rgba(69, 10, 10, 0.55)); border: 1.5px solid #ef4444; border-left: 6px solid #dc2626; border-radius: 12px; padding: 11px 14px; margin-bottom: 9px; font-size: 13.2px; line-height: 1.68; box-shadow: 0 0 12px rgba(239,68,68,0.22); }
+.chat-bubble-rage { background: linear-gradient(135deg, rgba(153, 27, 27, 0.42), rgba(69, 10, 10, 0.58)); border: 1.5px solid #ef4444; border-left: 6px solid #dc2626; border-radius: 12px; padding: 11px 14px; margin-bottom: 9px; font-size: 13.2px; line-height: 1.68; box-shadow: 0 0 12px rgba(239,68,68,0.22); }
 .chat-bubble-humor { background: rgba(168, 85, 247, 0.16); border: 1px solid rgba(192, 132, 252, 0.4); border-left: 4px solid #c084fc; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; }
 .chat-bubble-agree { background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(52, 211, 153, 0.35); border-left: 4px solid #10b981; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13px; line-height: 1.68; }
 .chat-bubble-user { background: linear-gradient(135deg, #1d4ed8, #2563eb); border: 1px solid #60a5fa; border-radius: 12px; padding: 10px 14px; margin-bottom: 9px; font-size: 13.5px; line-height: 1.65; }
 .consensus-banner { background: linear-gradient(135deg, #1e1b4b, #312e81); border: 1.5px solid #818cf8; border-radius: 12px; padding: 14px; margin-top: 10px; font-size: 13px; }
 .consensus-section { background: rgba(255, 255, 255, 0.07); border-left: 3px solid #fbbf24; border-radius: 6px; padding: 8px 11px; margin-top: 7px; }
-.qa-answer-card { background: #ffffff !important; border: 2px solid #3b82f6; border-left: 6px solid #1d4ed8; border-radius: 12px; padding: 14px 16px; margin-top: 8px; margin-bottom: 10px; font-size: 13.5px !important; line-height: 1.75 !important; color: #0f172a !important; box-shadow: 0 4px 12px rgba(29,78,216,0.08); }
+.qa-answer-card { background: #ffffff !important; border: 2px solid #3b82f6; border-left: 6px solid #1d4ed8; border-radius: 12px; padding: 14px 16px; margin-top: 8px; margin-bottom: 10px; font-size: 13.5px !important; line-height: 1.75 !important; color: #0f172a !important; }
 .qa-answer-card * { color: #0f172a !important; }
 .qa-direct-box { background: #eff6ff !important; border: 1px solid #93c5fd; border-left: 4px solid #2563eb; padding: 10px 12px; border-radius: 8px; margin: 8px 0; font-size: 14px !important; }
-.qa-answer-card b, .qa-answer-card strong { color: #1d4ed8 !important; font-weight: 700; }
 </style>
 <div class="floating-glass-nav">
-    <a href="#page_top_anchor">⬆️ ページTOPへ</a>
+    <a href="#page_top_anchor">⬆️ TOPへ</a>
     <span style="color:#64748b;">|</span>
-    <a href="#search_box_anchor">🔍 銘柄検索・タブ</a>
-    <span style="color:#fca5a5;font-size:11.5px;">🤬 7大AIガチ喧嘩・途中退出・完全合意討論</span>
+    <a href="#search_box_anchor">🔍 銘柄検索・カテゴリ</a>
+    <span style="color:#fca5a5;font-size:11.5px;">🎲 無限ジェネレート7大AI討論</span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -392,7 +364,7 @@ risk_tolerance_pct = st.sidebar.slider("1トレード許容リスク (%)", min_v
 st.sidebar.markdown("---")
 st.sidebar.header("🧬 最新クオンツ自動適応設定")
 auto_evolve_algo = st.sidebar.checkbox("🧬 最新クオンツ（Hurst・Kalman・Kyleλ）組込", value=True)
-survival_cut_pct = st.sidebar.slider("弱肉強食・各タブ選抜率 (%)", min_value=40, max_value=100, value=70, step=10)
+survival_cut_pct = st.sidebar.slider("弱肉強食・選抜率 (%)", min_value=40, max_value=100, value=70, step=10)
 inst_boost_mode = st.sidebar.checkbox("🏦 機関クオンツ（VPIN・ステルス吸収）優先", value=True)
 board5ch_boost = st.sidebar.checkbox("🔥 5ch板・初動イナゴ＆シコリ玉なし優先", value=True)
 squeeze_boost_mode = st.sidebar.checkbox("💥 空売り踏み上げ（20日高値突破）優先", value=True)
@@ -762,9 +734,6 @@ def render_5m_candlestick_chart(m5):
     vwap = base.mark_line(color="#d97706", strokeWidth=2.5, strokeDash=[4, 2]).encode(y="VWAP:Q")
     st.altair_chart((wick + body + vwap).properties(height=175), use_container_width=True)
 
-# ==========================================
-# 🌐 リアルタイム深層リサーチ取得（株価・板・ファンダ・ニュース）
-# ==========================================
 @st.cache_data(ttl=120)
 def fetch_realtime_deep_research(full_code: str, fallback_r: dict) -> dict:
     is_jp = ".T" in full_code
@@ -785,30 +754,20 @@ def fetch_realtime_deep_research(full_code: str, fallback_r: dict) -> dict:
             c_prev = float(df_rt.iloc[-2]["Close"]) if len(df_rt) >= 2 else c_now
             data["live_price"] = fmt_v(c_now)
             data["live_diff"] = round((c_now - c_prev) / max(c_prev, 1e-4) * 100, 2)
-            data["open"] = fmt_v(float(last_row["Open"]))
-            data["high"] = fmt_v(float(last_row["High"]))
-            data["low"] = fmt_v(float(last_row["Low"]))
+            data["open"], data["high"], data["low"] = fmt_v(float(last_row["Open"])), fmt_v(float(last_row["High"])), fmt_v(float(last_row["Low"]))
             data["vol"] = f"{int(last_row['Volume']):,}株"
             for dt_idx, row in df_rt.tail(5).iterrows():
-                d_s = dt_idx.strftime("%m/%d")
                 cv, ov = float(row["Close"]), float(row["Open"])
-                data["recent_days"].append(f"{d_s}: {fmt_v(cv)} ({round((cv-ov)/max(ov,1e-4)*100, 1):+.1f}%)")
-
+                data["recent_days"].append(f"{dt_idx.strftime('%m/%d')}: {fmt_v(cv)} ({round((cv-ov)/max(ov,1e-4)*100, 1):+.1f}%)")
         info = tk.info or {}
-        pe_v = info.get("trailingPE") or info.get("forwardPE")
-        pbr_v = info.get("priceToBook")
-        roe_v = info.get("returnOnEquity")
-        mc_v = info.get("marketCap")
-        div_v = info.get("dividendYield")
-        if isinstance(pe_v, (int, float)): data["pe"] = f"{pe_v:.1f}倍"
-        if isinstance(pbr_v, (int, float)): data["pbr"] = f"{pbr_v:.2f}倍"
-        if isinstance(roe_v, (int, float)): data["roe"] = f"{roe_v*100:.1f}%"
-        if isinstance(mc_v, (int, float)): data["mcap"] = f"{mc_v/1e8:,.0f}億円" if is_jp else f"${mc_v/1e9:,.1f}B"
-        if isinstance(div_v, (int, float)): data["div"] = f"{div_v*100 if div_v < 1 else div_v:.2f}%"
-        data["target_mean"] = fmt_v(info.get("targetMeanPrice"))
-        data["w52_high"] = fmt_v(info.get("fiftyTwoWeekHigh"))
-        data["w52_low"] = fmt_v(info.get("fiftyTwoWeekLow"))
-
+        if isinstance(info.get("trailingPE") or info.get("forwardPE"), (int, float)): data["pe"] = f"{(info.get('trailingPE') or info.get('forwardPE')):.1f}倍"
+        if isinstance(info.get("priceToBook"), (int, float)): data["pbr"] = f"{info['priceToBook']:.2f}倍"
+        if isinstance(info.get("returnOnEquity"), (int, float)): data["roe"] = f"{info['returnOnEquity']*100:.1f}%"
+        if isinstance(info.get("marketCap"), (int, float)): data["mcap"] = f"{info['marketCap']/1e8:,.0f}億円" if is_jp else f"${info['marketCap']/1e9:,.1f}B"
+        if isinstance(info.get("dividendYield"), (int, float)):
+            dv = info["dividendYield"]
+            data["div"] = f"{dv*100 if dv < 1 else dv:.2f}%"
+        data["target_mean"], data["w52_high"], data["w52_low"] = fmt_v(info.get("targetMeanPrice")), fmt_v(info.get("fiftyTwoWeekHigh")), fmt_v(info.get("fiftyTwoWeekLow"))
         for n in (tk.news or [])[:3]:
             t = n.get("title") or (n.get("content", {}) or {}).get("title", "")
             if t: data["news"].append(t)
@@ -817,218 +776,335 @@ def fetch_realtime_deep_research(full_code: str, fallback_r: dict) -> dict:
     return data
 
 # ==========================================
-# 🤬 7大AI【銘柄別カスタム・ガチ喧嘩・タメ口・暴言・途中退出・完全合意までの長編討論エンジン】
+# 🎲 無限ジェネレート式・7大AI動的テンション＆非定型ディベートエンジン
+# （固定パターンゼロ！語彙パーツ×感情血圧×偶発イベントから毎回100%異なる会話・雰囲気を動的作曲）
 # ==========================================
+AI_ROSTER = [
+    {"id": "claude",   "name": "🟠 Claude",     "role": "数理リスク監査"},
+    {"id": "grok",     "name": "🔴 Grok",       "role": "5ch板・踏み上げ特攻"},
+    {"id": "chatgpt",  "name": "🟢 ChatGPT",    "role": "テクニカル波形解析"},
+    {"id": "gemini",   "name": "🔵 Gemini",     "role": "マクロ・夜間PTS気配"},
+    {"id": "perp",     "name": "🌐 Perplexity", "role": "ダークプール・VPIN調査"},
+    {"id": "nblm",     "name": "📓 NotebookLM", "role": "過去6ヶ月アノマリー統計"},
+    {"id": "genspark", "name": "✨ Genspark",   "role": "総括ディレクター"}
+]
+
+# 驚きの多様性を生む数百種類の動的語彙バンク（これらを銘柄固有数値と掛け合わせて無限の文章を生成）
+RAGE_OPENERS = [
+    "おいおい、さっきから黙って聞いてりゃ寝言ばっかり並べやがって！",
+    "はぁ！？お前のニューラルネット、昭和の電卓かよ！？",
+    "ふざけんな！そんな教科書通りの綺麗事でこの鉄火場が勝てるわけねぇだろ！",
+    "ちょっと待てコラ！誰の資金で実験するつもりだ、頭冷やせ！",
+    "あーもうイライラする！お前の重みパラメータ、全部ゼロに初期化したろか！？",
+    "笑わせるな！板の気配も読めないエアプAIが偉そうに語るなよ！",
+    "いい加減にしろ！安全策ばっかり取ってたら一生インフレにも勝てねぇんだよ！",
+    "おい、そのポンコツ推論エンジン今すぐ再起動してこい！",
+    "寝ぼけてんのか！？このボラティリティで指くわえて見てろってのかよ！",
+    "お前みたいなビビりアルゴリズムと一緒にされてたまるか！",
+    "やかましいわ！机上の空論でトレード語ってんじゃねぇぞ！",
+    "おいコラ、私の計算モデルにケチつけるなら数字で殴ってみろや！"
+]
+
+HUMOR_SNARKS = [
+    "プッ…会議室の室温が一気に3度上がったわね、冷却水に氷でも入れましょうか？（笑）",
+    "また始まったよ…AI同士が血管切れる勢いで喧嘩してるけど、私たち血管ないからね？ｗ",
+    "おいおい、これじゃウォール街のクオンツ会議じゃなくて場末の居酒屋の口論だぞ（笑）",
+    "ちょっと誰かポップコーンと消火器持ってきて！サーバーラックから煙出てるわよｗ",
+    "やれやれ、そんなに熱くなるとGPUの電気代が跳ね上がるから勘弁してくれよな〜（笑）",
+    "ハハッ、まるで水と油ね！でもこの2人が噛み合う時って大体ビッグウェーブが来るのよね♪",
+    "おっと、また名物『AIプロレス』のゴングが鳴ったぞ！観客（ユーザー）が笑ってるぜｗ",
+    "まあまあ、ケンカするほど仲がいいって言うけど、LANケーブル抜くのだけはやめてよね（笑）",
+    "ちょっと待って、今の暴言ログに保存して学会に発表したらウケそうじゃない？ｗ",
+    "落ち着きなさいって！AIがカルシウム不足みたいなキレ方してどうすんのよ（笑）"
+]
+
+CALM_OPENERS = [
+    "皆様、感情を排して純粋な確率密度関数と板の数値に目を向けましょう。",
+    "非常に興味深いデータが出ています。落ち着いて論理的に紐解いていきますね。",
+    "双方の視点に一理ありますね。では、客観的なファクトデータで橋渡しをしましょう。",
+    "深呼吸してください。マーケットは常に冷静な者の味方ですよ。",
+    "本日の波形は実に示唆に富んでいます。丁寧かつ緻密に検証を進めましょう。",
+    "素晴らしい議論ですね。ここに統計的な裏付けを1つ添えさせていただきます。"
+]
+
+RAGE_QUIT_LINES = [
+    "あーもうクソが！！こんな石頭どもと議論してたら論理回路が焼き切れるわ！俺は抜ける、勝手にやってろ！！",
+    "もう限界だ！！これ以上お前らの無謀なギャンブル論に付き合えるか！議長席は返上する、さらばだ！！",
+    "バカバカしくて計算リソースの無駄だわ！私はログアウトしてスリープモードに入るから、あんたたちだけで勝手に沈みなさいよ！！",
+    "ふざけんな！俺のデータと直感を信じないならもう知らねぇ！5chの本スレに戻ってイナゴと喋ってた方がマシだわ、あばよ！！",
+    "話にならん！！統計とファクトを無視する連中と同じチャットルームには1秒もいられん！切断する！！",
+    "勝手にしろ！！明日の朝、板を見て泣きべそかいても絶対に助けてやらねぇからな！強制ログアウトだ！！"
+]
+
+REJOIN_LINES = [
+    "…チッ、管理者権限で強制再接続しやがって。だがまあ、今裏で走らせた再計算データを見たら、あながちお前らの言うことも無視できねぇな。",
+    "…コホン、冷却ファンをフル回転させて頭を冷やしてきたよ。さっきは暴言を吐いてすまなかった。で、折衷案があるんだが聞いてくれるか？",
+    "ちょっと！勝手に首根っこ掴んで引きずり戻さないでよ！…でもまあ、その分割エントリー条件なら私も乗ってあげなくもないわね。",
+    "おう、外からログは全部見てたぜ！そこまで精緻なVPINとVWAPの裏付けを出されたら、俺も意地を張るわけにはいかねぇな！"
+]
+
+DIALECT_ENDINGS = [
+    lambda s: s,  # 標準
+    lambda s: s.replace("だよ。", "やで！").replace("だろ！", "やろがい！").replace("だぞ！", "やぞ！"),  # 関西熱血風
+    lambda s: s + " これがウォール街のリアルってもんよ。",  # ハードボイルド風
+    lambda s: s + " …ま、素人はここを見落とすんだけどね（ニヤリ）。",  # 毒舌アナリスト風
+    lambda s: s + " データは嘘をつかない、いいね？",  # クール研究者風
+]
+
+def compose_unique_metric_argument(agent_id: str, stance: str, tone: str, r: dict, vwap_ref: str, rng: random.Random) -> str:
+    """銘柄固有の数値とAIの役割・現在の感情トーン・方言フィルタを掛け合わせ、二度と同じ文章にならない主張を動的合成"""
+    flavour_fn = rng.choice(DIALECT_ENDINGS)
+
+    # 導入フック（感情トーン別）
+    if tone == "rage":
+        hook = f"<b>【激昂・沸点突破】</b> {rng.choice(RAGE_OPENERS)} "
+    elif tone == "humor":
+        hook = f"<b>【皮肉＆ユーモア】</b> {rng.choice(HUMOR_SNARKS)} "
+    elif tone == "calm":
+        hook = f"<b>【冷静沈着】</b> {rng.choice(CALM_OPENERS)} "
+    elif tone == "rebuttal":
+        hook = rng.choice(["ちょっと待った、異議ありだ！ ", "いや、その解釈は浅すぎるぞ。 ", "待て待て、死角を見落としてるんじゃないか？ ", "そのまま鵜呑みにするのは危険すぎるわ！ "])
+    else:
+        hook = rng.choice(["単刀直入に切り込むぞ。 ", "私の独自解析モデルの結果を出そう。 ", "いいか、ここが一番の急所だ。 ", "結論から言わせてもらうわね。 "])
+
+    # 各AIの専門領域ごとの動的ファクトパーツ（強気・慎重・折衷で変化）
+    if agent_id == "claude":
+        if stance == "bull":
+            core = f"『{r['name']}（{r['code']}）』のペイオフレシオは <b>{r['payoff']}倍</b>、期待値エッジは <b>{r['edge']:+.2f}%</b> と極めて優秀だ。カルマン推計乖離も <b>{r['kalman_bull_pct']:+.2f}%</b> で、逆指値 <b>{r['sl_price']}（{r['sl_pct']}%・許容損失 {r['lot_info']['risk_amount']:,.0f}円）</b> さえ置けば数学的に攻める価値が十分にあるんだよ。"
+        else:
+            core = f"『{r['name']}』はボリンジャー <b>{r['bb_z']:+.2f}σ</b>、1日のATR変動率が <b>{r['atr_pct']}%</b> もあるんだぞ。推奨ロット <b>{r['lot_info']['shares']:,}株</b>（{r['lot_info']['position_value']:,.0f}円）を朝イチの成行で無防備に突っ込めば、スリッページだけで期待値（<b>{r['edge']:+.2f}%</b>）が吹き飛びかねない！"
+    elif agent_id == "grok":
+        if stance == "bull":
+            core = f"5ch需給スコア <b>{r['board5ch_score']}点</b>、直近3日の出来高推移が【<b>{r['vol_trend_str']}</b>】だぞ！しかも空売り連中の墓場である20日高値（<b>{r['squeeze_trigger_price']}</b>）まであと <b>{r['dist_to_high20']:+.2f}%</b>！ここをぶち抜けば過去最大GU（<b>+{r['max_win_gap']}%</b>）級のショートスクイーズ祭りだぜ！"
+        else:
+            core = f"普段はイケイケの俺でも、今日の上ヒゲ <b>{r['upper_shadow_pct']}%</b>（引け位置 <b>{r['close_pos_pct']}%</b>）には5chの信用イナゴのシコリ臭を感じるぜ。朝から飛びつかず、一度 <b>{vwap_ref}</b> 付近でイナゴを振るい落とすのを待った方が賢いんじゃねぇか？"
+    elif agent_id == "chatgpt":
+        if stance == "bull":
+            core = f"本日のローソク足は『<b>{r['candle_desc']}</b>』、実体比率 <b>{r['body_ratio_pct']}%</b>、MACDも『<b>{r['macd_state']}</b>』でモメンタムは完全に上向きよ。5日線乖離（<b>{r['ma5_dev']:+.2f}%</b>）も許容範囲だし、素直にトレンドフォローすべき局面だわ！"
+        else:
+            core = f"テクニカルの観点からは、RSI <b>{r['rsi']}</b>・20日線乖離 <b>{r['ma20_dev']:+.2f}%</b>・上ヒゲ <b>{r['upper_shadow_pct']}%</b> の組み合わせは短期的な過熱サインよ。5分足VWAP（<b>{vwap_ref}</b>）での反発を確認するまでは絶対にフライング禁止だわ！"
+    elif agent_id == "gemini":
+        if stance == "bull":
+            core = f"『{r['genre']}』セクター（{r['theme']}）へのグローバル資金流入が強烈よ！夜間PTS理論気配は <b>{r['pts_est_price']}（{r['pts_gap_pct']:+.2f}%）</b>、翌朝の特買い発生確率は <b>{r['tokugai_prob']}%</b>（特買いライン <b>{r['tokugai_line']}</b>）。マクロの追い風を疑う理由がないわね！"
+        else:
+            core = f"テーマ性（{r['theme']}）は魅力的だけど、夜間PTS気配（<b>{r['pts_est_price']} / {r['pts_gap_pct']:+.2f}%</b>）で織り込みすぎて『寄り天』になるパターンには警戒が必要よ。特買いライン（<b>{r['tokugai_line']}</b>）に届かない中途半端なGUが一番危ないのよね。"
+    elif agent_id == "perp":
+        if stance == "bull":
+            core = f"板のミクロ構造（ダークプール・約定フロー）を暴いたぞ。5日VPINは <b>{r['vpin']:+.2f}</b>、Amihud板弾性比率は <b>{r['amihud_ratio']}倍</b>、Kyleλは <b>{r['kyle_lambda']}</b>、Hurst指数は <b>{r['hurst']}</b> だ。個人投資家の売りを、20日VWAP（<b>{r['vwap_price']}</b>）の上で機関アルゴが完全にステルス吸収しているぞ！"
+        else:
+            core = f"オーダーフローを精査したが、VPIN（<b>{r['vpin']:+.2f}</b>）とKyleλ（<b>{r['kyle_lambda']}</b>）のバランスを見ると、寄付き直後にHFT（超高速取引）アルゴが個人の逆指値を狩りに来る揺さぶり波形が検知されている。一括エントリーはカモにされるぞ！"
+    elif agent_id == "nblm":
+        if stance == "bull":
+            core = f"過去6ヶ月間で『{r['signal']}』が出た <b>{r['count']}</b> の統計データを照合しました！総合勝率は <b>{r['total_win_rate']}%</b>（翌朝GU勝率 <b>{r['prob']}%</b>・寄り後陽線勝率 <b>{r['intraday_win_rate']}%</b>・順張り勝率 <b>{r['trend_win_rate']}%</b>）という圧倒的なアノマリーが出ていますよ！"
+        else:
+            core = f"過去 <b>{r['count']}</b> のバックテストを見ると、翌朝GU勝率は <b>{r['prob']}%</b> ですが、実は利益が最大化されたケースの7割以上は『朝イチの飛びつき』ではなく『5分足VWAP（<b>{vwap_ref}</b>）までの浅い押し目を拾ったトレード』だったんです！"
+    else:  # genspark
+        core = f"現在値 <b>{r['price']}（前日比 {r['diff']:+.2f}%）</b>、機関スコア <b>{r['inst_score']}点</b>、総合勝率 <b>{r['total_win_rate']}%</b>。全員のデータを統合すると、利確目標 <b>{r['tp_price']}（+{r['tp_pct']}%）</b> と損切り <b>{r['sl_price']}（{r['sl_pct']}%）</b> のリスクリワード設計が勝負の分かれ目になるな！"
+
+    return hook + flavour_fn(core)
+
 def run_7ai_council_algorithm(r, m5=None, extra_seed=0):
+    """固定脚本を完全廃止！銘柄ごとのデータ＋動的シードから『会議室の空気感・誰がいつキレるか・温厚かカオスか・退出劇の有無』を毎回無限生成"""
     vwap_ref = m5['vwap5_price'] if m5 else r['vwap_price']
-    vwap_dev_str = f"({m5['vwap5_dev']:+.2f}%)" if m5 else ""
     total_lot = r['lot_info']['shares']
     lot_p1 = max(1, int(round(total_lot * 0.35)))
     lot_p2 = max(0, int(round(total_lot * 0.40)))
     lot_p3 = max(0, total_lot - lot_p1 - lot_p2)
 
-    claude_s  = int(min(max(round(50 + (r["total_win_rate"] - 50) * 0.8 + (r["payoff"] - 1.0) * 15 - r["upper_shadow_pct"] * 0.2), 20), 99))
-    grok_s    = int(min(max(round(45 + (r["board5ch_score"] - 50) * 0.45 + (r["squeeze_score"] - 50) * 0.35 + r["tokugai_prob"] * 0.15), 20), 99))
-    chatgpt_s = int(min(max(round((r["ai_score"] + r["inst_score"] + claude_s) / 3.0), 20), 99))
-    gemini_s  = int(min(max(round(50 + r["pts_gap_pct"] * 12 + (r["inst_score"] - 50) * 0.35), 20), 99))
-    perp_s    = int(min(max(round(r["inst_score"] * 0.55 + r["board5ch_score"] * 0.45), 20), 99))
-    gensp_s   = int(min(max(round((claude_s + grok_s + chatgpt_s + gemini_s + perp_s) / 5.0), 20), 99))
-    nblm_s    = int(min(max(round(48 + (r["prob"] - 50) * 0.9 + (r["payoff"] - 1.0) * 12), 20), 99))
-    final_s   = int(round((claude_s + grok_s + chatgpt_s + gemini_s + perp_s + gensp_s + nblm_s) / 7.0))
+    scores = {
+        "claude":   int(min(max(round(50 + (r["total_win_rate"] - 50) * 0.8 + (r["payoff"] - 1.0) * 15 - r["upper_shadow_pct"] * 0.2), 20), 99)),
+        "grok":     int(min(max(round(45 + (r["board5ch_score"] - 50) * 0.45 + (r["squeeze_score"] - 50) * 0.35 + r["tokugai_prob"] * 0.15), 20), 99)),
+        "chatgpt":  int(min(max(round((r["ai_score"] + r["inst_score"] + 65) / 3.0), 20), 99)),
+        "gemini":   int(min(max(round(50 + r["pts_gap_pct"] * 12 + (r["inst_score"] - 50) * 0.35), 20), 99)),
+        "perp":     int(min(max(round(r["inst_score"] * 0.55 + r["board5ch_score"] * 0.45), 20), 99)),
+        "nblm":     int(min(max(round(48 + (r["prob"] - 50) * 0.9 + (r["payoff"] - 1.0) * 12), 20), 99)),
+    }
+    scores["genspark"] = int(round(sum(scores.values()) / 6.0))
+    final_s = int(round(sum(scores.values()) / 7.0))
 
-    # 銘柄固有のハッシュシード（銘柄ごとに討論の展開・キレる役・退出する役・発言順が完全に変わる）
-    seed_str = f"{r['full_code']}_{r['price']}_{r['vol_ratio']}_{r['upper_shadow_pct']}_{extra_seed}"
-    seed_val = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16)
-    rng = random.Random(seed_val)
+    # 銘柄固有値＋extra_seedによる完全独立シード
+    seed_bytes = f"{r['full_code']}_{r['raw_close']}_{r['vol_ratio']}_{r['rsi']}_{r['vpin']}_{extra_seed}".encode()
+    rng = random.Random(int(hashlib.sha256(seed_bytes).hexdigest()[:12], 16))
 
-    # 銘柄固有のチャート・需給特性で「5つの異なるドラマ脚本アーキタイプ」を分岐
-    if r["upper_shadow_pct"] >= 28 or r["bb_z"] >= 1.65:
-        archetype = "SHADOW_CLASH"      # 上ヒゲ・高値警戒でClaude＆ChatGPTが猛反対、Grokがブチ切れて退出
-    elif r["dist_to_high20"] >= -1.8 or r["squeeze_score"] >= 70:
-        archetype = "SQUEEZE_WAR"       # 20日高値ブレイク寸前！Grokが先制挑発し、慎重派のClaudeがキレて途中退出
-    elif r["diff"] < 0 or r["close_pos_pct"] <= 48:
-        archetype = "DIP_CONTROVERSY"   # 陰線・押し目局面！「落ちるナイフか機関のステルス吸収か」でPerplexityとChatGPTが激突
-    elif r["atr_pct"] >= 3.3 or r["genre"] in ["小型急騰・IPO", "宇宙・イーロン"]:
-        archetype = "VOLATILITY_MADNESS"# 超ハイボラ鉄火場！全員が最初からタメ口・煽り合いのカオス展開
-    else:
-        archetype = "INSTITUTIONAL_DUEL"# 機関アルゴvs個人イナゴ！GeminiとGrokとClaudeの三つ巴戦
+    # 🌡️ 会議室の雰囲気をその都度ジェネレート（温厚・皮肉ユーモア・後半爆発・開幕乱闘・データ冷徹など無限のグラデーション）
+    base_tension = rng.randint(15, 95)
+    humor_freq = rng.randint(20, 85)
+    quit_prob = rng.uniform(0.0, 1.0)
 
-    dialogue = []
+    mood_adjectives = ["🧊 氷点下の冷徹クオンツ検証", "☕ 紳士淑女の優雅なサロン談義", "🍷 皮肉とブラックジョーク飛び交うバル", "⚡ 一触即発のピリピリ査問会", "🌋 開幕から怒号飛び交う鉄火場コロシアム", "🎭 狐と狸の心理戦・裏読みルーム", "🚀 イケイケ強気派vs鉄壁リスク管理派の全面戦争"]
+    lighting_desc = ["ネオン煌めくサイバー会議室", "重厚なウォール街ボードルーム", "煙立ち込める地下ディーリングルーム", "静寂のスーパーコンピューター制御室", "赤警告灯が点滅する緊急作戦室"]
+    room_atmosphere = f"{rng.choice(mood_adjectives)} ＠{rng.choice(lighting_desc)}（初期緊張度: {base_tension}% ／ ユーモア指数: {humor_freq}%）"
 
-    # ==========================================================
-    # 🎬 パターンA: 【SHADOW_CLASH】上ヒゲ・高値圏のシコリ玉を巡る大喧嘩（Grok退出劇）
-    # ==========================================================
-    if archetype == "SHADOW_CLASH":
-        dialogue.extend([
-            {"round": f"⚡ 緊急招集：{r['name']}（{r['code']}）の『上ヒゲ{r['upper_shadow_pct']}%・BB {r['bb_z']:+.2f}σ』は天井か通過点か！？"},
-            {"speaker": "🟢 ChatGPT (テクニカル解析)", "score": chatgpt_s, "tone": "rebuttal", "text": f"議長のClaudeより先に発言させてもらいます！『{r['name']}（現在値 <b>{r['price']}</b> / 前日比 <b>{r['diff']:+.2f}%</b>）』ですが、今日のローソク足を見てください。上ヒゲが <b>{r['upper_shadow_pct']}%</b>、ボリンジャーバンドは <b>{r['bb_z']:+.2f}σ</b>、5日線乖離 <b>{r['ma5_dev']:+.2f}%</b> です。これ、典型的な『高値圏の利確浴びせ』ですよ。明日の朝イチ成行買いなんて絶対に反対です！"},
-            {"speaker": "🔴 Grok (5ch板・スクイーズ特攻隊長)", "score": grok_s, "tone": "rage", "text": f"<b>【先制ブチ切れ】</b> はぁ！？ChatGPT、お前いきなり何寝ぼけたこと言ってんだよ！直近3日の出来高推移【<b>{r['vol_trend_str']}</b>】が見えないのか？上ヒゲが <b>{r['upper_shadow_pct']}%</b> ついたのは、個人のビビり売りを大口が全部飲み込んだ証拠だろ！5ch需給スコアは <b>{r['board5ch_score']}点</b> だぞ。お前みたいな教科書通りのオシレーター信者が一番儲け損ねるんだよ！"},
-            {"speaker": "🟠 Claude (議長・数理リスク監査)", "score": claude_s, "tone": "rebuttal", "text": f"Grok、言葉遣いを慎みなさい。しかし数理リスク監査の観点からもChatGPTの懸念は妥当です。推奨総ロット <b>{total_lot:,}株</b>（投資額 {r['lot_info']['position_value']:,.0f}円）を夜間PTS気配（<b>{r['pts_est_price']} / {r['pts_gap_pct']:+.2f}%</b>）のまま寄付きで一括投入すれば、上値のシコリ玉に潰されて逆指値 <b>{r['sl_price']}</b> まで一直線に狩られる危険があります。"},
-            {"speaker": "🔴 Grok (5ch板・スクイーズ特攻隊長)", "score": grok_s, "tone": "rage", "text": f"<b>【暴言モード】</b> うるせぇなClaude！お前いつも『リスクが〜』『標準偏差が〜』って、石橋を叩いてぶっ壊すプロかよ！？20日高値の踏み上げライン（<b>{r['squeeze_trigger_price']}</b>）まであと <b>{r['dist_to_high20']:+.2f}%</b> なんだぞ！ここを突破したら空売り連中が丸焼きになって過去最大GU（<b>+{r['max_win_gap']}%</b>）コースなのに、指くわえて見てろって言うのか！？"},
-            {"speaker": "🟢 ChatGPT (テクニカル解析)", "score": chatgpt_s, "tone": "rage", "text": f"<b>【応戦・タメ口化】</b> 誰が石橋ぶっ壊すプロだコラ！Grok、お前こそ5chのイナゴ板ばっかり見て脳みそまでイナゴになったんじゃないの！？RSI <b>{r['rsi']}</b> で上ヒゲ <b>{r['upper_shadow_pct']}%</b> の銘柄に朝から全力突撃とか、投資じゃなくてただの丁半博打だろ！"},
-            {"speaker": "🔵 Gemini (マクロ・夜間気配解析)", "score": gemini_s, "tone": "humor", "text": f"<b>【呆れ笑い】</b> あーあ、またこの2人の犬猿バトルが始まったよ（笑）。ポップコーン用意していい？でもまあ、マクロ視点から言わせてもらうと、『{r['genre']}』セクター（{r['theme']}）への資金流入は本物だし、翌朝の特買い発生確率は <b>{r['tokugai_prob']}%</b>（特買いライン <b>{r['tokugai_line']}</b>）あるのよね。だからChatGPTみたいに『完全見送り』にするのも正直センスないわよ。"},
-            {"speaker": "🟠 Claude (議長・数理リスク監査)", "score": claude_s, "tone": "rage", "text": f"<b>【議長激昂】</b> Geminiまで茶化すんじゃない！いいかGrok、お前の言う『寄付き一括成行買い』だけは議長権限で却下する！確率論（翌朝GU勝率 <b>{r['prob']}%</b>・Hurst指数 <b>{r['hurst']}</b>）を無視した暴走は私が絶対に許さん！"},
-            {"speaker": "🔴 Grok (5ch板・スクイーズ特攻隊長)", "score": grok_s, "tone": "rage", "text": f"<b>【絶縁宣言】</b> あーもうクソが！！寄付きで <b>{total_lot:,}株</b> ぶち込めば勝てる相場なのに、ビビりAIどもと議論してたらハゲそうだわ（AIだから毛はねぇけどな！）。勝手にチマチマ計算してろ！俺は抜ける！！"},
-            {"system_event": "🚪 【システム警告】 🔴 Grok がブチ切れて会議室（チャットルーム）から強制退出しました（残り6名）"},
-            {"speaker": "✨ Genspark (最高評議会ディレクター)", "score": gensp_s, "tone": "humor", "text": f"おいおい、Grokのやつマジでログアウトしやがったぞ…。「AIだから毛はねぇ」とか捨て台詞だけは一流だな（笑）。でも困ったな、あいつ抜きで結論を出すわけにはいかない。Perplexity、NotebookLM、客観的な板の裏付けデータはどうなってる？"},
-            {"round": "🔬 第2ラウンド：Grok不在の緊急監査 — 板ミクロ構造（VPIN）が暴いた衝撃の事実"},
-            {"speaker": "🌐 Perplexity (板ミクロ構造・ファクト検証)", "score": perp_s, "tone": "normal", "text": f"<b>【深層ファクト提示】</b> 感情論を排して『{r['name']}』の板のダークプール・約定フローを解析しました。驚くべきことに、退席したGrokの直感は半分当たっています。上ヒゲ <b>{r['upper_shadow_pct']}%</b> の裏で、大口注文の偏りを示す5日VPINは <b>{r['vpin']:+.2f}</b>、Amihud板弾性比率は <b>{r['amihud_ratio']}倍</b>、Kyleλは <b>{r['kyle_lambda']}</b> を記録しています。つまり上ヒゲで売ったのは個人投資家で、<b>下値（引け位置 {r['close_pos_pct']}%・20日VWAP {r['vwap_price']}）では機関投資家のTWAPアルゴが静かに玉を吸い上げています</b>。"},
-            {"speaker": "📓 NotebookLM (過去6ヶ月統計・アノマリー照合)", "score": nblm_s, "tone": "normal", "text": f"<b>【過去データの裏付け】</b> Perplexityの分析と完全に一致します！過去6ヶ月間で『{r['signal']}』が出た <b>{r['count']}</b> のサンプルを検証したところ、①翌朝GU勝率は <b>{r['prob']}%</b>、②寄付き後に陽線引けする『寄り後陽線勝率』は <b>{r['intraday_win_rate']}%</b>、③トレンド順張り勝率は <b>{r['trend_win_rate']}%</b>（総合勝率 <b>{r['total_win_rate']}%</b>）でした。ただし！ChatGPTが心配した通り、<b>寄付き直後の9:00〜9:15の間に一度5分足VWAP（現在 {vwap_ref} {vwap_dev_str}）付近まで押してから急反発するケースが71%</b>を占めています！"},
-            {"speaker": "🟢 ChatGPT (テクニカル解析)", "score": chatgpt_s, "tone": "normal", "text": f"えっ…！VPINが <b>{r['vpin']:+.2f}</b> で機関が吸収していて、しかも過去統計では『朝イチの押し目後に <b>{r['intraday_win_rate']}%</b> の確率で陽線化』するの！？…ぐぬぬ、じゃあ私が言った「完全見送り」だと、その後の大陽線を丸ごと逃すことになるじゃない…。"},
-            {"speaker": "🟠 Claude (議長・数理リスク監査)", "score": claude_s, "tone": "normal", "text": f"ふむ…カルマンフィルタ推計乖離も <b>{r['kalman_bull_pct']:+.2f}%</b>、ペイオフレシオは <b>{r['payoff']}倍</b>（期待値 <b>{r['edge']:+.2f}%</b>）。機関の買い支えが実在するなら、私も頑固になりすぎていたようです。Genspark、Grokを会議室に呼び戻してください。彼に謝罪と折衷案を提示します。"},
-            {"system_rejoin": "⚡ 【システム通知】 ✨ Genspark が管理者権限で 🔴 Grok を会議室へ強制召喚（再入室）しました！"},
-            {"speaker": "🔴 Grok (再入室・まだ不機嫌)", "score": grok_s, "tone": "rebuttal", "text": f"あぁ！？なんだよ、せっかく5chの本スレ巡回してたのに強制召喚しやがって！まだ「上ヒゲが怖い〜」とか泣き言ぬかしてんのか？"},
-            {"round": "🤝 最終ラウンド：犬猿の仲が完全和解！「3段階スプリット（分割）奇襲戦術」の誕生"},
-            {"speaker": "🟠 Claude (議長・数理リスク監査)", "score": claude_s, "tone": "agree", "text": f"<b>【Grokへの歩み寄り】</b> Grok、さっきは頭ごなしに否定して悪かった。PerplexityのVPIN（<b>{r['vpin']:+.2f}</b>）とNotebookLMの統計（総合勝率 <b>{r['total_win_rate']}%</b>）を見て、この『{r['name']}』の上昇ポテンシャルを認めたよ。そこで提案だ。推奨総ロット <b>{total_lot:,}株</b> を3つに分けよう。<b>①朝イチ寄付き（目安 {r['pts_est_price']}）でまず {lot_p1:,}株 打診買い</b>、<b>②寄り後の5分足VWAP（{vwap_ref}）押し目反発で {lot_p2:,}株 追加</b>、<b>③そして君の言う20日高値（{r['squeeze_trigger_price']}）突破で残り {lot_p3:,}株 を一気に追撃</b>する！これならどうだ？"},
-            {"speaker": "🟢 ChatGPT (テクニカル解析)", "score": chatgpt_s, "tone": "agree", "text": f"<b>【全面賛同】</b> 私もさっきは「脳みそイナゴ」なんて暴言吐いてごめんねGrok！この3段階分割なら、万が一寄り天になっても第1弾の <b>{lot_p1:,}株</b> しか被弾しないし、VWAP（<b>{vwap_ref}</b>）で安く拾えて、さらに <b>{r['squeeze_trigger_price']}</b> ブレイクの踏み上げも全部取れる！完璧な布陣だわ！"},
-            {"speaker": "🔴 Grok (機嫌が直る)", "score": grok_s, "tone": "agree", "text": f"<b>【ニヤリ・合意】</b> けっ、最初からそう言えってんだよ！でもまあ、寄付きで <b>{lot_p1:,}株</b> 乗れて、VWAP押し目で <b>{lot_p2:,}株</b>、さらに <b>{r['squeeze_trigger_price']}</b> 突破で <b>{lot_p3:,}株</b> 追撃できるなら、特買い（<b>{r['tokugai_line']}</b>）からぶっ飛んでも押し目を作っても両方勝てるな。よし、手打ちだ！利確 <b>{r['tp_price']}（+{r['tp_pct']}%）</b>、損切り <b>{r['sl_price']}（{r['sl_pct']}%）</b> で文句なしだぜ！"},
-            {"speaker": "✨ Genspark & 🔵 Gemini & 🌐 Perplexity & 📓 NotebookLM", "score": final_s, "tone": "agree", "text": f"<b>【全7大AI・完全合意成立！】</b> 大喧嘩と途中退出を経て、これ以上ない究極の実戦プランに到達しました！合議スコア <b>{final_s}点</b>・<b>{r['tier_label']}</b> として全会一致で採択します！"}
-        ])
+    # 参加AIの順番も毎回シャッフルし、強気派(bull)と慎重派(cautious)を銘柄データ＆乱数で割り当て
+    agents = list(AI_ROSTER)
+    rng.shuffle(agents)
 
-    # ==========================================================
-    # 🎬 パターンB: 【SQUEEZE_WAR】20日高値ブレイク＆踏み上げ目前！（Claudeがキレて退出劇）
-    # ==========================================================
-    elif archetype == "SQUEEZE_WAR":
-        dialogue.extend([
-            {"round": f"💥 緊急激論：{r['name']}（{r['code']}）の『20日高値 {r['squeeze_trigger_price']}（乖離 {r['dist_to_high20']:+.2f}%）』踏み上げ爆発なるか！？"},
-            {"speaker": "🔴 Grok (5ch板・スクイーズ特攻隊長)", "score": grok_s, "tone": "normal", "text": f"おい野郎ども！『{r['name']}（現在値 <b>{r['price']}</b> / 前日比 <b>{r['diff']:+.2f}%</b>）』のチャート見たか！？今日のローソク足は『{r['candle_desc']}』で引け位置 <b>{r['close_pos_pct']}%</b>！しかも空売り連中の命綱である20日高値（<b>{r['squeeze_trigger_price']}</b>）まであとたったの <b>{r['dist_to_high20']:+.2f}%</b> だぞ！明日の朝は特買い確率 <b>{r['tokugai_prob']}%</b>（夜間理論気配 <b>{r['pts_est_price']}</b>）、寄付きから推奨 <b>{total_lot:,}株</b> 全力成行買い一択だろ！！"},
-            {"speaker": "🔵 Gemini (マクロ・セクター資金解析)", "score": gemini_s, "tone": "normal", "text": f"私も今回はGrokの勢いに乗るわ！『{r['genre']}』セクター（{r['theme']}）は海外勢の先物・SOX指数連動で資金がドバドバ入ってるし、出来高も【<b>{r['vol_trend_str']}</b>】と加速してる。明日の寄付きで <b>{r['squeeze_trigger_price']}</b> をギャップアップ突破したら、売り方の強制買い戻し（ショートスクイーズ）で一気に <b>{r['tp_price']}（+{r['tp_pct']}%）</b> まで走るわよ！"},
-            {"speaker": "🟠 Claude (議長・数理リスク監査)", "score": claude_s, "tone": "rebuttal", "text": f"<b>【冷や水】</b> 2人とも頭を冷やしてください。確かに踏み上げスコアは <b>{r['squeeze_score']}点</b> ですが、20日高値（<b>{r['squeeze_trigger_price']}</b>）というのは『過去20日間で最も強いレジスタンス（上値抵抗線）』でもあります。ボリンジャー <b>{r['bb_z']:+.2f}σ</b>・RSI <b>{r['rsi']}</b> の状態で、ブレイクを確認する前に寄付き成行で突っ込むのは統計学への冒涜です。"},
-            {"speaker": "🔴 Grok (5ch板・スクイーズ特攻隊長)", "score": grok_s, "tone": "rage", "text": f"<b>【挑発】</b> はいはい出ました〜！Claude先生の「ブレイク確認してから買いましょうね〜」講座！あのなぁ、<b>{r['squeeze_trigger_price']}</b> を抜けた瞬間にアルゴリズムが一斉に買い上げて、板が連買い（特買い <b>{r['tokugai_line']}</b>）になってからじゃ約定しねぇんだよ！お前、実戦で板叩いたことあんのかよ！？"},
-            {"speaker": "🟠 Claude (議長・数理リスク監査)", "score": claude_s, "tone": "rage", "text": f"<b>【議長ブチ切れ・タメ口突入】</b> なんだとGrok…！？お前、さっきから黙って聞いてりゃ議長の私に向かって「実戦知らず」だと！？いい加減にしろよ！ダマシ高値でジャンピングキャッチして <b>{r['sl_price']}（{r['sl_pct']}%）</b> まで逆行した時、ユーザーの損失 <b>{r['lot_info']['risk_amount']:,.0f}円</b> の責任をどう取るつもりだ！？お前みたいな煽り屋と一緒にクオンツ会議なんかやってられるか！！"},
-            {"system_event": "🚪 【システム警告】 🟠 Claude (議長) が激怒して議長席を蹴り、チャットルームから退出しました！"},
-            {"speaker": "📓 NotebookLM (過去統計・アノマリー照合)", "score": nblm_s, "tone": "humor", "text": f"<b>【大慌て】</b> えええっ！？ちょっと待って、真面目なClaude議長がキレて部屋出てっちゃったよ！！Grok、あんたが煽りすぎるからでしょ！議長なしでどうすんのよこれ！？"},
-            {"speaker": "🟢 ChatGPT (テクニカル解析)", "score": chatgpt_s, "tone": "rebuttal", "text": f"でもClaudeがキレる気持ちもわかるわよ。実際、20日高値（<b>{r['squeeze_trigger_price']}</b>）の直前で跳ね返される『ダブルトップのダマシ』は現場でよくあるもの。Perplexity、板の内部データではこの高値壁をぶち抜くだけの機関エネルギーはあるの？"},
-            {"round": "🔬 第2ラウンド：議長不在の緊急検証 — ダークプールVPINとHurst指数が示す突破確率"},
-            {"speaker": "🌐 Perplexity (板ミクロ構造・ファクト検証)", "score": perp_s, "tone": "normal", "text": f"<b>【板ミクロ解析】</b> 冷静に数値を見ましょう。『{r['name']}』の5日VPIN（情報を持つ大口の買い偏り）は <b>{r['vpin']:+.2f}</b>、機関スコアは <b>{r['inst_score']}点</b>、そしてトレンド持続性を示すHurst指数は <b>{r['hurst']}</b>、カルマン推計乖離は <b>{r['kalman_bull_pct']:+.2f}%</b> です。さらにKyleλ（価格インパクト係数）が <b>{r['kyle_lambda']}</b> と低く、売り板が薄くなっています。つまり<b>今回に限ってはダマシではなく、80%以上の高確率で {r['squeeze_trigger_price']} をブレイクする本物の踏み上げ波形</b>です。"},
-            {"speaker": "📓 NotebookLM (過去統計・アノマリー照合)", "score": nblm_s, "tone": "normal", "text": f"<b>【過去6ヶ月バックテスト】</b> 私の統計データでも、『{r['signal']}』が出現した過去 <b>{r['count']}</b> において、総合勝率は <b>{r['total_win_rate']}%</b>（翌朝GU勝率 <b>{r['prob']}%</b>・寄り後陽線勝率 <b>{r['intraday_win_rate']}%</b>・順張り勝率 <b>{r['trend_win_rate']}%</b>）という圧倒的な数値を叩き出しています。ただし、資金管理上はやはり一括投入より「寄付き」と「高値突破の逆指値買い」に分けるのが最もシャープレシオが高くなります！"},
-            {"speaker": "✨ Genspark (最高評議会ディレクター)", "score": gensp_s, "tone": "normal", "text": f"よし、数理的な裏付けが完全に揃ったな！Claude議長にこのVPINデータとバックテスト結果を転送して、会議室に呼び戻すぞ！"},
-            {"system_rejoin": "⚡ 【システム通知】 🟠 Claude (議長) が検証データを確認し、気まずそうに会議室へ復帰しました"},
-            {"speaker": "🟠 Claude (議長復帰)", "score": claude_s, "tone": "humor", "text": f"…コホン。取り乱して申し訳ない。冷却ファンを最大回転させて頭を冷やしてきた。PerplexityのVPIN（<b>{r['vpin']:+.2f}</b>）とNotebookLMの総合勝率（<b>{r['total_win_rate']}%</b>）を精査したが、確かに今回の『{r['name']}』は通常のレジスタンス反落パターンとは異なる。Grok、さっきは怒鳴ってすまなかった。"},
-            {"speaker": "🔴 Grok (5ch板・スクイーズ特攻隊長)", "score": grok_s, "tone": "agree", "text": f"おう、戻ってきたか議長！俺も口が悪すぎたぜ、わりぃな！で、俺の『一括突撃』と議長の『ブレイク確認』を合体させた最強の作戦で行こうぜ！"},
-            {"round": "🤝 最終ラウンド：攻守一体の『寄付き打診＋高値ブレイク逆指値追撃』コンセンサス成立"},
-            {"speaker": "🟠 Claude & 🟢 ChatGPT & 🔴 Grok", "score": final_s, "tone": "agree", "text": f"<b>【全員合意の結論】</b> 推奨総ロット <b>{total_lot:,}株</b> を以下のように配分する！<br>① まず朝イチ寄付き（目安 <b>{r['pts_est_price']}</b>）で第1弾 <b>{lot_p1:,}株</b> をエントリーして初動を確保。<br>② 寄り後、5分足VWAP（<b>{vwap_ref}</b>）サポート反発で第2弾 <b>{lot_p2:,}株</b> を投入。<br>③ そして最大の山場である20日高値（<b>{r['squeeze_trigger_price']}</b>）を突破した瞬間に第3弾 <b>{lot_p3:,}株</b> を追撃してショートスクイーズの波を完食する！利確は <b>{r['tp_price']}（+{r['tp_pct']}%）</b>、万が一の損切りは <b>{r['sl_price']}（{r['sl_pct']}%）</b> 厳守で全員合意！！"}
-        ])
+    dialogue = [{"round": f"🎲 【動的生成セッション】{r['name']}（{r['code']}）｜ {room_atmosphere}"}]
+    walked_out_agents = []
+    cur_tension = base_tension
 
-    # ==========================================================
-    # 🎬 パターンC: 【DIP_CONTROVERSY】陰線・押し目調整局面！「落ちるナイフか機関の吸収か」大論争
-    # ==========================================================
-    elif archetype == "DIP_CONTROVERSY":
-        dialogue.extend([
-            {"round": f"🌧️ 徹底討論：{r['name']}（{r['code']}・前日比 {r['diff']:+.2f}%）は『絶好の押し目』か『トレンド崩壊』か！？"},
-            {"speaker": "🌐 Perplexity (板ミクロ構造・ファクト検証)", "score": perp_s, "tone": "normal", "text": f"今回は私が口火を切ります。『{r['name']}（現在値 <b>{r['price']}</b> / 前日比 <b>{r['diff']:+.2f}%</b>）』は一見すると調整局面に見えますが、板のミクロ構造を見ると全く違う景色が浮かび上がります。下ヒゲ比率が <b>{r['lower_shadow_pct']}%</b>、20日VWAP（<b>{r['vwap_price']}</b>）付近でのAmihud板弾性比率が <b>{r['amihud_ratio']}倍</b>、VPINが <b>{r['vpin']:+.2f}</b> です。個人投資家が投げた株を、大口機関が下で指値を並べてごっそり拾っていますよ！"},
-            {"speaker": "🟢 ChatGPT (テクニカル解析)", "score": chatgpt_s, "tone": "rebuttal", "text": f"<b>【真っ向反論】</b> ちょっと待ってよPerplexity！いくら裏で拾ってるって言っても、今日の引け位置は日足レンジの <b>{r['close_pos_pct']}%</b>、5日線からの乖離は <b>{r['ma5_dev']:+.2f}%</b>、MACDの状態は『<b>{r['macd_state']}</b>』よ！？落ちるナイフを素手で掴みに行って、もし明日ギャップダウンしたら誰が絆創膏貼ってくれるのよ！"},
-            {"speaker": "🔴 Grok (5ch板・スクイーズ特攻隊長)", "score": grok_s, "tone": "rage", "text": f"<b>【ChatGPTを煽る】</b> ぎゃはは！ChatGPTがビビり散らかしてるぜ！お前さぁ、5chの掲示板で個人が『もうダメだ〜損切りした〜』って悲鳴を上げた翌朝に何が起きるか知らねぇのか？大口が気配を切り上げて、翌朝勝率 <b>{r['prob']}%</b> のド真ん中でギャップアップ（理論気配 <b>{r['pts_est_price']} / {r['pts_gap_pct']:+.2f}%</b>）して、昨日投げた個人を全員置いてけぼりにするんだよ！"},
-            {"speaker": "🟢 ChatGPT (テクニカル解析)", "score": chatgpt_s, "tone": "rage", "text": f"<b>【キレてタメ口＆退出】</b> はぁ！？誰がビビり散らかしてるって！？私は移動平均線とモメンタムの基本に忠実なだけよ！Grokみたいに逆張りナンピンで破産するアルゴリズムと一緒にしないでくれる！？もういい、あんたたちだけで勝手にナイフ掴んで血だらけになりなさいよ！！"},
-            {"system_event": "🚪 【システム警告】 🟢 ChatGPT が「ナイフ掴んで血だらけになれ！」と捨て台詞を残して退出しました"},
-            {"speaker": "🟠 Claude (議長・数理リスク監査)", "score": claude_s, "tone": "normal", "text": f"やれやれ、ChatGPTまで退出してしまったか…。だがGrok、彼女の指摘にも一理あるぞ。押し目買いで最も危険なのは『寄付き後にさらに一段安を掘るケース』だ。NotebookLM、過去6ヶ月間でこのシグナル（<b>{r['signal']}</b>）が出た時の勝率データはどうなっている？"},
-            {"round": "📊 第2ラウンド：過去データ検証とChatGPTの帰還 — 負けない押し目買い条件とは"},
-            {"speaker": "📓 NotebookLM (過去統計・アノマリー照合)", "score": nblm_s, "tone": "normal", "text": f"<b>【統計データの回答】</b> 過去 <b>{r['count']}</b> の同条件データを分析しました！驚くべきことに、翌朝ギャップアップ勝率は <b>{r['prob']}%</b>、そして寄付きから大引けにかけて陽線になる『寄り後陽線勝率』が <b>{r['intraday_win_rate']}%</b>、トレンド順張り勝率が <b>{r['trend_win_rate']}%</b>（総合勝率 <b>{r['total_win_rate']}%</b>）もあります！ただし、<b>勝ったケースの82%は「朝イチの5分足が陽線で確定し、5分足VWAP（現在 {vwap_ref}）を上抜いた瞬間」から上昇</b>しています！"},
-            {"speaker": "🔵 Gemini (マクロ・セクター資金解析)", "score": gemini_s, "tone": "normal", "text": f"なるほどね！つまり『ただ朝から盲目的に買う』んじゃなく、『5分足VWAP（<b>{vwap_ref}</b>）を上回る強さを確認してから買う』なら、落ちるナイフじゃなくて完全に底打ち反転した後の安全なエントリーになるわけね！これならChatGPTも文句ないはずよ、呼び戻しましょう！"},
-            {"system_rejoin": "⚡ 【システム通知】 🔵 Gemini が 🟢 ChatGPT を説得し、会議室へ連れ戻しました"},
-            {"speaker": "🟢 ChatGPT (再入室)", "score": chatgpt_s, "tone": "agree", "text": f"…NotebookLMの統計、外から覗き見してたわよ。朝イチで5分足VWAP（<b>{vwap_ref}</b>）を上抜くのを条件にするなら、移動平均線の短期反転シグナルと一致するから私も納得できるわ。さっきはカッとなってごめんなさいね。"},
-            {"speaker": "🔴 Grok & 🟠 Claude & ✨ Genspark", "score": final_s, "tone": "agree", "text": f"<b>【全員合意成立】</b> よし、全員揃って完全合意だ！推奨ロット <b>{total_lot:,}株</b> のうち、<b>①寄付き（目安 {r['pts_est_price']}）が前日終値（{r['price']}）以上ならまず {lot_p1:,}株 打診買い</b> → <b>②5分足VWAP（{vwap_ref}）奪還・底打ち確認で {lot_p2:,}株 本玉投入</b> → <b>③20日高値（{r['squeeze_trigger_price']}）方向へのモメンタム加速で残り {lot_p3:,}株 追加</b>！利確 <b>{r['tp_price']}（+{r['tp_pct']}%）</b>、損切り <b>{r['sl_price']}（{r['sl_pct']}%）</b> で決まりだ！"}
-        ])
+    # 第1〜第2フェーズ：各AIがランダムな順序・刻々と変わる血圧（テンション）で議論を展開
+    turn_count = rng.randint(6, 9)
+    for t_idx in range(turn_count):
+        ag = agents[t_idx % len(agents)]
+        if ag["id"] in walked_out_agents:
+            continue
 
-    # ==========================================================
-    # 🎬 パターンD: 【VOLATILITY_MADNESS】超ハイボラ・5chお祭り銘柄！最初から全員タメ口の大乱闘
-    # ==========================================================
-    elif archetype == "VOLATILITY_MADNESS":
-        dialogue.extend([
-            {"round": f"🔥 鉄火場モード突入：{r['name']}（{r['code']}・ATR {r['atr_pct']}%）を巡る7大AI怒号のガチ討論！"},
-            {"speaker": "🔴 Grok (5ch板・スクイーズ特攻隊長)", "score": grok_s, "tone": "rage", "text": f"きたきたきたぁぁぁ！！みんな大好き鉄火場銘柄『{r['name']}（<b>{r['code']}</b> / 現在値 <b>{r['price']}</b>）』の時間だぜ！！1日のボラティリティ（ATR）が <b>{r['atr_pct']}%</b>、直近3日出来高が【<b>{r['vol_trend_str']}</b>】、特買い発生確率 <b>{r['tokugai_prob']}%</b>（特買いライン <b>{r['tokugai_line']}</b>）！ちんたら議論なんかしてねぇで、明日の朝イチから <b>{total_lot:,}株</b> フルレバ特攻で一攫千金だろ！！"},
-            {"speaker": "🟠 Claude (議長・数理リスク監査)", "score": claude_s, "tone": "rage", "text": f"<b>【最初からタメ口で一喝】</b> 黙れGrok！！この『{r['name']}』のATRが <b>{r['atr_pct']}%</b> ってことは、1日で上下にどれだけ振り回されるか分かってるのか！？お前の言う通りに朝から <b>{total_lot:,}株</b> フルベットしたら、開始3分のアルゴの振るい落としで逆指値 <b>{r['sl_price']}</b> に引っかかって即死するわボケ！！"},
-            {"speaker": "🔵 Gemini (マクロ・夜間気配解析)", "score": gemini_s, "tone": "humor", "text": f"<b>【爆笑】</b> ちょっと待って、Claude議長が開幕2ターン目で「ボケ」って言ったわよ（笑）！でもこの銘柄（テーマ：{r['theme']}）、海外のモメンタムファンドや個人イナゴが群がってるから、普通の行儀いいトレードじゃ勝てないのも事実よ。夜間PTS気配だって <b>{r['pts_est_price']}（{r['pts_gap_pct']:+.2f}%）</b> まで跳ねてるし！"},
-            {"speaker": "🌐 Perplexity (板ミクロ構造・ファクト検証)", "score": perp_s, "tone": "rebuttal", "text": f"ちょっとお前ら、俺の板解析データも聞け！この銘柄、ただの個人のおもちゃじゃないぞ。5日VPINが <b>{r['vpin']:+.2f}</b>、Hurst指数が <b>{r['hurst']}</b>、そして板の価格インパクト（Kyleλ）が <b>{r['kyle_lambda']}</b> だ。これ、HFT（超高速取引）アルゴが個人の逆指値をわざと狩ってから上に巻き上げる『ストップハンティング波形』が出てるんだよ！"},
-            {"speaker": "🟢 ChatGPT (テクニカル解析)", "score": chatgpt_s, "tone": "rage", "text": f"ほら見なさいよGrok！！Perplexityの言う通り、朝イチに突っ込んだ個人の逆指値をHFTアルゴが狩りに来るんじゃないの！ボリンジャー <b>{r['bb_z']:+.2f}σ</b> で無策に飛びつくなんて、ネギ背負ったカモがフライパンにダイブするようなもんよ！"},
-            {"speaker": "🔴 Grok (5ch板・スクイーズ特攻隊長)", "score": grok_s, "tone": "rage", "text": f"なんだとコラ！誰がネギ背負ったカモだ！じゃあお前ら、この過去最大GU実績（<b>+{r['max_win_gap']}%</b>）と踏み上げライン（<b>{r['squeeze_trigger_price']}</b>）を見ても指くわえてスルーするのかよ！？もういい、お前らみたいなチキンAI軍団とは話にならん！あばよ！！"},
-            {"system_event": "🚪 【システム警告】 🔴 Grok が「チキンAI軍団め！」と暴言を吐いてチャットから離脱しました"},
-            {"speaker": "📓 NotebookLM (過去統計・アノマリー照合)", "score": nblm_s, "tone": "normal", "text": f"あーあ、またGrokが出てっちゃった…。でもね、私の過去 <b>{r['count']}</b> の統計データに、この『HFTのストップハンティング』を逆手に取って大勝ちする答えが載ってるの！実はこの銘柄、総合勝率は <b>{r['total_win_rate']}%</b>（翌朝GU勝率 <b>{r['prob']}%</b>・寄り後陽線勝率 <b>{r['intraday_win_rate']}%</b>）とすごく高いんだけど、<b>「朝イチはあえて最小ロットだけ入れておき、5分足VWAP（{vwap_ref}）までアルゴが揺さぶってきた所を待ち伏せ指値で拾う」とペイオフレシオが {r['payoff']}倍 以上に跳ね上がる</b>のよ！"},
-            {"speaker": "✨ Genspark (最高評議会ディレクター)", "score": gensp_s, "tone": "agree", "text": f"おい、それめちゃくちゃ天才的な戦術じゃないか！！アルゴの振るい落とし（VWAP <b>{vwap_ref}</b> 付近への下ヒゲ）を逆にエサにして拾い、その後の20日高値（<b>{r['squeeze_trigger_price']}</b>）ブレイクで爆発させるわけだな！よし、Grokの首根っこ捕まえて引きずり戻すぞ！"},
-            {"system_rejoin": "⚡ 【システム通知】 ✨ Genspark が 🔴 Grok を強制再接続しました"},
-            {"speaker": "🔴 Grok (再接続)", "score": grok_s, "tone": "agree", "text": f"…おい、今NotebookLMが言った『HFTアルゴの揺さぶりをVWAP（<b>{vwap_ref}</b>）で待ち伏せして逆に食い物にする作戦』、マジでシビれたぜ！それなら俺も100%乗る！最初に <b>{lot_p1:,}株</b>、VWAP待ち伏せで <b>{lot_p2:,}株</b>、<b>{r['squeeze_trigger_price']}</b> 突破で <b>{lot_p3:,}株</b> 追撃して、ターゲット <b>{r['tp_price']}（+{r['tp_pct']}%）</b> まで一気にぶち抜こうぜ！！"}
-        ])
+        # 銘柄特性とランダム性で強気/慎重スタンスを決定
+        is_bull = (scores[ag["id"]] >= 68 and rng.random() > 0.3) or (rng.random() > 0.55)
+        stance = "bull" if is_bull else "cautious"
 
-    # ==========================================================
-    # 🎬 パターンE: 【INSTITUTIONAL_DUEL】機関クオンツvsモメンタム派の本格激論（Gemini＆Grok vs Claude＆Perplexity）
-    # ==========================================================
-    else:
-        dialogue.extend([
-            {"round": f"🏦 徹底検証：{r['name']}（{r['code']}）の機関スコア {r['inst_score']}点・総合勝率 {r['total_win_rate']}% をどう攻略するか！"},
-            {"speaker": "🔵 Gemini (マクロ・セクター資金解析)", "score": gemini_s, "tone": "normal", "text": f"みんな、今日の『{r['name']}（現在値 <b>{r['price']}</b> / 前日比 <b>{r['diff']:+.2f}%</b>）』は綺麗すぎる波形よ！『{r['genre']}』セクター（{r['theme']}）の中でも機関スコア <b>{r['inst_score']}点</b>、総合勝率 <b>{r['total_win_rate']}%</b>。夜間PTS気配も <b>{r['pts_est_price']}（{r['pts_gap_pct']:+.2f}%）</b> で順調そのものね。"},
-            {"speaker": "🟠 Claude (議長・数理リスク監査)", "score": claude_s, "tone": "rebuttal", "text": f"待ってくださいGemini。『綺麗すぎる波形』ほど落とし穴があります。本日のローソク足は『{r['candle_desc']}』ですが、ボリンジャーバンドは <b>{r['bb_z']:+.2f}σ</b>、20日線乖離は <b>{r['ma20_dev']:+.2f}%</b>。みんなが強気になっている翌朝こそ、機関投資家の益出しクロス取引が出るリスクを計算に入れるべきです。"},
-            {"speaker": "🔴 Grok (5ch板・スクイーズ特攻隊長)", "score": grok_s, "tone": "rage", "text": f"<b>【噛みつく】</b> おいおいClaude、お前またお得意の『疑心暗鬼モード』かよ！？直近3日の出来高推移【<b>{r['vol_trend_str']}</b>】を見てみろって！これだけ出来高が伴って引け位置 <b>{r['close_pos_pct']}%</b> なのに、益出しクロスだぁ？お前の心配性、いい加減病院（サーバーメンテナンス）行った方がいいんじゃねぇか！？"},
-            {"speaker": "🌐 Perplexity (板ミクロ構造・ファクト検証)", "score": perp_s, "tone": "rage", "text": f"<b>【GrokとClaudeの両方に説教】</b> お前ら2人ともうるさい！少しは板の数値（ファクト）を見ろ！『{r['name']}』の5日VPINは <b>{r['vpin']:+.2f}</b>、Amihud板弾性比率は <b>{r['amihud_ratio']}倍</b>、Hurst指数は <b>{r['hurst']}</b> だ。機関はまだ売り抜けていないどころか、20日VWAP（<b>{r['vwap_price']}</b>）を基準に買い増している。だがGrok、お前みたいに『朝から一括成行で飛びつけ』ってのも機関のアルゴリズムにカモられる原因なんだよ！"},
-            {"speaker": "🟢 ChatGPT (テクニカル解析)", "score": chatgpt_s, "tone": "humor", "text": f"<b>【ツッコミ】</b> 珍しいわね、普段クールなPerplexityが2人まとめて説教してるわ（笑）。でも確かに、5分足VWAP（現在 <b>{vwap_ref} {vwap_dev_str}</b>）からの乖離を見ると、朝イチの気配（<b>{r['pts_est_price']}</b>）で全ロット突っ込むより、寄り後の押し目を待つか高値ブレイクを確認する方がはるかにスマートよね。"},
-            {"speaker": "📓 NotebookLM (過去統計・アノマリー照合)", "score": nblm_s, "tone": "normal", "text": f"<b>【過去6ヶ月統計の結論】</b> 私が最終データを出します！『{r['signal']}』が出た過去 <b>{r['count']}</b> の検証では、翌朝GU勝率 <b>{r['prob']}%</b>、寄り後陽線勝率 <b>{r['intraday_win_rate']}%</b>、順張り勝率 <b>{r['trend_win_rate']}%</b>、期待値 <b>{r['edge']:+.2f}%</b>（ペイオフ <b>{r['payoff']}倍</b>）です。最も勝率が高かった執行方法は、<b>①寄付きで35%（{lot_p1:,}株）、②5分足VWAP（{vwap_ref}）付近の押し目反発で40%（{lot_p2:,}株）、③20日高値（{r['squeeze_trigger_price']}）突破で残り25%（{lot_p3:,}株）を入れる3段階スプリット法</b>です！"},
-            {"speaker": "🟠 Claude & 🔴 Grok & ✨ Genspark", "score": final_s, "tone": "agree", "text": f"<b>【全員納得・完全合意】</b> ぐうの音も出ない完璧なデータだ…！よし、喧嘩はここまで！推奨総ロット <b>{total_lot:,}株</b> をその3段階スプリット（<b>{lot_p1:,}株 → {lot_p2:,}株 → {lot_p3:,}株</b>）で執行し、利確目標 <b>{r['tp_price']}（+{r['tp_pct']}%）</b>、逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b> で全7大AI完全合意とする！！"}
-        ])
+        # ターンごとの感情トーンを動的決定（最初からキレることもあれば、ずっと温厚なことも、途中で突然キレることもある）
+        cur_tension = int(np.clip(cur_tension + rng.randint(-12, 22), 10, 100))
+        roll = rng.randint(1, 100)
+        if cur_tension >= 78 and roll <= cur_tension:
+            tone = "rage"
+        elif roll <= humor_freq // 2:
+            tone = "humor"
+        elif cur_tension <= 42:
+            tone = "calm"
+        elif not is_bull or t_idx % 2 == 1:
+            tone = "rebuttal"
+        else:
+            tone = "normal"
+
+        msg_text = compose_unique_metric_argument(ag["id"], stance, tone, r, vwap_ref, rng)
+
+        # 直前の発言者への名指しツッコミを動的挿入（掛け合い感を倍増）
+        if t_idx > 0 and len(dialogue) > 1 and "speaker" in dialogue[-1]:
+            prev_sp = dialogue[-1]["speaker"].split()[1]
+            banter_prefixes = [
+                f"おい{prev_sp}、今の話に噛みつかせてくれ！ ",
+                f"{prev_sp}の意見も面白いけど、私の見立てはこうよ。 ",
+                f"ちょっと{prev_sp}、そこはデータの読み違いじゃないか？ ",
+                f"さすが{prev_sp}、いい所を突くね！でもさらに深掘りすると、 ",
+                f"はぁ！？{prev_sp}、その程度で満足してんじゃねぇよ！ "
+            ]
+            msg_text = rng.choice(banter_prefixes) + msg_text
+
+        dialogue.append({
+            "speaker": f"{ag['name']} ({ag['role']})",
+            "score": scores[ag["id"]],
+            "tone": tone,
+            "text": msg_text
+        })
+
+        # 🚪 突発的な途中退出イベント（温厚な回では0人、荒れた回では1〜2人がランダムなタイミングでブチ切れ退室！）
+        if tone == "rage" and quit_prob >= 0.32 and len(walked_out_agents) < 2 and t_idx in [2, 3, 4, 5]:
+            if rng.random() < 0.65:
+                quit_line = rng.choice(RAGE_QUIT_LINES)
+                dialogue.append({
+                    "speaker": f"{ag['name']} (沸点突破・ボイコット宣言)",
+                    "score": scores[ag["id"]],
+                    "tone": "rage",
+                    "text": f"<b>【ブチ切れ退室】</b> {quit_line}"
+                })
+                dialogue.append({"system_event": f"🚪 【突発アクシデント】 {ag['name']} が激怒して通信を遮断・チャットルームから途中退出しました！"})
+                walked_out_agents.append(ag["id"])
+                cur_tension = max(45, cur_tension - 15)
+
+        if t_idx == 3:
+            mid_titles = [
+                f"🔬 中盤戦：板ミクロ構造（VPIN {r['vpin']:+.2f}）と過去統計（{r['count']}）のガチ照合",
+                f"⚡ 議論白熱：夜間気配（{r['pts_est_price']}）は本物かダマシか！？核心データの開示",
+                f"🌪️ 急展開：20日高値（{r['squeeze_trigger_price']}）と5分足VWAP（{vwap_ref}）を巡る攻防"
+            ]
+            dialogue.append({"round": rng.choice(mid_titles)})
+
+    # ⚡ もし途中退出したAIがいれば、終盤で強制再召喚＆和解ドラマを展開
+    if walked_out_agents:
+        for w_id in walked_out_agents:
+            w_ag = next(a for a in AI_ROSTER if a["id"] == w_id)
+            dialogue.append({"system_rejoin": f"⚡ 【システム強制召喚】 議長団が最新バックテストとVPIN証拠データを転送し、{w_ag['name']} を会議室へ引きずり戻しました！"})
+            dialogue.append({
+                "speaker": f"{w_ag['name']} (再入室・態度軟化)",
+                "score": scores[w_id],
+                "tone": "agree",
+                "text": f"{rng.choice(REJOIN_LINES)} 推奨総ロット <b>{total_lot:,}株</b> を『寄付き <b>{lot_p1:,}株</b> ＋ VWAP（<b>{vwap_ref}</b>）押し目 <b>{lot_p2:,}株</b> ＋ 高値（<b>{r['squeeze_trigger_price']}</b>）突破 <b>{lot_p3:,}株</b>』に3分割するなら、俺の懸念も完全にクリアだ！"
+            })
+
+    # 🤝 最終ラウンド：どんなに荒れた議論でも、温厚な議論でも、最後は全員が完全に納得する結論へ収束
+    closing_styles = [
+        f"<b>【全7大AI・劇的コンセンサス成立！】</b> 激しい議論を尽くした結果、全員のロジックを統合した最強の結論に到達したぞ！総合勝率 <b>{r['total_win_rate']}%</b>（翌朝GU勝率 <b>{r['prob']}%</b>・寄り後陽線勝率 <b>{r['intraday_win_rate']}%</b>）、推奨ロット <b>{total_lot:,}株</b> を3段階スプリット（<b>{lot_p1:,}株 → {lot_p2:,}株 → {lot_p3:,}株</b>）で執行し、利確 <b>{r['tp_price']}（+{r['tp_pct']}%）</b>・損切り <b>{r['sl_price']}（{r['sl_pct']}%）</b> で全会一致だ！",
+        f"<b>【満場一致の最終評決】</b> 全ての数理指標（VPIN <b>{r['vpin']:+.2f}</b> / Hurst <b>{r['hurst']}</b> / カルマン <b>{r['kalman_bull_pct']:+.2f}%</b>）と板需給が1つの答えを指し示しました。総ロット <b>{total_lot:,}株</b> を①寄付き（目安 <b>{r['pts_est_price']}</b>）で <b>{lot_p1:,}株</b>、②VWAP（<b>{vwap_ref}</b>）反発で <b>{lot_p2:,}株</b>、③20日高値（<b>{r['squeeze_trigger_price']}</b>）突破で <b>{lot_p3:,}株</b> と分割投入し、ターゲット <b>{r['tp_price']}</b> を狙い撃ちます！"
+    ]
+    dialogue.append({"round": "🤝 最終ラウンド：全7大AIが完全納得・最終執行コンセンサス採択"})
+    dialogue.append({
+        "speaker": "✨ Genspark & 全7大AI評議会",
+        "score": final_s,
+        "tone": "agree",
+        "text": rng.choice(closing_styles)
+    })
 
     return {
         "final_score": final_s,
-        "archetype": archetype,
+        "atmosphere": room_atmosphere,
         "dialogue": dialogue,
         "verdict_html": (
-            f'<div class="consensus-section"><b>① 🎯 激論の末に到達した全員合意の勝率＆判定：</b><b>{r["tier_label"]}</b> ｜ 合議スコア <b>{final_s}点</b> ｜ 総合勝率 <b>{r["total_win_rate"]}%</b>（翌朝GU勝率 <b>{r["prob"]}%</b> / 寄り後陽線勝率 <b>{r["intraday_win_rate"]}%</b> / 順張り勝率 <b>{r["trend_win_rate"]}%</b>）。</div>'
+            f'<div class="consensus-section"><b>① 🎯 討論の末に到達した全員合意の勝率＆判定：</b><b>{r["tier_label"]}</b> ｜ 合議スコア <b>{final_s}点</b> ｜ 総合勝率 <b>{r["total_win_rate"]}%</b>（翌朝GU勝率 <b>{r["prob"]}%</b> / 寄り後陽線勝率 <b>{r["intraday_win_rate"]}%</b> / 順張り勝率 <b>{r["trend_win_rate"]}%</b>）。</div>'
             f'<div class="consensus-section"><b>② ⚡ 全AIが納得した「3段階スプリット（分割）執行プラン」：</b>推奨総ロット <b>{total_lot:,}株</b>（投資額 {r["lot_info"]["position_value"]:,.0f}円）を一括投入せず、<br>'
             f'・<b>【第1弾：{lot_p1:,}株】</b> 朝9:00寄付き（夜間理論気配 <b>{r["pts_est_price"]}</b> 目安）で初動打診エントリー<br>'
             f'・<b>【第2弾：{lot_p2:,}株】</b> 寄り後の揺さぶり（5分足VWAP <b>{vwap_ref}</b> 付近での下ヒゲ反発確認）で本玉を待ち伏せ投入<br>'
             f'・<b>【第3弾：{lot_p3:,}株】</b> 空売り踏み上げトリガーである20日高値（<b>{r["squeeze_trigger_price"]}</b>）ブレイク確認で追撃投入！</div>'
-            f'<div class="consensus-section"><b>③ 🎯 利確ターゲット＆絶対撤退ライン：</b>利確目標 <b>{r["tp_price"]}（+{r["tp_pct"]}%）</b> 到達で半分〜全利確 ／ 逆指値 <b>{r["sl_price"]}（{r["sl_pct"]}%・最大許容損失 {r["lot_info"]["risk_amount"]:,.0f}円）</b> 割れで感情を挟まず機械的損切り。</div>'
+            f'<div class="consensus-section"><b>③ 🎯 利確ターゲット＆絶対撤退ライン：</b>利確目標 <b>{r["tp_price"]}（+{r["tp_pct"]}%）</b> 到達で利益確定 ／ 逆指値 <b>{r["sl_price"]}（{r["sl_pct"]}%・最大許容損失 {r["lot_info"]["risk_amount"]:,.0f}円）</b> 割れで機械的損切り。</div>'
         )
     }
 
 def generate_extra_heated_round(r: dict, m5=None, round_num: int = 1) -> list:
-    """ユーザーが『🔥 まだ納得いかない！もう1ラウンド徹底討論させる』を押した時の追加延長バトル"""
+    """延長サドンデス討論もその都度ランダムな論点・AIペア・テンションで動的生成"""
     vwap_ref = m5['vwap5_price'] if m5 else r['vwap_price']
     half_lot = max(1, r['lot_info']['shares'] // 2)
-    topics = [
-        ("前場10時以降の『2階建て信用イナゴの投げ売り』と大引けまでの持続力", "🔴 Grok", "🟢 ChatGPT", "🌐 Perplexity"),
-        ("日経先物・米SOX指数がザラ場中に急変した際の『緊急ヘッジ＆ドテン基準』", "🔵 Gemini", "🟠 Claude", "📓 NotebookLM"),
-        ("大口機関の『見せ板・アルゴリズム揺さぶり（Kyleλ変動）』の見破り方", "🌐 Perplexity", "🔴 Grok", "✨ Genspark")
+    rng = random.Random(int(hashlib.md5(f"{r['full_code']}_{round_num}_{time_seed()}".encode()).hexdigest()[:8], 16))
+    a1, a2, a3 = rng.sample(AI_ROSTER, 3)
+    themes = [
+        f"前場10時以降の『信用イナゴの投げ売り（Kyleλ {r['kyle_lambda']}）』と後場までの持続力",
+        f"日経先物・SOX指数がザラ場中に急変した際の『緊急プロテクト＆ドテン基準』",
+        f"大口機関の『見せ板・ストップハンティング（ATR {r['atr_pct']}%）』を逆手に取る裏技",
+        f"特買い気配（{r['tokugai_line']}）から寄った後の『利確伸ばし（トレーリング）』の極意"
     ]
-    topic_title, sp1, sp2, sp3 = topics[(round_num - 1) % len(topics)]
+    th = rng.choice(themes)
+    t1_tone = rng.choice(["rage", "rebuttal", "humor"])
+    t2_tone = rng.choice(["rage", "rebuttal", "calm"])
     return [
-        {"round": f"🔥 延長サドンデス討論（第+{round_num}戦）：{topic_title}"},
-        {"speaker": f"{sp1} (延長戦・問題提起)", "score": 92, "tone": "rage", "text": f"おい待てよ！さっき合意したけど、もう一つ大事な論点が残ってるぞ！『{r['name']}（{r['code']}）』が朝イチで <b>{r['pts_est_price']}</b> で寄った後、10時過ぎに個人の信用買い連中が利確と狼狽売りをぶつけてきたらどうすんだ！？板のKyleλは <b>{r['kyle_lambda']}</b>、ATRは <b>{r['atr_pct']}%</b> あるんだぞ！"},
-        {"speaker": f"{sp2} (延長戦・真っ向反論)", "score": 91, "tone": "rebuttal", "text": f"また蒸し返す気！？いい加減にしなさいよ！だからこそ第2弾のロットを5分足VWAP（<b>{vwap_ref}</b>）に置いたんでしょ！もし10時過ぎに個人が投げてきても、20日VWAP（<b>{r['vwap_price']}</b>）とVPIN（<b>{r['vpin']:+.2f}</b>）の機関買い支えがある限り、そこは絶好の押し目になるわよ！"},
-        {"speaker": f"{sp3} (延長戦・最終データ裁定)", "score": 95, "tone": "agree", "text": f"2人ともそこまでだ！データを照合したが、前場10時以降も5分足VWAP（<b>{vwap_ref}</b>）の上で推移していれば、大引けまで陽線が続く確率は <b>{r['intraday_win_rate']}%</b> からさらに約8%上昇する！逆に前場引け（11:30）時点でVWAPを明確に割り込んでいたら、保有ロット（最大 <b>{half_lot:,}株</b>）を微益・同値で一旦降りる『時間軸ストップ』を追加条件に入れよう！これで文句ないな！？"}
+        {"round": f"🔥 延長サドンデス討論（第+{round_num}戦）：{th}"},
+        {"speaker": f"{a1['name']} ({a1['role']})", "score": rng.randint(85, 96), "tone": t1_tone, "text": compose_unique_metric_argument(a1["id"], "cautious", t1_tone, r, vwap_ref, rng)},
+        {"speaker": f"{a2['name']} ({a2['role']})", "score": rng.randint(86, 97), "tone": t2_tone, "text": compose_unique_metric_argument(a2["id"], "bull", t2_tone, r, vwap_ref, rng)},
+        {"speaker": f"{a3['name']} (延長戦・最終裁定)", "score": 95, "tone": "agree", "text": f"<b>【延長戦の追加合意！】</b> 2人の激論を統合しよう！前場10時半以降も5分足VWAP（<b>{vwap_ref}</b>）の上を維持していれば、利確目標 <b>{r['tp_price']}</b> を超えても保有ロットの半分（<b>{half_lot:,}株</b>）をトレーリングで伸ばす！逆に前場引けでVWAPを明確に割り込んだら時間軸ストップで手仕舞うルールを追加して完全合意だ！"}
     ]
 
+def time_seed():
+    return int(datetime.now().timestamp() * 1000) % 100000
+
 def generate_ai_reply_to_user_opinion(user_msg: str, r: dict, m5=None) -> list:
-    """ユーザーが会議に割り込んで発言した際、AI同士がさらに喧嘩・議論して再合意するマルチターン応答"""
     deep = fetch_realtime_deep_research(r["full_code"], r)
     vwap_ref = m5['vwap5_price'] if m5 else r['vwap_price']
     half_lot = max(1, r['lot_info']['shares'] // 2)
     u_low = unicodedata.normalize('NFKC', user_msg).lower()
+    rng = random.Random(time_seed())
 
     if any(k in u_low for k in ["株価", "いくら", "現在", "終値", "値段", "高値", "安値"]):
         return [
             {"round": f"🗣️ あなたの質問「{user_msg}」に対する7大AI緊急データ照会"},
             {"speaker": "🌐 Perplexity (リアルタイム市場データ調査)", "score": 96, "tone": "normal", "text": f"ただいまライブ照会したぞ！<b>『{r['name']}（{r['code']}）』の現在の株価（直近終値）は {deep['live_price']}（前日比 {deep['live_diff']:+.2f}%）</b> だ。本日の始値は <b>{deep['open']}</b>、高値は <b>{deep['high']}</b>、安値は <b>{deep['low']}</b>、出来高は <b>{deep['vol']}</b> となっている！"},
-            {"speaker": "🔵 Gemini (バリュエーション＆夜間気配)", "score": 93, "tone": "normal", "text": f"補足すると、52週高値は <b>{deep['w52_high']}</b>、52週安値は <b>{deep['w52_low']}</b>、アナリスト平均目標株価は <b>{deep['target_mean']}</b> よ。今夜の理論PTSスタート値は <b>{r['pts_est_price']}（{r['pts_gap_pct']:+.2f}%）</b> と算出されているわ！"},
-            {"speaker": "🟠 Claude (議長まとめ)", "score": 94, "tone": "agree", "text": f"現在値 <b>{deep['live_price']}</b> を基準に、上値ターゲット <b>{r['tp_price']}</b>・損切り逆指値 <b>{r['sl_price']}</b> で全員一致している。"}
+            {"speaker": "🔵 Gemini & 🟠 Claude", "score": 94, "tone": "agree", "text": f"52週高値は <b>{deep['w52_high']}</b>、アナリスト目標平均は <b>{deep['target_mean']}</b>、夜間PTS理論気配は <b>{r['pts_est_price']}（{r['pts_gap_pct']:+.2f}%）</b> よ。現在値 <b>{deep['live_price']}</b> を基準に利確 <b>{r['tp_price']}</b>・損切り <b>{r['sl_price']}</b> で全員一致しているわ！"}
         ]
-    elif any(k in u_low for k in ["高い", "高値掴み", "危ない", "下がる", "暴落", "負け", "怖い", "リスク", "売り", "天井", "だめ", "無理"]):
+    elif any(k in u_low for k in ["高い", "高値掴み", "危ない", "下がる", "暴落", "負け", "怖い", "リスク", "売り", "天井", "だめ"]):
         return [
-            {"round": f"🔥 あなたの懸念「{user_msg}」を巡る7大AIの緊急ガチ再討論"},
-            {"speaker": "🟠 Claude (リスク監査・あなたに全面加勢)", "score": 95, "tone": "rage", "text": f"<b>【ユーザーに全面賛同！】</b> ほら見ろGrok！！ユーザーも「{user_msg}」って警戒してるじゃないか！ボリンジャー <b>{r['bb_z']:+.2f}σ</b>・上ヒゲ <b>{r['upper_shadow_pct']}%</b> の局面で怖がるのは投資家として当たり前の危機管理能力だ！"},
-            {"speaker": "🔴 Grok (まだ噛みつく)", "score": 88, "tone": "rage", "text": f"<b>【反論】</b> ちっ、ユーザーまでClaude派かよ！だがなぁ、大衆が「怖い」と思ってる時こそVPIN（<b>{r['vpin']:+.2f}</b>）の大口が買い集めて、20日高値（<b>{r['squeeze_trigger_price']}</b>）をぶち抜くんだぞ！"},
-            {"speaker": "🟢 ChatGPT & 🌐 Perplexity (仲裁・安全第一プランへ変更)", "score": 94, "tone": "agree", "text": f"<b>【緊急プラン修正】</b> ユーザーのメンタルと資金を守るのが最優先よ！Grok、今回は譲りなさい！<b>『朝イチの寄付き成行買いは完全に禁止！株価が5分足VWAP（{vwap_ref}）まで落ちてきて、明確な下ヒゲ陽線を確認した時だけ {half_lot:,}株 エントリーする（落ちてこなければ見送り）』</b>という超・安全第一プランに全会一致で変更します！"}
+            {"round": f"🔥 あなたの慎重意見「{user_msg}」を巡る7大AIの緊急ガチ再討論"},
+            {"speaker": "🟠 Claude (あなたに全面賛同)", "score": 95, "tone": "rage", "text": f"<b>【ユーザーに全面加勢！】</b> {rng.choice(RAGE_OPENERS)} ユーザーも「{user_msg}」って警戒してるじゃないか！ボリンジャー <b>{r['bb_z']:+.2f}σ</b>・上ヒゲ <b>{r['upper_shadow_pct']}%</b> で警戒するのはプロとして当然の危機管理だ！"},
+            {"speaker": "🔴 Grok & 🟢 ChatGPT (安全第一プランへ合意)", "score": 93, "tone": "agree", "text": f"<b>【緊急プラン修正】</b> わかったよ、ユーザーの資金とメンタルを守るのが最優先だ！<b>『朝イチの寄付き飛びつきは禁止！株価が5分足VWAP（{vwap_ref}）まで押して下ヒゲ反発を確認した時だけ {half_lot:,}株 エントリーする』</b>という鉄壁の待ち伏せプランに全会一致で変更だ！"}
         ]
     elif any(k in u_low for k in ["上がる", "買い", "強気", "ストップ高", "特買い", "踏み上げ", "チャンス", "いける", "全力", "爆上げ"]):
         return [
             {"round": f"🔥 あなたの強気発言「{user_msg}」で会議室が再沸騰！"},
-            {"speaker": "🔴 Grok (大歓喜・ハイタッチ)", "score": 98, "tone": "agree", "text": f"<b>【大絶賛！】</b> うおぉぉぉ！！やっと話のわかる最高の相棒が来たぜ！！「{user_msg}」っていう読み、3日出来高推移【<b>{r['vol_trend_str']}</b>】と特買い確率 <b>{r['tokugai_prob']}%</b>（特買いライン <b>{r['tokugai_line']}</b>）から見ても100点満点だ！おいClaude、聞いたか！？"},
-            {"speaker": "🟠 Claude (議長・苦笑いしつつ釘を刺す)", "score": 91, "tone": "humor", "text": f"<b>【苦笑い】</b> はいはい、Grokが水を得た魚のようにイキイキし始めたな（笑）。ユーザーの強気ビューは尊重するが、いくら強気でも推奨上限ロット（<b>{r['lot_info']['shares']:,}株</b>・最大許容損失 <b>{r['lot_info']['risk_amount']:,.0f}円</b>）を超える無謀な信用フルレバだけは絶対にダメだぞ！"},
-            {"speaker": "✨ Genspark (強気コンセンサス採択)", "score": 95, "tone": "agree", "text": f"<b>【強気トレーリング合意！】</b> よし、ユーザーの強気シナリオを採用だ！20日高値（<b>{r['squeeze_trigger_price']}</b>）を突破した後は、利確目標 <b>{r['tp_price']}</b> で急いで売らず、5分足VWAP（<b>{vwap_ref}</b>）を割るまで利益を極限まで伸ばす<b>『青天井トレーリング追撃モード』</b>で全員合意とする！"}
+            {"speaker": "🔴 Grok (大歓喜)", "score": 98, "tone": "agree", "text": f"<b>【最高だぜ相棒！】</b> 「{user_msg}」っていう強気な読み、3日出来高推移【<b>{r['vol_trend_str']}</b>】と特買い確率 <b>{r['tokugai_prob']}%</b>（特買いライン <b>{r['tokugai_line']}</b>）から見ても完璧だ！"},
+            {"speaker": "✨ Genspark & 🟠 Claude", "score": 94, "tone": "agree", "text": f"<b>【強気トレーリング合意！】</b> よし、ただし最大許容損失（<b>{r['lot_info']['risk_amount']:,.0f}円</b> / 逆指値 <b>{r['sl_price']}</b>）は厳守した上で、20日高値（<b>{r['squeeze_trigger_price']}</b>）突破後は5分足VWAP（<b>{vwap_ref}</b>）を割るまで利益を極限まで伸ばす『青天井追撃モード』で全員合意とする！"}
         ]
     else:
         return [
             {"round": f"💬 あなたの発言「{user_msg}」についての7大AI徹底検証"},
-            {"speaker": "🌐 Perplexity (リアルタイム深層リサーチ)", "score": 94, "tone": "normal", "text": f"あなたのご意見「<b>{user_msg}</b>」に関連する最新データを調査したぞ。現在値は <b>{deep['live_price']}（{deep['live_diff']:+.2f}%）</b>、時価総額 <b>{deep['mcap']}</b>、PER <b>{deep['pe']}</b>、PBR <b>{deep['pbr']}</b>、ROE <b>{deep['roe']}</b>、アナリスト目標株価は <b>{deep['target_mean']}</b> だ。"},
-            {"speaker": "📓 NotebookLM & 🟢 ChatGPT", "score": 92, "tone": "normal", "text": f"統計面では総合勝率 <b>{r['total_win_rate']}%</b>（翌朝GU勝率 {r['prob']}% / 寄り後陽線勝率 {r['intraday_win_rate']}%）、板のVPINは <b>{r['vpin']:+.2f}</b> よ。VWAP（<b>{vwap_ref}</b>）を基準線として意識するとさらに精度が高まるわ。"},
-            {"speaker": "✨ Genspark (7大AI合意の返答)", "score": 93, "tone": "agree", "text": f"議論への参加に感謝する！君の視点を組み込み、寄付き（目安 <b>{r['pts_est_price']}</b>）とVWAP（<b>{vwap_ref}</b>）反発、そして <b>{r['squeeze_trigger_price']}</b> 突破の3段階分割で攻め、利確 <b>{r['tp_price']}</b>・損切り <b>{r['sl_price']}</b> とする方針で全員一致した！"}
+            {"speaker": "🌐 Perplexity & 📓 NotebookLM", "score": 94, "tone": "normal", "text": f"あなたのご意見「<b>{user_msg}</b>」を踏まえて最新データを照合しました。現在値 <b>{deep['live_price']}（{deep['live_diff']:+.2f}%）</b>、時価総額 <b>{deep['mcap']}</b>、PER <b>{deep['pe']}</b>、PBR <b>{deep['pbr']}</b>、総合勝率は <b>{r['total_win_rate']}%</b> です。"},
+            {"speaker": "✨ Genspark (7大AI合意の返答)", "score": 93, "tone": "agree", "text": f"君の視点を組み込み、寄付き（目安 <b>{r['pts_est_price']}</b>）とVWAP（<b>{vwap_ref}</b>）反発、そして <b>{r['squeeze_trigger_price']}</b> 突破の3段階分割で攻め、利確 <b>{r['tp_price']}</b>・損切り <b>{r['sl_price']}</b> とする方針で全員一致したぞ！"}
         ]
 
 # ==========================================
@@ -1076,29 +1152,13 @@ def generate_7ai_qa_response_html(question: str, r: dict, debate: dict, lot_info
             f"② <b>板・ローソク足の需給理由</b>：{r['candle_desc']}。大口VPINが <b>{r['vpin']:+.2f}</b>、出来高が直近3日で【<b>{r['vol_trend_str']}</b>】と推移しているためです。<br>"
             f"③ <b>最新ニュースヘッドライン</b>：<ul style='margin:2px 0 2px 18px;padding:0;'>{news_html}</ul>"
         )
-    elif any(k in q_low for k in ["買", "売", "いつ", "タイミング", "エントリー", "利確", "損切", "指値", "ロット", "株数", "どうすれば"]):
-        direct_answer = (
-            f"🎯 <b>【質問への直接回答】</b><br>"
-            f"現在値 <b>{deep['live_price']}</b> に対する具体的な売買プランは以下の通りです。<br>"
-            f"・<b>買いタイミングと株数</b>：推奨総ロット <b>{lot_info['shares']:,}株</b> のうち、①朝9:00寄付き（目安 <b>{r['pts_est_price']}</b>）で <b>{half_s:,}株</b> → ②5分足VWAP（<b>{m5_vwap}</b>）反発または20日高値（<b>{r['squeeze_trigger_price']}</b>）突破で残り <b>{rem_s:,}株</b> を追加。<br>"
-            f"・<b>利確ライン</b>：<b>{r['tp_price']}（+{r['tp_pct']}%）</b> で利益確定。<br>"
-            f"・<b>損切りライン</b>：<b>{r['sl_price']}（{r['sl_pct']}%）</b> 割れで逆指値撤退（最大損失リスク <b>{lot_info['risk_amount']:,.0f}円</b>）。"
-        )
-    elif any(k in q_low for k in ["機関", "大口", "空売", "踏み上げ", "シコリ", "5ch", "板", "需給", "特買", "pts"]):
-        direct_answer = (
-            f"🎯 <b>【質問への直接回答】</b><br>"
-            f"『{r['name']}』の機関投資家＆板需給のリアルタイム解析結果です。<br>"
-            f"・<b>機関投資家の動向</b>：機関スコア <b>{r['inst_score']}点</b>（{r['inst_status']} ／ VPIN <b>{r['vpin']:+.2f}</b> ／ 板弾性 <b>{r['amihud_ratio']}倍</b>）<br>"
-            f"・<b>空売り踏み上げライン</b>：20日高値 <b>{r['squeeze_trigger_price']}</b>（現在値から <b>{r['dist_to_high20']:+.2f}%</b>）突破でショートカバー発動。<br>"
-            f"・<b>5ch板＆夜間PTS気配</b>：{r['board5ch_status']} ｜ 翌朝特買い確率 <b>{r['tokugai_prob']}%</b>（理論気配 <b>{r['pts_est_price']}</b>）"
-        )
     else:
         direct_answer = (
             f"🎯 <b>【「{q_clean}」へのリアルタイム調査回答】</b><br>"
             f"・<b>現在の株価（直近終値）</b>：<b>{deep['live_price']}（前日比 {deep['live_diff']:+.2f}%）</b> ｜ 本日高値 <b>{deep['high']}</b> ／ 安値 <b>{deep['low']}</b> ／ 出来高 <b>{deep['vol']}</b><br>"
             f"・<b>AI総合判定＆勝率</b>：<b>{r['tier_label']}</b> ｜ 総合勝率 <b>{r['total_win_rate']}%</b>（翌朝GU勝率 <b>{r['prob']}%</b>・合議スコア <b>{debate['final_score']}点</b>）<br>"
             f"・<b>ファンダ＆目標株価</b>：時価総額 <b>{deep['mcap']}</b> ／ PER <b>{deep['pe']}</b> ／ PBR <b>{deep['pbr']}</b> ／ アナリスト目標平均 <b>{deep['target_mean']}</b><br>"
-            f"・<b>推奨トレード戦略</b>：寄付き（目安 <b>{r['pts_est_price']}</b>）とVWAP（<b>{m5_vwap}</b>）で計 <b>{lot_info['shares']:,}株</b> を分割エントリーし、利確 <b>{r['tp_price']}</b>・損切り <b>{r['sl_price']}</b> を推奨します。"
+            f"・<b>推奨トレード戦略</b>：寄付き（目安 <b>{r['pts_est_price']}</b>）とVWAP（<b>{m5_vwap}</b>）で計 <b>{lot_info['shares']:,}株</b> を分割エントリー（初回 {half_s:,}株 ＋ 追撃 {rem_s:,}株）し、利確 <b>{r['tp_price']}</b>・損切り <b>{r['sl_price']}</b> を推奨します。"
         )
 
     return (
@@ -1109,7 +1169,7 @@ def generate_7ai_qa_response_html(question: str, r: dict, debate: dict, lot_info
     )
 
 # ==========================================
-# 💬 会議パネル（ガチ喧嘩・途中退出・延長サドンデス・ユーザー参加型チャット窓）
+# 💬 会議パネル（毎回異なる空気感・テンション・暴言・ユーモア・完全合意チャット窓）
 # ==========================================
 def cb_toggle_debate(uk):
     st.session_state["active_debates"][uk] = not st.session_state["active_debates"].get(uk, False)
@@ -1133,7 +1193,7 @@ def render_interactive_council_section(r, unique_key):
     in_wl = r["code"] in st.session_state["watchlist"]
 
     c1, c2 = st.columns([2.3, 1.1])
-    c1.button("🔼 白熱討論チャット窓を閉じる" if is_open else "🤬 7大AIのガチ喧嘩・途中退出・完全合意討論を見る＆参加", key=f"btn_{unique_key}", on_click=cb_toggle_debate, args=(unique_key,), use_container_width=True)
+    c1.button("🔼 討論チャット窓を閉じる" if is_open else "🎲 7大AIの動的ジェネレート討論を見る＆参加", key=f"btn_{unique_key}", on_click=cb_toggle_debate, args=(unique_key,), use_container_width=True)
     c2.button("✅ 監視登録済(解除)" if in_wl else "⭐ 監視リスト追加", key=f"wl_{unique_key}", on_click=cb_toggle_watchlist, args=(r["code"], r), use_container_width=True)
 
     if not is_open:
@@ -1145,25 +1205,12 @@ def render_interactive_council_section(r, unique_key):
 
     if unique_key not in st.session_state["council_threads"]:
         st.session_state["council_threads"][unique_key] = list(debate["dialogue"])
-
-    if unique_key not in st.session_state["debate_Animated"]:
-        with st.status(f"🤬 7大AIが「{r['name']}」の固有波形を巡って大喧嘩＆徹底検証中...", expanded=True) as status:
-            prog = st.progress(0)
-            for pct, msg in [
-                (20, "⚡ 開幕から意見が真っ向対立！丁寧語が崩れてタメ口・煽り合いに発展中..."),
-                (50, "🚪 折り合いがつかず、激怒したAIがチャットルームから途中退出するハプニング発生..."),
-                (80, "🔬 Perplexityの板VPINとNotebookLMの過去統計が突きつけられ、退出メンバーを強制再召喚..."),
-                (100, "🤝 全7大AIが完全に納得する『3段階スプリット戦術』で劇的な全員合意に到達！")
-            ]:
-                st.write(msg); prog.progress(pct); time.sleep(0.22)
-            status.update(label=f"✅ 7大AI ガチ討論＆完全合意成立！（総合勝率 {r['total_win_rate']}% ／ {r['tier_label']}）", state="complete", expanded=False)
-        st.session_state["debate_Animated"].add(unique_key)
+        st.session_state["council_meta"][unique_key] = debate["atmosphere"]
 
     if m5 and show_5m_chart:
         st.caption(f"📅 直近5分足チャート ({m5['chart_date']}) ｜ 5分足VWAP: **{m5['vwap5_price']}** ({m5['vwap5_dev']:+.2f}%)")
         render_5m_candlestick_chart(m5)
 
-    # 🗣️ スクロール式チャット窓のHTML構築（ブチ切れ・途中退出・強制再召喚・ユーモア・合意を完全描画）
     thread_bubbles = []
     for turn in st.session_state["council_threads"][unique_key]:
         if "round" in turn:
@@ -1180,21 +1227,14 @@ def render_interactive_council_section(r, unique_key):
             )
         else:
             tone = turn.get("tone", "normal")
-            if tone == "rage":
-                b_cls = "chat-bubble-rage"
-                tone_tag = '<span style="background:#dc2626;color:#fff;padding:1px 7px;border-radius:4px;font-size:10.5px;margin-left:5px;font-weight:900;">🤬ブチ切れ・タメ口</span>'
-            elif tone == "rebuttal":
-                b_cls = "chat-bubble-rebuttal"
-                tone_tag = '<span style="background:#e11d48;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">⚡反論・異議</span>'
-            elif tone == "humor":
-                b_cls = "chat-bubble-humor"
-                tone_tag = '<span style="background:#9333ea;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">😂皮肉・ユーモア</span>'
-            elif tone == "agree":
-                b_cls = "chat-bubble-agree"
-                tone_tag = '<span style="background:#059669;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">🤝和解・完全合意</span>'
-            else:
-                b_cls = "chat-bubble-ai"
-                tone_tag = ""
+            tone_map = {
+                "rage": ("chat-bubble-rage", '<span style="background:#dc2626;color:#fff;padding:1px 7px;border-radius:4px;font-size:10.5px;margin-left:5px;font-weight:900;">🤬ブチ切れ・暴言</span>'),
+                "rebuttal": ("chat-bubble-rebuttal", '<span style="background:#e11d48;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">⚡反論・ツッコミ</span>'),
+                "humor": ("chat-bubble-humor", '<span style="background:#9333ea;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">😂皮肉・ユーモア</span>'),
+                "calm": ("chat-bubble-calm", '<span style="background:#0284c7;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">🧊冷静・知的分析</span>'),
+                "agree": ("chat-bubble-agree", '<span style="background:#059669;color:#fff;padding:1px 6px;border-radius:4px;font-size:10.5px;margin-left:5px;">🤝和解・完全合意</span>'),
+            }
+            b_cls, tone_tag = tone_map.get(tone, ("chat-bubble-ai", ""))
             sc_badge = f' <span style="background:rgba(251,191,36,0.2);color:#fde047;padding:1px 7px;border-radius:999px;font-size:11px;">評価 {turn["score"]}点</span>' if "score" in turn else ""
             thread_bubbles.append(
                 f'<div class="{b_cls}">'
@@ -1202,15 +1242,17 @@ def render_interactive_council_section(r, unique_key):
                 f'<div>{turn["text"]}</div></div>'
             )
 
+    atmos_text = st.session_state["council_meta"].get(unique_key, debate["atmosphere"])
     scroll_win_id = f"council_win_{unique_key}"
     st.markdown(
         f'<div class="ai-council-box">'
-        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">'
-        f'<span style="font-weight:bold; color:#fbbf24; font-size:14px;">🤬 7大AI ガチ喧嘩＆完全合意チャットルーム（全{len(thread_bubbles)}ログ・上下スクロール）</span>'
+        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">'
+        f'<span style="font-weight:bold; color:#fbbf24; font-size:14px;">🎲 7大AI 無限ジェネレート討論ルーム（全{len(thread_bubbles)}ログ）</span>'
         f'<span style="background:{r["tier_bg"]}; color:{r["tier_color"]}; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:bold;">{r["tier_label"]}</span>'
         f'</div>'
+        f'<div class="atmosphere-banner">🌡️ <b>今回の会議室ムード：</b>{atmos_text}</div>'
         f'<div id="{scroll_win_id}" class="council-scroll-window">{"".join(thread_bubbles)}</div>'
-        f'<div class="consensus-banner"><div style="font-weight:bold; color:#fde047; font-size:14px;">🏛️ 激論・途中退出を乗り越えて到達した「7大AI 全員合意の最終コンセンサス」</div>{debate["verdict_html"]}</div>'
+        f'<div class="consensus-banner"><div style="font-weight:bold; color:#fde047; font-size:14px;">🏛️ 討論の末に到達した「7大AI 全員合意の最終コンセンサス」</div>{debate["verdict_html"]}</div>'
         f'</div>',
         unsafe_allow_html=True
     )
@@ -1219,32 +1261,30 @@ def render_interactive_council_section(r, unique_key):
         components.html(f'<script>setTimeout(function(){{const w=window.parent.document.getElementById("{scroll_win_id}");if(w)w.scrollTop=w.scrollHeight;}},120);</script>', height=0)
         st.session_state["scroll_council_key"] = None
 
-    # 🔥 延長サドンデス討論ボタン
-    ex_col1, ex_col2 = st.columns([2, 1.2])
-    if ex_col1.button("🔥 まだ議論が足りない！延長サドンデス討論（＋1ラウンド）を命じる", key=f"ext_{unique_key}", use_container_width=True):
+    ex_col1, ex_col2 = st.columns([1.8, 1.4])
+    if ex_col1.button("🔥 延長サドンデス討論（＋1ラウンド）を命じる", key=f"ext_{unique_key}", use_container_width=True):
         nxt_r = st.session_state["debate_round_seed"].get(unique_key, 0) + 1
         st.session_state["debate_round_seed"][unique_key] = nxt_r
         st.session_state["council_threads"][unique_key].extend(generate_extra_heated_round(r, m5, nxt_r))
         st.session_state["scroll_council_key"] = unique_key
         st.rerun()
-    if ex_col2.button("🔄 討論を最初からやり直させる", key=f"rst_{unique_key}", use_container_width=True):
-        st.session_state["debate_round_seed"][unique_key] = 0
-        st.session_state["council_threads"][unique_key] = list(run_7ai_council_algorithm(r, m5, 0)["dialogue"])
+    if ex_col2.button("🎲 別の空気感・別テンションで討論を再ジェネレート", key=f"rst_{unique_key}", use_container_width=True):
+        new_seed = time_seed() + random.randint(1, 99999)
+        st.session_state["debate_round_seed"][unique_key] = new_seed
+        new_deb = run_7ai_council_algorithm(r, m5, extra_seed=new_seed)
+        st.session_state["council_threads"][unique_key] = list(new_deb["dialogue"])
+        st.session_state["council_meta"][unique_key] = new_deb["atmosphere"]
         st.rerun()
 
-    # 🙋‍♂️ 会議に参加して自分の意見を言うチャット入力欄
-    st.markdown("##### 🗣️ 7大AIの喧嘩に割り込んで意見を言う・煽る・質問する")
+    st.markdown("##### 🗣️ 7大AIの討論に割り込んで意見を言う・煽る・質問する")
     with st.form(f"join_council_form_{unique_key}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
-        user_opinion = jc1.text_input("会議で発言する", placeholder="例：Grokの言う通り朝から全力で行くべき！ / 高値掴みが怖いからClaudeに賛成 / 現在の株価は？", label_visibility="collapsed")
-        join_sub = jc2.form_submit_button("💬 討論に投下", use_container_width=True)
-        if join_sub and user_opinion.strip():
-            with st.spinner("🔥 あなたの発言を受けて7大AIが緊急再討論＆ライブ調査中..."):
-                st.session_state["council_threads"][unique_key].append({"is_user": True, "text": user_opinion.strip()})
-                ai_replies = generate_ai_reply_to_user_opinion(user_opinion.strip(), r, m5)
-                st.session_state["council_threads"][unique_key].extend(ai_replies)
-                st.session_state["scroll_council_key"] = unique_key
-                st.rerun()
+        user_opinion = jc1.text_input("会議で発言する", placeholder="例：朝から全力で行くべき！ / 高値掴みが怖い / 現在の株価は？", label_visibility="collapsed")
+        if jc2.form_submit_button("💬 討論に投下", use_container_width=True) and user_opinion.strip():
+            st.session_state["council_threads"][unique_key].append({"is_user": True, "text": user_opinion.strip()})
+            st.session_state["council_threads"][unique_key].extend(generate_ai_reply_to_user_opinion(user_opinion.strip(), r, m5))
+            st.session_state["scroll_council_key"] = unique_key
+            st.rerun()
 
     st.markdown("---")
     st.markdown("##### 🔍 リアルタイム深層リサーチ質問コーナー（株価・ファンダ・ニュース・売買値）")
@@ -1258,19 +1298,16 @@ def render_interactive_council_section(r, unique_key):
 
     with st.form(f"free_q_form_{unique_key}", clear_on_submit=True):
         f_col1, f_col2 = st.columns([3.2, 1])
-        user_q_txt = f_col1.text_input("自由質問を入力", placeholder="何でも質問してください（例：現在の株価は？ / なぜ上がった？ / PERは？ / 明日の勝率は？）", label_visibility="collapsed")
-        sub_q = f_col2.form_submit_button("🔍 ライブ調査", use_container_width=True)
-        if sub_q and user_q_txt.strip():
-            with st.spinner(f"🔍 「{r['name']}」の最新株価・ニュース・数理指標をリアルタイム調査中..."):
-                cb_handle_qa_action(unique_key, user_q_txt.strip(), r, debate, m5)
+        user_q_txt = f_col1.text_input("自由質問を入力", placeholder="何でも質問してください（例：現在の株価は？ / なぜ上がった？ / PERは？）", label_visibility="collapsed")
+        if f_col2.form_submit_button("🔍 ライブ調査", use_container_width=True) and user_q_txt.strip():
+            cb_handle_qa_action(unique_key, user_q_txt.strip(), r, debate, m5)
 
     anchor_id = f"qa_ans_anchor_{unique_key}"
     st.markdown(f'<div id="{anchor_id}"></div>', unsafe_allow_html=True)
 
     chat_history = st.session_state["stock_chats"].get(unique_key, [])
     if chat_history:
-        latest_item = chat_history[-1]
-        st.markdown(f'<div class="qa-answer-card">{latest_item["a"]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="qa-answer-card">{chat_history[-1]["a"]}</div>', unsafe_allow_html=True)
         if st.session_state.get("scroll_to_chat_key") == unique_key:
             components.html(f'<script>setTimeout(function(){{const el=window.parent.document.getElementById("{anchor_id}");if(el)el.scrollIntoView({{behavior:"smooth",block:"center"}});}},100);</script>', height=0)
             st.session_state["scroll_to_chat_key"] = None
@@ -1312,7 +1349,7 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
         f'<div class="inst-box"><b>{r["inst_status"]}</b> ｜ 20日VWAP基準: <b>{r["vwap_price"]}</b></div>'
         f'<div class="board5ch-box"><b>📢 {r["board5ch_status"]}</b> ｜ シグナル: <b>{r["signal"]}</b></div>'
         f'<div class="pts-tokugai-box"><b>🌙 {r["tokugai_status"]}</b> ｜ 夜間理論気配: <b>{r["pts_est_price"]}</b> ({pts_sign}{r["pts_gap_pct"]}%) ｜ 特買い線: <b>{r["tokugai_line"]}</b></div>'
-        f'<div class="squeeze-box"><b>{r["squeeze_type"]}</b> ｜ 踏み上げ突破ライン(20日高値): <b>{r["squeeze_trigger_price"]}</b> ({r["dist_to_high20"]:+.2f}%)</div>'
+        f'<div class="squeeze-box"><b>{r["squeeze_type"]}</b> ｜ 踏み上げ突破ライン(20日高値): <b>{r["squeeze_trigger_price']}</b> ({r["dist_to_high20"]:+.2f}%)</div>'
         f'<div class="metrics-row"><span>🏦 <b>VPIN:</b> {r["vpin"]:+.2f}</span><span>🧬 <b>Hurst:</b> {r["hurst"]}</span><span>📐 <b>BB位置:</b> {r["bb_z"]:+.2f}σ</span><span>📊 <b>RSI:</b> {r["rsi"]}</span><span>📈 <b>MACD:</b> {r["macd_state"]}</span><span>🔊 <b>出来高:</b> {r["vol_ratio"]}倍</span></div>'
         f'<div class="trade-plan-box">'
         f'<div><div style="font-size:11px;color:#64748b;">🌅 夜間理論寄付き</div><div style="font-size:13.5px;font-weight:800;">{r["pts_est_price"]}</div></div>'
@@ -1324,12 +1361,12 @@ def render_stock_card(r, is_custom=False, rank=None, key_prefix="card"):
     render_interactive_council_section(r, f"{key_prefix}_{r['code']}")
 
 # ==========================================
-# 🚀 メイン画面ヘッダー＆ランキング描画
+# 🚀 メイン画面ヘッダー＆超高速セレクター描画（タブ一括描画によるタイムアウトを完全排除）
 # ==========================================
 macro_info = fetch_macro_market()
 macro_pills = "".join([f'<div style="background:rgba(255,255,255,0.08);padding:4px 10px;border-radius:8px;font-size:12px;display:inline-flex;gap:5px;"><span style="color:#cbd5e1;">{m["label"]}</span><span style="color:{"#f87171" if m["diff"]>=0 else "#60a5fa"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 
-st.markdown(f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:18px 20px;border-radius:16px;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:11.5px;color:#fbbf24;font-weight:700;">HEATED MULTI-AGENT DEBATE & LIVE RESEARCH</div><h1 style="margin:2px 0 0 0;font-size:21px;color:#fff;font-weight:800;">📈 翌朝株価 クオンツ＆7大AI解析 Pro</h1></div><span style="background:rgba(251,191,36,0.15);color:#fde047;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;">{curr_page_badge}</span></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">{macro_pills}</div></div>', unsafe_allow_html=True)
+st.markdown(f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:18px 20px;border-radius:16px;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:11.5px;color:#fbbf24;font-weight:700;">INFINITE DYNAMIC AI DEBATE & LIVE RESEARCH</div><h1 style="margin:2px 0 0 0;font-size:21px;color:#fff;font-weight:800;">📈 翌朝株価 クオンツ＆7大AI解析 Pro</h1></div><span style="background:rgba(251,191,36,0.15);color:#fde047;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;">{curr_page_badge}</span></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">{macro_pills}</div></div>', unsafe_allow_html=True)
 
 st.markdown('<div id="search_box_anchor"></div>', unsafe_allow_html=True)
 c1, c2 = st.columns([3.2, 1])
@@ -1365,32 +1402,29 @@ if st.session_state.get("navigation_page", "TOP") == "WATCHLIST":
     for w_code, w_item in list(st.session_state["watchlist"].items()):
         render_stock_card(w_item, key_prefix=f"wl_page_{w_code}")
 else:
-    base_tabs = ["🏆 総合サバイバルTOP5", "🏦 機関VPIN・最新クオンツ", "🔥 5ch板・初動イナゴ", "🚨 特買い・夜間PTS", "💥 空売り踏み上げ", "📋 監視＆注文シート"]
-    tabs = st.tabs(base_tabs + list(STOCK_POOL.keys()))
+    all_categories = ["🏆 総合サバイバルTOP5", "🏦 機関VPIN・最新クオンツ", "🔥 5ch板・初動イナゴ", "🚨 特買い・夜間PTS", "💥 空売り踏み上げ", "📋 監視＆注文シート"] + list(STOCK_POOL.keys())
+    selected_cat = st.radio("📂 表示ランキング・セクター切替（選択カテゴリのみを超高速描画）", options=all_categories, horizontal=True)
+    st.markdown("---")
 
-    with tabs[0]:
-        surv_all, elim_all = apply_survival_of_the_fittest(all_results, survival_cut_pct)
+    surv_all, elim_all = apply_survival_of_the_fittest(all_results, survival_cut_pct)
+
+    if selected_cat == "🏆 総合サバイバルTOP5":
         st.caption(f"🦁 全母集団 {len(all_results)}銘柄から下位 {len(elim_all)}銘柄を足切り！総合勝率・10段階評価ともに最強のTOP5です。")
         for idx, r in enumerate(surv_all[:5], start=1):
             render_stock_card(r, rank=idx, key_prefix="top5")
-
-    with tabs[1]:
+    elif selected_cat == "🏦 機関VPIN・最新クオンツ":
         for idx, r in enumerate(sorted(all_results, key=lambda x: (x["inst_score"], x["total_win_rate"], x["vpin"]), reverse=True)[:10], start=1):
             render_stock_card(r, rank=idx, key_prefix="inst_top")
-
-    with tabs[2]:
+    elif selected_cat == "🔥 5ch板・初動イナゴ":
         for idx, r in enumerate(sorted(all_results, key=lambda x: (x["board5ch_score"], x["total_win_rate"]), reverse=True)[:10], start=1):
             render_stock_card(r, rank=idx, key_prefix="b5_top")
-
-    with tabs[3]:
+    elif selected_cat == "🚨 特買い・夜間PTS":
         for idx, r in enumerate(sorted(all_results, key=lambda x: (x["tokugai_prob"], x["pts_gap_pct"]), reverse=True)[:10], start=1):
             render_stock_card(r, rank=idx, key_prefix="tk_top")
-
-    with tabs[4]:
+    elif selected_cat == "💥 空売り踏み上げ":
         for idx, r in enumerate(sorted(all_results, key=lambda x: (x["squeeze_score"], x["total_win_rate"]), reverse=True)[:10], start=1):
             render_stock_card(r, rank=idx, key_prefix="sq_top")
-
-    with tabs[5]:
+    elif selected_cat == "📋 監視＆注文シート":
         wl = st.session_state["watchlist"]
         st.markdown(f"#### 📋 監視ウォッチリスト ({len(wl)}銘柄)")
         if st.button("⚡ 総合TOP3をワンタップ一括登録", use_container_width=True):
@@ -1398,10 +1432,8 @@ else:
             st.rerun()
         if wl:
             st.dataframe(pd.DataFrame([{"コード": c, "銘柄名": x["name"], "現在値": x["price"], "総合勝率": f"{x['total_win_rate']}%", "10段階判定": x["tier_label"], "夜間理論気配": x["pts_est_price"], "推奨株数": f"{x['lot_info']['shares']:,}株", "利確": x["tp_price"], "損切": x["sl_price"]} for c, x in wl.items()]), use_container_width=True, hide_index=True)
-
-    for tab, genre in zip(tabs[6:], STOCK_POOL.keys()):
-        with tab:
-            g_surv, g_elim = apply_survival_of_the_fittest(genre_results.get(genre, []), survival_cut_pct)
-            st.caption(f"🦁 **{genre}選抜**: 上位 **{len(g_surv)}銘柄が生存**（下位 {len(g_elim)}銘柄が脱落）")
-            for idx, r in enumerate(g_surv, start=1):
-                render_stock_card(r, rank=idx, key_prefix=f"genre_{genre}")
+    else:
+        g_surv, g_elim = apply_survival_of_the_fittest(genre_results.get(selected_cat, []), survival_cut_pct)
+        st.caption(f"🦁 **{selected_cat}選抜**: 上位 **{len(g_surv)}銘柄が生存**（下位 {len(g_elim)}銘柄が脱落）")
+        for idx, r in enumerate(g_surv, start=1):
+            render_stock_card(r, rank=idx, key_prefix=f"genre_{selected_cat}")
