@@ -35,6 +35,14 @@ MEMBERS_DB_FILE = "members_db.json"
 SMTP_CONFIG_FILE = "admin_smtp_config.json"
 LLM_CONFIG_FILE = "admin_llm_config.json"
 
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
+FALLBACK_GEMINI_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.1-pro-preview",
+    "gemini-flash-latest",
+    "gemini-pro-latest"
+]
+
 def clean_api_key_str(raw_key: str) -> str:
     """コピペ時の空白・改行・全角文字・引用符を完全除去"""
     if not raw_key:
@@ -43,6 +51,13 @@ def clean_api_key_str(raw_key: str) -> str:
     s = s.strip('"').strip("'").strip()
     s = re.sub(r"\s+", "", s)
     return s
+
+def upgrade_legacy_model_name(model_name: str) -> str:
+    """廃止された旧世代モデル(1.5 / 2.0 / 2.5)が指定されていた場合は最新の3.8-flashへ自動アップグレード"""
+    m = str(model_name or "").strip().replace("models/", "")
+    if not m or any(old in m for old in ["1.5", "2.0", "2.5"]):
+        return DEFAULT_GEMINI_MODEL
+    return m
 
 def generate_member_passcode(email: str) -> str:
     return hmac.new(SECRET_MASTER_KEY.encode(), email.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
@@ -77,21 +92,23 @@ def load_llm_config() -> dict:
     default_cfg = {
         "provider": "gemini",
         "gemini_api_key": clean_api_key_str(os.environ.get("GEMINI_API_KEY", "")),
-        "gemini_model": "gemini-2.5-flash",
+        "gemini_model": DEFAULT_GEMINI_MODEL,
         "openai_api_key": clean_api_key_str(os.environ.get("OPENAI_API_KEY", "")),
         "openai_model": "gpt-4o-mini"
     }
     cfg = _load_json(LLM_CONFIG_FILE, default_cfg)
     cfg["gemini_api_key"] = clean_api_key_str(cfg.get("gemini_api_key", ""))
     cfg["openai_api_key"] = clean_api_key_str(cfg.get("openai_api_key", ""))
-    # 廃止された1.5系が保存されていた場合は2.5-flashに自動補正
-    if "1.5" in str(cfg.get("gemini_model", "")):
-        cfg["gemini_model"] = "gemini-2.5-flash"
+    upgraded_m = upgrade_legacy_model_name(cfg.get("gemini_model", DEFAULT_GEMINI_MODEL))
+    if cfg.get("gemini_model") != upgraded_m:
+        cfg["gemini_model"] = upgraded_m
+        _save_json(LLM_CONFIG_FILE, cfg)
     return cfg
 
 def save_llm_config(cfg: dict):
     cfg["gemini_api_key"] = clean_api_key_str(cfg.get("gemini_api_key", ""))
     cfg["openai_api_key"] = clean_api_key_str(cfg.get("openai_api_key", ""))
+    cfg["gemini_model"] = upgrade_legacy_model_name(cfg.get("gemini_model", DEFAULT_GEMINI_MODEL))
     _save_json(LLM_CONFIG_FILE, cfg)
 
 def get_active_llm_settings() -> dict:
@@ -111,9 +128,9 @@ def get_active_llm_settings() -> dict:
         or clean_api_key_str(os.environ.get("GEMINI_API_KEY", ""))
         or secret_gemini
     )
-    gemini_model = st.session_state.get("rt_gemini_model") or file_cfg.get("gemini_model", "gemini-2.5-flash")
-    if "1.5" in gemini_model:
-        gemini_model = "gemini-2.5-flash"
+    gemini_model = upgrade_legacy_model_name(
+        st.session_state.get("rt_gemini_model") or file_cfg.get("gemini_model", DEFAULT_GEMINI_MODEL)
+    )
     openai_key = (
         clean_api_key_str(st.session_state.get("rt_openai_api_key", ""))
         or clean_api_key_str(file_cfg.get("openai_api_key", ""))
@@ -445,18 +462,18 @@ if is_admin_user:
             navigate_to("ADMIN"); st.rerun()
 
 # ==========================================
-# 🧠 本物LLM通信コア（利用可能モデル自動検出 ＆ 壊れないJSON/正規表現ハイブリッド解析）
+# 🧠 本物LLM通信コア（最新3.8/3.1系標準対応 ＆ 404推奨モデル自動自己修復）
 # ==========================================
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1800)
 def fetch_available_gemini_models(api_key: str) -> list:
-    """APIキーで実際にgenerateContentが利用可能なGeminiモデル一覧を自動取得（404エラー完全防止）"""
+    """APIキーで実際にgenerateContentが利用可能な最新Geminiモデル一覧を取得（旧世代1.5/2.0/2.5は完全除外）"""
     if not api_key:
         return []
     ssl_ctx = ssl.create_default_context()
     ssl_ctx.check_hostname = False
     ssl_ctx.verify_mode = ssl.CERT_NONE
     url = f"https://generativelanguage.googleapis.com/v1beta/models?key={urllib.parse.quote(api_key)}"
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 QuantAgentPro/3.0"}, method="GET")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 QuantAgentPro/4.0"}, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=15, context=ssl_ctx) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -465,20 +482,13 @@ def fetch_available_gemini_models(api_key: str) -> list:
                 methods = m.get("supportedGenerationMethods", [])
                 name = m.get("name", "").replace("models/", "")
                 if "generateContent" in methods and name.startswith("gemini"):
-                    # 特殊な画像・音声・埋め込み専用モデルを除外
+                    # 廃止された旧世代(1.5, 2.0, 2.5)および特殊用途モデルを除外
+                    if any(old in name for old in ["1.5", "2.0", "2.5"]):
+                        continue
                     if not any(x in name for x in ["vision", "embedding", "imagen", "veo", "tts", "audio", "robotics", "computer-use"]):
                         models.append(name)
-            # 優先順位ソート（flash系・新しい世代を優先）
-            preferred_order = [
-                "gemini-2.5-flash",
-                "gemini-2.5-pro",
-                "gemini-2.0-flash",
-                "gemini-2.0-flash-lite",
-                "gemini-flash-latest",
-                "gemini-pro-latest"
-            ]
-            sorted_m = [p for p in preferred_order if p in models]
-            for m in models:
+            sorted_m = [p for p in FALLBACK_GEMINI_MODELS if p in models]
+            for m in sorted(models, reverse=True):
                 if m not in sorted_m:
                     sorted_m.append(m)
             return sorted_m
@@ -498,13 +508,11 @@ def _extract_json_from_text(raw_text: str):
     if start_b != -1 and end_b != -1 and end_b > start_b:
         txt = txt[start_b:end_b + 1]
 
-    # 1. 標準パース
     try:
         return json.loads(txt)
     except Exception:
         pass
 
-    # 2. 制御文字・改行・末尾カンマ修復パース
     try:
         txt_fixed = re.sub(r",\s*([}\]])", r"\1", txt)
         txt_fixed = re.sub(r"[\x00-\x1f]+", " ", txt_fixed)
@@ -512,7 +520,6 @@ def _extract_json_from_text(raw_text: str):
     except Exception:
         pass
 
-    # 3. ディベートturnsの正規表現レスキュー抽出（セリフ内に未エスケープの " があった場合でも復旧）
     turns_rescued = []
     pattern = re.compile(
         r'"speaker_key"\s*:\s*"([^"]+)"[\s\S]*?"score"\s*:\s*(\d+)[\s\S]*?"tone"\s*:\s*"([^"]+)"[\s\S]*?"text"\s*:\s*"(.*?)"(?=\s*\})',
@@ -534,7 +541,6 @@ def _extract_json_from_text(raw_text: str):
             "consensus_summary": c_m.group(1) if c_m else ""
         }
 
-    # 4. Q&A回答の正規表現レスキュー抽出
     da_m = re.search(r'"direct_answer_html"\s*:\s*"(.*?)"(?=\s*,\s*"specialist_comment_html"|\s*\})', txt, re.DOTALL)
     sc_m = re.search(r'"specialist_comment_html"\s*:\s*"(.*?)"(?=\s*\})', txt, re.DOTALL)
     if da_m:
@@ -555,27 +561,30 @@ def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float 
 
     if provider == "gemini":
         api_key = clean_api_key_str(cfg.get("gemini_api_key", ""))
-        primary_model = cfg.get("gemini_model", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+        primary_model = upgrade_legacy_model_name(cfg.get("gemini_model", DEFAULT_GEMINI_MODEL))
         if not api_key:
             return None, "Gemini APIキーが未設定です。左サイドバーの「🔑 Gemini API Key」に入力してください。"
 
-        # APIキーが実際に使えるモデル一覧を取得して候補リストを構築
         avail_models = fetch_available_gemini_models(api_key)
         candidate_models = []
-        if primary_model in avail_models:
-            candidate_models.append(primary_model)
-        for m in avail_models:
-            if m not in candidate_models:
-                candidate_models.append(m)
-        if not candidate_models:
-            candidate_models = [primary_model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+        for m in [primary_model] + FALLBACK_GEMINI_MODELS + avail_models:
+            m_clean = upgrade_legacy_model_name(m)
+            if m_clean and m_clean not in candidate_models:
+                candidate_models.append(m_clean)
 
         errors_log = []
         combined_prompt = f"【システム指示】\n{system_prompt}\n\n【ユーザー指示】\n{user_prompt}"
+        tried_models = set()
 
-        for model_name in candidate_models[:3]:
+        idx = 0
+        while idx < len(candidate_models) and len(tried_models) < 6:
+            model_name = candidate_models[idx]
+            idx += 1
+            if model_name in tried_models:
+                continue
+            tried_models.add(model_name)
+
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={urllib.parse.quote(api_key)}"
-            # まずJSON MIMEタイプ指定でリクエスト、万が一モデルが非対応なら通常テキストでリトライ
             for use_json_mime in (True, False):
                 gen_cfg = {"temperature": temperature}
                 if use_json_mime:
@@ -589,7 +598,7 @@ def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float 
                     data=json.dumps(payload).encode("utf-8"),
                     headers={
                         "Content-Type": "application/json",
-                        "User-Agent": "Mozilla/5.0 QuantAgentPro/3.0"
+                        "User-Agent": "Mozilla/5.0 QuantAgentPro/4.0"
                     },
                     method="POST"
                 )
@@ -603,19 +612,30 @@ def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float 
                         parts = candidates[0].get("content", {}).get("parts", [])
                         text_out = "".join(p.get("text", "") for p in parts)
                         parsed = _extract_json_from_text(text_out)
+                        # 成功したモデルが現在の設定と異なる場合は自動保存して次回から即成功させる
+                        if model_name != primary_model:
+                            st.session_state["rt_gemini_model"] = model_name
+                            cfg_save = load_llm_config()
+                            cfg_save["gemini_model"] = model_name
+                            save_llm_config(cfg_save)
                         return parsed, None
                 except urllib.error.HTTPError as he:
                     err_body = he.read().decode("utf-8", errors="ignore")
                     try:
                         err_j = json.loads(err_body)
-                        err_detail = err_j.get("error", {}).get("message", err_body[:160])
+                        err_detail = err_j.get("error", {}).get("message", err_body[:220])
                     except Exception:
-                        err_detail = err_body[:160]
+                        err_detail = err_body[:220]
+
+                    # エラー文に「use models/gemini-xxx」という推奨モデル案内があれば、即座にそのモデルを最優先候補に追加！
+                    suggested_models = re.findall(r"models/(gemini-[a-zA-Z0-9\.\-]+)", err_detail)
+                    for sm in suggested_models:
+                        if sm not in tried_models and sm not in candidate_models[idx:]:
+                            candidate_models.insert(idx, sm)
+
                     errors_log.append(f"HTTP {he.code} ({model_name}): {err_detail}")
-                    # APIキー自体の不正は即終了
                     if he.code in (400, 401, 403) and ("API_KEY" in err_body.upper() or "KEY_INVALID" in err_body.upper()):
                         return None, f"APIキーが無効です ({err_detail})"
-                    # 400エラーでresponseMimeType非対応の可能性がある場合のみuse_json_mime=Falseへ、それ以外は次のモデルへ
                     if he.code == 400 and use_json_mime:
                         continue
                     break
@@ -645,7 +665,7 @@ def call_real_llm_json(system_prompt: str, user_prompt: str, temperature: float 
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}",
-                "User-Agent": "Mozilla/5.0 QuantAgentPro/3.0"
+                "User-Agent": "Mozilla/5.0 QuantAgentPro/4.0"
             },
             method="POST"
         )
@@ -670,7 +690,7 @@ if sc2.button("⬅️ 前の画面", use_container_width=True):
 if st.sidebar.button(f"📋 監視ウォッチリスト ({len(st.session_state['watchlist'])}銘柄)", use_container_width=True):
     navigate_to("WATCHLIST"); st.rerun()
 
-# --- 🤖 本物LLMエンジン設定UI（APIキーから利用可能モデルを動的取得） ---
+# --- 🤖 本物LLMエンジン設定UI（最新 gemini-3.8-flash / gemini-3.1-pro-preview 標準搭載） ---
 st.sidebar.markdown("---")
 st.sidebar.header("🧠 LLM マルチエージェント設定")
 llm_cfg = load_llm_config()
@@ -693,13 +713,15 @@ if llm_provider == "gemini":
     api_key_input = st.sidebar.text_input("🔑 Gemini API Key", value=llm_cfg.get("gemini_api_key", ""), type="password", placeholder="AIzaSy...")
     clean_key = clean_api_key_str(api_key_input)
 
-    # 入力されたキーで利用可能なモデル一覧を自動取得（404になる廃止モデルを排除）
     detected_models = fetch_available_gemini_models(clean_key) if clean_key else []
-    g_models = detected_models if detected_models else ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-flash-latest"]
+    g_models = []
+    for m in FALLBACK_GEMINI_MODELS + detected_models:
+        if m not in g_models:
+            g_models.append(m)
 
-    saved_gm = llm_cfg.get("gemini_model", "gemini-2.5-flash")
+    saved_gm = upgrade_legacy_model_name(llm_cfg.get("gemini_model", DEFAULT_GEMINI_MODEL))
     gm_idx = g_models.index(saved_gm) if saved_gm in g_models else 0
-    model_input = st.sidebar.selectbox("🧠 モデル (API対応モデル自動検出)", g_models, index=gm_idx)
+    model_input = st.sidebar.selectbox("🧠 モデル (最新世代対応)", g_models, index=gm_idx)
 
     st.session_state["rt_gemini_api_key"] = clean_key
     st.session_state["rt_gemini_model"] = model_input
@@ -727,7 +749,8 @@ if llm_provider == "gemini":
                 if test_res:
                     st.session_state["council_threads"] = {}
                     st.session_state["council_meta"] = {}
-                    st.success(f"✅ {model_input} 正常接続を確認！")
+                    active_m = st.session_state.get("rt_gemini_model", model_input)
+                    st.success(f"✅ {active_m} で正常接続を確認！")
                 else:
                     st.error(f"❌ {test_err}")
 
