@@ -772,7 +772,6 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
 
 # ==========================================
 # 📈 高水準クオンツ (OFI/VPIN/YZ/CVaR/Hurst/Kalman/Kelly) ＋ 5ch解析エンジン
-# （※タイムアウト回避のため「20日高値突破」「翌朝特買い」の2アルゴリズムは完全削除済）
 # ==========================================
 def norm_tk(raw: str) -> str:
     s = unicodedata.normalize("NFKC", raw).strip().upper()
@@ -1020,7 +1019,7 @@ def build_quant_debate(r: dict, smap: dict, fs: int, vref: str, lp1: int, lp2: i
     v_desc = "機関アルゴのステルス買い集め" if r["vpin"] >= 0.15 else ("大口の利確・売り抜け警戒" if r["vpin"] < -0.1 else "機関オーダーフロー均衡")
 
     sp1, tx1 = rng.choice([
-        ("MICRO", f"『{r['name']}（{r['code']}）』の機関マイクロストラクチャ解析から入るぞ。現在値 <b>{r['price']}（{r['diff']:+.2f}%）</b>、VPIN <b>{r['vpin']:+.2f}</b>・OFI（板不均衡Z値）<b>{r['ofi_z']:+.2f}σ</b> で{v_desc}を示唆。Smart Money乖離も <b>{r['sm_div']:+.2f}</b> だ。"),
+        ("MICRO", f"『{r['name']}（{r['code']}）』の機関マイクロストラクチャ解析から入るぞ。現在値 <b>{r['price']}（{r['diff']:+.2f}%）</b>、VPIN <b>{r['vpin']:+.2f}</b>・OFI（板不均衡Z値）<b>{r['ofi_z']:+.2f}σ</b> で{v_desc}を示唆。Smart Money乖離も <b>{r['sm_div']:+.2f}</b> だ."),
         ("TECHNOS", f"数理波形構造から口火を切ろう。『{r['name']}』は【<b>{r['candle_desc']}</b>】を形成。Yang-Zhang年率ボラは <b>{r['yz_vol']}%</b>、市場効率性純度は <b>{r['eff_pct']}%</b>、RSI <b>{r['rsi']}</b> で推移している。"),
         ("MACRO", f"海外・先物裁定の視点からいいかな。『{r['name']}』の夜間理論寄付きは <b>{r['pts_est_price']}（{r['pts_gap_pct']:+.2f}%）</b>、Kalmanトレンド推計は <b>{r['kalman_bull_pct']:+.2f}%</b> と算出されている。")
     ])
@@ -1217,7 +1216,7 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]} !important;"><span>🎯 {r["tier_label"]}</span><span style="font-size:11px;">Lv.{r["tier_num"]}/10</span></div>'
         f'<div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:3px;">{rk_h}<span class="score-badge">⚡ 総合 {r["ai_score"]}点</span><span class="inst-badge">🏦 機関 {r["inst_score"]}点</span><span class="algo-badge">🧬 OFI {r["ofi_z"]:+.2f}σ</span><span class="board5ch-badge">🔥 5ch需給 {r["board5ch_score"]}点</span></div>'
         f'<div style="display:flex;justify-content:space-between;align-items:center;"><div style="display:flex;align-items:center;gap:9px;">{logo}<div><span style="font-size:16.5px;font-weight:800;">{r["name"]}</span> <span style="font-size:12px;color:#64748b;">({r["code"]} / {r["genre"]})</span><br><span style="font-size:14px;">現在値: <b>{r["price"]}</b> (<span style="color:{dc};font-weight:800;">{ds}{r["diff"]}%</span>)</span></div></div>'
-        f'<div style="text-align:right;"><span style="font-size:10.5px;color:#64748b;font-weight:700;">🎯 総合勝率</span><br><span class="prob-badge">{r["total_win_rate"]}%</span><div style="font-size:10.5px;color:#64748b;">損益比 {r["payoff"]}倍 / 期待値 {r["edge']:+.2f}%</div></div></div>'
+        f'<div style="text-align:right;"><span style="font-size:10.5px;color:#64748b;font-weight:700;">🎯 総合勝率</span><br><span class="prob-badge">{r["total_win_rate"]}%</span><div style="font-size:10.5px;color:#64748b;">損益比 {r["payoff"]}倍 / 期待値 {r["edge"]:+.2f}%</div></div></div>'
         f'<div class="winrate-bar"><div><div style="font-size:10px;color:#881337;font-weight:700;">🏆 総合勝率</div><div style="font-size:13.5px;font-weight:900;color:#e11d48;">{r["total_win_rate"]}%</div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10px;color:#64748b;">🌅 翌朝GU</div><div style="font-size:13px;font-weight:800;color:#dc2626;">{r["prob"]}%</div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10px;color:#64748b;">☀️ 寄り後陽線</div><div style="font-size:13px;font-weight:800;color:#d97706;">{r["intraday_win_rate"]}%</div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10px;color:#64748b;">📈 順張り</div><div style="font-size:13px;font-weight:800;color:#15803d;">{r["trend_win_rate"]}%</div></div></div>'
         f'<div class="trade-plan-box"><div><div style="font-size:10px;color:#64748b;">🌅 夜間理論寄付き</div><div style="font-size:12.5px;font-weight:800;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid #cbd5e1;border-right:1px solid #cbd5e1;"><div style="font-size:10px;color:#15803d;font-weight:bold;">🎯 利確目標</div><div style="font-size:12.5px;font-weight:800;color:#15803d;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:10px;color:#b91c1c;font-weight:bold;">🛡️ 損切り逆指値</div><div style="font-size:12.5px;font-weight:800;color:#b91c1c;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
         f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> (投資額 {lot["position_value"]:,.0f}円 / 許容損失 {lot["risk_amount"]:,.0f}円 / Kelly最適配分 {r["kelly_pct"]}%)</span><span style="font-size:11px;color:#15803d;font-weight:700;">VWAP基準: {r["vwap_price"]}</span></div>'
@@ -1292,7 +1291,6 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.08);padding:3px 9px;border-radius:6px;font-size:11.5px;display:inline-flex;gap:4px;"><span style="color:#cbd5e1;">{m["label"]}</span><span style="color:{"#f87171" if m["diff"]>=0 else "#60a5fa"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:14px 18px;border-radius:14px;margin-bottom:10px;border:1px solid rgba(56,189,248,0.25);"><div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:10px;color:#38bdf8;font-weight:800;">INSTITUTIONAL ALGO (OFI / YZ-VOL / CVaR / KELLY) & 5CH LIVE</div><h1 style="margin:2px 0 0 0;font-size:19px;color:#fff;font-weight:900;">⚡ 翌朝株価 クオンツ＆AIエージェント合議 Pro</h1></div><span style="background:rgba(16,185,129,0.2);color:#6ee7b7;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;">🟢 {"5ch実況＋機関クオンツ稼働" if b5_live_ok else "機関クオンツ高速稼働"}</span></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;">{mpills}</div></div>', unsafe_allow_html=True)
 
-# 高水準アルゴリズム＋5chアルゴリズムの3本柱に集約（2個削除により超高速化）
 BOOST_MAP = {"🧬 高水準クオンツ(OFI/YZ/Hurst/Kalman/CVaR)": "algo", "🏦 機関VPIN・SmartMoney": "inst", "🔥 5ch実況＆短期モメンタム": "mom"}
 st.markdown('<div class="compact-bar-label"><span>⚡ QUANT ENGINE BOOST</span><span style="color:#94a3b8;font-weight:600;">高水準機関アルゴリズム ＆ 5ch解析ON/OFF</span></div>', unsafe_allow_html=True)
 sel_b = st.pills("ブースト", list(BOOST_MAP.keys()), default=list(BOOST_MAP.keys()), selection_mode="multi", label_visibility="collapsed") if hasattr(st, "pills") else st.multiselect("ブースト", list(BOOST_MAP.keys()), default=list(BOOST_MAP.keys()), label_visibility="collapsed")
