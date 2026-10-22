@@ -71,8 +71,8 @@ def save_j(p: str, d: dict):
 
 def load_smtp(): return load_j(FILES["smtp"], {"smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
 def load_llm(): return load_j(FILES["llm"], {"provider": "gemini", "api_keys": {}, "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}})
-def load_sec(): return load_j(FILES["sec"], {"banned_fps": {}, "spoof_logs": [], "device_bio_map": {}})
-def load_mail_db(): return load_j(FILES["mail"], {"logs": []})
+def load_sec(): return load_j(FILES["sec"], {"banned_fps": {}, "banned_emails": {}, "banned_pins": {}, "banned_names": [], "spoof_logs": [], "device_bio_map": {}})
+def load_mail_db(): return load_j(FILES["mail"], {"logs": [], "messages": []})
 def load_mem():
     db = load_j(FILES["mem"], {})
     adm = ADMIN_EMAIL.strip().lower()
@@ -81,6 +81,60 @@ def load_mem():
         db[adm] = {"name": "管理者", "email": adm, "status": "approved", "passcode": gen_code(adm), "pin_hash": hash_pin("0000"), "applied_at": ns, "approved_at": ns, "last_seen_ts": 0, "last_seen_str": "-", "fp": "-", "bio_enabled": False}
         save_j(FILES["mem"], db)
     return db
+
+def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h: str = "", action_type: str = "アクセス") -> tuple:
+    em_c = em.strip().lower()
+    if em_c == ADMIN_EMAIL.strip().lower():
+        return False, ""
+    sec = load_sec()
+    db = load_mem()
+    b_fps = sec.get("banned_fps", {})
+    b_ems = sec.get("banned_emails", {})
+    b_pins = sec.get("banned_pins", {})
+    u_rec = db.get(em_c, {})
+
+    reasons = []
+    orig_target = ""
+    if u_rec.get("status") == "banned" or em_c in b_ems:
+        reasons.append("永久BAN対象メールアドレス一致")
+        orig_target = em_c
+    if cur_fp and cur_fp != "-" and cur_fp in b_fps:
+        reasons.append(f"永久BAN端末指紋(FP:{cur_fp})一致")
+        orig_target = orig_target or b_fps[cur_fp].get("email", "不明")
+    if raw_hfp and raw_hfp != "-" and raw_hfp in b_fps:
+        reasons.append(f"永久BAN環境ヘッダ指紋(HFP:{raw_hfp})一致")
+        orig_target = orig_target or b_fps[raw_hfp].get("email", "不明")
+    if pin_h and pin_h in b_pins and em_c != b_pins[pin_h]:
+        reasons.append(f"永久BAN会員({b_pins[pin_h]})と同一PINハッシュ一致")
+        orig_target = orig_target or b_pins[pin_h]
+
+    if reasons:
+        now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        r_str = " / ".join(reasons)
+        is_spoof = bool(orig_target and em_c and em_c != orig_target)
+        log_entry = {
+            "time": now_s,
+            "action": f"🚨 なりすまし{action_type}検知" if is_spoof else f"🚫 永久BAN遮断({action_type})",
+            "input_email": em_c or "未入力",
+            "input_name": name.strip() or u_rec.get("name", "不明"),
+            "orig_banned_email": orig_target or em_c,
+            "fp": cur_fp,
+            "raw_hfp": raw_hfp,
+            "reason": r_str
+        }
+        logs = sec.get("spoof_logs", [])
+        if not logs or logs[0].get("input_email") != log_entry["input_email"] or logs[0].get("action") != log_entry["action"] or (logs[0].get("time", "")[:16] != now_s[:16]):
+            logs.insert(0, log_entry)
+            sec["spoof_logs"] = logs[:150]
+        if cur_fp and cur_fp != "-":
+            sec.setdefault("banned_fps", {})[cur_fp] = {"email": orig_target or em_c, "name": log_entry["input_name"], "banned_at": now_s, "reason": r_str}
+        if raw_hfp and raw_hfp != "-":
+            sec.setdefault("banned_fps", {})[raw_hfp] = {"email": orig_target or em_c, "name": log_entry["input_name"], "banned_at": now_s, "reason": r_str}
+        if em_c:
+            sec.setdefault("banned_emails", {})[em_c] = {"name": log_entry["input_name"], "banned_at": now_s, "orig": orig_target or em_c}
+        save_j(FILES["sec"], sec)
+        return True, r_str
+    return False, ""
 
 def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") -> bool:
     to_clean, now_str = to_em.strip().lower(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -126,11 +180,19 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     if st.button("🧬 登録済み端末：生体認証 / ワンタップで即ログイン", use_container_width=True, type="primary"):
         if mapped and mapped.get("email"):
             t_em = mapped["email"].strip().lower(); u_rec = db.get(t_em, {})
-            if u_rec.get("status") == "suspended": st.error("🚫 アカウント停止中です。")
-            elif cur_fp in sec.get("banned_fps", {}) and t_em != ADMIN_EMAIL.strip().lower(): st.error("🚫 端末制限中です。")
+            is_ban, _ = check_and_log_ban_spoof(t_em, u_rec.get("name", ""), cur_fp, raw_hfp, u_rec.get("pin_hash", ""), "ワンタップログイン")
+            if is_ban or u_rec.get("status") == "banned":
+                st.error("💀 このアカウントまたは端末は永久BAN（アクセス禁止）されています。")
+            elif u_rec.get("status") == "suspended": st.error("🚫 アカウント一時停止中です。")
+            elif (cur_fp in sec.get("banned_fps", {}) or raw_hfp in sec.get("banned_fps", {})) and t_em != ADMIN_EMAIL.strip().lower(): st.error("🚫 端末制限中です。")
             elif (u_rec and u_rec.get("status") == "approved") or t_em == ADMIN_EMAIL.strip().lower():
                 st.session_state["authenticated_user"] = t_em; st.query_params["u"], st.query_params["t"] = t_em, gen_tok(t_em, "session_keep"); st.rerun()
-        else: st.warning("⚠️ 初回は下のフォームから専用コードでログインしてください（次回から自動登録されます）。")
+        else:
+            is_ban, _ = check_and_log_ban_spoof("", "未認証端末", cur_fp, raw_hfp, "", "ワンタップ試行")
+            if is_ban:
+                st.error("💀 この端末は永久BAN（アクセス禁止）されています。")
+            else:
+                st.warning("⚠️ 初回は下のフォームから専用コードでログインしてください（次回から自動登録されます）。")
 
 def inject_css():
     css = """
@@ -199,8 +261,12 @@ def check_auth():
     if st.session_state["authenticated_user"]:
         cu = st.session_state["authenticated_user"]
         u_rec = db.get(cu, {})
-        if cu != ADMIN_EMAIL.strip().lower() and (not u_rec or u_rec.get("status") != "approved"):
-            st.session_state["authenticated_user"] = None; st.query_params.clear(); st.error("🚫 アカウント停止中です。"); st.stop()
+        if cu != ADMIN_EMAIL.strip().lower():
+            is_ban, _ = check_and_log_ban_spoof(cu, u_rec.get("name", ""), cur_fp, raw_hfp, u_rec.get("pin_hash", ""), "セッション維持")
+            if is_ban or u_rec.get("status") == "banned":
+                st.session_state["authenticated_user"] = None; st.query_params.clear(); st.error("💀 このアカウントまたは端末は永久BAN（利用禁止）されています。"); st.stop()
+            if not u_rec or u_rec.get("status") != "approved":
+                st.session_state["authenticated_user"] = None; st.query_params.clear(); st.error("🚫 アカウント一時停止中、または削除されています。"); st.stop()
         keep_tok = gen_tok(cu, "session_keep")
         if cu in db:
             db[cu].update({"last_seen_ts": time.time(), "last_seen_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": True})
@@ -215,7 +281,10 @@ def check_auth():
                 st.session_state["authenticated_user"] = None; st.query_params.clear(); st.rerun()
         if cu == ADMIN_EMAIL.strip().lower():
             pend = [v for v in db.values() if v.get("status") == "pending"]
-            if st.sidebar.button(f"👑 管理画面 (承認待:{len(pend)} / メール:{len(load_mail_db().get('logs',[]))})", use_container_width=True):
+            mdb_Now = load_mail_db()
+            unread_msgs = [m for m in mdb_Now.get("messages", []) if m.get("sender_role") == "member" and not m.get("read_by_admin", False)]
+            spoof_cnt = len(sec.get("spoof_logs", []))
+            if st.sidebar.button(f"👑 管理画面 (承認待:{len(pend)} / 未読MSG:{len(unread_msgs)} / 監視:{spoof_cnt})", use_container_width=True):
                 st.session_state["navigation_page"] = "ADMIN"; st.rerun()
         return True
 
@@ -239,7 +308,10 @@ def check_auth():
             ic = st.text_input("🔑 専用アクセスコード", type="password", placeholder="8桁の専用コード")
             if st.form_submit_button("🔓 認証して量子ターミナルを起動", use_container_width=True):
                 cm = ie.strip().lower(); rec = db.get(cm)
-                if rec and rec.get("status") == "suspended": st.error("🚫 このアカウントは停止されています。")
+                is_ban, _ = check_and_log_ban_spoof(cm, (rec or {}).get("name", ""), cur_fp, raw_hfp, (rec or {}).get("pin_hash", ""), "コードログイン")
+                if is_ban or (rec and rec.get("status") == "banned"):
+                    st.error("💀 このアカウントまたは端末は永久BAN（利用禁止）されています。")
+                elif rec and rec.get("status") == "suspended": st.error("🚫 このアカウントは一時停止されています。")
                 elif ((rec and rec.get("status") == "approved") or cm == ADMIN_EMAIL.strip().lower()) and (hmac.compare_digest(ic.strip().upper(), gen_code(cm)) or (cm == ADMIN_EMAIL.strip().lower() and ic.strip() == "ADMIN777")):
                     st.session_state["authenticated_user"] = cm; st.rerun()
                 else: st.warning("⚠️ 未承認または専用アクセスコードが異なります。")
@@ -256,10 +328,15 @@ def check_auth():
                 else:
                     cm, pc, ns = am.strip().lower(), gen_code(am), datetime.now().strftime("%Y-%m-%d %H:%M")
                     nm_clean = an.strip() or "未入力"
-                    db[cm] = {"name": nm_clean, "email": cm, "status": "pending", "passcode": pc, "pin_hash": hash_pin(apin), "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False}
-                    save_j(FILES["mem"], db)
-                    send_mail(cm, "【YAMASHISHI LAB】会員登録申請の受付完了", f"{nm_clean} 様\n申請を受け付けました。管理者承認後、ログイン画面の『🔐 承認確認・暗号化コード照会』タブにて、ご設定いただいた4桁の暗証番号(PIN)を入力すると専用アクセスコードをご確認いただけます。")
-                    st.success("✅ 申請を受け付けました！承認完了まで今しばらくお待ちください。")
+                    pin_h = hash_pin(apin)
+                    is_ban, ban_reason = check_and_log_ban_spoof(cm, nm_clean, cur_fp, raw_hfp, pin_h, "新規登録申請")
+                    if is_ban or (db.get(cm) and db[cm].get("status") == "banned"):
+                        st.error("💀 セキュリティ監視システムにより、永久BAN対象者（または同一端末からのなりすまし再登録）と判定されたため申請は永久ブロックされました。")
+                    else:
+                        db[cm] = {"name": nm_clean, "email": cm, "status": "pending", "passcode": pc, "pin_hash": pin_h, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False}
+                        save_j(FILES["mem"], db)
+                        send_mail(cm, "【YAMASHISHI LAB】会員登録申請の受付完了", f"{nm_clean} 様\n申請を受け付けました。管理者承認後、ログイン画面の『🔐 承認確認・暗号化コード照会』タブにて、ご設定いただいた4桁の暗証番号(PIN)を入力すると専用アクセスコードをご確認いただけます。")
+                        st.success("✅ 申請を受け付けました！承認完了まで今しばらくお待ちください。")
 
     with tab_vault:
         st.caption("🛡️ 第三者による盗み見を防止するため、**申請時のメールアドレス** と **秘密の4桁暗証番号(PIN)** の両方が一致した場合のみ専用アクセスコードを開示します。")
@@ -268,13 +345,16 @@ def check_auth():
             chk_pin = st.text_input("🔢 申請時に設定した4桁の暗証番号 (PIN)", type="password", max_chars=4).strip()
             if st.form_submit_button("🔍 本人確認して承認ステータスを照会", use_container_width=True):
                 u_info = db.get(chk_em)
-                if not u_info: st.error("❌ 該当する申請データが見つかりません。")
+                is_ban, _ = check_and_log_ban_spoof(chk_em, (u_info or {}).get("name", ""), cur_fp, raw_hfp, hash_pin(chk_pin) if chk_pin else "", "コード照会")
+                if is_ban or (u_info and u_info.get("status") == "banned"):
+                    st.error("💀 このアカウントまたは端末は永久BANされています。")
+                elif not u_info: st.error("❌ 該当する申請データが見つかりません。")
                 elif u_info.get("pin_hash") and not hmac.compare_digest(u_info.get("pin_hash", ""), hash_pin(chk_pin)):
                     st.error("🚫 暗証番号(PIN)が一致しません。第三者による照会はブロックされました。")
                 elif u_info.get("status") == "approved":
                     st.success(f"🎉 本人確認完了・承認済みです！あなたの専用アクセスコードは **`{u_info.get('passcode', gen_code(chk_em))}`** です。「🔑 コードログイン」タブからログインしてください。")
                 elif u_info.get("status") == "pending": st.info("⏳ 本人確認完了：現在、管理者の承認審査待ちです。")
-                else: st.error("🚫 現在このアカウントは利用できません。")
+                else: st.error("🚫 現在このアカウントは一時停止中または利用できません。")
     st.stop()
 
 check_auth()
@@ -479,6 +559,67 @@ toggle_fn = getattr(st.sidebar, "toggle", st.sidebar.checkbox)
 show_5m_chart = toggle_fn("📈 5分足＆VWAP描画", value=True)
 enable_news_popup = toggle_fn("🚨 緊急ニュースポップアップ", value=True)
 
+# --- サイドバー下部：管理者にメッセージを送る ＆ 管理者からの返信確認 ---
+st.sidebar.markdown("---")
+st.sidebar.header("✉️ 管理者にメッセージを送る")
+cu_Now = st.session_state.get("authenticated_user", "")
+if cu_Now:
+    db_Now = load_mem()
+    mdb_Now = load_mail_db()
+    u_name_Now = db_Now.get(cu_Now, {}).get("name", "会員")
+    my_msgs = [m for m in mdb_Now.get("messages", []) if m.get("member_email") == cu_Now]
+    unread_admin_replies = [m for m in my_msgs if m.get("sender_role") == "admin" and not m.get("read_by_member", False)]
+    if unread_admin_replies:
+        st.sidebar.markdown(
+            f'<div style="background:rgba(16,185,129,0.18);border:1px solid #10b981;border-radius:8px;padding:7px 10px;font-size:11.5px;color:#ecfdf5;margin-bottom:6px;">'
+            f'📬 <b>管理者から新着の返信メッセージが {len(unread_admin_replies)}件 届いています！</b>（下の履歴から確認できます）</div>',
+            unsafe_allow_html=True
+        )
+    with st.sidebar.form("sidebar_msg_to_admin", clear_on_submit=True):
+        msg_subj = st.text_input("件名（任意）", placeholder="ご質問・ご要望など")
+        msg_body = st.text_area("メッセージ本文", placeholder="管理者へのメッセージを入力してください...", height=85)
+        if st.form_submit_button("📨 管理者にメッセージを送信", use_container_width=True):
+            if not msg_body.strip():
+                st.warning("⚠️ メッセージ本文を入力してください。")
+            else:
+                now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                subj_c = msg_subj.strip() or "会員からのメッセージ"
+                mdb_Now.setdefault("messages", []).insert(0, {
+                    "id": hashlib.md5(f"{cu_Now}_{now_s}_{msg_body}".encode()).hexdigest()[:8],
+                    "time": now_s,
+                    "member_email": cu_Now,
+                    "member_name": u_name_Now,
+                    "sender_role": "member",
+                    "subject": subj_c,
+                    "body": msg_body.strip(),
+                    "read_by_admin": False,
+                    "read_by_member": True
+                })
+                save_j(FILES["mail"], mdb_Now)
+                send_mail(ADMIN_EMAIL, f"【会員メッセージ受信】{u_name_Now}様 ({cu_Now}) - {subj_c}", f"送信者: {u_name_Now} ({cu_Now})\n日時: {now_s}\n件名: {subj_c}\n\n{msg_body.strip()}", category="会員メッセージ")
+                st.success("✅ 管理者にメッセージを送信しました！")
+    if my_msgs:
+        with st.sidebar.expander(f"📬 管理者とのメッセージ履歴 ({len(my_msgs)}件)", expanded=bool(unread_admin_replies)):
+            if unread_admin_replies:
+                if st.button("✅ 新着返信を既読にする", key="mark_read_mem", use_container_width=True):
+                    for m in mdb_Now.get("messages", []):
+                        if m.get("member_email") == cu_Now and m.get("sender_role") == "admin":
+                            m["read_by_member"] = True
+                    save_j(FILES["mail"], mdb_Now)
+                    st.rerun()
+            for m in my_msgs[:15]:
+                is_adm = m.get("sender_role") == "admin"
+                bg_c = "rgba(16,185,129,0.14)" if is_adm else "rgba(56,189,248,0.10)"
+                bd_c = "#10b981" if is_adm else "#38bdf8"
+                who_lbl = "👑 管理者からの返信" if is_adm else f"🗣️ あなた ({m.get('member_name', '')})"
+                st.markdown(
+                    f'<div style="background:{bg_c};border-left:3px solid {bd_c};border-radius:7px;padding:6px 9px;margin-bottom:6px;font-size:11.5px;">'
+                    f'<div style="font-size:10px;color:#94a3b8;display:flex;justify-content:space-between;"><span><b>{who_lbl}</b></span><span>{m.get("time","")}</span></div>'
+                    f'<div style="font-weight:700;color:#f8fafc;margin-top:2px;">{m.get("subject","")}</div>'
+                    f'<div style="color:#e2e8f0;margin-top:2px;white-space:pre-wrap;">{m.get("body","")}</div></div>',
+                    unsafe_allow_html=True
+                )
+
 all_impact_news = fetch_global_impact_news()
 if enable_news_popup and st.session_state.get("navigation_page") != "NEWS_DETAIL":
     unread = [n for n in all_impact_news if n["id"] not in st.session_state["dismissed_news_ids"]]
@@ -502,15 +643,230 @@ if enable_news_popup and st.session_state.get("navigation_page") != "NEWS_DETAIL
 
 if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower():
     db = load_mem()
-    st.subheader("👑 会員管理センター")
-    if st.button("⬅️ TOPへ戻る"): st.session_state["navigation_page"] = "TOP"; st.rerun()
-    for k, v in list(db.items()):
-        pc = v.get("passcode", gen_code(k))
-        c1, c2, c3 = st.columns([3, 1, 1])
-        c1.markdown(f"**{v.get('name')}** (`{k}`) ｜ 状態: **{v.get('status')}** ｜ 専用コード: `{pc}`")
-        if k != ADMIN_EMAIL.strip().lower():
-            if c2.button("✅承認", key=f"ap_{k}"): db[k]["status"] = "approved"; save_j(FILES["mem"], db); send_mail(k, "【YAMASHISHI LAB】承認完了のお知らせ", "会員登録が承認されました。ログイン画面の『🔐 承認確認・暗号化コード照会』タブより4桁PINを入力して専用コードをご確認ください。"); st.rerun()
-            if c3.button("🚫停止", key=f"bn_{k}"): db[k]["status"] = "suspended"; save_j(FILES["mem"], db); st.rerun()
+    sec = load_sec()
+    mdb = load_mail_db()
+    st.subheader("👑 会員管理センター ＆ セキュリティ監視・メッセージ管理")
+    if st.button("⬅️ TOPへ戻る", use_container_width=True):
+        st.session_state["navigation_page"] = "TOP"; st.rerun()
+
+    adm_tab1, adm_tab2, adm_tab3 = st.tabs([
+        f"👥 会員管理 ({len(db)}名)",
+        f"📩 会員メッセージ受信・返信 ({len([m for m in mdb.get('messages',[]) if m.get('sender_role')=='member'])})",
+        f"🛡️ 永久BAN・なりすまし監視 ({len(sec.get('spoof_logs',[]))})"
+    ])
+
+    with adm_tab1:
+        st.caption("会員ごとの承認・**一時停止**・**削除**・**永久BAN（端末指紋＆PINロックによるなりすまし再登録ブロック）**を管理できます。")
+        for k, v in list(db.items()):
+            pc = v.get("passcode", gen_code(k))
+            st_val = v.get("status", "pending")
+            st_badge = {
+                "approved": "🟢 承認済 (利用中)",
+                "pending": "⏳ 承認待ち",
+                "suspended": "⏸️ 一時停止中",
+                "banned": "💀 永久BAN (再登録阻止中)"
+            }.get(st_val, st_val)
+            st.markdown(
+                f'<div style="background:#0f172a;border:1px solid rgba(148,163,184,0.22);border-radius:10px;padding:10px 12px;margin-bottom:6px;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
+                f'<div><b style="font-size:14px;color:#f8fafc;">{v.get("name","未入力")}</b> (<code>{k}</code>) ｜ 状態: <b>{st_badge}</b></div>'
+                f'<div style="font-size:11px;color:#94a3b8;">専用コード: <code>{pc}</code> ｜ 端末FP: <code>{v.get("fp","-")}</code> ｜ 最終アクセス: {v.get("last_seen_str","-")}</div>'
+                f'</div></div>',
+                unsafe_allow_html=True
+            )
+            if k != ADMIN_EMAIL.strip().lower():
+                b1, b2, b3, b4 = st.columns(4)
+                if b1.button("✅ 承認 / 復帰", key=f"ap_{k}", use_container_width=True):
+                    db[k]["status"] = "approved"
+                    db[k]["approved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    # もし過去にBANリストに入っていた場合は解除
+                    sec.get("banned_emails", {}).pop(k, None)
+                    if v.get("fp") in sec.get("banned_fps", {}): sec["banned_fps"].pop(v.get("fp"), None)
+                    if v.get("raw_hfp") in sec.get("banned_fps", {}): sec["banned_fps"].pop(v.get("raw_hfp"), None)
+                    if v.get("pin_hash") in sec.get("banned_pins", {}): sec["banned_pins"].pop(v.get("pin_hash"), None)
+                    save_j(FILES["sec"], sec)
+                    save_j(FILES["mem"], db)
+                    send_mail(k, "【YAMASHISHI LAB】承認完了のお知らせ", "会員登録が承認（または復帰）されました。ログイン画面の『🔐 承認確認・暗号化コード照会』タブより4桁PINを入力して専用コードをご確認ください。")
+                    st.rerun()
+                if b2.button("⏸️ 一時停止", key=f"sp_{k}", use_container_width=True):
+                    db[k]["status"] = "suspended"
+                    save_j(FILES["mem"], db)
+                    st.warning(f"⏸️ {v.get('name')} ({k}) を一時停止にしました。")
+                    st.rerun()
+                if b3.button("🗑️ 削除", key=f"dl_{k}", use_container_width=True):
+                    u_fp, u_hfp = v.get("fp", ""), v.get("raw_hfp", "")
+                    if u_fp in sec.get("device_bio_map", {}): sec["device_bio_map"].pop(u_fp, None)
+                    if u_hfp in sec.get("device_bio_map", {}): sec["device_bio_map"].pop(u_hfp, None)
+                    save_j(FILES["sec"], sec)
+                    del db[k]
+                    save_j(FILES["mem"], db)
+                    st.info(f"🗑️ {v.get('name')} ({k}) の会員データを削除しました。")
+                    st.rerun()
+                if b4.button("💀 永久BAN", key=f"bn_{k}", use_container_width=True):
+                    now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    db[k]["status"] = "banned"
+                    u_fp, u_hfp, u_pin, u_nm = v.get("fp", ""), v.get("raw_hfp", ""), v.get("pin_hash", ""), v.get("name", "不明")
+                    sec.setdefault("banned_emails", {})[k] = {"name": u_nm, "banned_at": now_s, "fp": u_fp, "raw_hfp": u_hfp}
+                    if u_fp and u_fp != "-":
+                        sec.setdefault("banned_fps", {})[u_fp] = {"email": k, "name": u_nm, "banned_at": now_s, "reason": "管理者による永久BAN"}
+                        sec.get("device_bio_map", {}).pop(u_fp, None)
+                    if u_hfp and u_hfp != "-":
+                        sec.setdefault("banned_fps", {})[u_hfp] = {"email": k, "name": u_nm, "banned_at": now_s, "reason": "管理者による永久BAN"}
+                        sec.get("device_bio_map", {}).pop(u_hfp, None)
+                    if u_pin:
+                        sec.setdefault("banned_pins", {})[u_pin] = k
+                    if u_nm and u_nm not in sec.setdefault("banned_names", []):
+                        sec["banned_names"].append(u_nm)
+                    save_j(FILES["sec"], sec)
+                    save_j(FILES["mem"], db)
+                    st.error(f"💀 {u_nm} ({k}) を永久BANし、端末指紋・PINをなりすまし監視リストに登録しました。")
+                    st.rerun()
+
+    with adm_tab2:
+        st.caption("📩 会員から届いたメッセージの発信者（名前・メールアドレス）を確認し、その場で直接会員へ返信できます。")
+        all_msgs = mdb.get("messages", [])
+        # 直前にメッセージを送ってきた会員順にグループ化
+        member_order = []
+        for m in all_msgs:
+            me = m.get("member_email", "")
+            if me and me not in member_order:
+                member_order.append(me)
+
+        # 全会員への新規ダイレクトメッセージ送信フォーム（任意の会員または直前会員を選択可能）
+        member_choices = [k for k in db.keys() if k != ADMIN_EMAIL.strip().lower()]
+        if member_order:
+            # 直前に連絡があった会員を先頭に並べる
+            member_choices = member_order + [m for m in member_choices if m not in member_order]
+
+        if member_choices:
+            with st.expander("✉️ 会員を指定してダイレクトメッセージを送信 / 直前会員へ即返信", expanded=True):
+                with st.form("admin_direct_reply_top", clear_on_submit=True):
+                    target_em = st.selectbox(
+                        "宛先会員（一番上が直前にメッセージを送ってきた会員です）",
+                        member_choices,
+                        format_func=lambda em: f"{'🔴【直前メッセージ会員】 ' if member_order and em == member_order[0] else ''}{db.get(em, {}).get('name', '会員')} ({em})"
+                    )
+                    rep_subj = st.text_input("件名", value="【YAMASHISHI LAB 管理者より】ご連絡・ご回答")
+                    rep_body = st.text_area("返信メッセージ本文", placeholder="会員への返信メッセージを入力してください...", height=90)
+                    if st.form_submit_button("📤 この会員にメッセージを送信（アプリ内＆メール通知）", use_container_width=True, type="primary"):
+                        if not rep_body.strip():
+                            st.warning("⚠️ メッセージ本文を入力してください。")
+                        else:
+                            now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            t_name = db.get(target_em, {}).get("name", "会員")
+                            for m in mdb.get("messages", []):
+                                if m.get("member_email") == target_em and m.get("sender_role") == "member":
+                                    m["read_by_admin"] = True
+                            mdb.setdefault("messages", []).insert(0, {
+                                "id": hashlib.md5(f"adm_{target_em}_{now_s}".encode()).hexdigest()[:8],
+                                "time": now_s,
+                                "member_email": target_em,
+                                "member_name": t_name,
+                                "sender_role": "admin",
+                                "subject": rep_subj.strip() or "管理者からの返信",
+                                "body": rep_body.strip(),
+                                "read_by_admin": True,
+                                "read_by_member": False
+                            })
+                            save_j(FILES["mail"], mdb)
+                            send_mail(target_em, rep_subj.strip() or "【YAMASHISHI LAB】管理者からの返信", f"{t_name} 様\n\n管理者よりメッセージが届きました。\n\n{rep_body.strip()}", category="管理者返信")
+                            st.success(f"✅ {t_name} 様 ({target_em}) へメッセージを返信しました！")
+                            st.rerun()
+
+        if not member_order:
+            st.info("現在、会員から受信しているメッセージはありません。")
+        else:
+            st.markdown("#### 📬 会員別メッセージスレッド一覧（最新順）")
+            for idx_m, mem_em in enumerate(member_order):
+                mem_name = db.get(mem_em, {}).get("name") or next((m.get("member_name") for m in all_msgs if m.get("member_email") == mem_em), "会員")
+                thread_msgs = [m for m in all_msgs if m.get("member_email") == mem_em]
+                unread_cnt = sum(1 for m in thread_msgs if m.get("sender_role") == "member" and not m.get("read_by_admin", False))
+                badge_html = f'<span class="pill-badge" style="background:#ef4444;color:#fff;border:none;">🔴 未読 {unread_cnt}件</span>' if unread_cnt else '<span class="pill-badge" style="color:#10b981;">✅ 確認済</span>'
+                latest_badge = '<span class="quantum-badge">⚡ 直前メッセージ送信会員</span>' if idx_m == 0 else ''
+                st.markdown(
+                    f'<div class="rank-card" style="border-left-color:{"#ef4444" if unread_cnt else "#38bdf8"};margin-bottom:8px;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px;">'
+                    f'<div>{latest_badge}{badge_html} <b style="font-size:14.5px;color:#f8fafc;">👤 {mem_name}</b> (<code>{mem_em}</code>)</div>'
+                    f'<span style="font-size:11px;color:#94a3b8;">最終やり取り: {thread_msgs[0].get("time","")}</span></div>',
+                    unsafe_allow_html=True
+                )
+                for tm in thread_msgs[:8]:
+                    is_adm = tm.get("sender_role") == "admin"
+                    b_col = "#10b981" if is_adm else "#f59e0b"
+                    bg_col = "rgba(16,185,129,0.10)" if is_adm else "rgba(245,158,11,0.10)"
+                    sender_str = "👑 あなた (管理者返信)" if is_adm else f"📩 {mem_name} ({mem_em}) からの受信メッセージ"
+                    st.markdown(
+                        f'<div style="background:{bg_col};border-left:3px solid {b_col};border-radius:7px;padding:7px 10px;margin-bottom:5px;font-size:12px;">'
+                        f'<div style="display:flex;justify-content:space-between;font-size:10.5px;color:#cbd5e1;"><b>{sender_str}</b><span>{tm.get("time","")}</span></div>'
+                        f'<div style="font-weight:700;color:#fde047;margin-top:2px;">件名: {tm.get("subject","")}</div>'
+                        f'<div style="color:#f8fafc;margin-top:3px;white-space:pre-wrap;">{tm.get("body","")}</div></div>',
+                        unsafe_allow_html=True
+                    )
+                with st.form(f"quick_reply_{mem_em}", clear_on_submit=True):
+                    qr_c1, qr_c2 = st.columns([3.2, 1])
+                    qr_txt = qr_c1.text_input("ダイレクト返信", placeholder=f"{mem_name} ({mem_em}) 様へ直接返信メッセージを送る...", label_visibility="collapsed")
+                    if qr_c2.form_submit_button("↩️ 即時返信", use_container_width=True) and qr_txt.strip():
+                        now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        for m in mdb.get("messages", []):
+                            if m.get("member_email") == mem_em and m.get("sender_role") == "member":
+                                m["read_by_admin"] = True
+                        mdb.setdefault("messages", []).insert(0, {
+                            "id": hashlib.md5(f"qr_{mem_em}_{now_s}".encode()).hexdigest()[:8],
+                            "time": now_s,
+                            "member_email": mem_em,
+                            "member_name": mem_name,
+                            "sender_role": "admin",
+                            "subject": "管理者からのダイレクト返信",
+                            "body": qr_txt.strip(),
+                            "read_by_admin": True,
+                            "read_by_member": False
+                        })
+                        save_j(FILES["mail"], mdb)
+                        send_mail(mem_em, "【YAMASHISHI LAB】管理者からの返信メッセージ", f"{mem_name} 様\n\n{qr_txt.strip()}", category="管理者返信")
+                        st.success(f"✅ {mem_name} 様へ返信しました！")
+                        st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+
+    with adm_tab3:
+        st.caption("🛡️ 永久BANされたユーザーが別名・別メールアドレスで再登録やログイン（なりすまし）を試みた場合、端末フィンガープリント(FP)・ブラウザ環境指紋(HFP)・PINハッシュから自動検知して遮断し、以下にリアルタイム記録します。")
+        b_ems = sec.get("banned_emails", {})
+        b_fps = sec.get("banned_fps", {})
+        st.markdown(f"**💀 現在の永久BAN登録数:** メールアドレス `{len(b_ems)}件` ／ 監視端末指紋(FP/HFP) `{len(b_fps)}件`")
+        if b_ems:
+            for bem, binfo in list(b_ems.items()):
+                c_b1, c_b2 = st.columns([3.5, 1])
+                c_b1.markdown(f"💀 **{binfo.get('name','不明')}** (`{bem}`) ｜ BAN日時: {binfo.get('banned_at','-')} ｜ 端末FP: `{binfo.get('fp','-')}`")
+                if c_b2.button("🔓 永久BAN解除", key=f"unban_{bem}", use_container_width=True):
+                    sec.get("banned_emails", {}).pop(bem, None)
+                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email") == bem]:
+                        sec["banned_fps"].pop(fp_k, None)
+                    for pin_k in [k_p for k_p, v_p in sec.get("banned_pins", {}).items() if v_p == bem]:
+                        sec["banned_pins"].pop(pin_k, None)
+                    if bem in db:
+                        db[bem]["status"] = "suspended"
+                        save_j(FILES["mem"], db)
+                    save_j(FILES["sec"], sec)
+                    st.success(f"🔓 {bem} の永久BANを解除しました（状態：一時停止）。")
+                    st.rerun()
+        st.markdown("---")
+        st.markdown("#### 🚨 なりすまし再登録・不正アクセス監視ログ")
+        s_logs = sec.get("spoof_logs", [])
+        if not s_logs:
+            st.info("現在、永久BAN対象者によるなりすまし再登録や不正アクセスの検知ログはありません。")
+        else:
+            if st.button("🧹 監視ログをクリア", key="clr_spoof_logs"):
+                sec["spoof_logs"] = []
+                save_j(FILES["sec"], sec)
+                st.rerun()
+            for sl in s_logs[:50]:
+                st.markdown(
+                    f'<div style="background:rgba(239,68,68,0.12);border-left:4px solid #ef4444;border-radius:8px;padding:8px 11px;margin-bottom:6px;font-size:12px;">'
+                    f'<div style="display:flex;justify-content:space-between;color:#fca5a5;font-weight:800;"><span>{sl.get("action","🚨 遮断")}</span><span>{sl.get("time","")}</span></div>'
+                    f'<div style="color:#f8fafc;margin-top:3px;">試行名: <b>{sl.get("input_name","")}</b> ｜ 試行アドレス: <code>{sl.get("input_email","")}</code> ｜ 元BAN対象: <code>{sl.get("orig_banned_email","")}</code></div>'
+                    f'<div style="color:#cbd5e1;font-size:11px;margin-top:2px;">検知理由: <b style="color:#fde047;">{sl.get("reason","")}</b> ｜ 端末FP: <code>{sl.get("fp","")}</code> / HFP: <code>{sl.get("raw_hfp","")}</code></div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
     st.stop()
 
 # ==========================================
