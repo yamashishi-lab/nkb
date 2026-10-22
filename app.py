@@ -198,22 +198,35 @@ def inject_css():
     css = """
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
-    .block-container{padding-top:5.2rem!important;padding-bottom:3rem!important;padding-left:0.75rem!important;padding-right:0.75rem!important;max-width:840px!important;}
+    header[data-testid="stHeader"]{background:transparent!important;pointer-events:none!important;}
+    header[data-testid="stHeader"] button,header[data-testid="stHeader"] a,header[data-testid="stHeader"] [data-testid="stToolbar"],[data-testid="collapsedControl"],[data-testid="stSidebarCollapsedControl"]{pointer-events:auto!important;}
+    .block-container{padding-top:3.6rem!important;padding-bottom:3rem!important;padding-left:0.75rem!important;padding-right:0.75rem!important;max-width:840px!important;}
     .brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,24px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;display:block;width:100%;}
     .brand-sub{font-family:'JetBrains Mono',monospace;font-size:clamp(8.5px,2.2vw,10.5px);color:#64748b;letter-spacing:1.2px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stElementContainer"] div.top-nav-marker),
     div[data-testid="stVerticalBlock"] > div:has(> div.element-container div.top-nav-marker),
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(div.top-nav-marker){position:fixed!important;top:3.1rem!important;left:50%!important;transform:translateX(-50%)!important;z-index:999990!important;width:min(816px,calc(100vw - 1.5rem))!important;background:rgba(5,8,17,0.88)!important;backdrop-filter:blur(12px)!important;border:none!important;border-radius:9px!important;outline:none!important;box-shadow:0 6px 18px rgba(0,0,0,0.65)!important;padding:4px 6px!important;margin:0!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stElementContainer"]:has(div.top-nav-marker),
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;gap:5px!important;width:100%!important;border:none!important;background:transparent!important;box-shadow:none!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="column"],
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stColumn"]{min-width:0!important;flex:1 1 0%!important;padding:0!important;border:none!important;background:transparent!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="column"]:nth-child(2),
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stColumn"]:nth-child(2){flex:1.45 1 0%!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button{width:100%!important;min-width:0!important;height:28px!important;min-height:28px!important;max-height:28px!important;padding:0 4px!important;margin:0!important;border-radius:7px!important;background:rgba(15,23,42,0.92)!important;backdrop-filter:blur(10px)!important;color:#f8fafc!important;border:1px solid rgba(56,189,248,0.25)!important;box-shadow:0 4px 12px rgba(0,0,0,0.45)!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button:hover{border-color:#38bdf8!important;color:#38bdf8!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button p{font-size:clamp(10px,2.6vw,11.5px)!important;font-weight:700!important;margin:0!important;padding:0!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;line-height:1!important;}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(div.top-nav-marker),
+    div[data-testid="stVerticalBlock"]:has(> div > div.top-nav-marker),
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"] div.top-nav-marker),
+    .fixed-top-nav-bar{position:fixed!important;top:0.45rem!important;left:50%!important;transform:translateX(-50%)!important;z-index:1000020!important;width:min(680px,calc(100vw - 7.2rem))!important;background:rgba(5,8,17,0.92)!important;backdrop-filter:blur(12px)!important;border:none!important;border-radius:9px!important;outline:none!important;box-shadow:0 6px 18px rgba(0,0,0,0.65)!important;padding:4px 6px!important;margin:0!important;pointer-events:auto!important;}
+    div[data-testid="stElementContainer"]:has(div.top-nav-marker),
+    div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}
+    div:has(> div > div.top-nav-marker) div[data-testid="stHorizontalBlock"],
+    .fixed-top-nav-bar div[data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;gap:5px!important;width:100%!important;border:none!important;background:transparent!important;box-shadow:none!important;}
+    div:has(> div > div.top-nav-marker) div[data-testid="column"],
+    div:has(> div > div.top-nav-marker) div[data-testid="stColumn"],
+    .fixed-top-nav-bar div[data-testid="column"],
+    .fixed-top-nav-bar div[data-testid="stColumn"]{min-width:0!important;flex:1 1 0%!important;padding:0!important;border:none!important;background:transparent!important;}
+    div:has(> div > div.top-nav-marker) div[data-testid="column"]:nth-child(2),
+    div:has(> div > div.top-nav-marker) div[data-testid="stColumn"]:nth-child(2),
+    .fixed-top-nav-bar div[data-testid="column"]:nth-child(2),
+    .fixed-top-nav-bar div[data-testid="stColumn"]:nth-child(2){flex:1.45 1 0%!important;}
+    div:has(> div > div.top-nav-marker) button,
+    .fixed-top-nav-bar button{width:100%!important;min-width:0!important;height:28px!important;min-height:28px!important;max-height:28px!important;padding:0 4px!important;margin:0!important;border-radius:7px!important;background:rgba(15,23,42,0.92)!important;backdrop-filter:blur(10px)!important;color:#f8fafc!important;border:1px solid rgba(56,189,248,0.25)!important;box-shadow:0 4px 12px rgba(0,0,0,0.45)!important;}
+    div:has(> div > div.top-nav-marker) button:hover,
+    .fixed-top-nav-bar button:hover{border-color:#38bdf8!important;color:#38bdf8!important;}
+    div:has(> div > div.top-nav-marker) button p,
+    .fixed-top-nav-bar button p{font-size:clamp(10px,2.6vw,11.5px)!important;font-weight:700!important;margin:0!important;padding:0!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;line-height:1!important;}
     div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stElementContainer"] div.floating-news-popup-marker),
     div[data-testid="stVerticalBlock"] > div:has(> div.element-container div.floating-news-popup-marker){position:fixed!important;bottom:16px!important;right:16px!important;z-index:99999!important;width:min(395px,93vw)!important;background:rgba(12,18,34,0.97)!important;backdrop-filter:blur(18px)!important;border:1px solid rgba(239,68,68,0.65)!important;border-left:4px solid #ef4444!important;border-radius:12px!important;padding:11px 13px!important;box-shadow:0 16px 38px rgba(0,0,0,0.85)!important;}
     div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker) div[data-testid="stElementContainer"]:has(div.floating-news-popup-marker),
@@ -384,8 +397,42 @@ with st.container():
             st.session_state["last_cat"] = "🏆 総合TOP5"
         st.rerun()
 
-if st.session_state["scroll_top_trig"] > 0:
-    components.html(f"""<script>/* {st.session_state['scroll_top_trig']} */try{{window.parent.scrollTo({{top:0,behavior:'instant'}});const m=window.parent.document.querySelector('section.main');if(m)m.scrollTo({{top:0,behavior:'instant'}});const a=window.parent.document.querySelector('[data-testid="stAppViewContainer"]');if(a)a.scrollTo({{top:0,behavior:'instant'}});}}catch(e){{}}</script>""", height=0)
+# スクロールしても常時追従し、かつ上部アイコン（サイドバーボタン・右上メニュー）に被らない位置へ固定するスクリプト
+components.html(
+    f"""<script>
+    (function(){{
+        const doc = window.parent.document;
+        function fixTopNav(){{
+            const marker = doc.querySelector('.top-nav-marker');
+            if(!marker) return;
+            let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
+            if(box && box.querySelector('[data-testid="stHorizontalBlock"]')){{
+                box.classList.add('fixed-top-nav-bar');
+                let p = box.parentElement;
+                while(p && p !== doc.body){{
+                    const st = window.parent.getComputedStyle(p);
+                    if(st.transform && st.transform !== 'none') p.style.setProperty('transform', 'none', 'important');
+                    if(st.filter && st.filter !== 'none') p.style.setProperty('filter', 'none', 'important');
+                    if(st.perspective && st.perspective !== 'none') p.style.setProperty('perspective', 'none', 'important');
+                    p = p.parentElement;
+                }}
+            }}
+        }}
+        fixTopNav();
+        setTimeout(fixTopNav, 120);
+        setTimeout(fixTopNav, 400);
+        if({st.session_state['scroll_top_trig']} > 0 && window.parent._lastScrollTrig !== {st.session_state['scroll_top_trig']}){{
+            window.parent._lastScrollTrig = {st.session_state['scroll_top_trig']};
+            try{{
+                window.parent.scrollTo({{top:0,behavior:'instant'}});
+                const m=doc.querySelector('section.main');if(m)m.scrollTo({{top:0,behavior:'instant'}});
+                const a=doc.querySelector('[data-testid="stAppViewContainer"]');if(a)a.scrollTo({{top:0,behavior:'instant'}});
+            }}catch(e){{}}
+        }}
+    }})();
+    </script>""",
+    height=0
+)
 
 AI_ROSTER = {
     "QUANTUM": "⚛️ QUANTUM (量子波動・トンネル解析官)",
@@ -1053,7 +1100,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, bi=True, b5
 
         hl_r = np.maximum(h - l, 1e-4)
         sf = ((2.0 * c - h - l) / hl_r) * v
-        ofi_z = round(float(np.clip((np.mean(sf[-5:]) - np.mean(sf[-20:])) / max(float(np.std(sf[-20:])), 1.0), -3.5, 3.5)), 2)
+        ofi_z = round(float(np.clip((np.mean(sf[-5:]) - np.mean(sf[-20:])) / max(float(np.std(sf[-20:])) , 1.0), -3.5, 3.5)), 2)
         rets = np.diff(c) / np.maximum(c[:-1], 1e-4) * 100.0
         q05 = np.percentile(rets, 5)
         cvar95 = round(float(abs(np.mean(rets[rets <= q05]))) if any(rets <= q05) else abs(float(q05)), 2)
