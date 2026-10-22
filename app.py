@@ -159,8 +159,8 @@ def inject_css():
     .compact-bar-label{display:flex;justify-content:space-between;font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#94a3b8;background:#0f172a;padding:5px 11px;border-radius:7px;border-left:3px solid #a855f7;margin-bottom:5px;}
     .rank-card,.search-result-card{background:linear-gradient(180deg,#0f172a 0%,#090d16 100%)!important;color:#f8fafc!important;border-radius:14px;padding:13px 14px;margin-bottom:11px;box-shadow:0 8px 24px rgba(0,0,0,0.45);border:1px solid rgba(148,163,184,0.16);border-left:4px solid #38bdf8;}
     .search-result-card{border-left-color:#f59e0b;}
-    .prob-badge{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:#38bdf8!important;}
-    .expect-badge{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:900;color:#fde047!important;}
+    .prob-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:800;color:#38bdf8!important;white-space:nowrap;}
+    .expect-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:900;color:#fde047!important;white-space:nowrap;}
     .pill-badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;margin-right:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#e2e8f0;}
     .quantum-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;margin-right:4px;background:linear-gradient(90deg,rgba(168,85,247,0.22),rgba(56,189,248,0.22));border:1px solid rgba(168,85,247,0.55);color:#e9d5ff;}
     .inst-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;margin-right:4px;background:linear-gradient(90deg,rgba(16,185,129,0.2),rgba(56,189,248,0.2));border:1px solid rgba(16,185,129,0.55);color:#a7f3d0;}
@@ -279,7 +279,7 @@ def check_auth():
 
 check_auth()
 
-for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("selected_news_item", None), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("nav_history", []), ("scroll_top_trig", 0), ("dismissed_news_ids", set()), ("show_ai_guide", False)]:
+for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("selected_news_item", None), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("last_cat", "🏆 総合TOP5"), ("nav_history", []), ("scroll_top_trig", 0), ("dismissed_news_ids", set()), ("show_ai_guide", False)]:
     if k not in st.session_state: st.session_state[k] = v
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
@@ -294,8 +294,13 @@ with st.container():
         if st.session_state.get("navigation_page") != "TOP":
             st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] += 1
         elif st.session_state.get("custom_search_code"): st.session_state["custom_search_code"] = ""
-        elif st.session_state["nav_history"]: st.session_state["active_category"] = st.session_state["nav_history"].pop()
-        else: st.session_state["active_category"] = "🏆 総合TOP5"
+        elif st.session_state["nav_history"]:
+            popped = st.session_state["nav_history"].pop()
+            st.session_state["active_category"] = popped
+            st.session_state["last_cat"] = popped
+        else:
+            st.session_state["active_category"] = "🏆 総合TOP5"
+            st.session_state["last_cat"] = "🏆 総合TOP5"
         st.rerun()
 
 if st.session_state["scroll_top_trig"] > 0:
@@ -946,8 +951,8 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
         f'<div style="margin-bottom:7px;">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点 (突破{r["q_tunnel"]}%)</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点 (Kyle吸収{r["kyle_stealth"]}%)</span><span class="pill-badge">🧬 OFI {r["ofi_z"]:+.2f}σ</span></div>'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;"><div><span style="font-size:16px;font-weight:800;color:#f8fafc;">{r["name"]}</span> <span style="font-size:11.5px;color:#94a3b8;">({r["code"]} / {r["genre"]})</span><div style="font-size:11px;color:#94a3b8;margin-top:2px;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div></div>'
-        f'<div style="text-align:right;"><span style="font-size:9.5px;color:#fde047;font-weight:700;">🔥 AI期待度 / 統合勝率</span><br><span class="expect-badge">{r["expect_pct"]}%</span> <span style="color:#64748b;">/</span> <span class="prob-badge">{r["total_win_rate"]}%</span><div style="font-size:9.5px;color:#94a3b8;">Payoff {r["payoff"]}x / Edge {r["edge"]:+.2f}%</div></div></div>'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="min-width:0;flex:1;"><span style="font-size:16px;font-weight:800;color:#f8fafc;">{r["name"]}</span> <span style="font-size:11.5px;color:#94a3b8;">({r["code"]} / {r["genre"]})</span><div style="font-size:11px;color:#94a3b8;margin-top:2px;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div></div>'
+        f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;line-height:1.15;">🔥 AI期待度 / 統合勝率</div><div style="white-space:nowrap;line-height:1.2;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div><div style="font-size:9.5px;color:#94a3b8;">Payoff {r["payoff"]}x / Edge {r["edge"]:+.2f}%</div></div></div>'
         f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ 量子トンネル</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ 機関Kyle吸収</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 翌朝GU / 陽線</div><div style="font-size:12px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
         f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 夜間理論寄付き</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
         f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>基準VWAP: <b>{r["vwap_price"]}</b></span></div>'
@@ -1064,12 +1069,25 @@ def cut_stocks(slist, pct):
 
 cats = ["🏆 総合TOP5", "⚛️ 量子トンネル突破TOP10", "🏛️ 機関最新ミクロ構造TOP10", "🚨 重大ニュース＆連動株", "🎟️ IPO募集・新規上場", "🏦 機関VPIN・OFI", "🔥 5ch＆短期モメンタム", "📋 監視シート"] + [f"📂 {g}" for g in STOCK_POOL.keys()]
 st.markdown('<div class="compact-bar-label"><span>📂 QUANTUM STRATEGY & SECTOR SELECT</span><span>期待度ランキング / 機関ミクロ構造 / ニュース連動株 / IPO</span></div>', unsafe_allow_html=True)
-prev_cat = st.session_state.get("active_category", "🏆 総合TOP5")
-if prev_cat not in cats: prev_cat = "🏆 総合TOP5"
-sel_cat = (st.pills("カテゴリ", cats, default=prev_cat, selection_mode="single", label_visibility="collapsed") or prev_cat) if hasattr(st, "pills") else st.radio("カテゴリ", cats, horizontal=True, label_visibility="collapsed")
-if sel_cat != prev_cat:
-    st.session_state["nav_history"].append(prev_cat)
-    st.session_state["active_category"] = sel_cat
+
+if st.session_state.get("active_category") not in cats:
+    st.session_state["active_category"] = "🏆 総合TOP5"
+
+def _on_cat_change():
+    nw = st.session_state.get("active_category")
+    ol = st.session_state.get("last_cat", "🏆 総合TOP5")
+    if not nw:
+        st.session_state["active_category"] = ol
+    elif nw != ol:
+        st.session_state["nav_history"].append(ol)
+        st.session_state["last_cat"] = nw
+
+if hasattr(st, "pills"):
+    st.pills("カテゴリ", cats, selection_mode="single", label_visibility="collapsed", key="active_category", on_change=_on_cat_change)
+else:
+    st.radio("カテゴリ", cats, horizontal=True, label_visibility="collapsed", key="active_category", on_change=_on_cat_change)
+
+sel_cat = st.session_state.get("active_category") or st.session_state.get("last_cat", "🏆 総合TOP5")
 
 surv, _ = cut_stocks(all_res, survival_cut_pct)
 if sel_cat == "🏆 総合TOP5":
