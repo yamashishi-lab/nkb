@@ -81,18 +81,62 @@ def send_mail(to_em: str, subj: str, body: str) -> bool:
         return True
     except Exception: return False
 
-# --- WebAuthn 生体認証 ＆ 端末フィンガープリント連携ブリッジ ---
+# --- WebAuthn 生体認証 ＆ 端末フィンガープリント連携ブリッジ（見切れ防止・自動高さ調整対応） ---
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
+    btn_html = (
+        """
+        <div id="bio_wrap" style="text-align:center;padding:4px 2px 8px 2px;box-sizing:border-box;">
+          <button onclick="triggerBioLogin()" style="width:100%;box-sizing:border-box;padding:11px 14px;border-radius:10px;border:1px solid #38bdf8;background:linear-gradient(135deg,#0284c7,#1d4ed8);color:#fff;font-weight:900;font-size:13.5px;line-height:1.4;white-space:normal;word-break:keep-all;cursor:pointer;box-shadow:0 4px 12px rgba(2,132,199,0.4);">
+            🧬 2回目以降の方：生体認証 (Face ID / Touch ID / 指紋) でワンタップログイン
+          </button>
+        </div>
+        """
+        if mode == "login"
+        else """
+        <div id="bio_wrap" style="text-align:center;padding:2px 1px 6px 1px;box-sizing:border-box;">
+          <button onclick="triggerBioRegister()" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid #10b981;background:#064e3b;color:#a7f3d0;font-weight:800;font-size:11.5px;line-height:1.35;white-space:normal;cursor:pointer;">
+            🧬 次回から生体認証でログインする（この端末を登録）
+          </button>
+        </div>
+        """
+    )
     components.html(f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <style>
+      html, body {{
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        background: transparent !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }}
+    </style>
+    </head>
+    <body>
+    {btn_html}
     <script>
-    (async function(){{
+    (function(){{
+        function syncFrameHeight(){{
+            const wrap = document.getElementById('bio_wrap');
+            if(wrap && window.frameElement){{
+                const h = Math.ceil(wrap.getBoundingClientRect().height) + 4;
+                window.frameElement.style.height = h + 'px';
+                window.frameElement.height = h;
+            }}
+        }}
+        window.addEventListener('load', syncFrameHeight);
+        window.addEventListener('resize', syncFrameHeight);
+        setTimeout(syncFrameHeight, 50);
+
         const pUrl = new URL(window.parent.location.href);
         const rawFp = [navigator.userAgent, screen.width+'x'+screen.height, Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.hardwareConcurrency||4].join('|');
         let h = 0; for(let i=0;i<rawFp.length;i++){{ h=((h<<5)-h)+rawFp.charCodeAt(i); h|=0; }}
         const dfp = Math.abs(h).toString(16).toUpperCase();
         if(!pUrl.searchParams.get('dfp')){{ pUrl.searchParams.set('dfp', dfp); window.parent.history.replaceState({{}},'',pUrl.toString()); }}
 
-        const mode = "{mode}";
         const email = "{user_email}";
         const token = "{bio_token}";
 
@@ -111,20 +155,13 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
                         }}
                     }});
                 }}
-                localStorage.setItem('quant_bio_email', email);
-                localStorage.setItem('quant_bio_token', token);
-                localStorage.setItem('quant_device_fp', dfp);
-                pUrl.searchParams.set('bio_reg_ok', email);
-                pUrl.searchParams.set('dfp', dfp);
-                window.parent.location.href = pUrl.toString();
-            }} catch(e) {{
-                localStorage.setItem('quant_bio_email', email);
-                localStorage.setItem('quant_bio_token', token);
-                localStorage.setItem('quant_device_fp', dfp);
-                pUrl.searchParams.set('bio_reg_ok', email);
-                pUrl.searchParams.set('dfp', dfp);
-                window.parent.location.href = pUrl.toString();
-            }}
+            }} catch(e) {{}}
+            localStorage.setItem('quant_bio_email', email);
+            localStorage.setItem('quant_bio_token', token);
+            localStorage.setItem('quant_device_fp', dfp);
+            pUrl.searchParams.set('bio_reg_ok', email);
+            pUrl.searchParams.set('dfp', dfp);
+            window.parent.location.href = pUrl.toString();
         }};
 
         window.triggerBioLogin = async function(){{
@@ -145,19 +182,9 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
         }};
     }})();
     </script>
-    """ + ("""
-    <div style="text-align:center;margin:6px 0;">
-      <button onclick="triggerBioLogin()" style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid #38bdf8;background:linear-gradient(135deg,#0284c7,#1d4ed8);color:#fff;font-weight:900;font-size:13.5px;cursor:pointer;box-shadow:0 4px 12px rgba(2,132,199,0.4);">
-        🧬 2回目以降の方：生体認証 (Face ID / Touch ID / 指紋) でワンタップログイン
-      </button>
-    </div>
-    """ if mode == "login" else """
-    <div style="text-align:center;margin:4px 0;">
-      <button onclick="triggerBioRegister()" style="width:100%;padding:7px 10px;border-radius:8px;border:1px solid #10b981;background:#064e3b;color:#a7f3d0;font-weight:800;font-size:11.5px;cursor:pointer;">
-        🧬 次回から生体認証でログインする（この端末を登録）
-      </button>
-    </div>
-    """), height=54 if mode == "login" else 42)
+    </body>
+    </html>
+    """, height=76 if mode == "login" else 58)
 
 qp = st.query_params
 act, em, tok = qp.get("admin_action", ""), qp.get("email", "").strip().lower(), qp.get("token", "")
@@ -1019,7 +1046,7 @@ def build_quant_debate(r: dict, smap: dict, fs: int, vref: str, lp1: int, lp2: i
     v_desc = "機関アルゴのステルス買い集め" if r["vpin"] >= 0.15 else ("大口の利確・売り抜け警戒" if r["vpin"] < -0.1 else "機関オーダーフロー均衡")
 
     sp1, tx1 = rng.choice([
-        ("MICRO", f"『{r['name']}（{r['code']}）』の機関マイクロストラクチャ解析から入るぞ。現在値 <b>{r['price']}（{r['diff']:+.2f}%）</b>、VPIN <b>{r['vpin']:+.2f}</b>・OFI（板不均衡Z値）<b>{r['ofi_z']:+.2f}σ</b> で{v_desc}を示唆。Smart Money乖離も <b>{r['sm_div']:+.2f}</b> だ."),
+        ("MICRO", f"『{r['name']}（{r['code']}）』の機関マイクロストラクチャ解析から入るぞ。現在値 <b>{r['price']}（{r['diff']:+.2f}%）</b>、VPIN <b>{r['vpin']:+.2f}</b>・OFI（板不均衡Z値）<b>{r['ofi_z']:+.2f}σ</b> で{v_desc}を示唆。Smart Money乖離も <b>{r['sm_div']:+.2f}</b> だ。"),
         ("TECHNOS", f"数理波形構造から口火を切ろう。『{r['name']}』は【<b>{r['candle_desc']}</b>】を形成。Yang-Zhang年率ボラは <b>{r['yz_vol']}%</b>、市場効率性純度は <b>{r['eff_pct']}%</b>、RSI <b>{r['rsi']}</b> で推移している。"),
         ("MACRO", f"海外・先物裁定の視点からいいかな。『{r['name']}』の夜間理論寄付きは <b>{r['pts_est_price']}（{r['pts_gap_pct']:+.2f}%）</b>、Kalmanトレンド推計は <b>{r['kalman_bull_pct']:+.2f}%</b> と算出されている。")
     ])
