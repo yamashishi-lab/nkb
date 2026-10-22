@@ -11,41 +11,33 @@ from concurrent.futures import ThreadPoolExecutor
 from email.mime.text import MIMEText
 from datetime import datetime
 
-st.set_page_config(page_title="翌朝株価 クオンツ＆AI合議 Pro", page_icon="⚡", layout="centered")
+st.set_page_config(page_title="Yamashishi Lab - やまししラボ", page_icon="⚡", layout="centered")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
 ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
 SECRET_KEY = "my_super_secret_quant_key_2026"
-FILES = {"mem": "members_db.json", "smtp": "admin_smtp_config.json", "llm": "admin_llm_config.json", "sec": "security_watch_db.json"}
+FILES = {"mem": "members_db.json", "smtp": "admin_smtp_config.json", "llm": "admin_llm_config.json", "sec": "security_watch_db.json", "mail": "mail_history_db.json"}
 G_MODELS = ["gemma-3-27b-it", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.1-pro-preview"]
 BOARD_URLS = ["https://egg.5ch.io/test/read.cgi/stock/1791877270/", "https://egg.5ch.io/test/read.cgi/stock/1791897352/"]
-ONLINE_TTL = 300  # 5分以内の通信を「🟢オンライン」と判定
+ONLINE_TTL = 300
 
 def clean_k(k: str) -> str: return re.sub(r"\s+", "", unicodedata.normalize("NFKC", str(k or "")).strip().strip("\"'"))
 def gen_code(em: str) -> str: return hmac.new(SECRET_KEY.encode(), em.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
 def gen_tok(em: str, act: str) -> str: return hashlib.sha256(f"{em.strip().lower()}:{act}:{SECRET_KEY}".encode()).hexdigest()[:16]
 
-def get_client_fp() -> str:
+def get_raw_header_fp() -> str:
     try:
-        h = dict(getattr(st.context, "headers", {}) or {})
-        norm_h = {str(k).lower(): str(v) for k, v in h.items()}
-        raw = f"{norm_h.get('user-agent','')}|{norm_h.get('accept-language','')}|{norm_h.get('sec-ch-ua-platform','')}|{norm_h.get('x-forwarded-for', norm_h.get('remote-addr',''))}"
-    except Exception:
-        raw = "default_env"
+        h = {str(k).lower(): str(v) for k, v in dict(getattr(st.context, "headers", {}) or {}).items()}
+        raw = f"{h.get('user-agent','')}|{h.get('accept-language','')}|{h.get('sec-ch-ua-platform','')}"
+    except Exception: raw = "default_env"
+    return hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
+
+def get_client_fp() -> str:
+    raw = get_raw_header_fp()
     qf = st.query_params.get("dfp", "")
     if qf: st.session_state["client_dfp"] = qf
     dfp = st.session_state.get("client_dfp", "")
-    return hashlib.sha256(f"{raw}".encode()).hexdigest()[:12].upper() if not dfp else hashlib.sha256(f"{raw}|{dfp}".encode()).hexdigest()[:12].upper()
-
-def get_raw_header_fp() -> str:
-    """クエリパラメータに依存しない純粋なヘッダーベースの端末識別子"""
-    try:
-        h = dict(getattr(st.context, "headers", {}) or {})
-        norm_h = {str(k).lower(): str(v) for k, v in h.items()}
-        raw = f"{norm_h.get('user-agent','')}|{norm_h.get('accept-language','')}|{norm_h.get('sec-ch-ua-platform','')}"
-    except Exception:
-        raw = "default_env"
-    return hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
+    return hashlib.sha256(f"{raw}|{dfp}".encode()).hexdigest()[:12].upper() if dfp else raw
 
 def load_j(p: str, d: dict) -> dict:
     r = dict(d)
@@ -60,13 +52,13 @@ def save_j(p: str, d: dict):
         with open(p, "w", encoding="utf-8") as f: json.dump(d, f, ensure_ascii=False, indent=2)
     except Exception: pass
 
-def load_smtp(): return load_j(FILES["smtp"], {"app_base_url": "http://localhost:8501", "smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
+def load_smtp(): return load_j(FILES["smtp"], {"smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
 def load_llm():
     c = load_j(FILES["llm"], {"provider": "gemini", "gemini_api_key": clean_k(os.environ.get("GEMINI_API_KEY", "")), "gemini_model": "gemma-3-27b-it", "openai_api_key": clean_k(os.environ.get("OPENAI_API_KEY", "")), "openai_model": "gpt-4o-mini"})
     c["gemini_api_key"], c["openai_api_key"] = clean_k(c.get("gemini_api_key", "")), clean_k(c.get("openai_api_key", ""))
     return c
-
 def load_sec(): return load_j(FILES["sec"], {"banned_fps": {}, "spoof_logs": [], "device_bio_map": {}})
+def load_mail_db(): return load_j(FILES["mail"], {"logs": []})
 
 def load_mem():
     db = load_j(FILES["mem"], {})
@@ -77,336 +69,99 @@ def load_mem():
         save_j(FILES["mem"], db)
     return db
 
-def is_online(u_rec: dict) -> bool:
-    return (time.time() - float(u_rec.get("last_seen_ts", 0) or 0)) <= ONLINE_TTL
+def is_online(u_rec: dict) -> bool: return (time.time() - float(u_rec.get("last_seen_ts", 0) or 0)) <= ONLINE_TTL
 
-def send_mail(to_em: str, subj: str, body: str) -> bool:
+# --- SMTP不要！クラウドAPIリレー＋アプリ内受信BOX＋メーラー履歴 完全統合メールシステム ---
+def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") -> bool:
+    to_clean = to_em.strip().lower()
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    delivery_route = "アプリ内ダイレクト受信BOX"
+    sent_ext = False
+
+    # 1. SMTP設定がある場合は試行
     c = load_smtp()
     u, p, srv, port = c.get("smtp_user", "").strip(), c.get("smtp_pass", "").strip(), c.get("smtp_server", "").strip(), int(c.get("smtp_port", 465))
-    if not u or not p: return False
-    try:
-        m = MIMEText(body, "plain", "utf-8"); m["Subject"], m["From"], m["To"] = subj, u, to_em
-        with (smtplib.SMTP_SSL(srv, port, timeout=5) if port == 465 else smtplib.SMTP(srv, port, timeout=5)) as s:
-            if port != 465: s.starttls()
-            s.login(u, p); s.send_message(m)
-        return True
-    except Exception: return False
+    if u and p:
+        try:
+            m = MIMEText(body, "plain", "utf-8"); m["Subject"], m["From"], m["To"] = subj, u, to_clean
+            with (smtplib.SMTP_SSL(srv, port, timeout=4) if port == 465 else smtplib.SMTP(srv, port, timeout=4)) as s:
+                if port != 465: s.starttls()
+                s.login(u, p); s.send_message(m)
+            sent_ext, delivery_route = True, "SMTPサーバー配信＋アプリ内BOX"
+        except Exception: pass
 
-# --- WebAuthn 生体認証 ＆ ワンタップログイン連携ブリッジ（iframeサンドボックス完全対応版） ---
+    # 2. SMTP未設定または失敗時：設定不要のWebメールリレーAPI (FormSubmit AJAX) で相手アドレスへ送信試行
+    if not sent_ext:
+        try:
+            ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+            payload = json.dumps({"_subject": subj, "宛先": to_clean, "メッセージ本文": body, "_template": "table", "_captcha": "false"}).encode("utf-8")
+            req = urllib.request.Request(f"https://formsubmit.co/ajax/{urllib.parse.quote(to_clean)}", data=payload, headers={"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "YamashishiLab/1.0"}, method="POST")
+            with urllib.request.urlopen(req, timeout=3.5, context=ctx) as r:
+                if r.status == 200: sent_ext, delivery_route = True, "クラウドWebリレー配信＋アプリ内BOX"
+        except Exception: pass
+
+    # 3. 全ての送信履歴をメーラーDBに保存（管理画面メーラー＆相手側アプリ内受信トレイで100%即時閲覧可能）
+    mdb = load_mail_db()
+    mail_id = hashlib.md5(f"{to_clean}_{subj}_{now_str}_{random.random()}".encode()).hexdigest()[:10]
+    mailto_url = f"mailto:{urllib.parse.quote(to_clean)}?subject={urllib.parse.quote(subj)}&body={urllib.parse.quote(body)}"
+    mdb.setdefault("logs", []).insert(0, {
+        "id": mail_id, "time": now_str, "to": to_clean, "from": ADMIN_EMAIL,
+        "subject": subj, "body": body, "category": category,
+        "route": delivery_route, "read": False, "mailto": mailto_url
+    })
+    mdb["logs"] = mdb["logs"][:200]
+    save_j(FILES["mail"], mdb)
+    return True
+
+# --- 生体認証・ワンタップログイン（青色ボタン削除済み・ネイティブ1本化） ---
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
-    db = load_mem()
-    sec = load_sec()
-    raw_hfp = get_raw_header_fp()
-    cur_fp = get_client_fp()
+    db, sec = load_mem(), load_sec()
+    raw_hfp, cur_fp = get_raw_header_fp(), get_client_fp()
 
     if mode == "register":
         is_reg = bool(db.get(user_email, {}).get("bio_enabled"))
-        btn_lbl = "✅ ワンタップ・生体認証 登録済み（再設定・更新する）" if is_reg else "🧬 次回からワンタップ / 生体認証でログインする（この端末を登録）"
-        if st.button(btn_lbl, key=f"bio_reg_btn_{user_email}", use_container_width=True):
+        btn_lbl = "✅ ワンタップ・生体認証 登録済み（再設定する）" if is_reg else "🧬 次回からワンタップ / 生体認証でログイン（この端末を登録）"
+        if st.button(btn_lbl, key=f"bio_reg_{user_email}", use_container_width=True):
             if user_email in db:
-                db[user_email]["bio_enabled"] = True
-                db[user_email]["fp"] = cur_fp
-                db[user_email]["raw_hfp"] = raw_hfp
+                db[user_email].update({"bio_enabled": True, "fp": cur_fp, "raw_hfp": raw_hfp})
                 save_j(FILES["mem"], db)
             sec.setdefault("device_bio_map", {})[raw_hfp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
             sec["device_bio_map"][cur_fp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
             save_j(FILES["sec"], sec)
-            st.session_state["trigger_js_bio_save"] = {"email": user_email, "token": bio_token}
-            st.success("✅ この端末にワンタップ・生体認証ログインを登録しました！次回からボタン1つでログインできます。")
-
-        # ブラウザ側のlocalStorage＆WebAuthnにも保存する補助スクリプト
-        if st.session_state.get("trigger_js_bio_save"):
-            b_info = st.session_state.pop("trigger_js_bio_save")
-            components.html(f"""
-            <script>
-            (async function(){{
-                try {{
-                    localStorage.setItem('quant_bio_email', '{b_info["email"]}');
-                    localStorage.setItem('quant_bio_token', '{b_info["token"]}');
-                    if(window.PublicKeyCredential){{
-                        const chal = new Uint8Array(32); window.crypto.getRandomValues(chal);
-                        const cred = await navigator.credentials.create({{
-                            publicKey: {{
-                                challenge: chal,
-                                rp: {{ name: "Quant AI Pro" }},
-                                user: {{ id: new TextEncoder().encode('{b_info["email"]}'), name: '{b_info["email"]}', displayName: '{b_info["email"]}' }},
-                                pubKeyCredParams: [{{ type: "public-key", alg: -7 }}, {{ type: "public-key", alg: -257 }}],
-                                authenticatorSelection: {{ authenticatorAttachment: "platform", userVerification: "preferred" }},
-                                timeout: 15000
-                            }}
-                        }});
-                        if(cred && cred.rawId){{
-                            const b64 = btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
-                            localStorage.setItem('quant_bio_cred_id', b64);
-                        }}
-                    }}
-                }} catch(e) {{}}
-            }})();
-            </script>
-            """, height=0)
+            st.success("✅ この端末にワンタップログインを登録しました！")
         return
 
-    # --- mode == "login" ---
-    # 1. サーバー側で端末識別子（raw_hfp または cur_fp）に紐づく登録済みアカウントを検索
     mapped = sec.get("device_bio_map", {}).get(raw_hfp) or sec.get("device_bio_map", {}).get(cur_fp)
     if not mapped:
         for k_em, v_rec in db.items():
-            if v_rec.get("bio_enabled") and v_rec.get("status") == "approved":
-                if v_rec.get("raw_hfp") == raw_hfp or v_rec.get("fp") == cur_fp:
-                    mapped = {"email": k_em, "token": gen_tok(k_em, "session_keep"), "fp": cur_fp}
-                    break
+            if v_rec.get("bio_enabled") and v_rec.get("status") == "approved" and (v_rec.get("raw_hfp") == raw_hfp or v_rec.get("fp") == cur_fp):
+                mapped = {"email": k_em, "token": gen_tok(k_em, "session_keep"), "fp": cur_fp}; break
 
-    # Streamlitネイティブのワンタップボタン（iframe制限を100%受けない確実なルート）
     if st.button("🧬 2回目以降の方：生体認証 / ワンタップでログイン", key="native_onetap_login_btn", use_container_width=True, type="primary"):
         if mapped and mapped.get("email"):
             t_em = mapped["email"].strip().lower()
             u_rec = db.get(t_em, {})
-            if u_rec.get("status") == "suspended":
-                st.error("🚫 このアカウントは管理者によりログイン停止措置が取られています。")
-            elif cur_fp in sec.get("banned_fps", {}) and t_em != ADMIN_EMAIL.strip().lower():
-                st.error("🚫 セキュリティ規定によりこの端末からのアクセスは制限されています。")
+            if u_rec.get("status") == "suspended": st.error("🚫 このアカウントはログイン停止措置が取られています。")
+            elif cur_fp in sec.get("banned_fps", {}) and t_em != ADMIN_EMAIL.strip().lower(): st.error("🚫 この端末からのアクセスは制限されています。")
             elif (u_rec and u_rec.get("status") == "approved") or t_em == ADMIN_EMAIL.strip().lower():
                 st.session_state["authenticated_user"] = t_em
-                st.query_params["u"] = t_em
-                st.query_params["t"] = gen_tok(t_em, "session_keep")
+                st.query_params["u"], st.query_params["t"] = t_em, gen_tok(t_em, "session_keep")
                 st.rerun()
-            else:
-                st.warning("⚠️ 登録アカウントが未承認または無効です。")
+            else: st.warning("⚠️ 登録アカウントが未承認または無効です。")
         else:
-            st.warning("⚠️ この端末にはまだワンタップ・生体認証が登録されていません。初回は下のフォームからメールアドレスと専用コードでログインし、左メニュー（サイドバー）の「🧬 次回からワンタップ / 生体認証でログインする」ボタンを押して登録してください。")
-
-    # 2. ブラウザのlocalStorageに保存されている場合のフォールバックボタン（target="_top"の<a>タグで親フレームを確実に遷移）
-    components.html("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta charset="utf-8">
-    <style>
-      html, body { margin:0!important; padding:0!important; overflow:hidden!important; background:transparent!important; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-      #ls_wrap { display:none; text-align:center; padding:2px 2px 6px 2px; box-sizing:border-box; }
-      .bio-link-btn {
-        display:block; width:100%; box-sizing:border-box; padding:10px 14px; border-radius:10px;
-        border:1px solid #38bdf8; background:linear-gradient(135deg,#0284c7,#1d4ed8);
-        color:#fff!important; text-decoration:none!important; font-weight:900; font-size:13px;
-        line-height:1.4; cursor:pointer; box-shadow:0 4px 12px rgba(2,132,199,0.35);
-      }
-    </style>
-    </head>
-    <body>
-    <div id="ls_wrap">
-      <a id="bio_top_link" class="bio-link-btn" target="_top" href="#">
-        ⚡ 端末保存データで即座にワンタップログイン (<span id="saved_em_lbl"></span>)
-      </a>
-    </div>
-    <script>
-    (function(){
-        const sEmail = localStorage.getItem('quant_bio_email');
-        const sToken = localStorage.getItem('quant_bio_token');
-        if(sEmail && sToken){
-            const wrap = document.getElementById('ls_wrap');
-            const link = document.getElementById('bio_top_link');
-            const lbl = document.getElementById('saved_em_lbl');
-            lbl.textContent = sEmail;
-            const rawFp = [navigator.userAgent, screen.width+'x'+screen.height, Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.hardwareConcurrency||4].join('|');
-            let h = 0; for(let i=0;i<rawFp.length;i++){ h=((h<<5)-h)+rawFp.charCodeAt(i); h|=0; }
-            const dfp = Math.abs(h).toString(16).toUpperCase();
-
-            // 親URLが取得できなくても相対クエリでトップフレームへ遷移可能
-            let baseUrl = "";
-            try { baseUrl = window.parent.location.origin + window.parent.location.pathname; } catch(e) { baseUrl = "/"; }
-            const targetHref = baseUrl + "?u=" + encodeURIComponent(sEmail) + "&t=" + encodeURIComponent(sToken) + "&bio_login=1&dfp=" + encodeURIComponent(dfp);
-            link.href = targetHref;
-
-            link.addEventListener('click', async function(ev){
-                if(window.PublicKeyCredential && localStorage.getItem('quant_bio_cred_id')){
-                    ev.preventDefault();
-                    try {
-                        const chal = new Uint8Array(32); window.crypto.getRandomValues(chal);
-                        await navigator.credentials.get({ publicKey: { challenge: chal, userVerification: "preferred", timeout: 15000 } });
-                    } catch(e) {}
-                    window.open(targetHref, '_top');
-                }
-            });
-
-            wrap.style.display = 'block';
-            if(window.frameElement){
-                const hPx = Math.ceil(wrap.getBoundingClientRect().height) + 6;
-                window.frameElement.style.height = hPx + 'px';
-                window.frameElement.height = hPx;
-            }
-        } else if(window.frameElement) {
-            window.frameElement.style.height = '0px';
-            window.frameElement.height = 0;
-        }
-    })();
-    </script>
-    </body>
-    </html>
-    """, height=52)
-
-qp = st.query_params
-act, em, tok = qp.get("admin_action", ""), qp.get("email", "").strip().lower(), qp.get("token", "")
-if act in ["approve", "reject"] and em and tok and hmac.compare_digest(tok, gen_tok(em, act)):
-    db = load_mem(); code, ns = gen_code(em), datetime.now().strftime("%Y-%m-%d %H:%M")
-    db.setdefault(em, {})
-    db[em].update({"name": db[em].get("name", qp.get("name", "会員")), "email": em, "status": "approved" if act == "approve" else "rejected", "passcode": code, "applied_at": db[em].get("applied_at", ns), "approved_at": ns})
-    save_j(FILES["mem"], db)
-    if act == "approve": send_mail(em, "【承認完了】専用コード", f"専用コード: {code}"); st.success(f"✅ {em} 承認完了 (コード: {code})")
-    for k in ["admin_action", "email", "token"]:
-        if k in st.query_params: del st.query_params[k]
-
-def check_auth():
-    db = load_mem()
-    sec = load_sec()
-    cur_fp = get_client_fp()
-    raw_hfp = get_raw_header_fp()
-
-    if qp.get("bio_reg_ok"):
-        bu = qp.get("bio_reg_ok").strip().lower()
-        if bu in db:
-            db[bu]["bio_enabled"] = True
-            db[bu]["fp"] = cur_fp
-            db[bu]["raw_hfp"] = raw_hfp
-            save_j(FILES["mem"], db)
-        del st.query_params["bio_reg_ok"]
-
-    if "authenticated_user" not in st.session_state: st.session_state["authenticated_user"] = None
-    qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
-
-    if not st.session_state["authenticated_user"] and qu and qt:
-        if hmac.compare_digest(qt, gen_tok(qu, "session_keep")) and ((db.get(qu) and db[qu].get("status") == "approved") or qu == ADMIN_EMAIL.strip().lower()):
-            st.session_state["authenticated_user"] = qu
-
-    if st.session_state["authenticated_user"]:
-        cu = st.session_state["authenticated_user"]
-        u_rec = db.get(cu, {})
-        # ログイン停止または削除された会員をリアルタイム遮断
-        if cu != ADMIN_EMAIL.strip().lower() and (not u_rec or u_rec.get("status") != "approved"):
-            st.session_state["authenticated_user"] = None
-            st.query_params.clear()
-            st.error("🚫 このアカウントは管理者によりログイン停止（または削除）されました。")
-            st.stop()
-
-        now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        keep_tok = gen_tok(cu, "session_keep")
-        if cu in db:
-            db[cu]["last_seen_ts"] = time.time()
-            db[cu]["last_seen_str"] = now_s
-            if cur_fp: db[cu]["fp"] = cur_fp
-            db[cu]["raw_hfp"] = raw_hfp
-            # 初回コードログイン時でも自動的にこの端末をワンタップ対象として紐づけ
-            db[cu]["bio_enabled"] = True
-            save_j(FILES["mem"], db)
-            sec.setdefault("device_bio_map", {})[raw_hfp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
-            sec["device_bio_map"][cur_fp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
-            save_j(FILES["sec"], sec)
-
-        st.query_params["u"], st.query_params["t"] = cu, keep_tok
-
-        with st.sidebar:
-            bio_badge = "🧬ワンタップ認証済" if db.get(cu, {}).get("bio_enabled") else "🔑コード認証"
-            st.markdown(f'<div style="background:#0f172a;padding:8px 12px;border-radius:10px;border:1px solid #38bdf8;margin-bottom:6px;"><div style="font-size:10px;color:#38bdf8;font-weight:800;">🟢 ONLINE ｜ {bio_badge}</div><div style="color:#f8fafc;font-size:12px;font-weight:700;">{db.get(cu,{}).get("name","会員")} ({cu})</div></div>', unsafe_allow_html=True)
-            render_biometric_bridge(mode="register", user_email=cu, bio_token=keep_tok)
-            if st.button("🚪 ログアウト", use_container_width=True):
-                if cu in db:
-                    db[cu]["last_seen_ts"] = 0
-                    save_j(FILES["mem"], db)
-                st.session_state["authenticated_user"] = None; st.query_params.clear(); st.rerun()
-
-        if cu == ADMIN_EMAIL.strip().lower():
-            pend = [v for v in db.values() if v.get("status") == "pending"]
-            spoof_cnt = len(sec.get("spoof_logs", []))
-            st.sidebar.subheader(f"👑 管理者 (待:{len(pend)} / 警:{spoof_cnt})")
-            if st.sidebar.button("🛠️ 会員管理＆なりすまし監視画面", use_container_width=True):
-                st.session_state["navigation_page"] = "ADMIN"; st.rerun()
-            for p in pend:
-                pm, pn, pc = p["email"], p.get("name", "未入力"), gen_code(p["email"])
-                warn_tag = " 🚨[なりすまし疑い]" if p.get("spoof_suspect") else ""
-                st.sidebar.caption(f"📩 {pn} ({pm}){warn_tag}")
-                c1, c2 = st.sidebar.columns(2)
-                if c1.button("✅承認", key=f"ap_{pm}", use_container_width=True):
-                    db[pm].update({"status": "approved", "passcode": pc, "approved_at": datetime.now().strftime("%Y-%m-%d %H:%M")}); save_j(FILES["mem"], db); send_mail(pm, "【承認完了】コード", f"コード: {pc}"); st.rerun()
-                if c2.button("❌拒否", key=f"rj_{pm}", use_container_width=True):
-                    db[pm]["status"] = "rejected"; save_j(FILES["mem"], db); st.rerun()
-        return True
-
-    st.markdown('<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:20px;border-radius:14px;text-align:center;margin-bottom:10px;"><h2 style="margin:0;color:#fbbf24;">🔒 会員限定 クオンツ＆AI合議 Pro</h2><div style="font-size:12px;color:#94a3b8;margin-top:4px;">初回は専用コード、2回目以降は生体認証・ワンタップで即ログイン可能</div></div>', unsafe_allow_html=True)
-    render_biometric_bridge(mode="login")
-
-    with st.form("login"):
-        ie, ic = st.text_input("📧 メールアドレス"), st.text_input("🔑 専用アクセスコード", type="password")
-        if st.form_submit_button("🔓 コードでログイン（次回からワンタップ自動登録）", use_container_width=True):
-            cm = ie.strip().lower(); rec = db.get(cm)
-            if rec and rec.get("status") == "suspended":
-                st.error("🚫 このアカウントは管理者によりログイン停止措置が取られています。")
-            elif cur_fp in sec.get("banned_fps", {}) and cm != ADMIN_EMAIL.strip().lower():
-                orig_ban = sec["banned_fps"][cur_fp]
-                sec["spoof_logs"].insert(0, {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "type": "停止端末からのログイン試行", "new_email": cm, "new_name": rec.get("name","-") if rec else "未登録", "fp": cur_fp, "linked_banned": orig_ban})
-                save_j(FILES["sec"], sec)
-                st.error("🚫 セキュリティ規定によりこの端末からのアクセスは制限されています。")
-            elif ((rec and rec.get("status") == "approved") or cm == ADMIN_EMAIL.strip().lower()) and (hmac.compare_digest(ic.strip().upper(), gen_code(cm)) or (cm == ADMIN_EMAIL.strip().lower() and ic.strip() == "ADMIN777")):
-                st.session_state["authenticated_user"] = cm
-                st.session_state["trigger_js_bio_save"] = {"email": cm, "token": gen_tok(cm, "session_keep")}
-                st.rerun()
-            else:
-                st.warning("⚠️ 未承認または専用コードが違います")
-
-    with st.form("apply"):
-        st.markdown("##### 📩 新規会員登録の申請")
-        an, am = st.text_input("👤 お名前"), st.text_input("📧 メール")
-        if st.form_submit_button("📨 申請送信", use_container_width=True) and "@" in am:
-            cm, pc, ns = am.strip().lower(), gen_code(am), datetime.now().strftime("%Y-%m-%d %H:%M")
-            existing = db.get(cm, {})
-            # なりすまし検知（同一端末FP、または停止中メアド・同一名での再申請）
-            banned_match = sec.get("banned_fps", {}).get(cur_fp)
-            suspended_same_name = next((k for k, v in db.items() if v.get("status") == "suspended" and v.get("name") == an.strip() and an.strip()), None)
-            is_spoof = bool(banned_match or existing.get("status") == "suspended" or suspended_same_name)
-            orig_ref = banned_match or (cm if existing.get("status") == "suspended" else suspended_same_name) or "-"
-
-            if is_spoof:
-                sec.setdefault("spoof_logs", []).insert(0, {
-                    "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "type": "🚨 なりすまし再登録の検知",
-                    "new_name": an.strip() or "未入力",
-                    "new_email": cm,
-                    "fp": cur_fp,
-                    "linked_banned": orig_ref
-                })
-                save_j(FILES["sec"], sec)
-
-            db[cm] = {
-                "name": an.strip() or "未入力", "email": cm,
-                "status": "suspended" if is_spoof else "pending",
-                "passcode": pc, "applied_at": ns, "approved_at": "-",
-                "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp,
-                "bio_enabled": False, "spoof_suspect": is_spoof, "spoof_origin": orig_ref
-            }
-            save_j(FILES["mem"], db)
-            if is_spoof:
-                st.error("🚨 過去にログイン停止された端末・アカウントとの一致が検知されたため、申請は自動保留（監視対象）となりました。")
-            else:
-                st.success("✅ 申請を受け付けました（承認後にメールで専用コードが通知されます）")
-    st.stop()
-
-check_auth()
-
-for k, v in [
-    ("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}),
-    ("debate_round_seed", {}), ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"),
-    ("prev_page_before_news", "TOP"), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
-    ("exhausted_models", set()), ("nav_history", []), ("scroll_target", None), ("scroll_top_trig", 0),
-    ("dismissed_news_ids", set()), ("toasted_news_ids", set()), ("selected_news_item", None), ("news_ai_cache", {})
-]:
-    if k not in st.session_state: st.session_state[k] = v
+            st.warning("⚠️ 初回は下のフォームから専用コードでログインしてください（ログインと同時に次回からワンタップ登録されます）。")
 
 def inject_css():
     css = """
+    @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
     html,body,[class*="css"]{font-size:15px;}
-    .block-container{padding-top:2.2rem!important;padding-bottom:3rem!important;max-width:820px!important;}
+    .block-container{padding-top:2rem!important;padding-bottom:3rem!important;max-width:820px!important;}
+    .brand-header-1line{display:flex;align-items:center;justify-content:center;gap:12px;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;width:100%;}
+    .brand-script{font-family:'Great Vibes',cursive!important;font-size:32px!important;font-weight:400!important;color:#fbbf24!important;letter-spacing:1.5px;text-shadow:0 2px 10px rgba(251,191,36,0.45);line-height:1.1;}
+    .brand-jp{font-size:18px!important;font-weight:900!important;color:#f8fafc!important;letter-spacing:1px;}
     div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker){position:sticky!important;top:2.75rem!important;z-index:999!important;background:transparent!important;padding:2px 0!important;margin:0 0 8px 0!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;justify-content:center!important;gap:12px!important;width:100%!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="column"],div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stColumn"]{min-width:0!important;width:auto!important;flex:1 1 auto!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button{width:100%!important;min-height:34px!important;height:34px!important;padding:0 12px!important;border-radius:8px!important;background:#1e293b!important;color:#f8fafc!important;border:1px solid #334155!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;gap:10px!important;width:100%!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button{width:100%!important;min-height:34px!important;height:34px!important;padding:0 10px!important;border-radius:8px!important;background:#1e293b!important;color:#f8fafc!important;border:1px solid #334155!important;}
     div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button p{font-size:13px!important;font-weight:700!important;margin:0!important;white-space:nowrap!important;color:inherit!important;}
     div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker){position:fixed!important;bottom:22px!important;right:22px!important;z-index:999999!important;width:min(430px,93vw)!important;background:linear-gradient(135deg,#450a0a,#7f1d1d,#0f172a)!important;border:2px solid #ef4444!important;border-radius:14px!important;padding:12px 14px!important;box-shadow:0 14px 35px rgba(220,38,38,0.55)!important;}
     div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker) button{background:linear-gradient(90deg,#fef08a,#fde047)!important;color:#0f172a!important;border:none!important;font-weight:900!important;border-radius:8px!important;min-height:38px!important;}
@@ -450,20 +205,144 @@ def inject_css():
     .qa-answer-card *{color:#0f172a!important;}
     .qa-direct-box{background:#eff6ff!important;border:1px solid #93c5fd;border-left:4px solid #2563eb;padding:8px 10px;border-radius:6px;margin:5px 0;}
     .qa-answer-card b{color:#1d4ed8!important;}
+    .mailer-card{background:#0f172a;color:#f8fafc;border:1px solid #334155;border-left:4px solid #38bdf8;border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:12.5px;}
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{" ".join(l.strip() for l in css.splitlines() if l.strip())}</style>', unsafe_allow_html=True)
 
 inject_css()
 
-open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
-lbl_close = f"合議タブ全て閉じる({open_cnt})" if open_cnt else "合議タブ全て閉じる"
+def check_auth():
+    db, sec = load_mem(), load_sec()
+    cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
+    if "authenticated_user" not in st.session_state: st.session_state["authenticated_user"] = None
+    qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
 
+    if not st.session_state["authenticated_user"] and qu and qt:
+        if hmac.compare_digest(qt, gen_tok(qu, "session_keep")) and ((db.get(qu) and db[qu].get("status") == "approved") or qu == ADMIN_EMAIL.strip().lower()):
+            st.session_state["authenticated_user"] = qu
+
+    if st.session_state["authenticated_user"]:
+        cu = st.session_state["authenticated_user"]
+        u_rec = db.get(cu, {})
+        if cu != ADMIN_EMAIL.strip().lower() and (not u_rec or u_rec.get("status") != "approved"):
+            st.session_state["authenticated_user"] = None; st.query_params.clear()
+            st.error("🚫 このアカウントは管理者によりログイン停止（または削除）されました。"); st.stop()
+
+        now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        keep_tok = gen_tok(cu, "session_keep")
+        if cu in db:
+            db[cu].update({"last_seen_ts": time.time(), "last_seen_str": now_s, "fp": cur_fp or db[cu].get("fp", "-"), "raw_hfp": raw_hfp, "bio_enabled": True})
+            save_j(FILES["mem"], db)
+            sec.setdefault("device_bio_map", {})[raw_hfp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
+            sec["device_bio_map"][cur_fp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
+            save_j(FILES["sec"], sec)
+
+        st.query_params["u"], st.query_params["t"] = cu, keep_tok
+        with st.sidebar:
+            st.markdown(f'<div style="background:#0f172a;padding:8px 12px;border-radius:10px;border:1px solid #38bdf8;margin-bottom:6px;"><div style="font-size:10px;color:#38bdf8;font-weight:800;">🟢 ONLINE ｜ 🧬ワンタップ認証済</div><div style="color:#f8fafc;font-size:12px;font-weight:700;">{db.get(cu,{}).get("name","会員")} ({cu})</div></div>', unsafe_allow_html=True)
+            render_biometric_bridge(mode="register", user_email=cu, bio_token=keep_tok)
+            if st.button("🚪 ログアウト", use_container_width=True):
+                if cu in db: db[cu]["last_seen_ts"] = 0; save_j(FILES["mem"], db)
+                st.session_state["authenticated_user"] = None; st.query_params.clear(); st.rerun()
+
+        if cu == ADMIN_EMAIL.strip().lower():
+            pend = [v for v in db.values() if v.get("status") == "pending"]
+            spoof_cnt = len(sec.get("spoof_logs", []))
+            mail_cnt = len(load_mail_db().get("logs", []))
+            st.sidebar.subheader(f"👑 管理者 (待:{len(pend)} / 警:{spoof_cnt})")
+            if st.sidebar.button(f"🛠️ 会員管理・メーラー履歴({mail_cnt}通)", use_container_width=True):
+                st.session_state["navigation_page"] = "ADMIN"; st.rerun()
+            for p in pend:
+                pm, pn, pc = p["email"], p.get("name", "未入力"), gen_code(p["email"])
+                st.sidebar.caption(f"📩 {pn} ({pm}){' 🚨[疑]' if p.get('spoof_suspect') else ''}")
+                c1, c2 = st.sidebar.columns(2)
+                if c1.button("✅承認", key=f"ap_{pm}", use_container_width=True):
+                    db[pm].update({"status": "approved", "passcode": pc, "approved_at": datetime.now().strftime("%Y-%m-%d %H:%M")}); save_j(FILES["mem"], db)
+                    send_mail(pm, "【Yamashishi Lab】会員登録承認＆専用アクセスコードのお知らせ", f"{pn} 様\n\nやまししラボ（Yamashishi Lab）への会員登録が承認されました！\n\n■ ログインメールアドレス: {pm}\n■ 専用アクセスコード: {pc}\n\nログイン画面より上記コードをご入力ください。", "承認＆コード通知")
+                    st.rerun()
+                if c2.button("❌拒否", key=f"rj_{pm}", use_container_width=True):
+                    db[pm]["status"] = "rejected"; save_j(FILES["mem"], db)
+                    send_mail(pm, "【Yamashishi Lab】会員登録審査結果のお知らせ", f"{pn} 様\n\n誠に恐れ入りますが、今回の会員登録申請は見送りとなりました。", "審査結果通知")
+                    st.rerun()
+        return True
+
+    # --- 未ログイン画面（1行タイトル：Yamashishi Lab やまししラボ） ---
+    st.markdown('<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:18px 16px;border-radius:14px;text-align:center;margin-bottom:10px;border:1px solid rgba(251,191,36,0.35);"><div class="brand-header-1line"><span class="brand-script">Yamashishi Lab</span><span class="brand-jp">⚡ やまししラボ</span></div><div style="font-size:12px;color:#94a3b8;margin-top:4px;">初回は専用コード、2回目以降は生体認証・ワンタップで即ログイン可能</div></div>', unsafe_allow_html=True)
+    render_biometric_bridge(mode="login")
+
+    with st.form("login"):
+        ie, ic = st.text_input("📧 メールアドレス"), st.text_input("🔑 専用アクセスコード", type="password")
+        if st.form_submit_button("🔓 コードでログイン（次回からワンタップ自動登録）", use_container_width=True):
+            cm = ie.strip().lower(); rec = db.get(cm)
+            if rec and rec.get("status") == "suspended": st.error("🚫 このアカウントは管理者によりログイン停止措置が取られています。")
+            elif cur_fp in sec.get("banned_fps", {}) and cm != ADMIN_EMAIL.strip().lower():
+                sec["spoof_logs"].insert(0, {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "type": "停止端末からのログイン試行", "new_email": cm, "new_name": rec.get("name","-") if rec else "未登録", "fp": cur_fp, "linked_banned": sec["banned_fps"][cur_fp]})
+                save_j(FILES["sec"], sec); st.error("🚫 この端末からのアクセスは制限されています。")
+            elif ((rec and rec.get("status") == "approved") or cm == ADMIN_EMAIL.strip().lower()) and (hmac.compare_digest(ic.strip().upper(), gen_code(cm)) or (cm == ADMIN_EMAIL.strip().lower() and ic.strip() == "ADMIN777")):
+                st.session_state["authenticated_user"] = cm; st.rerun()
+            else: st.warning("⚠️ 未承認または専用コードが違います（下の『📬 あなた宛の通知・専用コード受信BOX』もご確認ください）")
+
+    # 📬 アプリ完結・相手アドレス専用の受信トレイ（SMTP不要で即時コードや自動返信が届く）
+    with st.expander("📬 あなた宛の通知メール・専用アクセスコード受信BOX（メールが届かない場合もここで即時確認）", expanded=False):
+        chk_em = st.text_input("申請したメールアドレスを入力して受信メールを確認", placeholder="example@mail.com", key="inbox_chk_em").strip().lower()
+        if chk_em:
+            u_info = db.get(chk_em)
+            my_mails = [m for m in load_mail_db().get("logs", []) if m.get("to") == chk_em]
+            if u_info and u_info.get("status") == "approved":
+                st.success(f"🎉 **承認完了しています！** あなたの専用アクセスコードは **`{u_info.get('passcode', gen_code(chk_em))}`** です。上のログイン欄に入力してください。")
+            elif u_info and u_info.get("status") == "pending":
+                st.info("⏳ 現在、管理者の承認審査待ちです。承認されるとここに専用アクセスコードが届きます。")
+            if my_mails:
+                for mm in my_mails[:5]:
+                    st.markdown(f"<div class='mailer-card'><b>📩 件名: {mm['subject']}</b> <span style='color:#94a3b8;font-size:11px;'>({mm['time']})</span><br><pre style='white-space:pre-wrap;color:#e2e8f0;font-size:12px;margin:6px 0 0 0;background:#1e293b;padding:8px;border-radius:6px;'>{mm['body']}</pre></div>", unsafe_allow_html=True)
+            elif not u_info:
+                st.caption("このメールアドレス宛の通知履歴はまだありません。")
+
+    with st.form("apply"):
+        st.markdown("##### 📩 新規会員登録の申請（自動返信＆アプリ内受信BOX即時連携）")
+        an, am = st.text_input("👤 お名前"), st.text_input("📧 メールアドレス")
+        if st.form_submit_button("📨 申請送信", use_container_width=True) and "@" in am:
+            cm, pc, ns = am.strip().lower(), gen_code(am), datetime.now().strftime("%Y-%m-%d %H:%M")
+            nm_clean = an.strip() or "未入力"
+            existing = db.get(cm, {})
+            banned_match = sec.get("banned_fps", {}).get(cur_fp)
+            suspended_same_name = next((k for k, v in db.items() if v.get("status") == "suspended" and v.get("name") == nm_clean and nm_clean != "未入力"), None)
+            is_spoof = bool(banned_match or existing.get("status") == "suspended" or suspended_same_name)
+            orig_ref = banned_match or (cm if existing.get("status") == "suspended" else suspended_same_name) or "-"
+
+            if is_spoof:
+                sec.setdefault("spoof_logs", []).insert(0, {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "type": "🚨 なりすまし再登録の検知", "new_name": nm_clean, "new_email": cm, "fp": cur_fp, "linked_banned": orig_ref})
+                save_j(FILES["sec"], sec)
+
+            db[cm] = {"name": nm_clean, "email": cm, "status": "suspended" if is_spoof else "pending", "passcode": pc, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False, "spoof_suspect": is_spoof, "spoof_origin": orig_ref}
+            save_j(FILES["mem"], db)
+
+            if is_spoof:
+                st.error("🚨 過去にログイン停止された端末・アカウントとの一致が検知されたため、申請は自動保留となりました。")
+            else:
+                send_mail(cm, "【Yamashishi Lab】会員登録申請の受付完了（自動返信）", f"{nm_clean} 様\n\nやまししラボ（Yamashishi Lab）への会員登録申請を受け付けました。\n管理者の承認が完了次第、専用アクセスコードが発行されます。\n\n※承認後はこのメール、またはログイン画面の『📬 あなた宛の通知・専用コード受信BOX』にメールアドレス（{cm}）を入力すると即座に専用コードをご確認いただけます。", "申込自動返信")
+                send_mail(ADMIN_EMAIL, f"【管理者通知】新規会員申請: {nm_clean} ({cm})", f"新規申請がありました。\n名前: {nm_clean}\nメール: {cm}\n予定コード: {pc}\n管理画面より承認してください。", "管理者宛通知")
+                st.success(f"✅ 申請を受け付け、{cm} 宛に自動返信メッセージを送信しました！（上の『📬 あなた宛の通知・専用コード受信BOX』でも即時確認できます）")
+    st.stop()
+
+check_auth()
+
+for k, v in [
+    ("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}),
+    ("debate_round_seed", {}), ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"),
+    ("prev_page_before_news", "TOP"), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
+    ("exhausted_models", set()), ("nav_history", []), ("scroll_target", None), ("scroll_top_trig", 0),
+    ("dismissed_news_ids", set()), ("toasted_news_ids", set()), ("selected_news_item", None), ("news_ai_cache", {})
+]:
+    if k not in st.session_state: st.session_state[k] = v
+
+open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
     nav_c1, nav_c2, nav_c3 = st.columns([1, 1.45, 1])
     if nav_c1.button("トップ", key="top_nav_btn_top", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] += 1; st.rerun()
-    if nav_c2.button(lbl_close, key="top_nav_btn_close", use_container_width=True):
+    if nav_c2.button(f"合議タブ全て閉じる({open_cnt})" if open_cnt else "合議タブ全て閉じる", key="top_nav_btn_close", use_container_width=True):
         st.session_state["active_debates"] = {}; st.rerun()
     if nav_c3.button("戻る", key="top_nav_btn_back", use_container_width=True):
         if st.session_state.get("navigation_page") == "NEWS_DETAIL": st.session_state["navigation_page"] = st.session_state.get("prev_page_before_news", "TOP")
@@ -574,8 +453,7 @@ def _score_news(item: dict) -> dict:
     txt = f"{t} {d}"
     m_stocks = []
     for code, inf in KNOWN_STOCKS.items():
-        cs = code.replace(".T", "")
-        nm = re.sub(r"\s*\(.*?\)", "", inf["name"]).strip()
+        cs, nm = code.replace(".T", ""), re.sub(r"\s*\(.*?\)", "", inf["name"]).strip()
         if (len(nm) >= 2 and nm in txt) or (len(cs) >= 3 and re.search(r"\b" + re.escape(cs) + r"\b", txt)):
             m_stocks.append({"code": code, "short": cs, "name": inf["name"], "genre": inf["genre"], "theme": inf["theme"]})
     m_secs = [s for s, kws in SECTOR_KW.items() if any(k in txt for k in kws)]
@@ -616,8 +494,7 @@ def generate_news_deep_analysis(n: dict) -> str:
     if nid in st.session_state["news_ai_cache"]: return st.session_state["news_ai_cache"][nid]
     st_str = "、".join([f"{s['name']}({s['short']})" for s in n["matched_stocks"]]) or "日米主力ハイテク・先物主導株"
     sys_p = '機関クオンツ最高責任者として超重大ニュースを解析しJSON {"summary":"核心(3文)","algo_flow":"HFT・OFI板不均衡・VPINの連鎖","timeline_plan":"①寄付き前 → ②9:00寄付き → ③前場VWAP攻防の立ち回り","risk_trap":"ダマシ・CVaRテールリスク警戒点"} で出力せよ。'
-    usr_p = f"見出し:{n['title']}\n判定:{n['sentiment']}(影響度Lv.{n['impact_score']})\n直撃銘柄:{st_str}\n詳細:{n['desc']}"
-    llm_j, eng = call_api_seamless(sys_p, usr_p, 0.5)
+    llm_j, eng = call_api_seamless(sys_p, f"見出し:{n['title']}\n判定:{n['sentiment']}\n直撃:{st_str}\n詳細:{n['desc']}", 0.5)
     is_bull = "強気" in n["sentiment"]
     if llm_j and llm_j.get("summary"):
         s1, s2, s3, s4 = llm_j.get("summary", ""), llm_j.get("algo_flow", ""), llm_j.get("timeline_plan", ""), llm_j.get("risk_trap", "")
@@ -642,8 +519,7 @@ except Exception: auto_frag = frag_dec
 @auto_frag
 def render_live_news_popup_watcher(enabled: bool):
     if not enabled or st.session_state.get("navigation_page") == "NEWS_DETAIL": return
-    news_list = fetch_global_impact_news()
-    unread = [n for n in news_list if n["id"] not in st.session_state["dismissed_news_ids"]]
+    unread = [n for n in fetch_global_impact_news() if n["id"] not in st.session_state["dismissed_news_ids"]]
     if not unread: return
     top_n = unread[0]
     if top_n["id"] not in st.session_state["toasted_news_ids"] and hasattr(st, "toast"):
@@ -652,19 +528,11 @@ def render_live_news_popup_watcher(enabled: bool):
 
     st_tags = "・".join([s["name"].replace(" (米)", "") for s in top_n["matched_stocks"][:3]]) or top_n["cat"]
     with st.container():
-        st.markdown(
-            f'<div class="floating-news-popup-marker"></div>'
-            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
-            f'<span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:900;">🚨 株価直撃ニュース検知 (Lv.{top_n["impact_score"]}/99)</span>'
-            f'<span style="color:#fca5a5;font-size:10.5px;font-weight:700;">未読 {len(unread)}件 ｜ {top_n["source"]}</span></div>'
-            f'<div style="color:#fef08a;font-size:11.5px;font-weight:800;margin-bottom:6px;">🎯 直撃・関連: {st_tags}</div>',
-            unsafe_allow_html=True
-        )
+        st.markdown(f'<div class="floating-news-popup-marker"></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:900;">🚨 株価直撃ニュース検知 (Lv.{top_n["impact_score"]}/99)</span><span style="color:#fca5a5;font-size:10.5px;font-weight:700;">未読 {len(unread)}件 ｜ {top_n["source"]}</span></div><div style="color:#fef08a;font-size:11.5px;font-weight:800;margin-bottom:6px;">🎯 直撃・関連: {st_tags}</div>', unsafe_allow_html=True)
         if st.button(f"{top_n['badge_icon']} {top_n['title']} （👉クリックで超詳細ページへ）", key=f"pop_jmp_{top_n['id']}", use_container_width=True):
             st.session_state["selected_news_item"] = top_n
             st.session_state["dismissed_news_ids"].add(top_n["id"])
-            if st.session_state.get("navigation_page") != "NEWS_DETAIL":
-                st.session_state["prev_page_before_news"] = st.session_state.get("navigation_page", "TOP")
+            if st.session_state.get("navigation_page") != "NEWS_DETAIL": st.session_state["prev_page_before_news"] = st.session_state.get("navigation_page", "TOP")
             st.session_state["navigation_page"] = "NEWS_DETAIL"; st.rerun()
         c_nx, c_cl = st.columns(2)
         if c_nx.button("⏭️ 次のニュース" if len(unread) > 1 else "✅ 既読にして閉じる", key=f"pop_ack_{top_n['id']}", use_container_width=True):
@@ -712,23 +580,21 @@ if sc1.button("⬆️ ページTOP", use_container_width=True): st.session_state
 if sc2.button("📋 監視リスト", use_container_width=True): st.session_state["navigation_page"] = "WATCHLIST"; st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.header("🚨 緊急ニュースポップアップ設定")
+st.sidebar.header("🚨 緊急ニュース設定")
 toggle_fn = getattr(st.sidebar, "toggle", st.sidebar.checkbox)
-enable_news_popup = toggle_fn("🌐 超重大ニュース検知時のみポップアップ", value=True)
+enable_news_popup = toggle_fn("🌐 超重大ニュース検知ポップアップ", value=True)
 if st.sidebar.button("🔔 最新ニュースを今すぐ強制スキャン", use_container_width=True):
     fetch_global_impact_news.clear()
-    st.session_state["dismissed_news_ids"], st.session_state["toasted_news_ids"] = set(), set()
-    st.rerun()
+    st.session_state["dismissed_news_ids"], st.session_state["toasted_news_ids"] = set(), set(); st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.header("🧠 LLM マルチエージェント設定")
 llm_cfg = load_llm()
-llm_prov = st.sidebar.radio("AIコアエンジン選択", ["gemini", "openai"], format_func=lambda x: "🔵 Gemini API (429自動切替)" if x == "gemini" else "🟢 OpenAI API", horizontal=True, index=0 if llm_cfg.get("provider", "gemini") == "gemini" else 1)
+llm_prov = st.sidebar.radio("AIコアエンジン", ["gemini", "openai"], format_func=lambda x: "🔵 Gemini API (429自動切替)" if x == "gemini" else "🟢 OpenAI API", horizontal=True, index=0 if llm_cfg.get("provider", "gemini") == "gemini" else 1)
 st.session_state["rt_llm_provider"] = llm_prov
 
 if llm_prov == "gemini":
-    ak_in = st.sidebar.text_input("🔑 Gemini API Key", value=llm_cfg.get("gemini_api_key", ""), type="password", placeholder="AIzaSy...")
-    ck = clean_k(ak_in)
+    ck = clean_k(st.sidebar.text_input("🔑 Gemini API Key", value=llm_cfg.get("gemini_api_key", ""), type="password", placeholder="AIzaSy..."))
     gm_idx = G_MODELS.index(llm_cfg.get("gemini_model")) if llm_cfg.get("gemini_model") in G_MODELS else 0
     m_in = st.sidebar.selectbox("🧠 優先モデル", G_MODELS, index=gm_idx)
     st.session_state["rt_gemini_api_key"], st.session_state["rt_gemini_model"] = ck, m_in
@@ -736,8 +602,7 @@ if llm_prov == "gemini":
         llm_cfg.update({"provider": "gemini", "gemini_api_key": ck, "gemini_model": m_in}); save_j(FILES["llm"], llm_cfg)
         st.session_state["exhausted_models"], st.session_state["council_threads"], st.session_state["council_meta"] = set(), {}, {}
 else:
-    ak_in = st.sidebar.text_input("🔑 OpenAI API Key", value=llm_cfg.get("openai_api_key", ""), type="password", placeholder="sk-...")
-    ck = clean_k(ak_in)
+    ck = clean_k(st.sidebar.text_input("🔑 OpenAI API Key", value=llm_cfg.get("openai_api_key", ""), type="password", placeholder="sk-..."))
     m_in = st.sidebar.selectbox("🧠 モデル", ["gpt-4o-mini", "gpt-4o"], index=0)
     st.session_state["rt_openai_api_key"], st.session_state["rt_openai_model"] = ck, m_in
     if ck != llm_cfg.get("openai_api_key", "") or m_in != llm_cfg.get("openai_model", "") or llm_cfg.get("provider") != "openai":
@@ -750,9 +615,9 @@ if bc1.button("🔄 合議を再生成", use_container_width=True):
 if bc2.button("🔌 接続テスト", use_container_width=True):
     st.session_state["exhausted_models"] = set()
     with st.sidebar:
-        with st.spinner("通信テスト中..."):
+        with st.spinner("テスト中..."):
             _, used_eng = call_api_seamless("JSONのみ出力", '{"status":"ok"}', 0.1)
-            st.success(f"✅ 稼働ルート: 【{used_eng}】")
+            st.success(f"✅ 稼働: 【{used_eng}】")
 
 st.sidebar.markdown("---")
 st.sidebar.header("💰 資金管理＆表示設定")
@@ -764,105 +629,96 @@ show_5m_chart = toggle_fn("📈 5分足＆VWAP描画", value=True)
 render_live_news_popup_watcher(enable_news_popup)
 
 # ==========================================
-# 👑 管理者・会員DB＆なりすまし監視コンソール (ADMIN)
+# 👑 管理者・会員DB＆メーラー履歴＆なりすまし監視センター (ADMIN)
 # ==========================================
 if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower():
-    db = load_mem()
-    sec = load_sec()
-    st.subheader("👑 管理者・会員管理 ＆ なりすまし監視センター")
+    db, sec, mdb = load_mem(), load_sec(), load_mail_db()
+    st.subheader("👑 管理者・会員管理 ＆ メーラー送受信BOX ＆ なりすまし監視")
     if st.button("⬅️ ランキングTOPへ戻る", use_container_width=True): st.session_state["navigation_page"] = "TOP"; st.rerun()
 
-    # 🚨 なりすまし監視アラート表示
-    spoof_logs = sec.get("spoof_logs", [])
-    banned_fps = sec.get("banned_fps", {})
-    with st.expander(f"🕵️ なりすまし再登録・不正アクセス監視ログ (検知 {len(spoof_logs)}件 / 端末BAN {len(banned_fps)}件)", expanded=bool(spoof_logs)):
-        if spoof_logs:
-            st.dataframe(pd.DataFrame(spoof_logs), use_container_width=True, hide_index=True)
-            if st.button("🧹 監視ログをクリア", key="clr_spoof"):
-                sec["spoof_logs"] = []; save_j(FILES["sec"], sec); st.rerun()
-        else:
-            st.caption("現在、なりすまし再登録や停止端末からの不正アクセスは検知されていません。")
-        if banned_fps:
-            st.markdown("**🔒 現在ブラックリスト登録中の端末フィンガープリント一覧**")
-            for b_fp, b_info in list(banned_fps.items()):
-                c_f1, c_f2 = st.columns([3.5, 1])
-                c_f1.caption(f"端末ID: `{b_fp}` ｜ 元アカウント: {b_info}")
-                if c_f2.button("🔓 端末BAN解除", key=f"unban_fp_{b_fp}", use_container_width=True):
-                    del sec["banned_fps"][b_fp]; save_j(FILES["sec"], sec); st.rerun()
+    adm_tab1, adm_tab2, adm_tab3 = st.tabs(["👥 会員管理・承認・BAN", f"📨 メーラー＆送信履歴BOX ({len(mdb.get('logs',[]))}通)", f"🕵️ なりすまし監視 ({len(sec.get('spoof_logs',[]))}件)"])
 
-    # 📊 全会員一覧テーブル
-    rows = []
-    for k, v in db.items():
-        on_flag = "🟢 オンライン" if is_online(v) else "⚪ オフライン"
-        st_map = {"approved": "✅ 承認済(有効)", "suspended": "🚫 ログイン停止中", "pending": "⏳ 承認待ち", "rejected": "❌ 拒否"}
-        rows.append({
-            "通信状態": on_flag,
-            "アカウント状態": st_map.get(v.get("status", ""), v.get("status", "")),
-            "名前": v.get("name", "未入力"),
-            "メールアドレス": k,
-            "専用パスコード": v.get("passcode", gen_code(k)),
-            "登録(申請)日": v.get("applied_at", "-"),
-            "最終アクセス": v.get("last_seen_str", "-"),
-            "生体認証": "🧬 登録済" if v.get("bio_enabled") else "未登録",
-            "端末FP": v.get("fp", "-"),
-            "なりすまし監視": f"🚨 疑い(元:{v.get('spoof_origin')})" if v.get("spoof_suspect") else "正常"
-        })
-    st.markdown("#### 📋 登録会員リアルタイム一覧")
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    with adm_tab1:
+        rows = []
+        for k, v in db.items():
+            st_map = {"approved": "✅ 承認済(有効)", "suspended": "🚫 停止中", "pending": "⏳ 承認待ち", "rejected": "❌ 拒否"}
+            rows.append({
+                "通信": "🟢 ON" if is_online(v) else "⚪ OFF", "状態": st_map.get(v.get("status", ""), v.get("status", "")),
+                "名前": v.get("name", "未入力"), "メール": k, "専用コード": v.get("passcode", gen_code(k)),
+                "申請日": v.get("applied_at", "-"), "最終通信": v.get("last_seen_str", "-"), "端末FP": v.get("fp", "-"),
+                "監視": f"🚨 疑い(元:{v.get('spoof_origin')})" if v.get("spoof_suspect") else "正常"
+            })
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-    st.markdown("#### 🛠️ 個別会員の操作（ログイン停止 / 再開 / 完全削除）")
-    for k, v in list(db.items()):
-        is_adm = (k == ADMIN_EMAIL.strip().lower())
-        on_badge = "🟢 オンライン" if is_online(v) else "⚪ オフライン"
-        cur_st = v.get("status", "pending")
-        st_badge = "✅有効" if cur_st == "approved" else ("🚫ログイン停止中" if cur_st == "suspended" else f"⏳{cur_st}")
-        spoof_warn = f" ｜ 🚨<b style='color:#ef4444;'>なりすまし再登録疑い (元:{v.get('spoof_origin')})</b>" if v.get("spoof_suspect") else ""
-
-        with st.container():
-            st.markdown(
-                f"<div style='background:#0f172a;color:#f8fafc;padding:10px 14px;border-radius:10px;border:1px solid #334155;margin-bottom:6px;font-size:12.5px;'>"
-                f"<b>{v.get('name','未入力')}</b> ({k}) ｜ <b>{on_badge}</b> ｜ 状態: <b>{st_badge}</b> ｜ "
-                f"パスコード: <code style='color:#fde047;'>{v.get('passcode', gen_code(k))}</code> ｜ "
-                f"登録日: {v.get('applied_at','-')} ｜ 端末FP: <code>{v.get('fp','-')}</code>{spoof_warn}</div>",
-                unsafe_allow_html=True
-            )
+        st.markdown("#### 🛠️ 個別会員操作（ワンタップ承認＆コード通知 / BAN / 削除）")
+        for k, v in list(db.items()):
+            is_adm = (k == ADMIN_EMAIL.strip().lower())
+            cur_st = v.get("status", "pending")
+            pc = v.get("passcode", gen_code(k))
+            spoof_w = f" ｜ 🚨<b style='color:#ef4444;'>なりすまし疑い(元:{v.get('spoof_origin')})</b>" if v.get("spoof_suspect") else ""
+            st.markdown(f"<div class='mailer-card'><b>{v.get('name','未入力')}</b> ({k}) ｜ {'🟢オンライン' if is_online(v) else '⚪オフライン'} ｜ 状態: <b>{cur_st}</b> ｜ コード: <code style='color:#fde047;'>{pc}</code> ｜ FP: <code>{v.get('fp','-')}</code>{spoof_w}</div>", unsafe_allow_html=True)
             if not is_adm:
                 b1, b2, b3, b4 = st.columns(4)
                 if cur_st != "suspended":
-                    if b1.button("🚫 ログイン停止(BAN)", key=f"sus_{k}", use_container_width=True):
-                        db[k]["status"] = "suspended"
-                        db[k]["last_seen_ts"] = 0
-                        ufp = db[k].get("fp", "")
-                        if ufp and ufp != "-":
-                            sec.setdefault("banned_fps", {})[ufp] = f"{v.get('name','')} ({k})"
-                            save_j(FILES["sec"], sec)
+                    if b1.button("🚫 停止(BAN)", key=f"sus_{k}", use_container_width=True):
+                        db[k]["status"], db[k]["last_seen_ts"] = "suspended", 0
+                        if db[k].get("fp", "-") != "-": sec.setdefault("banned_fps", {})[db[k]["fp"]] = f"{v.get('name','')} ({k})"; save_j(FILES["sec"], sec)
                         save_j(FILES["mem"], db); st.rerun()
                 else:
-                    if b1.button("🔓 停止解除(有効化)", key=f"unsus_{k}", use_container_width=True):
-                        db[k]["status"] = "approved"
-                        db[k]["spoof_suspect"] = False
-                        ufp = db[k].get("fp", "")
-                        if ufp in sec.get("banned_fps", {}):
-                            del sec["banned_fps"][ufp]; save_j(FILES["sec"], sec)
+                    if b1.button("🔓 停止解除", key=f"unsus_{k}", use_container_width=True):
+                        db[k]["status"], db[k]["spoof_suspect"] = "approved", False
+                        sec.get("banned_fps", {}).pop(db[k].get("fp", ""), None); save_j(FILES["sec"], sec)
                         save_j(FILES["mem"], db); st.rerun()
-
-                if b2.button("✅ 承認＆コード送信", key=f"adm_ap_{k}", use_container_width=True):
-                    pc = gen_code(k)
+                if b2.button("✅ 承認＆メール送信", key=f"adm_ap_{k}", use_container_width=True):
                     db[k].update({"status": "approved", "passcode": pc, "approved_at": datetime.now().strftime("%Y-%m-%d %H:%M"), "spoof_suspect": False})
-                    save_j(FILES["mem"], db); send_mail(k, "【承認完了】専用コード", f"専用コード: {pc}"); st.rerun()
-
-                if b3.button("🗑️ 会員削除(端末BAN残す)", key=f"del_ban_{k}", use_container_width=True):
-                    ufp = db[k].get("fp", "")
-                    if ufp and ufp != "-":
-                        sec.setdefault("banned_fps", {})[ufp] = f"削除済:{v.get('name','')} ({k})"
-                        save_j(FILES["sec"], sec)
+                    save_j(FILES["mem"], db)
+                    send_mail(k, "【Yamashishi Lab】会員登録承認＆専用アクセスコードのお知らせ", f"{v.get('name','会員')} 様\n\nやまししラボ（Yamashishi Lab）の会員登録が承認されました！\n\n■ メールアドレス: {k}\n■ 専用アクセスコード: {pc}\n\nログイン画面よりご入力ください。", "承認＆コード通知")
+                    st.success(f"✅ {k} を承認し、専用コード（{pc}）を送信＆メーラー記録しました！"); st.rerun()
+                if b3.button("🗑️ 削除(BAN残す)", key=f"del_ban_{k}", use_container_width=True):
+                    if db[k].get("fp", "-") != "-": sec.setdefault("banned_fps", {})[db[k]["fp"]] = f"削除済:{v.get('name','')} ({k})"; save_j(FILES["sec"], sec)
+                    del db[k]; save_j(FILES["mem"], db); st.rerun()
+                if b4.button("🗑️ 完全削除", key=f"del_clean_{k}", use_container_width=True):
+                    sec.get("banned_fps", {}).pop(db[k].get("fp", ""), None); save_j(FILES["sec"], sec)
                     del db[k]; save_j(FILES["mem"], db); st.rerun()
 
-                if b4.button("🗑️ 完全削除(履歴クリア)", key=f"del_clean_{k}", use_container_width=True):
-                    ufp = db[k].get("fp", "")
-                    if ufp in sec.get("banned_fps", {}):
-                        del sec["banned_fps"][ufp]; save_j(FILES["sec"], sec)
-                    del db[k]; save_j(FILES["mem"], db); st.rerun()
+    with adm_tab2:
+        st.markdown("#### ✉️ 新規メッセージ作成・個別送信（アプリ内BOX＆Webリレー同時配信）")
+        with st.form("admin_compose_mail"):
+            m_to = st.selectbox("宛先会員を選択", [f"{k} ({v.get('name','未入力')} / コード:{v.get('passcode',gen_code(k))})" for k, v in db.items()])
+            m_subj = st.text_input("件名", value="【Yamashishi Lab】管理者からのお知らせ")
+            m_body = st.text_area("本文", value="いつも Yamashishi Lab（やまししラボ）をご利用いただきありがとうございます。\n")
+            if st.form_submit_button("📨 メールを送信＆履歴保存", use_container_width=True):
+                target_em = m_to.split(" ")[0].strip()
+                send_mail(target_em, m_subj, m_body, "管理者個別送信")
+                st.success(f"✅ {target_em} 宛にメッセージを送信しました！"); st.rerun()
+
+        st.markdown("#### 🗂️ 送信済みメーラー履歴一覧（クリックで全文確認・標準メーラー起動リンク付き）")
+        logs = mdb.get("logs", [])
+        if logs:
+            if st.button("🧹 メール履歴をすべてクリア", key="clr_mails"):
+                mdb["logs"] = []; save_j(FILES["mail"], mdb); st.rerun()
+            for lg in logs:
+                with st.expander(f"📩 [{lg.get('category','通知')}] 宛先: {lg['to']} ｜ 件名: {lg['subject']} ({lg['time']})", expanded=False):
+                    st.caption(f"配信ルート: **{lg.get('route','アプリ内BOX')}** ｜ 送信元: `{lg.get('from', ADMIN_EMAIL)}`")
+                    st.code(lg["body"], language="text")
+                    st.markdown(f"👉 **[お使いの端末の標準メールアプリで {lg['to']} 宛にそのまま開いて送る (mailto直通リンク)]({lg.get('mailto','#')})**")
+        else:
+            st.caption("まだ送信されたメール履歴はありません。")
+
+    with adm_tab3:
+        spoof_logs = sec.get("spoof_logs", [])
+        banned_fps = sec.get("banned_fps", {})
+        if spoof_logs:
+            st.dataframe(pd.DataFrame(spoof_logs), use_container_width=True, hide_index=True)
+            if st.button("🧹 監視ログをクリア", key="clr_spoof"): sec["spoof_logs"] = []; save_j(FILES["sec"], sec); st.rerun()
+        else: st.caption("現在、なりすまし再登録や不正アクセスは検知されていません。")
+        if banned_fps:
+            st.markdown("**🔒 端末フィンガープリントBAN一覧**")
+            for b_fp, b_info in list(banned_fps.items()):
+                c_f1, c_f2 = st.columns([3.5, 1])
+                c_f1.caption(f"端末ID: `{b_fp}` ｜ 元アカウント: {b_info}")
+                if c_f2.button("🔓 解除", key=f"unban_fp_{b_fp}", use_container_width=True):
+                    del sec["banned_fps"][b_fp]; save_j(FILES["sec"], sec); st.rerun()
     st.stop()
 
 # ==========================================
@@ -1333,36 +1189,19 @@ b5_live_map = fetch_5ch_live()
 b5_live_ok = any(v.get("live") for v in b5_live_map.values())
 
 if st.session_state.get("navigation_page") == "NEWS_DETAIL":
-    n_item = st.session_state.get("selected_news_item")
-    if not n_item:
-        nl = fetch_global_impact_news()
-        n_item = nl[0] if nl else None
-    if not n_item:
-        st.session_state["navigation_page"] = "TOP"; st.rerun()
+    n_item = st.session_state.get("selected_news_item") or (fetch_global_impact_news() or [None])[0]
+    if not n_item: st.session_state["navigation_page"] = "TOP"; st.rerun()
 
     c_bk1, c_bk2 = st.columns([1.8, 1.2])
-    if c_bk1.button("⬅️ 元の画面（ディベート・ランキング）へすぐ戻る", use_container_width=True):
-        st.session_state["navigation_page"] = st.session_state.get("prev_page_before_news", "TOP"); st.rerun()
-    if c_bk2.button("🏆 ランキングTOPへ", use_container_width=True):
-        st.session_state["navigation_page"] = "TOP"; st.rerun()
+    if c_bk1.button("⬅️ 元の画面へすぐ戻る", use_container_width=True): st.session_state["navigation_page"] = st.session_state.get("prev_page_before_news", "TOP"); st.rerun()
+    if c_bk2.button("🏆 ランキングTOPへ", use_container_width=True): st.session_state["navigation_page"] = "TOP"; st.rerun()
 
-    st.markdown(
-        f'<div style="background:linear-gradient(135deg,#450a0a,#7f1d1d,#0f172a);color:#fff;padding:16px 18px;border-radius:14px;border:2px solid #ef4444;margin-bottom:12px;">'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
-        f'<span style="background:{n_item["sent_bg"]};color:{n_item["sent_color"]};padding:3px 10px;border-radius:999px;font-weight:900;font-size:12px;">{n_item["badge_icon"]} {n_item["sentiment"]}</span>'
-        f'<span style="background:#ef4444;color:#fff;padding:3px 10px;border-radius:999px;font-weight:900;font-size:12px;">株価影響度スコア Lv.{n_item["impact_score"]}/99</span></div>'
-        f'<h2 style="margin:4px 0 8px 0;font-size:20px;color:#fef08a;line-height:1.4;">{n_item["title"]}</h2>'
-        f'<div style="font-size:12px;color:#cbd5e1;">📡 配信ソース: <b>{n_item["source"]}</b> ｜ 直撃セクター: <b>{", ".join(n_item["matched_sectors"])}</b> ｜ 検知時刻: {n_item["pub"]}</div></div>',
-        unsafe_allow_html=True
-    )
+    st.markdown(f'<div style="background:linear-gradient(135deg,#450a0a,#7f1d1d,#0f172a);color:#fff;padding:16px 18px;border-radius:14px;border:2px solid #ef4444;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><span style="background:{n_item["sent_bg"]};color:{n_item["sent_color"]};padding:3px 10px;border-radius:999px;font-weight:900;font-size:12px;">{n_item["badge_icon"]} {n_item["sentiment"]}</span><span style="background:#ef4444;color:#fff;padding:3px 10px;border-radius:999px;font-weight:900;font-size:12px;">株価影響度スコア Lv.{n_item["impact_score"]}/99</span></div><h2 style="margin:4px 0 8px 0;font-size:20px;color:#fef08a;line-height:1.4;">{n_item["title"]}</h2><div style="font-size:12px;color:#cbd5e1;">📡 配信ソース: <b>{n_item["source"]}</b> ｜ 直撃セクター: <b>{", ".join(n_item["matched_sectors"])}</b> ｜ 検知時刻: {n_item["pub"]}</div></div>', unsafe_allow_html=True)
 
     with st.spinner("🧠 機関クオンツ＆7専門AIが超詳細インパクトレポートを生成中..."):
-        deep_html = generate_news_deep_analysis(n_item)
-    st.markdown(deep_html, unsafe_allow_html=True)
+        st.markdown(generate_news_deep_analysis(n_item), unsafe_allow_html=True)
 
-    if n_item.get("link"):
-        st.markdown(f"🔗 **[ニュース配信元の原文記事を別タブで開く ({n_item['source']})]({n_item['link']})**")
-
+    if n_item.get("link"): st.markdown(f"🔗 **[ニュース配信元の原文記事を別タブで開く ({n_item['source']})]({n_item['link']})**")
     st.markdown("---")
     st.markdown("#### 🎯 このニュースが直撃するアプリ内登録銘柄")
     if n_item.get("matched_stocks"):
@@ -1370,21 +1209,26 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
         for idx, st_info in enumerate(n_item["matched_stocks"][:6]):
             with cols[idx % 3]:
                 if st.button(f"⚡ {st_info['name']} ({st_info['short']}) を精密診断", key=f"nd_jmp_{st_info['code']}", use_container_width=True):
-                    st.session_state["custom_search_code"] = st_info["code"]
-                    st.session_state["navigation_page"] = "TOP"; st.rerun()
-
-        lead_code = n_item["matched_stocks"][0]["code"]
-        with st.spinner(f"直撃筆頭銘柄「{n_item['matched_stocks'][0]['name']}」のクオンツ波形＆AI合議をロード中..."):
-            lead_r = fetch_one(lead_code, macro_info, b5_live_map, True, True, True)
-        if lead_r:
-            render_card(lead_r, is_custom=True, kp=f"news_lead_{lead_r['code']}")
+                    st.session_state["custom_search_code"] = st_info["code"]; st.session_state["navigation_page"] = "TOP"; st.rerun()
+        lead_r = fetch_one(n_item["matched_stocks"][0]["code"], macro_info, b5_live_map, True, True, True)
+        if lead_r: render_card(lead_r, is_custom=True, kp=f"news_lead_{lead_r['code']}")
     st.stop()
 
 # ==========================================
-# 🚀 メイン画面描画 (TOP / WATCHLIST)
+# 🚀 メイン画面描画（1行タイトル：Yamashishi Lab やまししラボ）
 # ==========================================
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.08);padding:3px 9px;border-radius:6px;font-size:11.5px;display:inline-flex;gap:4px;"><span style="color:#cbd5e1;">{m["label"]}</span><span style="color:{"#f87171" if m["diff"]>=0 else "#60a5fa"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
-st.markdown(f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:14px 18px;border-radius:14px;margin-bottom:10px;border:1px solid rgba(56,189,248,0.25);"><div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:10px;color:#38bdf8;font-weight:800;">INSTITUTIONAL ALGO (OFI / YZ-VOL / CVaR / KELLY) & 5CH LIVE</div><h1 style="margin:2px 0 0 0;font-size:19px;color:#fff;font-weight:900;">⚡ 翌朝株価 クオンツ＆AIエージェント合議 Pro</h1></div><span style="background:rgba(16,185,129,0.2);color:#6ee7b7;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;">🟢 {"5ch実況＋機関クオンツ稼働" if b5_live_ok else "機関クオンツ高速稼働"}</span></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;">{mpills}</div></div>', unsafe_allow_html=True)
+st.markdown(
+    f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:14px 18px;border-radius:14px;margin-bottom:10px;border:1px solid rgba(56,189,248,0.25);">'
+    f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;">'
+    f'<div style="display:flex;align-items:baseline;gap:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+    f'<span class="brand-script">Yamashishi Lab</span><span class="brand-jp">⚡ やまししラボ</span>'
+    f'</div>'
+    f'<span style="background:rgba(16,185,129,0.2);color:#6ee7b7;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;flex-shrink:0;">🟢 {"5ch実況＋機関クオンツ稼働" if b5_live_ok else "機関クオンツ高速稼働"}</span>'
+    f'</div>'
+    f'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">{mpills}</div></div>',
+    unsafe_allow_html=True
+)
 
 BOOST_MAP = {"🧬 高水準クオンツ(OFI/YZ/Hurst/Kalman/CVaR)": "algo", "🏦 機関VPIN・SmartMoney": "inst", "🔥 5ch実況＆短期モメンタム": "mom"}
 st.markdown('<div class="compact-bar-label"><span>⚡ QUANT ENGINE BOOST</span><span style="color:#94a3b8;font-weight:600;">高水準機関アルゴリズム ＆ 5ch解析ON/OFF</span></div>', unsafe_allow_html=True)
@@ -1396,8 +1240,7 @@ with st.spinner("🏦 国内外の母集団＆機関オーダーフローを一�
 
 c1, c2 = st.columns([3.4, 1])
 cin = c1.text_input("🔍 銘柄検索", placeholder="銘柄コードまたは米ティッカーを入力 (例: 6920, 5803, NVDA, IONQ)", label_visibility="collapsed")
-if c2.button("🔍 銘柄診断", use_container_width=True) and cin:
-    st.session_state["custom_search_code"] = norm_tk(cin)
+if c2.button("🔍 銘柄診断", use_container_width=True) and cin: st.session_state["custom_search_code"] = norm_tk(cin)
 
 if st.session_state.get("custom_search_code"):
     nc = st.session_state["custom_search_code"]
@@ -1405,8 +1248,7 @@ if st.session_state.get("custom_search_code"):
         cr = fetch_one(nc, macro_info, b5_live_map, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b)
     if cr:
         render_card(cr, is_custom=True, kp="custom")
-        if st.button("✖️ 個別診断結果を閉じてランキングに戻る", use_container_width=True):
-            st.session_state["custom_search_code"] = ""; st.rerun()
+        if st.button("✖️ 個別診断結果を閉じてランキングに戻る", use_container_width=True): st.session_state["custom_search_code"] = ""; st.rerun()
     else: st.warning(f"銘柄「{nc}」のデータが見つかりませんでした。")
 
 def cut_stocks(slist, pct):
@@ -1427,8 +1269,7 @@ else:
     if hasattr(st, "pills"):
         p_cat = st.pills("カテゴリ", cats, default=prev_cat, selection_mode="single", label_visibility="collapsed")
         sel_cat = p_cat if p_cat else prev_cat
-    else:
-        sel_cat = st.radio("カテゴリ", cats, horizontal=True, label_visibility="collapsed")
+    else: sel_cat = st.radio("カテゴリ", cats, horizontal=True, label_visibility="collapsed")
     if sel_cat != prev_cat:
         st.session_state["nav_history"].append(prev_cat)
         st.session_state["active_category"] = sel_cat
