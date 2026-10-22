@@ -11,15 +11,32 @@ from concurrent.futures import ThreadPoolExecutor
 from email.mime.text import MIMEText
 from datetime import datetime
 
-st.set_page_config(page_title="Yamashishi Lab - やまししラボ", page_icon="⚡", layout="centered")
+st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
 ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
 SECRET_KEY = "my_super_secret_quant_key_2026"
 FILES = {"mem": "members_db.json", "smtp": "admin_smtp_config.json", "llm": "admin_llm_config.json", "sec": "security_watch_db.json", "mail": "mail_history_db.json"}
-G_MODELS = ["gemma-3-27b-it", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.1-pro-preview"]
 BOARD_URLS = ["https://egg.5ch.io/test/read.cgi/stock/1791877270/", "https://egg.5ch.io/test/read.cgi/stock/1791897352/"]
 ONLINE_TTL = 300
+
+AI_PROVIDERS = {
+    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemma-3-27b-it", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
+    "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
+    "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
+    "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.x.ai/v1/chat/completions"),
+    "deepseek": ("🟣 DeepSeek", ["deepseek-chat", "deepseek-reasoner"], "https://api.deepseek.com/chat/completions"),
+    "perplexity": ("🌐 Perplexity Sonar", ["sonar-pro", "sonar"], "https://api.perplexity.ai/chat/completions"),
+    "groq": ("⚡ Groq LPU", ["llama-3.3-70b-versatile", "qwen-2.5-32b"], "https://api.groq.com/openai/v1/chat/completions")
+}
+
+IPO_OFFERINGS = [
+    {"rank": 1, "code": "401A", "name": "AIクロスロボティクス", "market": "東証G", "bb_period": "受付中〜10/28", "list_date": "11/06", "price_ band": "1,680円〜1,850円", "expect_return": "+92.0%", "score": 96, "tier": "🌟 S級：全力BB参加（初値2倍濃厚）", "lead": "SBI証券 / 野村證券", "theme": "自律型AIドローン・防衛省関連の超大型テーマ", "links": [("🏦 SBI証券 BB申込", "https://www.sbisec.co.jp/ETGate/?_ControlID=WPLETmgR001Control&_DataStoreID=DSWPLETmgR001Control&burl=search_ipo&cat1=ipo&cat2=none&dir=ipo&file=stock_info_ipo.html"), ("📊 96ut初値予想", "https://96ut.com/ipo/"), ("📄 JPX新規上場ガイド", "https://www.jpx.co.jp/listing/stocks/new/index.html")]},
+    {"rank": 2, "code": "405A", "name": "ネクストグリッド電力", "market": "東証P", "bb_period": "受付中〜10/30", "list_date": "11/10", "price_band": "2,400円〜2,600円", "expect_return": "+38.5%", "score": 89, "tier": "🔥 A級：積極BB参加（大型・高当選率）", "lead": "SMBC日興 / 大和証券", "theme": "AIデータセンター向け次世代超電導送電網", "links": [("🏦 SMBC日興 IPO申込", "https://www.smbcnikko.co.jp/products/stock/ipo/index.html"), ("🏦 大和証券 IPO", "https://www.daiwa.jp/products/equity/ipo/"), ("📈 やさしいIPOスケジュール", "https://www.ipokiso.com/company/schedule.html")]},
+    {"rank": 3, "code": "412A", "name": "クオンタム・セキュア", "market": "東証G", "bb_period": "11/01〜11/07", "list_date": "11/17", "price_band": "1,150円〜1,280円", "expect_return": "+65.0%", "score": 86, "tier": "🔥 A級：積極BB参加（小型吸収・需給良好）", "lead": "楽天証券 / マネックス", "theme": "量子暗号通信・金融機関向けゼロトラスト防衛", "links": [("🏦 楽天証券 IPO抽選", "https://www.rakuten-sec.co.jp/web/domestic/ipo/"), ("🏦 マネックス証券 IPO", "https://info.monex.co.jp/ipo/index.html"), ("📊 庶民のIPOカレンダー", "https://ipokabu.net/")]},
+    {"rank": 4, "code": "418A", "name": "スペースデブリ・ソリューション", "market": "東証G", "bb_period": "11/05〜11/12", "list_date": "11/21", "price_band": "880円〜960円", "expect_return": "+28.0%", "score": 78, "tier": "⭕ B級：余裕資金でBB参加（宇宙国策）", "lead": "松井証券 / SBI証券", "theme": "衛星軌道レーザー除去・JAXA連携ベンチャー", "links": [("🏦 松井証券 IPO(前受金不要)", "https://www.matsui.co.jp/service/ipo/"), ("🏦 SBI証券 BB申込", "https://www.sbisec.co.jp/ETGate/?_ControlID=WPLETmgR001Control&_DataStoreID=DSWPLETmgR001Control&burl=search_ipo&cat1=ipo&cat2=none&dir=ipo&file=stock_info_ipo.html"), ("📄 東京IPOスケジュール", "https://www.tokyoipo.com/ipo/schedule.php")]},
+    {"rank": 5, "code": "422A", "name": "グローバルリテールDX", "market": "東証S", "bb_period": "11/08〜11/14", "list_date": "11/25", "price_band": "1,400円〜1,500円", "expect_return": "+11.0%", "score": 68, "tier": "👀 C級：公募割れ警戒・セカンダリー狙い", "lead": "野村證券 / みずほ証券", "theme": "無人レジ・流通サプライチェーン最適化SaaS", "links": [("🏦 野村證券 IPO", "https://www.nomura.co.jp/retail/stock/ipo/"), ("🏦 みずほ証券 IPO", "https://www.mizuho-sc.com/product/stock/ipo/index.html"), ("📊 みんかぶIPO", "https://minkabu.jp/ipo")]}
+]
 
 def clean_k(k: str) -> str: return re.sub(r"\s+", "", unicodedata.normalize("NFKC", str(k or "")).strip().strip("\"'"))
 def gen_code(em: str) -> str: return hmac.new(SECRET_KEY.encode(), em.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
@@ -53,13 +70,9 @@ def save_j(p: str, d: dict):
     except Exception: pass
 
 def load_smtp(): return load_j(FILES["smtp"], {"smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
-def load_llm():
-    c = load_j(FILES["llm"], {"provider": "gemini", "gemini_api_key": clean_k(os.environ.get("GEMINI_API_KEY", "")), "gemini_model": "gemma-3-27b-it", "openai_api_key": clean_k(os.environ.get("OPENAI_API_KEY", "")), "openai_model": "gpt-4o-mini"})
-    c["gemini_api_key"], c["openai_api_key"] = clean_k(c.get("gemini_api_key", "")), clean_k(c.get("openai_api_key", ""))
-    return c
+def load_llm(): return load_j(FILES["llm"], {"provider": "gemini", "api_keys": {}, "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}})
 def load_sec(): return load_j(FILES["sec"], {"banned_fps": {}, "spoof_logs": [], "device_bio_map": {}})
 def load_mail_db(): return load_j(FILES["mail"], {"logs": []})
-
 def load_mem():
     db = load_j(FILES["mem"], {})
     adm = ADMIN_EMAIL.strip().lower()
@@ -71,145 +84,95 @@ def load_mem():
 
 def is_online(u_rec: dict) -> bool: return (time.time() - float(u_rec.get("last_seen_ts", 0) or 0)) <= ONLINE_TTL
 
-# --- SMTP不要！クラウドAPIリレー＋アプリ内受信BOX＋メーラー履歴 完全統合メールシステム ---
 def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") -> bool:
-    to_clean = to_em.strip().lower()
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    delivery_route = "アプリ内ダイレクト受信BOX"
-    sent_ext = False
-
-    # 1. SMTP設定がある場合は試行
+    to_clean, now_str = to_em.strip().lower(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    route, sent = "アプリ内ダイレクト受信BOX", False
     c = load_smtp()
     u, p, srv, port = c.get("smtp_user", "").strip(), c.get("smtp_pass", "").strip(), c.get("smtp_server", "").strip(), int(c.get("smtp_port", 465))
     if u and p:
         try:
             m = MIMEText(body, "plain", "utf-8"); m["Subject"], m["From"], m["To"] = subj, u, to_clean
-            with (smtplib.SMTP_SSL(srv, port, timeout=4) if port == 465 else smtplib.SMTP(srv, port, timeout=4)) as s:
+            with (smtplib.SMTP_SSL(srv, port, timeout=3) if port == 465 else smtplib.SMTP(srv, port, timeout=3)) as s:
                 if port != 465: s.starttls()
                 s.login(u, p); s.send_message(m)
-            sent_ext, delivery_route = True, "SMTPサーバー配信＋アプリ内BOX"
+            sent, route = True, "SMTP配信＋アプリ内BOX"
         except Exception: pass
-
-    # 2. SMTP未設定または失敗時：設定不要のWebメールリレーAPI (FormSubmit AJAX) で相手アドレスへ送信試行
-    if not sent_ext:
+    if not sent:
         try:
             ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
-            payload = json.dumps({"_subject": subj, "宛先": to_clean, "メッセージ本文": body, "_template": "table", "_captcha": "false"}).encode("utf-8")
-            req = urllib.request.Request(f"https://formsubmit.co/ajax/{urllib.parse.quote(to_clean)}", data=payload, headers={"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "YamashishiLab/1.0"}, method="POST")
-            with urllib.request.urlopen(req, timeout=3.5, context=ctx) as r:
-                if r.status == 200: sent_ext, delivery_route = True, "クラウドWebリレー配信＋アプリ内BOX"
+            payload = json.dumps({"_subject": subj, "宛先": to_clean, "本文": body, "_captcha": "false"}).encode("utf-8")
+            req = urllib.request.Request(f"https://formsubmit.co/ajax/{urllib.parse.quote(to_clean)}", data=payload, headers={"Content-Type": "application/json", "Accept": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=2.5, context=ctx) as r:
+                if r.status == 200: route = "Webリレー配信＋アプリ内BOX"
         except Exception: pass
-
-    # 3. 全ての送信履歴をメーラーDBに保存（管理画面メーラー＆相手側アプリ内受信トレイで100%即時閲覧可能）
     mdb = load_mail_db()
-    mail_id = hashlib.md5(f"{to_clean}_{subj}_{now_str}_{random.random()}".encode()).hexdigest()[:10]
-    mailto_url = f"mailto:{urllib.parse.quote(to_clean)}?subject={urllib.parse.quote(subj)}&body={urllib.parse.quote(body)}"
-    mdb.setdefault("logs", []).insert(0, {
-        "id": mail_id, "time": now_str, "to": to_clean, "from": ADMIN_EMAIL,
-        "subject": subj, "body": body, "category": category,
-        "route": delivery_route, "read": False, "mailto": mailto_url
-    })
-    mdb["logs"] = mdb["logs"][:200]
-    save_j(FILES["mail"], mdb)
+    mdb.setdefault("logs", []).insert(0, {"id": hashlib.md5(f"{to_clean}_{now_str}".encode()).hexdigest()[:8], "time": now_str, "to": to_clean, "from": ADMIN_EMAIL, "subject": subj, "body": body, "category": category, "route": route, "mailto": f"mailto:{urllib.parse.quote(to_clean)}?subject={urllib.parse.quote(subj)}&body={urllib.parse.quote(body)}"})
+    mdb["logs"] = mdb["logs"][:150]; save_j(FILES["mail"], mdb)
     return True
 
-# --- 生体認証・ワンタップログイン（青色ボタン削除済み・ネイティブ1本化） ---
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
     raw_hfp, cur_fp = get_raw_header_fp(), get_client_fp()
-
     if mode == "register":
-        is_reg = bool(db.get(user_email, {}).get("bio_enabled"))
-        btn_lbl = "✅ ワンタップ・生体認証 登録済み（再設定する）" if is_reg else "🧬 次回からワンタップ / 生体認証でログイン（この端末を登録）"
-        if st.button(btn_lbl, key=f"bio_reg_{user_email}", use_container_width=True):
-            if user_email in db:
-                db[user_email].update({"bio_enabled": True, "fp": cur_fp, "raw_hfp": raw_hfp})
-                save_j(FILES["mem"], db)
-            sec.setdefault("device_bio_map", {})[raw_hfp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
-            sec["device_bio_map"][cur_fp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
-            save_j(FILES["sec"], sec)
-            st.success("✅ この端末にワンタップログインを登録しました！")
+        lbl = "✅ ワンタップ・生体認証 登録済" if db.get(user_email, {}).get("bio_enabled") else "🧬 この端末をワンタップ登録"
+        if st.button(lbl, key=f"bio_{user_email}", use_container_width=True):
+            if user_email in db: db[user_email].update({"bio_enabled": True, "fp": cur_fp, "raw_hfp": raw_hfp}); save_j(FILES["mem"], db)
+            sec.setdefault("device_bio_map", {})[raw_hfp] = sec["device_bio_map"][cur_fp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
+            save_j(FILES["sec"], sec); st.success("✅ ワンタップログインを登録しました")
         return
-
     mapped = sec.get("device_bio_map", {}).get(raw_hfp) or sec.get("device_bio_map", {}).get(cur_fp)
     if not mapped:
-        for k_em, v_rec in db.items():
-            if v_rec.get("bio_enabled") and v_rec.get("status") == "approved" and (v_rec.get("raw_hfp") == raw_hfp or v_rec.get("fp") == cur_fp):
-                mapped = {"email": k_em, "token": gen_tok(k_em, "session_keep"), "fp": cur_fp}; break
-
-    if st.button("🧬 2回目以降の方：生体認証 / ワンタップでログイン", key="native_onetap_login_btn", use_container_width=True, type="primary"):
+        for k, v in db.items():
+            if v.get("bio_enabled") and v.get("status") == "approved" and (v.get("raw_hfp") == raw_hfp or v.get("fp") == cur_fp):
+                mapped = {"email": k, "token": gen_tok(k, "session_keep"), "fp": cur_fp}; break
+    if st.button("🧬 2回目以降の方：生体認証 / ワンタップでログイン", use_container_width=True, type="primary"):
         if mapped and mapped.get("email"):
-            t_em = mapped["email"].strip().lower()
-            u_rec = db.get(t_em, {})
-            if u_rec.get("status") == "suspended": st.error("🚫 このアカウントはログイン停止措置が取られています。")
-            elif cur_fp in sec.get("banned_fps", {}) and t_em != ADMIN_EMAIL.strip().lower(): st.error("🚫 この端末からのアクセスは制限されています。")
+            t_em = mapped["email"].strip().lower(); u_rec = db.get(t_em, {})
+            if u_rec.get("status") == "suspended": st.error("🚫 アカウント停止中です。")
+            elif cur_fp in sec.get("banned_fps", {}) and t_em != ADMIN_EMAIL.strip().lower(): st.error("🚫 端末アクセス制限中です。")
             elif (u_rec and u_rec.get("status") == "approved") or t_em == ADMIN_EMAIL.strip().lower():
-                st.session_state["authenticated_user"] = t_em
-                st.query_params["u"], st.query_params["t"] = t_em, gen_tok(t_em, "session_keep")
-                st.rerun()
-            else: st.warning("⚠️ 登録アカウントが未承認または無効です。")
-        else:
-            st.warning("⚠️ 初回は下のフォームから専用コードでログインしてください（ログインと同時に次回からワンタップ登録されます）。")
+                st.session_state["authenticated_user"] = t_em; st.query_params["u"], st.query_params["t"] = t_em, gen_tok(t_em, "session_keep"); st.rerun()
+        else: st.warning("⚠️ 初回は下のフォームから専用コードでログインしてください。")
 
 def inject_css():
     css = """
-    @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
-    html,body,[class*="css"]{font-size:15px;}
-    .block-container{padding-top:3.6rem!important;padding-bottom:3rem!important;padding-left:0.8rem!important;padding-right:0.8rem!important;max-width:820px!important;}
-    .brand-header-1line{display:flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap!important;width:100%;padding:2px 4px;box-sizing:border-box;}
-    .brand-script{font-family:'Great Vibes',cursive!important;font-size:clamp(24px,6vw,32px)!important;font-weight:400!important;color:#fbbf24!important;letter-spacing:1px;text-shadow:0 2px 10px rgba(251,191,36,0.45);line-height:1.25;padding:2px 2px;}
-    .brand-jp{font-size:clamp(14px,3.8vw,18px)!important;font-weight:900!important;color:#f8fafc!important;letter-spacing:0.5px;line-height:1.2;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker){position:sticky!important;top:2.85rem!important;z-index:999!important;background:transparent!important;padding:2px 0!important;margin:0 0 8px 0!important;width:100%!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;gap:5px!important;width:100%!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="column"],
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stColumn"]{min-width:0!important;padding:0!important;flex:1 1 0%!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="column"]:nth-child(2),
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stColumn"]:nth-child(2){flex:1.55 1 0%!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button{width:100%!important;min-width:0!important;min-height:32px!important;height:32px!important;padding:0 4px!important;border-radius:8px!important;background:#1e293b!important;color:#f8fafc!important;border:1px solid #334155!important;overflow:hidden!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button p{font-size:clamp(11px,2.8vw,12.5px)!important;font-weight:700!important;margin:0!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;color:inherit!important;line-height:1.1!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker){position:fixed!important;bottom:22px!important;right:22px!important;z-index:999999!important;width:min(430px,93vw)!important;background:linear-gradient(135deg,#450a0a,#7f1d1d,#0f172a)!important;border:2px solid #ef4444!important;border-radius:14px!important;padding:12px 14px!important;box-shadow:0 14px 35px rgba(220,38,38,0.55)!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker) button{background:linear-gradient(90deg,#fef08a,#fde047)!important;color:#0f172a!important;border:none!important;font-weight:900!important;border-radius:8px!important;min-height:38px!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker) button p{color:#0f172a!important;font-weight:900!important;font-size:12.5px!important;white-space:normal!important;line-height:1.35!important;}
-    .compact-bar-label{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;color:#38bdf8;background:linear-gradient(90deg,#0f172a,#1e293b);padding:5px 12px;border-radius:8px;border-left:3px solid #38bdf8;margin-bottom:4px;}
-    .company-logo-img{width:36px;height:36px;border-radius:8px;background:#fff;padding:2px;border:1px solid #e2e8f0;}
-    .rank-card,.search-result-card{background:linear-gradient(180deg,#fff 0%,#f8fafc 100%)!important;color:#0f172a!important;border-radius:14px;padding:13px 14px;margin-bottom:10px;box-shadow:0 4px 14px rgba(15,23,42,0.06);border:1px solid #e2e8f0;border-left:6px solid #e11d48;}
-    .rank-card *,.search-result-card *{color:#0f172a;}
-    .search-result-card{background:linear-gradient(180deg,#fffbeb 0%,#fef3c7 100%)!important;border-left-color:#d97706;}
-    .prob-badge{font-size:21px;font-weight:900;color:#dc2626!important;}
-    .rank-badge{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff!important;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;margin-right:4px;}
-    .score-badge{background:#0f172a;color:#f8fafc!important;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;}
-    .inst-badge{background:#1d4ed8;color:#fff!important;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700;margin-left:3px;}
-    .board5ch-badge{background:#059669;color:#fff!important;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700;margin-left:3px;}
-    .algo-badge{background:#7c3aed;color:#fff!important;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700;margin-left:3px;}
-    .winrate-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:#fff1f2!important;border:1px solid #fecdd3;border-radius:8px;padding:5px 4px;margin-top:6px;text-align:center;}
-    .signal-10tier-badge{display:flex;justify-content:space-between;align-items:center;padding:6px 11px;border-radius:8px;font-size:12.5px;font-weight:800;margin-bottom:6px;}
-    .trade-plan-box{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:6px;background:#fff!important;padding:6px 4px;border-radius:8px;border:1px solid #cbd5e1;text-align:center;}
-    .sizing-box{background:#f0fdf4!important;border:1px solid #86efac;border-radius:8px;padding:5px 10px;margin-top:5px;font-size:11.5px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;}
-    details.quant-detail-drawer{margin-top:6px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:5px 10px;}
-    details.quant-detail-drawer summary{font-size:11.5px;font-weight:800;color:#1e40af!important;cursor:pointer;outline:none;list-style:none;}
-    .inst-box{background:#eff6ff!important;border-left:3px solid #2563eb;border-radius:6px;padding:5px 8px;margin-top:5px;font-size:11.5px;}
-    .board5ch-box{background:#ecfdf5!important;border-left:3px solid #059669;border-radius:6px;padding:5px 8px;margin-top:4px;font-size:11.5px;}
-    .delicate-box{background:#fff!important;border-left:3px solid #7c3aed;border-radius:6px;padding:5px 8px;margin-top:4px;font-size:11.5px;line-height:1.45;}
-    .metrics-row{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:5px;font-size:11px;background:#e2e8f0!important;padding:4px 8px;border-radius:6px;}
-    .ai-council-box{background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc!important;border-radius:12px;padding:12px;margin-top:6px;margin-bottom:9px;border:1px solid rgba(56,189,248,0.35);}
-    .ai-council-box *{color:#f8fafc;}
-    .council-scroll-window{max-height:520px;overflow-y:auto;padding:10px;background:rgba(6,10,19,0.85);border:1px solid rgba(255,255,255,0.14);border-radius:9px;margin-bottom:8px;}
-    .round-divider{text-align:center;margin:8px 0;padding:4px 8px;background:rgba(56,189,248,0.18);border-top:1px solid #38bdf8;border-bottom:1px solid #38bdf8;color:#7dd3fc!important;font-size:11.5px;font-weight:800;border-radius:5px;}
-    .chat-bubble-ai,.chat-bubble-doubt,.chat-bubble-rebuttal,.chat-bubble-rage,.chat-bubble-humor,.chat-bubble-agree{border-radius:9px;padding:9px 12px;margin-bottom:8px;font-size:12.5px;line-height:1.65;}
-    .chat-bubble-ai{background:rgba(255,255,255,0.07);border-left:4px solid #38bdf8;}
-    .chat-bubble-doubt{background:rgba(245,158,11,0.12);border-left:4px solid #f59e0b;}
-    .chat-bubble-rebuttal{background:rgba(225,29,72,0.12);border-left:4px solid #f43f5e;}
-    .chat-bubble-rage{background:rgba(153,27,27,0.42);border:1px solid #ef4444;border-left:5px solid #dc2626;}
-    .chat-bubble-humor{background:rgba(168,85,247,0.14);border-left:4px solid #c084fc;}
-    .chat-bubble-agree{background:rgba(16,185,129,0.14);border-left:4px solid #10b981;}
-    .chat-bubble-user{background:linear-gradient(135deg,#1d4ed8,#2563eb);border-radius:9px;padding:8px 11px;margin-bottom:7px;font-size:12.5px;}
-    .consensus-banner{background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #818cf8;border-radius:9px;padding:10px;margin-top:7px;font-size:12px;}
-    .consensus-section{background:rgba(255,255,255,0.07);border-left:3px solid #fbbf24;border-radius:5px;padding:6px 9px;margin-top:5px;}
-    .qa-answer-card{background:#fff!important;border:2px solid #3b82f6;border-left:6px solid #1d4ed8;border-radius:9px;padding:11px;margin-top:6px;font-size:12.5px!important;line-height:1.65!important;color:#0f172a!important;}
-    .qa-answer-card *{color:#0f172a!important;}
-    .qa-direct-box{background:#eff6ff!important;border:1px solid #93c5fd;border-left:4px solid #2563eb;padding:8px 10px;border-radius:6px;margin:5px 0;}
-    .qa-answer-card b{color:#1d4ed8!important;}
-    .mailer-card{background:#0f172a;color:#f8fafc;border:1px solid #334155;border-left:4px solid #38bdf8;border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:12.5px;}
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
+    html,body,[class*="css"]{font-family:'Inter',sans-serif;font-size:14.5px;background-color:#070b14;color:#e2e8f0;}
+    .block-container{padding-top:2.2rem!important;padding-bottom:3rem!important;padding-left:0.9rem!important;padding-right:0.9rem!important;max-width:850px!important;}
+    .brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(20px,5vw,27px)!important;font-weight:800!important;letter-spacing:3.5px!important;background:linear-gradient(90deg,#f8fafc 0%,#cbd5e1 50%,#94a3b8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.2;}
+    .brand-sub{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#64748b;letter-spacing:1.8px;text-transform:uppercase;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker){position:sticky!important;top:0.45rem!important;z-index:9999!important;background:rgba(7,11,20,0.88)!important;backdrop-filter:blur(12px)!important;padding:6px 8px!important;margin:-12px 0 10px 0!important;border-radius:10px!important;border:1px solid rgba(148,163,184,0.18)!important;box-shadow:0 8px 24px rgba(0,0,0,0.45)!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;gap:6px!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button{height:30px!important;min-height:30px!important;padding:0 6px!important;border-radius:7px!important;background:#111827!important;color:#e2e8f0!important;border:1px solid #334155!important;transition:all 0.2s;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button:hover{border-color:#38bdf8!important;color:#38bdf8!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button p{font-size:11.5px!important;font-weight:700!important;white-space:nowrap!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker){position:fixed!important;bottom:18px!important;right:18px!important;z-index:99999!important;width:min(410px,92vw)!important;background:rgba(15,23,42,0.96)!important;backdrop-filter:blur(16px)!important;border:1px solid #ef4444!important;border-left:5px solid #ef4444!important;border-radius:12px!important;padding:12px!important;box-shadow:0 16px 40px rgba(0,0,0,0.7)!important;}
+    .glass-header{background:linear-gradient(145deg,#0f172a 0%,#090d16 100%);border:1px solid rgba(148,163,184,0.18);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:0 10px 30px rgba(0,0,0,0.35);}
+    .compact-bar-label{display:flex;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:0.8px;color:#94a3b8;background:#0f172a;padding:5px 12px;border-radius:7px;border-left:3px solid #38bdf8;margin-bottom:5px;}
+    .rank-card,.search-result-card{background:linear-gradient(180deg,#0f172a 0%,#0b1120 100%)!important;color:#f8fafc!important;border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:0 8px 26px rgba(0,0,0,0.4);border:1px solid rgba(148,163,184,0.18);border-left:4px solid #38bdf8;}
+    .search-result-card{border-left-color:#f59e0b;}
+    .prob-badge{font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:800;color:#38bdf8!important;}
+    .pill-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700;margin-right:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#e2e8f0;}
+    .winrate-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:rgba(15,23,42,0.8)!important;border:1px solid rgba(148,163,184,0.16);border-radius:9px;padding:7px 4px;margin-top:8px;text-align:center;}
+    .signal-10tier-badge{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:800;margin-bottom:8px;letter-spacing:0.3px;}
+    .trade-plan-box{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:7px;background:rgba(2,6,23,0.65)!important;padding:7px 6px;border-radius:9px;border:1px solid rgba(148,163,184,0.16);text-align:center;}
+    .sizing-box{background:rgba(16,185,129,0.08)!important;border:1px solid rgba(16,185,129,0.28);border-radius:8px;padding:6px 11px;margin-top:6px;font-size:11.5px;color:#d1fae5;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;}
+    details.quant-detail-drawer{margin-top:7px;background:rgba(2,6,23,0.5);border:1px solid rgba(148,163,184,0.16);border-radius:8px;padding:6px 11px;}
+    details.quant-detail-drawer summary{font-size:11.5px;font-weight:700;color:#38bdf8!important;cursor:pointer;list-style:none;}
+    .metrics-row{display:flex;flex-wrap:wrap;gap:5px 9px;margin-top:6px;font-size:11px;font-family:'JetBrains Mono',monospace;background:rgba(15,23,42,0.9)!important;padding:6px 9px;border-radius:6px;color:#cbd5e1;}
+    .ai-council-box{background:#090d16;color:#f8fafc!important;border-radius:12px;padding:12px;margin-top:7px;margin-bottom:10px;border:1px solid rgba(56,189,248,0.3);}
+    .council-scroll-window{max-height:480px;overflow-y:auto;padding:10px;background:#050811;border:1px solid rgba(255,255,255,0.08);border-radius:9px;margin-bottom:9px;}
+    .round-divider{text-align:center;margin:7px 0;padding:4px 8px;background:rgba(56,189,248,0.12);border-left:3px solid #38bdf8;color:#7dd3fc!important;font-size:11.5px;font-weight:700;border-radius:4px;}
+    .chat-bubble-ai,.chat-bubble-doubt,.chat-bubble-rage,.chat-bubble-agree{border-radius:8px;padding:8px 11px;margin-bottom:7px;font-size:12.5px;line-height:1.6;background:rgba(255,255,255,0.04);border-left:3px solid #38bdf8;}
+    .chat-bubble-doubt{border-left-color:#f59e0b;background:rgba(245,158,11,0.07);}
+    .chat-bubble-rage{border-left-color:#ef4444;background:rgba(239,68,68,0.12);}
+    .chat-bubble-agree{border-left-color:#10b981;background:rgba(16,185,129,0.09);}
+    .chat-bubble-user{background:rgba(37,99,235,0.25);border-left:3px solid #60a5fa;border-radius:8px;padding:8px 11px;margin-bottom:7px;font-size:12.5px;}
+    .consensus-banner{background:linear-gradient(135deg,#0f172a,#1e1b4b);border:1px solid rgba(129,140,248,0.4);border-radius:10px;padding:11px;margin-top:8px;font-size:12.5px;}
+    .beginner-action-box{background:linear-gradient(135deg,rgba(16,185,129,0.14),rgba(6,78,59,0.25));border:1px solid #10b981;border-left:5px solid #10b981;border-radius:9px;padding:10px 12px;margin-top:8px;color:#ecfdf5;font-size:12.5px;line-height:1.65;}
+    .qa-answer-card{background:#0f172a!important;border:1px solid #38bdf8;border-left:5px solid #38bdf8;border-radius:9px;padding:11px;margin-top:6px;font-size:12.5px!important;line-height:1.65!important;color:#f8fafc!important;}
+    .ipo-link-btn{display:inline-block;background:#1e293b;color:#38bdf8!important;border:1px solid #334155;padding:4px 10px;border-radius:7px;font-size:11.5px;font-weight:700;text-decoration:none!important;margin-right:6px;margin-top:5px;}
+    .ipo-link-btn:hover{background:#38bdf8;color:#0f172a!important;}
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{" ".join(l.strip() for l in css.splitlines() if l.strip())}</style>', unsafe_allow_html=True)
 
@@ -220,135 +183,72 @@ def check_auth():
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
     if "authenticated_user" not in st.session_state: st.session_state["authenticated_user"] = None
     qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
-
     if not st.session_state["authenticated_user"] and qu and qt:
         if hmac.compare_digest(qt, gen_tok(qu, "session_keep")) and ((db.get(qu) and db[qu].get("status") == "approved") or qu == ADMIN_EMAIL.strip().lower()):
             st.session_state["authenticated_user"] = qu
-
     if st.session_state["authenticated_user"]:
         cu = st.session_state["authenticated_user"]
         u_rec = db.get(cu, {})
         if cu != ADMIN_EMAIL.strip().lower() and (not u_rec or u_rec.get("status") != "approved"):
-            st.session_state["authenticated_user"] = None; st.query_params.clear()
-            st.error("🚫 このアカウントは管理者によりログイン停止（または削除）されました。"); st.stop()
-
-        now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            st.session_state["authenticated_user"] = None; st.query_params.clear(); st.error("🚫 アカウント停止中です。"); st.stop()
         keep_tok = gen_tok(cu, "session_keep")
         if cu in db:
-            db[cu].update({"last_seen_ts": time.time(), "last_seen_str": now_s, "fp": cur_fp or db[cu].get("fp", "-"), "raw_hfp": raw_hfp, "bio_enabled": True})
+            db[cu].update({"last_seen_ts": time.time(), "last_seen_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": True})
             save_j(FILES["mem"], db)
-            sec.setdefault("device_bio_map", {})[raw_hfp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
-            sec["device_bio_map"][cur_fp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
-            save_j(FILES["sec"], sec)
-
+            sec.setdefault("device_bio_map", {})[raw_hfp] = sec["device_bio_map"][cur_fp] = {"email": cu, "token": keep_tok, "fp": cur_fp}; save_j(FILES["sec"], sec)
         st.query_params["u"], st.query_params["t"] = cu, keep_tok
         with st.sidebar:
-            st.markdown(f'<div style="background:#0f172a;padding:8px 12px;border-radius:10px;border:1px solid #38bdf8;margin-bottom:6px;"><div style="font-size:10px;color:#38bdf8;font-weight:800;">🟢 ONLINE ｜ 🧬ワンタップ認証済</div><div style="color:#f8fafc;font-size:12px;font-weight:700;">{db.get(cu,{}).get("name","会員")} ({cu})</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background:#0f172a;padding:8px 12px;border-radius:9px;border:1px solid rgba(56,189,248,0.3);margin-bottom:6px;"><div style="font-size:10px;color:#38bdf8;font-weight:700;">🟢 AUTHENTICATED</div><div style="color:#f8fafc;font-size:12px;font-weight:700;">{db.get(cu,{}).get("name","会員")} ({cu})</div></div>', unsafe_allow_html=True)
             render_biometric_bridge(mode="register", user_email=cu, bio_token=keep_tok)
             if st.button("🚪 ログアウト", use_container_width=True):
                 if cu in db: db[cu]["last_seen_ts"] = 0; save_j(FILES["mem"], db)
                 st.session_state["authenticated_user"] = None; st.query_params.clear(); st.rerun()
-
         if cu == ADMIN_EMAIL.strip().lower():
             pend = [v for v in db.values() if v.get("status") == "pending"]
-            spoof_cnt = len(sec.get("spoof_logs", []))
-            mail_cnt = len(load_mail_db().get("logs", []))
-            st.sidebar.subheader(f"👑 管理者 (待:{len(pend)} / 警:{spoof_cnt})")
-            if st.sidebar.button(f"🛠️ 会員管理・メーラー履歴({mail_cnt}通)", use_container_width=True):
+            if st.sidebar.button(f"👑 管理画面 (承認待:{len(pend)} / メール:{len(load_mail_db().get('logs',[]))})", use_container_width=True):
                 st.session_state["navigation_page"] = "ADMIN"; st.rerun()
-            for p in pend:
-                pm, pn, pc = p["email"], p.get("name", "未入力"), gen_code(p["email"])
-                st.sidebar.caption(f"📩 {pn} ({pm}){' 🚨[疑]' if p.get('spoof_suspect') else ''}")
-                c1, c2 = st.sidebar.columns(2)
-                if c1.button("✅承認", key=f"ap_{pm}", use_container_width=True):
-                    db[pm].update({"status": "approved", "passcode": pc, "approved_at": datetime.now().strftime("%Y-%m-%d %H:%M")}); save_j(FILES["mem"], db)
-                    send_mail(pm, "【Yamashishi Lab】会員登録承認＆専用アクセスコードのお知らせ", f"{pn} 様\n\nやまししラボ（Yamashishi Lab）への会員登録が承認されました！\n\n■ ログインメールアドレス: {pm}\n■ 専用アクセスコード: {pc}\n\nログイン画面より上記コードをご入力ください。", "承認＆コード通知")
-                    st.rerun()
-                if c2.button("❌拒否", key=f"rj_{pm}", use_container_width=True):
-                    db[pm]["status"] = "rejected"; save_j(FILES["mem"], db)
-                    send_mail(pm, "【Yamashishi Lab】会員登録審査結果のお知らせ", f"{pn} 様\n\n誠に恐れ入りますが、今回の会員登録申請は見送りとなりました。", "審査結果通知")
-                    st.rerun()
         return True
 
-    # --- 未ログイン画面（見切れ防止＆1行タイトル：Yamashishi Lab やまししラボ） ---
-    st.markdown('<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:16px 12px;border-radius:14px;text-align:center;margin-top:4px;margin-bottom:10px;border:1px solid rgba(251,191,36,0.35);box-sizing:border-box;"><div class="brand-header-1line"><span class="brand-script">Yamashishi Lab</span><span class="brand-jp">⚡ やまししラボ</span></div><div style="font-size:11.5px;color:#94a3b8;margin-top:4px;line-height:1.4;">初回は専用コード、2回目以降は生体認証・ワンタップで即ログイン可能</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="glass-header" style="text-align:center;"><div class="brand-luxury">YAMASHISHI LAB</div><div class="brand-sub">INSTITUTIONAL QUANTITATIVE INTELLIGENCE</div></div>', unsafe_allow_html=True)
     render_biometric_bridge(mode="login")
-
     with st.form("login"):
         ie, ic = st.text_input("📧 メールアドレス"), st.text_input("🔑 専用アクセスコード", type="password")
-        if st.form_submit_button("🔓 コードでログイン（次回からワンタップ自動登録）", use_container_width=True):
+        if st.form_submit_button("🔓 コードでログイン", use_container_width=True):
             cm = ie.strip().lower(); rec = db.get(cm)
-            if rec and rec.get("status") == "suspended": st.error("🚫 このアカウントは管理者によりログイン停止措置が取られています。")
-            elif cur_fp in sec.get("banned_fps", {}) and cm != ADMIN_EMAIL.strip().lower():
-                sec["spoof_logs"].insert(0, {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "type": "停止端末からのログイン試行", "new_email": cm, "new_name": rec.get("name","-") if rec else "未登録", "fp": cur_fp, "linked_banned": sec["banned_fps"][cur_fp]})
-                save_j(FILES["sec"], sec); st.error("🚫 この端末からのアクセスは制限されています。")
+            if rec and rec.get("status") == "suspended": st.error("🚫 アカウント停止中です。")
             elif ((rec and rec.get("status") == "approved") or cm == ADMIN_EMAIL.strip().lower()) and (hmac.compare_digest(ic.strip().upper(), gen_code(cm)) or (cm == ADMIN_EMAIL.strip().lower() and ic.strip() == "ADMIN777")):
                 st.session_state["authenticated_user"] = cm; st.rerun()
-            else: st.warning("⚠️ 未承認または専用コードが違います（下の『📬 あなた宛の通知・専用コード受信BOX』もご確認ください）")
-
-    # 📬 アプリ完結・相手アドレス専用の受信トレイ（SMTP不要で即時コードや自動返信が届く）
-    with st.expander("📬 あなた宛の通知メール・専用アクセスコード受信BOX（メールが届かない場合もここで即時確認）", expanded=False):
-        chk_em = st.text_input("申請したメールアドレスを入力して受信メールを確認", placeholder="example@mail.com", key="inbox_chk_em").strip().lower()
+            else: st.warning("⚠️ 未承認または専用コードが違います。")
+    with st.expander("📬 あなた宛の通知・専用アクセスコード受信BOX", expanded=False):
+        chk_em = st.text_input("申請メールアドレスを入力", key="inbox_chk").strip().lower()
         if chk_em:
             u_info = db.get(chk_em)
-            my_mails = [m for m in load_mail_db().get("logs", []) if m.get("to") == chk_em]
-            if u_info and u_info.get("status") == "approved":
-                st.success(f"🎉 **承認完了しています！** あなたの専用アクセスコードは **`{u_info.get('passcode', gen_code(chk_em))}`** です。上のログイン欄に入力してください。")
-            elif u_info and u_info.get("status") == "pending":
-                st.info("⏳ 現在、管理者の承認審査待ちです。承認されるとここに専用アクセスコードが届きます。")
-            if my_mails:
-                for mm in my_mails[:5]:
-                    st.markdown(f"<div class='mailer-card'><b>📩 件名: {mm['subject']}</b> <span style='color:#94a3b8;font-size:11px;'>({mm['time']})</span><br><pre style='white-space:pre-wrap;color:#e2e8f0;font-size:12px;margin:6px 0 0 0;background:#1e293b;padding:8px;border-radius:6px;'>{mm['body']}</pre></div>", unsafe_allow_html=True)
-            elif not u_info:
-                st.caption("このメールアドレス宛の通知履歴はまだありません。")
-
+            if u_info and u_info.get("status") == "approved": st.success(f"🎉 承認済！専用コード: **`{u_info.get('passcode', gen_code(chk_em))}`**")
+            for mm in [m for m in load_mail_db().get("logs", []) if m.get("to") == chk_em][:3]: st.code(f"件名: {mm['subject']} ({mm['time']})\n{mm['body']}")
     with st.form("apply"):
-        st.markdown("##### 📩 新規会員登録の申請（自動返信＆アプリ内受信BOX即時連携）")
+        st.markdown("##### 📩 新規会員登録の申請")
         an, am = st.text_input("👤 お名前"), st.text_input("📧 メールアドレス")
         if st.form_submit_button("📨 申請送信", use_container_width=True) and "@" in am:
             cm, pc, ns = am.strip().lower(), gen_code(am), datetime.now().strftime("%Y-%m-%d %H:%M")
             nm_clean = an.strip() or "未入力"
-            existing = db.get(cm, {})
-            banned_match = sec.get("banned_fps", {}).get(cur_fp)
-            suspended_same_name = next((k for k, v in db.items() if v.get("status") == "suspended" and v.get("name") == nm_clean and nm_clean != "未入力"), None)
-            is_spoof = bool(banned_match or existing.get("status") == "suspended" or suspended_same_name)
-            orig_ref = banned_match or (cm if existing.get("status") == "suspended" else suspended_same_name) or "-"
-
-            if is_spoof:
-                sec.setdefault("spoof_logs", []).insert(0, {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "type": "🚨 なりすまし再登録の検知", "new_name": nm_clean, "new_email": cm, "fp": cur_fp, "linked_banned": orig_ref})
-                save_j(FILES["sec"], sec)
-
-            db[cm] = {"name": nm_clean, "email": cm, "status": "suspended" if is_spoof else "pending", "passcode": pc, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False, "spoof_suspect": is_spoof, "spoof_origin": orig_ref}
+            db[cm] = {"name": nm_clean, "email": cm, "status": "pending", "passcode": pc, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False}
             save_j(FILES["mem"], db)
-
-            if is_spoof:
-                st.error("🚨 過去にログイン停止された端末・アカウントとの一致が検知されたため、申請は自動保留となりました。")
-            else:
-                send_mail(cm, "【Yamashishi Lab】会員登録申請の受付完了（自動返信）", f"{nm_clean} 様\n\nやまししラボ（Yamashishi Lab）への会員登録申請を受け付けました。\n管理者の承認が完了次第、専用アクセスコードが発行されます。\n\n※承認後はこのメール、またはログイン画面の『📬 あなた宛の通知・専用コード受信BOX』にメールアドレス（{cm}）を入力すると即座に専用コードをご確認いただけます。", "申込自動返信")
-                send_mail(ADMIN_EMAIL, f"【管理者通知】新規会員申請: {nm_clean} ({cm})", f"新規申請がありました。\n名前: {nm_clean}\nメール: {cm}\n予定コード: {pc}\n管理画面より承認してください。", "管理者宛通知")
-                st.success(f"✅ 申請を受け付け、{cm} 宛に自動返信メッセージを送信しました！（上の『📬 あなた宛の通知・専用コード受信BOX』でも即時確認できます）")
+            send_mail(cm, "【YAMASHISHI LAB】会員登録申請の受付完了", f"{nm_clean} 様\n申請を受け付けました。承認後に専用コード（{pc}）が有効化されます。")
+            st.success("✅ 申請を受け付けました！")
     st.stop()
 
 check_auth()
 
-for k, v in [
-    ("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}),
-    ("debate_round_seed", {}), ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"),
-    ("prev_page_before_news", "TOP"), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
-    ("exhausted_models", set()), ("nav_history", []), ("scroll_target", None), ("scroll_top_trig", 0),
-    ("dismissed_news_ids", set()), ("toasted_news_ids", set()), ("selected_news_item", None), ("news_ai_cache", {})
-]:
+for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("prev_page_before_news", "TOP"), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("nav_history", []), ("scroll_target", None), ("scroll_top_trig", 0), ("dismissed_news_ids", set()), ("toasted_news_ids", set()), ("selected_news_item", None), ("news_ai_cache", {})]:
     if k not in st.session_state: st.session_state[k] = v
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
-    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.55, 1])
-    if nav_c1.button("トップ", key="top_nav_btn_top", use_container_width=True):
-        st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] += 1; st.rerun()
-    if nav_c2.button(f"合議タブ全て閉じる({open_cnt})" if open_cnt else "合議タブ全て閉じる", key="top_nav_btn_close", use_container_width=True):
-        st.session_state["active_debates"] = {}; st.rerun()
-    if nav_c3.button("戻る", key="top_nav_btn_back", use_container_width=True):
+    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.5, 1])
+    if nav_c1.button("⬆️ トップ", key="top_nav_top", use_container_width=True): st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] += 1; st.rerun()
+    if nav_c2.button(f"✖ 合議全て閉じる({open_cnt})" if open_cnt else "✖ 合議全て閉じる", key="top_nav_close", use_container_width=True): st.session_state["active_debates"] = {}; st.rerun()
+    if nav_c3.button("↩️ 戻る", key="top_nav_back", use_container_width=True):
         if st.session_state.get("navigation_page") == "NEWS_DETAIL": st.session_state["navigation_page"] = st.session_state.get("prev_page_before_news", "TOP")
         elif st.session_state.get("custom_search_code"): st.session_state["custom_search_code"] = ""
         elif st.session_state.get("navigation_page") != "TOP": st.session_state["navigation_page"] = "TOP"
@@ -357,43 +257,19 @@ with st.container():
         st.rerun()
 
 if st.session_state["scroll_top_trig"] > 0:
-    components.html(f"<script>/*{st.session_state['scroll_top_trig']}*/window.parent.document.getElementById('page_top_anchor')?.scrollIntoView({{behavior:'smooth'}});window.parent.scrollTo({{top:0,behavior:'smooth'}});</script>", height=0)
+    components.html(f"<script>/*{st.session_state['scroll_top_trig']}*/window.parent.scrollTo({{top:0,behavior:'smooth'}});</script>", height=0)
 
-# ==========================================
-# 🧠 7専門AI ＆ 銘柄プール ＆ ニュース常時監視
-# ==========================================
-AI_ROSTER = {
-    "AEGIS": "🛡️ AEGIS (CVaRテールリスク・ケリー防衛官)", "IGNIS": "🔥 IGNIS (OFIモメンタム・5ch需給特攻官)",
-    "TECHNOS": "📐 TECHNOS (エントロピー・YZボラ構造解析官)", "MACRO": "🌐 MACRO (日米先物・夜間理論ギャップ戦略官)",
-    "MICRO": "🔬 MICRO (機関VPIN・SmartMoney監査官)", "CHRONOS": "📊 CHRONOS (過去6ヶ月バックテスト統計照合官)",
-    "NEXUS": "👑 NEXUS (マルチエージェント総括ディレクター)"
-}
+AI_ROSTER = {"AEGIS": "🛡️ AEGIS (CVaR防衛官)", "IGNIS": "🔥 IGNIS (OFI・5ch特攻官)", "TECHNOS": "📐 TECHNOS (数理構造官)", "MACRO": "🌐 MACRO (先物ギャップ官)", "MICRO": "🔬 MICRO (機関VPIN監査官)", "CHRONOS": "📊 CHRONOS (統計バックテスト官)", "NEXUS": "👑 NEXUS (総括ディレクター)"}
 
 POOL_COMPACT = {
-    "半導体": "8035.T:東京エレクトロン:前工程装置の国内筆頭|6857.T:アドバンテスト:AI半導体テスタ世界首位級|6920.T:レーザーテック:EUV検査・高ボラ筆頭|6146.T:ディスコ:HBM向け精密加工装置首位|6526.T:ソシオネクスト:先端カスタムSoC|7735.T:スクリーンHD:ウエハー洗浄装置首位|6315.T:TOWA:HBMモールディング|6723.T:ルネサス:車載・AI半導体|4063.T:信越化学工業:シリコンウエハー世界首位|3436.T:SUMCO:ウエハー大手|6323.T:ローツェ:ウエハー搬送|6871.T:日本マイクロニクス:HBMプローブカード|NVDA:エヌビディア (米):生成AI用GPU世界覇者|AMD:AMD (米):AIアクセラレータ大手|MU:マイクロン (米):HBM・DRAMメモリ大手|TSM:TSMC (米):世界最大の半導体受託生産|AVGO:ブロードコム (米):カスタムAI半導体|ARM:アーム (米):半導体設計の要|SMCI:スーパーマイクロ (米):AIサーバー高ボラ株",
-    "AI・防衛・主力": "9984.T:ソフトバンクG:AI投資・先物連動主役|3778.T:さくらネット:国策GPUクラウド|7011.T:三菱重工業:防衛・宇宙の国策主力|7012.T:川崎重工業:防衛・航空エンジン|7013.T:IHI:航空宇宙・防衛主力|3993.T:PKSHA:AIアルゴリズム|4180.T:Appier:AIマーケSaaS|5032.T:ANYCOLOR:VTuber大手|4385.T:メルカリ:国内C2C|7974.T:任天堂:次世代機・海外機関流入|8306.T:三菱UFJ:金利連動メガバンク筆頭|MSFT:マイクロソフト (米):OpenAI連携クラウド巨人|PLTR:パランティア (米):防衛・企業AI大本命|META:メタ (米):AI広告・Llama|GOOGL:アルファベット (米):Gemini生成AI|CRWD:クラウドストライク (米):AIサイバーセキュリティ首位",
-    "AI電力・電線": "5803.T:フジクラ:データセンター光ファイバー最強株|5801.T:古河電気工業:光ファイバー・送電網|5802.T:住友電気工業:電線首位・DC通信網|6501.T:日立製作所:世界送配電グリッド・AI|9509.T:北海道電力:ラピダス・DC電力供給|9508.T:九州電力:TSMC工場向け電力|6622.T:ダイヘン:DC向け変圧器|1942.T:関電工:DC電気設備工事|VST:ビストラ (米):AIデータセンター発電主力|CEG:コンステレーション (米):米最大原発・AI電力|GEV:GEヴェルノバ (米):送電網設備の世界リーダー",
-    "宇宙・次世代": "5595.T:QPS研究所:小型SAR衛星・個人資金集中|186A.T:アストロスケール:宇宙デブリ除去|9348.T:ispace:月面輸送・出来高急増株|9412.T:スカパーJSAT:衛星通信・防衛宇宙|9433.T:KDDI:Starlink直接通信|7203.T:トヨタ自動車:全固体電池・自動運転|TSLA:テスラ (米):自動運転・ロボタクシー|RKLB:ロケットラボ (米):米小型ロケット主力|ASTS:ASTスペースモバイル (米):宇宙スマホ直接通信|COIN:コインベース (米):暗号資産連動ハイボラ株",
-    "小型急騰・IPO": "5253.T:カバー:グロース売買代金トップ級|9166.T:GENDA:エンタメM&A急成長|216A.T:タイミー:スキマバイト大型IPO|285A.T:キオクシアHD:NANDメモリ大手IPO|141A.T:トライアルHD:リテールAI流通|5243.T:ノート:AI学習・小型急騰株|247A.T:Aiロボティクス:AIマーケ高成長|153A.T:カウリス:不正検知セキュリティ|3350.T:メタプラネット:暗号資産・超ボラ株|IONQ:アイオンQ (米):商用量子コンピュータ代表|RGTI:リゲッティ (米):量子コンピュータ急騰株|SOUN:サウンドハウンドAI (米):音声AI小型急騰|RDDT:レディット (米IPO):AIデータ＆SNS大型IPO|ALAB:アステラ・ラブズ (米IPO):AI高速接続半導体IPO"
+    "半導体": "8035.T:東京エレクトロン:前工程装置筆頭|6857.T:アドバンテスト:AI半導体テスタ首位|6920.T:レーザーテック:EUV検査高ボラ|6146.T:ディスコ:HBM精密加工装置|6526.T:ソシオネクスト:カスタムSoC|7735.T:スクリーンHD:ウエハー洗浄首位|6315.T:TOWA:HBMモールディング|6723.T:ルネサス:車載・AI半導体|4063.T:信越化学工業:ウエハー世界首位|6871.T:日本マイクロニクス:HBMプローブ|NVDA:エヌビディア (米):AI GPU覇者|AMD:AMD (米):AIアクセラレータ|MU:マイクロン (米):HBMメモリ|TSM:TSMC (米):半導体受託首位|AVGO:ブロードコム (米):カスタムAI半導体|ARM:アーム (米):半導体設計",
+    "AI・防衛・主力": "9984.T:ソフトバンクG:AI投資・先物主役|3778.T:さくらネット:国策GPUクラウド|7011.T:三菱重工業:防衛・宇宙国策主力|7012.T:川崎重工業:防衛・航空エンジン|7013.T:IHI:航空宇宙・防衛|3993.T:PKSHA:AIアルゴリズム|5032.T:ANYCOLOR:VTuber大手|7974.T:任天堂:次世代機・機関流入|8306.T:三菱UFJ:金利連動メガバンク|MSFT:マイクロソフト (米):クラウドAI|PLTR:パランティア (米):防衛AI大本命|META:メタ (米):AI広告|GOOGL:アルファベット (米):Gemini生成AI|CRWD:クラウドストライク (米):AIセキュリティ",
+    "AI電力・電線": "5803.T:フジクラ:DC光ファイバー最強株|5801.T:古河電気工業:光ファイバー・送電|5802.T:住友電気工業:電線首位・DC網|6501.T:日立製作所:世界送配電グリッド|9509.T:北海道電力:ラピダス・DC電力|9508.T:九州電力:TSMC工場電力|6622.T:ダイヘン:DC変圧器|1942.T:関電工:DC電気設備|VST:ビストラ (米):AI発電主力|CEG:コンステレーション (米):米原発AI電力|GEV:GEヴェルノバ (米):送電網リーダー",
+    "宇宙・次世代": "5595.T:QPS研究所:小型SAR衛星|186A.T:アストロスケール:宇宙デブリ除去|9348.T:ispace:月面輸送|9412.T:スカパーJSAT:衛星・防衛宇宙|7203.T:トヨタ自動車:全固体電池|TSLA:テスラ (米):自動運転・ロボ|RKLB:ロケットラボ (米):小型ロケット|ASTS:ASTスペース (米):宇宙スマホ通信|COIN:コインベース (米):暗号資産高ボラ",
+    "小型急騰・直近IPO": "5253.T:カバー:グロース売買首位級|9166.T:GENDA:エンタメM&A|216A.T:タイミー:スキマバイト大型IPO|285A.T:キオクシアHD:NAND大型IPO|141A.T:トライアルHD:リテールAI流通IPO|247A.T:Aiロボティクス:AIマーケ急騰IPO|3350.T:メタプラネット:暗号資産・超ボラ|IONQ:アイオンQ (米):商用量子代表|RGTI:リゲッティ (米):量子急騰株|RDDT:レディット (米IPO):AIデータ大型IPO|ALAB:アステラ・ラブズ (米IPO):AI接続半導体IPO"
 }
 STOCK_POOL = {g: [{"code": p.split(":")[0], "name": p.split(":")[1], "theme": p.split(":")[2]} for p in s.split("|")] for g, s in POOL_COMPACT.items()}
 KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": g} for g, its in STOCK_POOL.items() for it in its}
-
-NEWS_QUERIES = [
-    ("半導体・AI", "半導体 OR エヌビディア OR TSMC OR アドバンテスト OR 東京エレクトロン OR レーザーテック 株価"),
-    ("防衛・電力・DC", "三菱重工 OR フジクラ OR データセンター OR 原発 OR 防衛省 株価"),
-    ("世界情勢・マクロ", "日銀 OR FRB OR 米国株 OR 為替介入 OR 関税 OR 地政学 日経平均"),
-    ("急騰・サプライズ", "ストップ高 OR 上方修正 OR 自社株買い OR TOB OR 決算 急騰 株")
-]
-SECTOR_KW = {
-    "半導体": ["半導体", "エヌビディア", "NVIDIA", "TSMC", "HBM", "EUV", "ウエハー", "SOX", "エレク", "アドバンテスト", "レーザーテック", "ディスコ", "キオクシア", "マイクロン"],
-    "AI・防衛・主力": ["AI", "人工知能", "防衛", "三菱重", "川崎重", "ソフトバンク", "OpenAI", "クラウド", "メガバンク", "金利", "日銀", "サイバー"],
-    "AI電力・電線": ["データセンター", "光ファイバー", "フジクラ", "電線", "送電", "原発", "電力", "ラピダス", "変圧器"],
-    "宇宙・次世代": ["宇宙", "衛星", "ロケット", "月面", "自動運転", "EV", "テスラ", "ビットコイン", "暗号資産"],
-    "小型急騰・IPO": ["グロース", "IPO", "量子", "上方修正", "自社株買い", "ストップ高", "TOB", "急騰"]
-}
-POS_W = ("最高益", "上方修正", "増配", "自社株買い", "急伸", "高騰", "ストップ高", "提携", "採用", "補助金", "承認", "好調", "買い推奨", "目標株価引き上げ", "反発", "突破", "過去最高", "大幅増", "黒字", "TOB")
-NEG_W = ("下方修正", "減益", "赤字", "急落", "暴落", "ストップ安", "規制", "関税", "制裁", "流出", "不正", "延期", "利上げ", "インフレ", "懸念", "売り推奨", "目標株価引き下げ", "地政学リスク", "緊迫")
 
 def _parse_j(raw: str):
     txt = re.sub(r"^```(?:json)?\s*|\s*```$", "", str(raw or "").strip(), flags=re.IGNORECASE).strip()
@@ -403,330 +279,114 @@ def _parse_j(raw: str):
 
 def call_api_seamless(sys_p: str, usr_p: str, temp: float = 0.7) -> tuple:
     cfg = load_llm()
-    prov = st.session_state.get("rt_llm_provider") or cfg.get("provider", "gemini")
+    prov = st.session_state.get("rt_llm_prov") or cfg.get("provider", "gemini")
+    p_label, m_list, endpoint = AI_PROVIDERS.get(prov, AI_PROVIDERS["gemini"])
+    key = clean_k(st.session_state.get(f"rt_key_{prov}") or cfg.get("api_keys", {}).get(prov, ""))
+    model = st.session_state.get(f"rt_mod_{prov}") or cfg.get("models", {}).get(prov, m_list[0])
+    if not key: return None, "内蔵機関クオンツ推論エンジン"
     ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
-    if prov == "openai":
-        okey = clean_k(st.session_state.get("rt_openai_api_key") or cfg.get("openai_api_key"))
-        omodel = st.session_state.get("rt_openai_model") or cfg.get("openai_model", "gpt-4o-mini")
-        if okey:
-            try:
-                req = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=json.dumps({"model": omodel, "messages": [{"role": "system", "content": sys_p}, {"role": "user", "content": usr_p}], "temperature": temp, "response_format": {"type": "json_object"}}).encode("utf-8"), headers={"Content-Type": "application/json", "Authorization": f"Bearer {okey}"}, method="POST")
-                with urllib.request.urlopen(req, timeout=8, context=ctx) as r:
-                    return _parse_j(json.loads(r.read().decode("utf-8"))["choices"][0]["message"]["content"]), f"OpenAI ({omodel})"
-            except Exception: pass
-        return None, "内蔵機関クオンツ推論エンジン"
-
-    gkey = clean_k(st.session_state.get("rt_gemini_api_key") or cfg.get("gemini_api_key"))
-    if not gkey: return None, "内蔵機関クオンツ推論エンジン"
-    sel_m = st.session_state.get("rt_gemini_model") or cfg.get("gemini_model", "gemma-3-27b-it")
-    exhausted = st.session_state.get("exhausted_models", set())
-    models = [m for m in ([sel_m] + [x for x in G_MODELS if x != sel_m]) if m not in exhausted][:2]
-    prompt = f"【システム指示】\n{sys_p}\n\n【入力データ】\n{usr_p}"
-    for m in models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={urllib.parse.quote(gkey)}"
-        gen_cfg = {"temperature": temp}
-        if not m.startswith("gemma"): gen_cfg["responseMimeType"] = "application/json"
-        req = urllib.request.Request(url, data=json.dumps({"contents": [{"role": "user", "parts": [{"text": prompt}]}], "generationConfig": gen_cfg}).encode("utf-8"), headers={"Content-Type": "application/json", "User-Agent": "QuantPro/9.0"}, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=7, context=ctx) as r:
-                d = json.loads(r.read().decode("utf-8"))
-                return _parse_j("".join(p.get("text", "") for p in d["candidates"][0]["content"]["parts"])), f"Gemini API ({m})"
-        except urllib.error.HTTPError as he:
-            if he.code in (429, 404, 400, 503):
-                exhausted.add(m); st.session_state["exhausted_models"] = exhausted; continue
-            break
-        except Exception: continue
-    return None, "内蔵機関クオンツ推論エンジン (高速バイパス)"
-
-def _fetch_rss(qt: tuple) -> list:
-    cat, q = qt
-    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
-    url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=ja&gl=JP&ceid=JP:ja"
-    out = []
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=3.0, context=ctx) as res:
-            root = ET.fromstring(res.read())
-        for it in root.findall("./channel/item")[:5]:
-            t = (it.findtext("title") or "").strip()
-            if t: out.append({"title": t, "link": (it.findtext("link") or "").strip(), "pub": (it.findtext("pubDate") or "").strip(), "desc": re.sub(r"<[^>]+>", " ", it.findtext("description") or "").strip(), "source": (it.findtext("source") or "Market Wire").strip(), "cat": cat})
-    except Exception: pass
-    return out
-
-def _score_news(item: dict) -> dict:
-    t, d = item["title"], item.get("desc", "")
-    txt = f"{t} {d}"
-    m_stocks = []
-    for code, inf in KNOWN_STOCKS.items():
-        cs, nm = code.replace(".T", ""), re.sub(r"\s*\(.*?\)", "", inf["name"]).strip()
-        if (len(nm) >= 2 and nm in txt) or (len(cs) >= 3 and re.search(r"\b" + re.escape(cs) + r"\b", txt)):
-            m_stocks.append({"code": code, "short": cs, "name": inf["name"], "genre": inf["genre"], "theme": inf["theme"]})
-    m_secs = [s for s, kws in SECTOR_KW.items() if any(k in txt for k in kws)]
-    if not m_stocks and m_secs:
-        for s in m_secs[:2]:
-            for st_it in STOCK_POOL.get(s, [])[:3]:
-                m_stocks.append({"code": st_it["code"], "short": st_it["code"].replace(".T", ""), "name": st_it["name"], "genre": s, "theme": st_it["theme"]})
-    ph, nh = sum(1 for w in POS_W if w in txt), sum(1 for w in NEG_W if w in txt)
-    sc = min(99, 64 + len(m_stocks) * 6 + (ph + nh) * 8 + (8 if m_secs else 0))
-    if ph >= nh and ph > 0: sent, scol, sbg, ico = "📈 強気サプライズ (買い直撃材料)", "#16a34a", "#dcfce7", "🔥"
-    elif nh > ph: sent, scol, sbg, ico = "📉 警戒ショック (売り・下落リスク材料)", "#dc2626", "#fee2e2", "⚠️"
-    else: sent, scol, sbg, ico = "🌐 重要マクロ・機関バスケット材料", "#2563eb", "#dbeafe", "🚨"
-    return {
-        "id": hashlib.md5(t.encode("utf-8")).hexdigest()[:10], "title": t, "link": item.get("link", ""),
-        "source": item.get("source", "Market Wire"), "pub": item.get("pub", datetime.now().strftime("%H:%M")),
-        "desc": d if len(d) > 20 and d != t else "機関アルゴリズムのバスケット発注および翌朝の寄り付き気配（OFI板不均衡）に直結する重大ヘッドラインです。",
-        "cat": item.get("cat", "市場速報"), "impact_score": sc, "sentiment": sent, "sent_color": scol, "sent_bg": sbg, "badge_icon": ico,
-        "matched_stocks": m_stocks[:6], "matched_sectors": m_secs or [item.get("cat", "全セクター")]
-    }
-
-@st.cache_data(ttl=90)
-def fetch_global_impact_news() -> list:
-    raw = []
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        for r in ex.map(_fetch_rss, NEWS_QUERIES): raw.extend(r)
-    seen, out = set(), []
-    for it in raw:
-        tc = re.sub(r"\s*-\s*[^-]+$", "", it["title"]).strip()
-        if tc in seen or len(tc) < 10: continue
-        seen.add(tc); it["title"] = tc
-        s = _score_news(it)
-        if s["impact_score"] >= 72: out.append(s)
-    out.sort(key=lambda x: x["impact_score"], reverse=True)
-    return out[:6]
-
-def generate_news_deep_analysis(n: dict) -> str:
-    nid = n["id"]
-    if nid in st.session_state["news_ai_cache"]: return st.session_state["news_ai_cache"][nid]
-    st_str = "、".join([f"{s['name']}({s['short']})" for s in n["matched_stocks"]]) or "日米主力ハイテク・先物主導株"
-    sys_p = '機関クオンツ最高責任者として超重大ニュースを解析しJSON {"summary":"核心(3文)","algo_flow":"HFT・OFI板不均衡・VPINの連鎖","timeline_plan":"①寄付き前 → ②9:00寄付き → ③前場VWAP攻防の立ち回り","risk_trap":"ダマシ・CVaRテールリスク警戒点"} で出力せよ。'
-    llm_j, eng = call_api_seamless(sys_p, f"見出し:{n['title']}\n判定:{n['sentiment']}\n直撃:{st_str}\n詳細:{n['desc']}", 0.5)
-    is_bull = "強気" in n["sentiment"]
-    if llm_j and llm_j.get("summary"):
-        s1, s2, s3, s4 = llm_j.get("summary", ""), llm_j.get("algo_flow", ""), llm_j.get("timeline_plan", ""), llm_j.get("risk_trap", "")
-    else:
-        s1 = f"『{n['title']}』は、<b>{', '.join(n['matched_sectors'])}</b>セクター全体のバリュエーションと翌朝の先物気配を一変させる超重大カタリストです。特に <b>{st_str}</b> に対して直接的な機関資金流入を引き起こします。"
-        s2 = "ポジティブ・サプライズを検知したHFTが買い板を掃き上げ、OFI（オーダーフロー不均衡）が+2.0σ超へ急伸しVPINが跳ね上がる波形です。" if is_bull else "ヘッドラインリスクに反応した機関アルゴのリスク縮小売りが先行しやすく、寄り付き直後は板の薄い価格帯での成行売買は厳禁です。"
-        s3 = "①【8:50気配監視】理論寄付き乖離を確認 → ②【9:00寄付き】総ロットの35%で初動打診 → ③【9:15前後】5分足VWAPでの機関指値サポートを確認して40%追撃 → ④【順行確認】残り25%を乗せる3段階執行が最適です。" if is_bull else "①【寄付き前】ギャップダウン幅とVIXを確認 → ②【9:00〜9:15】狼狽売り一巡まで様子見 → ③【反発確認】5分足VWAP奪還を確認してから打診買いを検討してください。"
-        s4 = "好材料出尽くしによる『寄り天』を防ぐため、過度なGU時は初動飛びつきを見送りVWAP押し目を待つこと。95%CVaR撤退ラインを絶対厳守してください。"
-    html = (
-        f"<div style='display:grid;gap:10px;font-size:13.5px;line-height:1.7;color:#0f172a;'>"
-        f"<div style='background:#fff;border:1px solid #cbd5e1;border-left:5px solid #1d4ed8;padding:12px;border-radius:10px;'><b>🔎 ① 超重大ニュースの深層背景・本質（{eng}）</b><br>{s1}</div>"
-        f"<div style='background:#f8fafc;border:1px solid #cbd5e1;border-left:5px solid #7c3aed;padding:12px;border-radius:10px;'><b>🏦 ② 機関HFTアルゴ・OFI板不均衡・VPIN波及メカニズム</b><br>{s2}</div>"
-        f"<div style='background:#eff6ff;border:1px solid #93c5fd;border-left:5px solid #059669;padding:12px;border-radius:10px;'><b>⚡ ③ 翌朝トレード時間帯別アクションプラン</b><br>{s3}</div>"
-        f"<div style='background:#fff1f2;border:1px solid #fecdd3;border-left:5px solid #e11d48;padding:12px;border-radius:10px;'><b>🛡️ ④ ダマシ・寄り天・CVaRテールリスク防衛ライン</b><br>{s4}</div></div>"
-    )
-    st.session_state["news_ai_cache"][nid] = html
-    return html
-
-try: auto_frag = st.fragment(run_every=60)
-except Exception: auto_frag = frag_dec
-
-@auto_frag
-def render_live_news_popup_watcher(enabled: bool):
-    if not enabled or st.session_state.get("navigation_page") == "NEWS_DETAIL": return
-    unread = [n for n in fetch_global_impact_news() if n["id"] not in st.session_state["dismissed_news_ids"]]
-    if not unread: return
-    top_n = unread[0]
-    if top_n["id"] not in st.session_state["toasted_news_ids"] and hasattr(st, "toast"):
-        st.session_state["toasted_news_ids"].add(top_n["id"])
-        st.toast(f"🚨 【超重大ニュース検知 Lv.{top_n['impact_score']}】\n{top_n['title'][:44]}...", icon=top_n["badge_icon"])
-
-    st_tags = "・".join([s["name"].replace(" (米)", "") for s in top_n["matched_stocks"][:3]]) or top_n["cat"]
-    with st.container():
-        st.markdown(f'<div class="floating-news-popup-marker"></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:900;">🚨 株価直撃ニュース検知 (Lv.{top_n["impact_score"]}/99)</span><span style="color:#fca5a5;font-size:10.5px;font-weight:700;">未読 {len(unread)}件 ｜ {top_n["source"]}</span></div><div style="color:#fef08a;font-size:11.5px;font-weight:800;margin-bottom:6px;">🎯 直撃・関連: {st_tags}</div>', unsafe_allow_html=True)
-        if st.button(f"{top_n['badge_icon']} {top_n['title']} （👉クリックで超詳細ページへ）", key=f"pop_jmp_{top_n['id']}", use_container_width=True):
-            st.session_state["selected_news_item"] = top_n
-            st.session_state["dismissed_news_ids"].add(top_n["id"])
-            if st.session_state.get("navigation_page") != "NEWS_DETAIL": st.session_state["prev_page_before_news"] = st.session_state.get("navigation_page", "TOP")
-            st.session_state["navigation_page"] = "NEWS_DETAIL"; st.rerun()
-        c_nx, c_cl = st.columns(2)
-        if c_nx.button("⏭️ 次のニュース" if len(unread) > 1 else "✅ 既読にして閉じる", key=f"pop_ack_{top_n['id']}", use_container_width=True):
-            st.session_state["dismissed_news_ids"].add(top_n["id"]); st.rerun()
-        if c_cl.button("✖ 全て閉じる", key=f"pop_all_{top_n['id']}", use_container_width=True):
-            for u in unread: st.session_state["dismissed_news_ids"].add(u["id"])
-            st.rerun()
-
-def _fetch_board_url(u: str) -> str:
-    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
-    for t_url in (u + "l50", u):
-        try:
-            with urllib.request.urlopen(urllib.request.Request(t_url, headers={"User-Agent": "Mozilla/5.0"}), timeout=2.5, context=ctx) as res:
-                b = res.read()
-                for enc in ("cp932", "utf-8", "euc-jp"):
-                    try:
-                        txt = re.sub(r"<[^>]+>", " ", b.decode(enc, errors="ignore"))
-                        if len(txt) > 200: return txt
-                    except Exception: continue
-        except Exception: continue
-    return ""
-
-@st.cache_data(ttl=600)
-def fetch_5ch_live() -> dict:
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        raw_texts = [t for t in ex.map(_fetch_board_url, BOARD_URLS) if t]
-    joined, ok_cnt = " ".join(raw_texts), len(raw_texts)
-    pos_w = ("買", "強", "S高", "ストップ高", "特買", "踏み上げ", "爆上", "プラ転", "青天井", "ガチホ", "寄らず", "噴", "超絶")
-    neg_w = ("売", "弱", "S安", "ストップ安", "特売", "ガラ", "暴落", "マイ転", "損切", "オワコン", "逃げ", "天井", "塩漬")
-    b_map = {}
-    for code, inf in KNOWN_STOCKS.items():
-        cs, nm = code.replace(".T", ""), re.sub(r"\s*\(.*?\)", "", inf["name"]).strip()
-        hits = [m.start() for m in re.finditer(re.escape(cs) + "|" + re.escape(nm[:4]), joined)] if joined else []
-        p_cnt, n_cnt = 0, 0
-        for idx in hits[:12]:
-            win = joined[max(0, idx - 60):min(len(joined), idx + 90)]
-            p_cnt += sum(win.count(w) for w in pos_w); n_cnt += sum(win.count(w) for w in neg_w)
-        b_map[code] = {"hits": len(hits), "sent_bonus": max(-10.0, min(14.0, len(hits) * 1.6 + (p_cnt - n_cnt) * 2.2)), "live": ok_cnt > 0}
-    return b_map
-
-# --- サイドバー設定 ---
-st.sidebar.header("🧭 ナビゲーション")
-sc1, sc2 = st.sidebar.columns(2)
-if sc1.button("⬆️ ページTOP", use_container_width=True): st.session_state["navigation_page"] = "TOP"; st.session_state["custom_search_code"] = ""; st.rerun()
-if sc2.button("📋 監視リスト", use_container_width=True): st.session_state["navigation_page"] = "WATCHLIST"; st.rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.header("🚨 緊急ニュース設定")
-toggle_fn = getattr(st.sidebar, "toggle", st.sidebar.checkbox)
-enable_news_popup = toggle_fn("🌐 超重大ニュース検知ポップアップ", value=True)
-if st.sidebar.button("🔔 最新ニュースを今すぐ強制スキャン", use_container_width=True):
-    fetch_global_impact_news.clear()
-    st.session_state["dismissed_news_ids"], st.session_state["toasted_news_ids"] = set(), set(); st.rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.header("🧠 LLM マルチエージェント設定")
-llm_cfg = load_llm()
-llm_prov = st.sidebar.radio("AIコアエンジン", ["gemini", "openai"], format_func=lambda x: "🔵 Gemini API (429自動切替)" if x == "gemini" else "🟢 OpenAI API", horizontal=True, index=0 if llm_cfg.get("provider", "gemini") == "gemini" else 1)
-st.session_state["rt_llm_provider"] = llm_prov
-
-if llm_prov == "gemini":
-    ck = clean_k(st.sidebar.text_input("🔑 Gemini API Key", value=llm_cfg.get("gemini_api_key", ""), type="password", placeholder="AIzaSy..."))
-    gm_idx = G_MODELS.index(llm_cfg.get("gemini_model")) if llm_cfg.get("gemini_model") in G_MODELS else 0
-    m_in = st.sidebar.selectbox("🧠 優先モデル", G_MODELS, index=gm_idx)
-    st.session_state["rt_gemini_api_key"], st.session_state["rt_gemini_model"] = ck, m_in
-    if ck != llm_cfg.get("gemini_api_key", "") or m_in != llm_cfg.get("gemini_model", "") or llm_cfg.get("provider") != "gemini":
-        llm_cfg.update({"provider": "gemini", "gemini_api_key": ck, "gemini_model": m_in}); save_j(FILES["llm"], llm_cfg)
-        st.session_state["exhausted_models"], st.session_state["council_threads"], st.session_state["council_meta"] = set(), {}, {}
-else:
-    ck = clean_k(st.sidebar.text_input("🔑 OpenAI API Key", value=llm_cfg.get("openai_api_key", ""), type="password", placeholder="sk-..."))
-    m_in = st.sidebar.selectbox("🧠 モデル", ["gpt-4o-mini", "gpt-4o"], index=0)
-    st.session_state["rt_openai_api_key"], st.session_state["rt_openai_model"] = ck, m_in
-    if ck != llm_cfg.get("openai_api_key", "") or m_in != llm_cfg.get("openai_model", "") or llm_cfg.get("provider") != "openai":
-        llm_cfg.update({"provider": "openai", "openai_api_key": ck, "openai_model": m_in}); save_j(FILES["llm"], llm_cfg)
-        st.session_state["council_threads"], st.session_state["council_meta"] = {}, {}
-
-bc1, bc2 = st.sidebar.columns(2)
-if bc1.button("🔄 合議を再生成", use_container_width=True):
-    st.session_state["exhausted_models"], st.session_state["council_threads"], st.session_state["council_meta"] = set(), {}, {}; st.rerun()
-if bc2.button("🔌 接続テスト", use_container_width=True):
-    st.session_state["exhausted_models"] = set()
-    with st.sidebar:
-        with st.spinner("テスト中..."):
-            _, used_eng = call_api_seamless("JSONのみ出力", '{"status":"ok"}', 0.1)
-            st.success(f"✅ 稼働: 【{used_eng}】")
-
-st.sidebar.markdown("---")
-st.sidebar.header("💰 資金管理＆表示設定")
-total_capital = st.sidebar.number_input("総投資資金 (円 / ドル)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
-risk_tolerance_pct = st.sidebar.slider("1トレード許容リスク (%)", 0.5, 5.0, 2.0, 0.5)
-survival_cut_pct = st.sidebar.slider("弱肉強食・各タブ選抜率 (%)", 40, 100, 70, 10)
-show_5m_chart = toggle_fn("📈 5分足＆VWAP描画", value=True)
-
-render_live_news_popup_watcher(enable_news_popup)
-
-# ==========================================
-# 👑 管理者・会員DB＆メーラー履歴＆なりすまし監視センター (ADMIN)
-# ==========================================
-if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower():
-    db, sec, mdb = load_mem(), load_sec(), load_mail_db()
-    st.subheader("👑 管理者・会員管理 ＆ メーラー送受信BOX ＆ なりすまし監視")
-    if st.button("⬅️ ランキングTOPへ戻る", use_container_width=True): st.session_state["navigation_page"] = "TOP"; st.rerun()
-
-    adm_tab1, adm_tab2, adm_tab3 = st.tabs(["👥 会員管理・承認・BAN", f"📨 メーラー＆送信履歴BOX ({len(mdb.get('logs',[]))}通)", f"🕵️ なりすまし監視 ({len(sec.get('spoof_logs',[]))}件)"])
-
-    with adm_tab1:
-        rows = []
-        for k, v in db.items():
-            st_map = {"approved": "✅ 承認済(有効)", "suspended": "🚫 停止中", "pending": "⏳ 承認待ち", "rejected": "❌ 拒否"}
-            rows.append({
-                "通信": "🟢 ON" if is_online(v) else "⚪ OFF", "状態": st_map.get(v.get("status", ""), v.get("status", "")),
-                "名前": v.get("name", "未入力"), "メール": k, "専用コード": v.get("passcode", gen_code(k)),
-                "申請日": v.get("applied_at", "-"), "最終通信": v.get("last_seen_str", "-"), "端末FP": v.get("fp", "-"),
-                "監視": f"🚨 疑い(元:{v.get('spoof_origin')})" if v.get("spoof_suspect") else "正常"
-            })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-        st.markdown("#### 🛠️ 個別会員操作（ワンタップ承認＆コード通知 / BAN / 削除）")
-        for k, v in list(db.items()):
-            is_adm = (k == ADMIN_EMAIL.strip().lower())
-            cur_st = v.get("status", "pending")
-            pc = v.get("passcode", gen_code(k))
-            spoof_w = f" ｜ 🚨<b style='color:#ef4444;'>なりすまし疑い(元:{v.get('spoof_origin')})</b>" if v.get("spoof_suspect") else ""
-            st.markdown(f"<div class='mailer-card'><b>{v.get('name','未入力')}</b> ({k}) ｜ {'🟢オンライン' if is_online(v) else '⚪オフライン'} ｜ 状態: <b>{cur_st}</b> ｜ コード: <code style='color:#fde047;'>{pc}</code> ｜ FP: <code>{v.get('fp','-')}</code>{spoof_w}</div>", unsafe_allow_html=True)
-            if not is_adm:
-                b1, b2, b3, b4 = st.columns(4)
-                if cur_st != "suspended":
-                    if b1.button("🚫 停止(BAN)", key=f"sus_{k}", use_container_width=True):
-                        db[k]["status"], db[k]["last_seen_ts"] = "suspended", 0
-                        if db[k].get("fp", "-") != "-": sec.setdefault("banned_fps", {})[db[k]["fp"]] = f"{v.get('name','')} ({k})"; save_j(FILES["sec"], sec)
-                        save_j(FILES["mem"], db); st.rerun()
-                else:
-                    if b1.button("🔓 停止解除", key=f"unsus_{k}", use_container_width=True):
-                        db[k]["status"], db[k]["spoof_suspect"] = "approved", False
-                        sec.get("banned_fps", {}).pop(db[k].get("fp", ""), None); save_j(FILES["sec"], sec)
-                        save_j(FILES["mem"], db); st.rerun()
-                if b2.button("✅ 承認＆メール送信", key=f"adm_ap_{k}", use_container_width=True):
-                    db[k].update({"status": "approved", "passcode": pc, "approved_at": datetime.now().strftime("%Y-%m-%d %H:%M"), "spoof_suspect": False})
-                    save_j(FILES["mem"], db)
-                    send_mail(k, "【Yamashishi Lab】会員登録承認＆専用アクセスコードのお知らせ", f"{v.get('name','会員')} 様\n\nやまししラボ（Yamashishi Lab）の会員登録が承認されました！\n\n■ メールアドレス: {k}\n■ 専用アクセスコード: {pc}\n\nログイン画面よりご入力ください。", "承認＆コード通知")
-                    st.success(f"✅ {k} を承認し、専用コード（{pc}）を送信＆メーラー記録しました！"); st.rerun()
-                if b3.button("🗑️ 削除(BAN残す)", key=f"del_ban_{k}", use_container_width=True):
-                    if db[k].get("fp", "-") != "-": sec.setdefault("banned_fps", {})[db[k]["fp"]] = f"削除済:{v.get('name','')} ({k})"; save_j(FILES["sec"], sec)
-                    del db[k]; save_j(FILES["mem"], db); st.rerun()
-                if b4.button("🗑️ 完全削除", key=f"del_clean_{k}", use_container_width=True):
-                    sec.get("banned_fps", {}).pop(db[k].get("fp", ""), None); save_j(FILES["sec"], sec)
-                    del db[k]; save_j(FILES["mem"], db); st.rerun()
-
-    with adm_tab2:
-        st.markdown("#### ✉️ 新規メッセージ作成・個別送信（アプリ内BOX＆Webリレー同時配信）")
-        with st.form("admin_compose_mail"):
-            m_to = st.selectbox("宛先会員を選択", [f"{k} ({v.get('name','未入力')} / コード:{v.get('passcode',gen_code(k))})" for k, v in db.items()])
-            m_subj = st.text_input("件名", value="【Yamashishi Lab】管理者からのお知らせ")
-            m_body = st.text_area("本文", value="いつも Yamashishi Lab（やまししラボ）をご利用いただきありがとうございます。\n")
-            if st.form_submit_button("📨 メールを送信＆履歴保存", use_container_width=True):
-                target_em = m_to.split(" ")[0].strip()
-                send_mail(target_em, m_subj, m_body, "管理者個別送信")
-                st.success(f"✅ {target_em} 宛にメッセージを送信しました！"); st.rerun()
-
-        st.markdown("#### 🗂️ 送信済みメーラー履歴一覧（クリックで全文確認・標準メーラー起動リンク付き）")
-        logs = mdb.get("logs", [])
-        if logs:
-            if st.button("🧹 メール履歴をすべてクリア", key="clr_mails"):
-                mdb["logs"] = []; save_j(FILES["mail"], mdb); st.rerun()
-            for lg in logs:
-                with st.expander(f"📩 [{lg.get('category','通知')}] 宛先: {lg['to']} ｜ 件名: {lg['subject']} ({lg['time']})", expanded=False):
-                    st.caption(f"配信ルート: **{lg.get('route','アプリ内BOX')}** ｜ 送信元: `{lg.get('from', ADMIN_EMAIL)}`")
-                    st.code(lg["body"], language="text")
-                    st.markdown(f"👉 **[お使いの端末の標準メールアプリで {lg['to']} 宛にそのまま開いて送る (mailto直通リンク)]({lg.get('mailto','#')})**")
+        if prov == "gemini":
+            url = endpoint.format(model=model, key=urllib.parse.quote(key))
+            gen_cfg = {"temperature": temp}
+            if not model.startswith("gemma"): gen_cfg["responseMimeType"] = "application/json"
+            payload = {"contents": [{"role": "user", "parts": [{"text": f"【指示】\n{sys_p}\n\n【データ】\n{usr_p}"}]}], "generationConfig": gen_cfg}
+            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=5.5, context=ctx) as r:
+                d = json.loads(r.read().decode("utf-8"))
+                return _parse_j("".join(p.get("text", "") for p in d["candidates"][0]["content"]["parts"])), f"{p_label} ({model})"
+        elif prov == "claude":
+            payload = {"model": model, "max_tokens": 1200, "temperature": temp, "system": sys_p + " JSONのみ出力せよ。", "messages": [{"role": "user", "content": usr_p}]}
+            req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01"}, method="POST")
+            with urllib.request.urlopen(req, timeout=6.0, context=ctx) as r:
+                return _parse_j(json.loads(r.read().decode("utf-8"))["content"][0]["text"]), f"{p_label} ({model})"
         else:
-            st.caption("まだ送信されたメール履歴はありません。")
+            payload = {"model": model, "messages": [{"role": "system", "content": sys_p + " Always output valid JSON."}, {"role": "user", "content": usr_p}], "temperature": temp}
+            req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"}, method="POST")
+            with urllib.request.urlopen(req, timeout=6.0, context=ctx) as r:
+                return _parse_j(json.loads(r.read().decode("utf-8"))["choices"][0]["message"]["content"]), f"{p_label} ({model})"
+    except Exception: return None, "内蔵機関クオンツ推論エンジン"
 
-    with adm_tab3:
-        spoof_logs = sec.get("spoof_logs", [])
-        banned_fps = sec.get("banned_fps", {})
-        if spoof_logs:
-            st.dataframe(pd.DataFrame(spoof_logs), use_container_width=True, hide_index=True)
-            if st.button("🧹 監視ログをクリア", key="clr_spoof"): sec["spoof_logs"] = []; save_j(FILES["sec"], sec); st.rerun()
-        else: st.caption("現在、なりすまし再登録や不正アクセスは検知されていません。")
-        if banned_fps:
-            st.markdown("**🔒 端末フィンガープリントBAN一覧**")
-            for b_fp, b_info in list(banned_fps.items()):
-                c_f1, c_f2 = st.columns([3.5, 1])
-                c_f1.caption(f"端末ID: `{b_fp}` ｜ 元アカウント: {b_info}")
-                if c_f2.button("🔓 解除", key=f"unban_fp_{b_fp}", use_container_width=True):
-                    del sec["banned_fps"][b_fp]; save_j(FILES["sec"], sec); st.rerun()
+@st.cache_data(ttl=120)
+def fetch_global_impact_news() -> list:
+    qs = [("半導体・AI", "半導体 OR エヌビディア OR TSMC OR アドバンテスト 株価"), ("急騰・サプライズ", "ストップ高 OR 上方修正 OR 自社株買い OR TOB 株")]
+    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    out, seen = [], set()
+    for cat, q in qs:
+        try:
+            url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=ja&gl=JP&ceid=JP:ja"
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=2.0, context=ctx) as res:
+                root = ET.fromstring(res.read())
+            for it in root.findall("./channel/item")[:4]:
+                t = re.sub(r"\s*-\s*[^-]+$", "", (it.findtext("title") or "").strip())
+                if not t or t in seen: continue
+                seen.add(t)
+                m_st = [{"code": c, "short": c.replace(".T", ""), "name": inf["name"]} for c, inf in KNOWN_STOCKS.items() if inf["name"].split(" ")[0] in t]
+                out.append({"id": hashlib.md5(t.encode()).hexdigest()[:8], "title": t, "link": it.findtext("link") or "", "source": it.findtext("source") or "Market Wire", "pub": it.findtext("pubDate") or "", "cat": cat, "impact_score": min(98, 76 + len(m_st)*7), "matched_stocks": m_st[:4]})
+        except Exception: continue
+    return sorted(out, key=lambda x: x["impact_score"], reverse=True)[:4]
+
+@st.cache_data(ttl=900)
+def fetch_5ch_live() -> dict:
+    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    txts = []
+    for u in BOARD_URLS:
+        try:
+            with urllib.request.urlopen(urllib.request.Request(u + "l50", headers={"User-Agent": "Mozilla/5.0"}), timeout=1.8, context=ctx) as r:
+                txts.append(re.sub(r"<[^>]+>", " ", r.read().decode("cp932", errors="ignore")))
+        except Exception: continue
+    joined = " ".join(txts)
+    return {c: {"hits": len(re.findall(re.escape(c.replace(".T", "")), joined)) if joined else 0, "live": bool(txts)} for c in KNOWN_STOCKS}
+
+# --- サイドバー（7大AIプロバイダー対応） ---
+st.sidebar.header("🧠 7大AI マルチエンジン設定")
+llm_cfg = load_llm()
+cur_prov = st.sidebar.selectbox("AIプロバイダー選択 (7社対応)", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
+st.session_state["rt_llm_prov"] = cur_prov
+p_name, p_models, _ = AI_PROVIDERS[cur_prov]
+saved_k = llm_cfg.get("api_keys", {}).get(cur_prov, "")
+saved_m = llm_cfg.get("models", {}).get(cur_prov, p_models[0])
+in_k = clean_k(st.sidebar.text_input(f"🔑 {p_name} API Key", value=saved_k, type="password"))
+in_m = st.sidebar.selectbox(f"🧠 {p_name} モデル", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
+st.session_state[f"rt_key_{cur_prov}"], st.session_state[f"rt_mod_{cur_prov}"] = in_k, in_m
+if in_k != saved_k or in_m != saved_m or cur_prov != llm_cfg.get("provider"):
+    llm_cfg["provider"] = cur_prov; llm_cfg.setdefault("api_keys", {})[cur_prov] = in_k; llm_cfg.setdefault("models", {})[cur_prov] = in_m
+    save_j(FILES["llm"], llm_cfg)
+
+st.sidebar.markdown("---")
+st.sidebar.header("💰 資金管理＆フィルタ設定")
+total_capital = st.sidebar.number_input("総投資資金 (円/ドル)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
+risk_tolerance_pct = st.sidebar.slider("1トレード許容リスク (%)", 0.5, 5.0, 2.0, 0.5)
+survival_cut_pct = st.sidebar.slider("各タブ選抜率 (%)", 40, 100, 75, 5)
+toggle_fn = getattr(st.sidebar, "toggle", st.sidebar.checkbox)
+show_5m_chart = toggle_fn("📈 5分足＆VWAP描画", value=True)
+enable_news_popup = toggle_fn("🚨 緊急ニュースポップアップ", value=True)
+
+if enable_news_popup:
+    unread = [n for n in fetch_global_impact_news() if n["id"] not in st.session_state["dismissed_news_ids"]]
+    if unread:
+        tn = unread[0]
+        with st.container():
+            st.markdown(f'<div class="floating-news-popup-marker"></div><div style="font-size:11px;color:#f87171;font-weight:800;">🚨 緊急ヘッドライン (Lv.{tn["impact_score"]}) ｜ {tn["source"]}</div><div style="font-size:12.5px;font-weight:700;color:#f8fafc;margin:4px 0;">{tn["title"]}</div>', unsafe_allow_html=True)
+            c_n1, c_n2 = st.columns(2)
+            if tn.get("link"): c_n1.markdown(f'<a href="{tn["link"]}" target="_blank" class="ipo-link-btn">📰 原文記事を開く</a>', unsafe_allow_html=True)
+            if c_n2.button("✖ 閉じる", key=f"cls_n_{tn['id']}", use_container_width=True): st.session_state["dismissed_news_ids"].add(tn["id"]); st.rerun()
+
+if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower():
+    db, mdb = load_mem(), load_mail_db()
+    st.subheader("👑 会員管理 ＆ メーラー履歴")
+    if st.button("⬅️ TOPへ戻る"): st.session_state["navigation_page"] = "TOP"; st.rerun()
+    for k, v in list(db.items()):
+        pc = v.get("passcode", gen_code(k))
+        c1, c2, c3 = st.columns([3, 1, 1])
+        c1.markdown(f"**{v.get('name')}** (`{k}`) ｜ 状態: **{v.get('status')}** ｜ コード: `{pc}`")
+        if k != ADMIN_EMAIL.strip().lower():
+            if c2.button("✅承認", key=f"ap_{k}"): db[k]["status"] = "approved"; save_j(FILES["mem"], db); send_mail(k, "【YAMASHISHI LAB】承認通知", f"専用コード: {pc}"); st.rerun()
+            if c3.button("🚫停止", key=f"bn_{k}"): db[k]["status"] = "suspended"; save_j(FILES["mem"], db); st.rerun()
     st.stop()
 
 # ==========================================
-# 📈 高水準クオンツ (OFI/VPIN/YZ/CVaR/Hurst/Kalman/Kelly) ＋ 5ch解析エンジン
+# 📈 銘柄別・動的6大アルゴリズム戦略エンジン（タイムアウト防止・高速版）
 # ==========================================
 def norm_tk(raw: str) -> str:
     s = unicodedata.normalize("NFKC", raw).strip().upper()
@@ -734,182 +394,187 @@ def norm_tk(raw: str) -> str:
 
 @st.cache_data(ttl=900)
 def fetch_macro():
-    tks = {"sp500": (["^GSPC"], "🇺🇸 米S&P500"), "sox": (["^SOX"], "💽 米SOX半導体"), "usdjpy": (["JPY=X"], "💴 ドル円"), "nk_fut": (["NIY=F", "^N225"], "🇯🇵 日経先物"), "vix": (["^VIX"], "⚡ VIX指数")}
+    tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
     res = {}
-    for k, (codes, lbl) in tks.items():
-        for c in codes:
+    try:
+        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=6)
+        for k, (c, lbl) in tks.items():
             try:
-                d = yf.Ticker(c).history(period="5d").dropna(subset=["Close"])
-                if len(d) >= 2:
-                    lc, pc = float(d["Close"].iloc[-1]), float(d["Close"].iloc[-2])
-                    res[k] = {"price": lc, "diff": round((lc - pc) / pc * 100, 2), "label": lbl}; break
-            except Exception: continue
-        if k not in res: res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
+                d = raw[c].dropna(subset=["Close"])
+                lc, pc = float(d["Close"].iloc[-1]), float(d["Close"].iloc[-2])
+                res[k] = {"price": lc, "diff": round((lc - pc) / pc * 100, 2), "label": lbl}
+            except Exception: res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
+    except Exception:
+        for k, (_, lbl) in tks.items(): res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
     return res
 
-def calc_inst_quant_suite(df: pd.DataFrame) -> dict:
-    c, o, h, l, v = df["Close"].values.astype(float), df["Open"].values.astype(float), df["High"].values.astype(float), df["Low"].values.astype(float), df["Volume"].values.astype(float)
-    n = len(c)
-    hurst = float(np.clip(np.polyfit(np.log(np.arange(2, 12)), np.log([max(float(np.std(c[lg:] - c[:-lg])), 1e-6) for lg in np.arange(2, 12)]), 1)[0] * 1.35, 0.25, 0.85)) if n >= 30 else 0.52
-    x_e, p_e = c[0], 1.0
-    for z in c[1:]:
-        pp = p_e + 0.03; kg = pp / (pp + 0.12); x_e += kg * (z - x_e); p_e = (1.0 - kg) * pp
-    kalman_bull = round((c[-1] - x_e) / max(x_e, 1e-4) * 100, 2)
-    yz_vol = 28.0
-    if n >= 21:
-        l_ho, l_lo, l_co, l_oc = np.log(np.maximum(h[1:]/np.maximum(o[1:],1e-4),1e-4)), np.log(np.maximum(l[1:]/np.maximum(o[1:],1e-4),1e-4)), np.log(np.maximum(c[1:]/np.maximum(o[1:],1e-4),1e-4)), np.log(np.maximum(o[1:]/np.maximum(c[:-1],1e-4),1e-4))
-        rs_v = np.mean((l_ho * (l_ho - l_co) + l_lo * (l_lo - l_co))[-20:])
-        k_yz = 0.34 / (1.34 + 21.0 / 19.0)
-        yz_vol = round(float(np.sqrt(max(np.var(l_oc[-20:], ddof=1) + k_yz * np.var(l_co[-20:], ddof=1) + (1.0 - k_yz) * rs_v, 1e-8) * 252.0) * 100.0), 1)
-    hl_r = np.maximum(h - l, 1e-4)
-    sf = ((2.0 * c - h - l) / hl_r) * v
-    ofi_z = round(float(np.clip((np.mean(sf[-5:]) - np.mean(sf[-20:])) / max(float(np.std(sf[-20:])), 1.0), -3.5, 3.5)), 2) if n >= 20 else 0.0
-    rets = np.diff(c) / np.maximum(c[:-1], 1e-4) * 100.0
-    if len(rets) >= 20:
-        q05 = np.percentile(rets, 5); tail = rets[rets <= q05]
-        cvar95 = round(float(abs(np.mean(tail))) if len(tail) > 0 else abs(float(q05)), 2)
-    else: cvar95 = 3.5
-    eff_pct = int(np.clip(round((abs(c[-1] - c[-15]) / max(float(np.sum(np.abs(np.diff(c[-15:])))), 1e-4)) * 100.0 * 1.4), 15, 99)) if n >= 15 else 55
-    vn = v / max(float(np.mean(v[-20:])), 1.0)
-    sm_div = round(float(np.clip(np.mean(((c[-5:] - o[-5:]) / hl_r[-5:]) * vn[-5:]) * 2.2 - ((c[-1] - c[-6]) / max(c[-6], 1e-4) * 10.0 if n >= 6 else 0.0) * 0.25, -3.0, 3.0)), 2)
-    return {"hurst": round(hurst, 2), "kalman_bull_pct": kalman_bull, "yz_vol": yz_vol, "ofi_z": ofi_z, "cvar95": cvar95, "eff_pct": eff_pct, "sm_div": sm_div}
+def select_dynamic_strategy(code: str, tot_win: float, ofi_z: float, vpin: float, yz_vol: float, cvar95: float, rsi: float, cpos: float, base_sh: int, pest_str: str, vwap_str: str, tp_str: str, sl_str: str, kelly_pct: float) -> dict:
+    # 銘柄の特性に応じて全く異なる6つのアルゴリズム執行戦略を自動選択
+    if tot_win >= 64.0 and ofi_z >= 0.8 and vpin >= 0.15:
+        mult = 1.45
+        sh = max(1, int(round(base_sh * mult)))
+        l1, l2 = max(1, int(round(sh * 0.70))), max(0, sh - max(1, int(round(sh * 0.70))))
+        return {
+            "algo_name": "🦁 【超強気・レバレッジ集中特攻型】フルケリー・モメンタム突破アルゴリズム",
+            "risk_posture": f"🔥 最大リスク許容（通常ロットの1.45倍・資金配分 {min(48.0, round(kelly_pct*1.5,1))}% 集中投下）",
+            "core_logic": f"総合勝率 {tot_win}%・OFI +{ofi_z:.2f}σ・機関VPIN +{vpin:.2f} が同時点灯する極大エッジ局面。チマチマした分割では初動の爆益を取り逃がすため、寄り付きから70%の主力資金を一気に叩き込み、上値ブレイクで残り30%を追撃する大勝負プラン。",
+            "adj_shares": sh,
+            "step_plan": f"① 9:00寄付き成行（{pest_str}目安）で主力 <b>{l1:,}株（70%）</b> を一気投入 → ② 前場高値ブレイク確認で残り <b>{l2:,}株（30%）</b> を順張り追撃",
+            "beginner_html": f"<b>🔰 初心者向け・明日のカンタン行動手順（大チャンス勝負銘柄！）</b><br>① <b>【朝8:50までに準備】</b> 証券アプリを開き、勝率が非常に高いため普段より多めの <b>「成行（なりゆき）買い・{l1:,}株」</b> を注文予約します。<br>② <b>【買えた直後にやる事】</b> 万が一の急落に備えて <b>「逆指値（損切り）：{sl_str}」</b> をセットしつつ、勢いが続けば <b>{l2:,}株</b> を追加購入します。<br>③ <b>【利益確定】</b> 株価がグングン伸びて <b>「{tp_str}」</b> に到達したら迷わず売って大きな利益を確定させましょう！"
+        }
+    elif ofi_z >= 1.1 or (cpos >= 0.82 and yz_vol >= 35.0):
+        sh = max(1, int(round(base_sh * 1.2)))
+        return {
+            "algo_name": "⚡ 【初動ブレイク一括特攻型】OFI板掃き上げ・ギャップアップ順張りアルゴリズム",
+            "risk_posture": "🚀 攻撃的順張り（押し目を待たず寄付き初動に100%集中）",
+            "core_logic": f"大引け位置 {int(cpos*100)}%・年率ボラ {yz_vol}% とショートカバー（踏み上げ）が加速中。押し目を待つと置いていかれる波形のため、寄付きで全ロット {sh:,}株 を一括投入し、前場の急伸を短期で抜くスピード勝負。",
+            "adj_shares": sh,
+            "step_plan": f"① 9:00寄付き（{pest_str}目安）で <b>{sh:,}株（100%一括）</b> を即時執行 → ② 9:30〜10:30の急伸局面（{tp_str}）で素早く全株利確",
+            "beginner_html": f"<b>🔰 初心者向け・明日のカンタン行動手順（スピード短期決戦！）</b><br>① <b>【買い方】</b> 値動きが速く下がるのを待つと買えなくなる銘柄です。朝9:00の寄り付きで <b>「{sh:,}株」をまとめて1回で購入</b> します。<br>② <b>【守り方】</b> 買えたらすぐに <b>「{sl_str}」で逆指値（自動損切り）</b> を入れておきます。<br>③ <b>【売り方】</b> 朝9:00〜10:30頃の勢いがあるうちに <b>「{tp_str}」付近でサッと売って</b> お昼前に利益確定するのがコツです！"
+        }
+    elif rsi <= 44.0 or cpos <= 0.38:
+        sh = max(1, int(round(base_sh * 0.9)))
+        l1, l2 = max(1, int(round(sh * 0.40))), max(0, sh - max(1, int(round(sh * 0.40))))
+        return {
+            "algo_name": "🛡️ 【逆張りリバーサル・スナイプ型】機関指値吸収・底打ち反発アルゴリズム",
+            "risk_posture": "🎯 厳選押し目狙い（寄付き飛びつき厳禁・安値指値待ち伏せ）",
+            "core_logic": f"RSI {rsi} と売られすぎ圏にあり、個人の投げ売りを機関アルゴが下値で吸収している波形。朝イチの成り行き買いは厳禁とし、前場の売り一巡とVWAP（{vwap_str}）奪還を確認してから狙い撃つ。",
+            "adj_shares": sh,
+            "step_plan": f"① 9:00〜9:15は様子見（飛びつき厳禁） → ② 安値止まり＆VWAP（{vwap_str}）反発で <b>{l1:,}株（40%）</b> 指値買い → ③ 陽線転換確認で <b>{l2:,}株（60%）</b> 本玉投入",
+            "beginner_html": f"<b>🔰 初心者向け・明日のカンタン行動手順（じっくり底値拾い！）</b><br>① <b>【朝9:00は絶対に買わない！】</b> 朝イチは売りが残りやすいので、まずは15分ほどチャートを観察します。<br>② <b>【買いタイミング】</b> 下げ止まって <b>「{vwap_str}」</b> のラインを下から上に抜けたタイミングで <b>まず{l1:,}株</b>、さらに上がれば <b>残り{l2:,}株</b> を買います。<br>③ <b>【出口戦略】</b> 反発して <b>「{tp_str}」</b> まで戻したら利益確定、もし <b>「{sl_str}」</b> を割ったらすぐに撤退しましょう。"
+        }
+    elif tot_win < 54.0 or cvar95 >= 4.8:
+        sh = max(1, int(round(base_sh * 0.55)))
+        return {
+            "algo_name": "👀 【超厳格ディフェンシブ・見送り優先型】CVaRテールリスク防衛アルゴリズム",
+            "risk_posture": f"⚠️ 防衛モード（通常ロットを45%強制削減・打診 {sh:,}株 のみ）",
+            "core_logic": f"95%CVaR（最大想定下落率）が -{cvar95}% と高く、勝率 {tot_win}% では大ロットを張る優位性が不足。資金を守ることを最優先とし、VWAP（{vwap_str}）を終日維持できるか確認する最小ロット打診に限定。",
+            "adj_shares": sh,
+            "step_plan": f"① 寄付きは見送り推奨 → ② 10:00以降にVWAP（{vwap_str}）の上で安定していれば打診 <b>{sh:,}株のみ</b> エントリー",
+            "beginner_html": f"<b>🔰 初心者向け・明日のカンタン行動手順（無理せず資金を守る日！）</b><br>① <b>【基本は様子見でOK】</b> この銘柄は現在ブレ幅（リスク）が大きいため、無理に買う必要はありません。他のS級・A級銘柄を優先しましょう。<br>② <b>【どうしても買う場合】</b> 株数を普段の半分（<b>{sh:,}株だけ</b>）に減らし、株価が <b>「{vwap_str}」</b> より上で安定している時だけ少額で買ってください。<br>③ <b>【損切り厳守】</b> 少しでも逆行して <b>「{sl_str}」</b> に触れたら、迷わず即座に損切りして資金を守りましょう。"
+        }
+    elif yz_vol <= 26.0 and vpin >= 0.08:
+        sh = max(1, int(round(base_sh * 1.15)))
+        l1, l2, l3 = max(1, int(round(sh * 0.50))), max(0, int(round(sh * 0.30))), max(0, sh - max(1, int(round(sh * 0.50))) - max(0, int(round(sh * 0.30))))
+        return {
+            "algo_name": "🌊 【機関トレンド・ピラミッディング型】低ボラ安定順行・買い増しアルゴリズム",
+            "risk_posture": "📈 安定トレンド追随（含み益が乗るごとに買い増すピラミッディング）",
+            "core_logic": f"年率ボラ {yz_vol}% とノイズが少なく、機関のTWAP（時間分散）買いが継続している安定波形。最初に50%を入れ、含み益が出るたびに30%→20%と買い増すことでリスクを抑えつつ利益を最大化する。",
+            "adj_shares": sh,
+            "step_plan": f"① 寄付き（{pest_str}）で <b>{l1:,}株（50%）</b> → ② VWAP（{vwap_str}）支持確認で <b>{l2:,}株（30%）</b> 追加 → ③ 後場高値圏で <b>{l3:,}株（20%）</b> 仕上げ追撃",
+            "beginner_html": f"<b>🔰 初心者向け・明日のカンタン行動手順（安心のトレンド乗り！）</b><br>① <b>【ステップ1】</b> 値動きが安定してプロが買っている銘柄です。まず朝9:00に <b>半分の「{l1:,}株」</b> を買います。<br>② <b>【ステップ2】</b> 買ったあとに利益が出て、株価が <b>「{vwap_str}」</b> より上で順調なら <b>追加で「{l2:,}株〜{l3:,}株」</b> を買い増しします。<br>③ <b>【ステップ3】</b> 目標の <b>「{tp_str}」</b> で利益確定！万が一 <b>「{sl_str}」</b> まで下がったら手仕舞いします。"
+        }
+    else:
+        sh = base_sh
+        l1, l2 = max(1, int(round(sh * 0.45))), max(0, sh - max(1, int(round(sh * 0.45))))
+        return {
+            "algo_name": "📐 【機関VWAPアンカー2段執行型】寄り付き打診＋VWAP押し目確認アルゴリズム",
+            "risk_posture": "⚖️ リスク・リワード黄金比（初動45%＋VWAP反発55%の2段階執行）",
+            "core_logic": f"勝率 {tot_win}%・OFI {ofi_z:+.2f}σ のバランス型好需給。寄り付き直後のアルゴの揺さぶりをやり過ごすため、寄付き45%とVWAP（{vwap_str}）押し目反発55%の2段構えで平均取得単価を最適化する。",
+            "adj_shares": sh,
+            "step_plan": f"① 9:00寄付き（{pest_str}目安）で先行 <b>{l1:,}株（45%）</b> → ② 9:15前後のVWAP（{vwap_str}）押し目反発で本玉 <b>{l2:,}株（55%）</b> 投入",
+            "beginner_html": f"<b>🔰 初心者向け・明日のカンタン行動手順（失敗しにくい2回分け購入！）</b><br>① <b>【1回目の買い】</b> 一度に全部買わず、まずは朝9:00に <b>「{l1:,}株」</b> だけ買います。<br>② <b>【2回目の買い】</b> 9:15〜9:30頃に少し下がって <b>「{vwap_str}」</b> のラインで跳ね返った瞬間、残りの <b>「{l2:,}株」</b> を買うと安く上手に買えます。<br>③ <b>【売り注文】</b> 買えたら <b>目標「{tp_str}」で売り指値</b>、念のため <b>「{sl_str}」で逆指値（損切り）</b> をセットして完了です！"
+        }
 
 def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, bi=True, b5=True, bal=True):
     try:
         if df_raw is None or df_raw.empty: return None
         df = df_raw.dropna(subset=["Close", "Open", "High", "Low", "Volume"]).copy()
-        if len(df) < 35: return None
+        if len(df) < 30: return None
+        c, o, h, l, v = df["Close"].values.astype(float), df["Open"].values.astype(float), df["High"].values.astype(float), df["Low"].values.astype(float), df["Volume"].values.astype(float)
         df["Prev_Close"] = df["Close"].shift(1)
         df["Day_Return"] = (df["Close"] - df["Prev_Close"]) / df["Prev_Close"] * 100
-        df["MA5"], df["MA20"] = df["Close"].rolling(5).mean(), df["Close"].rolling(20).mean()
-        df["BB_Z"] = ((df["Close"] - df["MA20"]) / df["Close"].rolling(20).std().replace(0, np.nan)).fillna(0.0)
-        df["MA5_Dev"], df["MA20_Dev"] = ((df["Close"] - df["MA5"]) / df["MA5"] * 100).fillna(0.0), ((df["Close"] - df["MA20"]) / df["MA20"] * 100).fillna(0.0)
+        df["MA20"] = df["Close"].rolling(20).mean()
         df["Vol_Ratio"] = (df["Volume"] / df["Volume"].rolling(20).mean().replace(0, np.nan)).fillna(1.0)
         df["Vol_Accel_5d"] = (df["Volume"] / df["Volume"].rolling(5).mean().replace(0, np.nan)).fillna(1.0)
 
         dlt = df["Close"].diff()
-        g, l = dlt.clip(lower=0).ewm(alpha=1/14, adjust=False).mean(), (-dlt.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
-        df["RSI"] = (100 - (100 / (1 + g / l.replace(0, np.nan)))).fillna(50.0)
-        e12, e26 = df["Close"].ewm(span=12, adjust=False).mean(), df["Close"].ewm(span=26, adjust=False).mean()
-        df["MACD_Hist"] = (e12 - e26) - (e12 - e26).ewm(span=9, adjust=False).mean()
-
+        g_r, l_r = dlt.clip(lower=0).ewm(alpha=1/14, adjust=False).mean(), (-dlt.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
+        df["RSI"] = (100 - (100 / (1 + g_r / l_r.replace(0, np.nan)))).fillna(50.0)
         tr = pd.concat([df["High"] - df["Low"], (df["High"] - df["Prev_Close"]).abs(), (df["Low"] - df["Prev_Close"]).abs()], axis=1).max(axis=1)
         df["ATR"] = tr.rolling(14).mean().fillna(df["Close"] * 0.02)
-        df["ATR_Pct"] = (df["ATR"] / df["Close"] * 100).fillna(2.0)
 
         hl = (df["High"] - df["Low"]).replace(0, np.nan)
         df["Close_Pos"] = ((df["Close"] - df["Low"]) / hl).fillna(0.5)
-        bt, bb = df[["Open", "Close"]].max(axis=1), df[["Open", "Close"]].min(axis=1)
-        df["Upper_Shadow"], df["Lower_Shadow"], df["Body_Ratio"] = ((df["High"] - bt) / hl).fillna(0.0), ((bb - df["Low"]) / hl).fillna(0.0), ((bt - bb) / hl).fillna(0.5)
         df["VWAP20"] = (((df["High"] + df["Low"] + df["Close"]) / 3.0 * df["Volume"]).rolling(20).sum() / df["Volume"].rolling(20).sum().replace(0, np.nan)).fillna(df["Close"])
         df["VPIN_5d"] = (((df["Close"] - df["Open"]) / hl).fillna(0.0) * df["Vol_Ratio"]).rolling(5).mean().fillna(0.0)
 
-        iq = calc_inst_quant_suite(df)
-        hurst_v, kal_b, yz_vol, ofi_z, cvar95, eff_pct, sm_div = iq["hurst"], iq["kalman_bull_pct"], iq["yz_vol"], iq["ofi_z"], iq["cvar95"], iq["eff_pct"], iq["sm_div"]
-
-        c_inst = (df["VPIN_5d"] >= 0.22) & (df["Close"] >= df["VWAP20"]) & (df["Close_Pos"] >= 0.68)
-        c_5ch = (df["Vol_Accel_5d"] >= 1.35) & (df["Close_Pos"] >= 0.72) & (df["Upper_Shadow"] <= 0.18) & (df["Close"] > df["Open"])
+        hl_r = np.maximum(h - l, 1e-4)
+        sf = ((2.0 * c - h - l) / hl_r) * v
+        ofi_z = round(float(np.clip((np.mean(sf[-5:]) - np.mean(sf[-20:])) / max(float(np.std(sf[-20:])), 1.0), -3.5, 3.5)), 2)
+        rets = np.diff(c) / np.maximum(c[:-1], 1e-4) * 100.0
+        q05 = np.percentile(rets, 5)
+        cvar95 = round(float(abs(np.mean(rets[rets <= q05]))) if any(rets <= q05) else abs(float(q05)), 2)
+        yz_vol = round(float(np.std(rets[-20:]) * np.sqrt(252)), 1)
+        eff_pct = int(np.clip(round((abs(c[-1] - c[-15]) / max(float(np.sum(np.abs(np.diff(c[-15:])))), 1e-4)) * 140.0), 20, 98))
 
         df["Next_Open"], df["Next_Close"] = df["Open"].shift(-1), df["Close"].shift(-1)
         df["Gap_Pct"] = (df["Next_Open"] - df["Close"]) / df["Close"] * 100
         df["Morning_Up"], df["Intraday_Up"] = df["Next_Open"] > df["Close"], df["Next_Close"] > df["Next_Open"]
 
-        lat = df.iloc[-1]; hist = df.iloc[:-1].dropna(subset=["Next_Open", "Next_Close", "MA20", "RSI"])
-        if len(hist) == 0: return None
+        lat = df.iloc[-1]; hist = df.iloc[:-1].dropna(subset=["Next_Open", "Next_Close", "MA20"])
+        if len(hist) < 5: return None
+        vpin, vacc, cpos, rsi_v = float(lat["VPIN_5d"]), float(lat["Vol_Accel_5d"]), float(lat["Close_Pos"]), round(float(lat["RSI"]), 1)
+        isc = int(np.clip(round(52 + vpin * 36 + ofi_z * 6.5 + (cpos - 0.5) * 20), 20, 99))
+        b5_hits = (b5_live_map or {}).get(code, {}).get("hits", 0)
+        b5sc = int(np.clip(round(50 + (min(vacc, 3.0) - 1.0) * 18 + (cpos - 0.5) * 28 + b5_hits * 2.5), 20, 99))
 
-        ush, lsh, brt = float(lat["Upper_Shadow"]), float(lat["Lower_Shadow"]), float(lat["Body_Ratio"])
-        vacc, cpos = float(lat["Vol_Accel_5d"]), float(lat["Close_Pos"])
-        vpin, bbz, m5d, m20d = float(lat["VPIN_5d"]), float(lat["BB_Z"]), float(lat["MA5_Dev"]), float(lat["MA20_Dev"])
-
-        if lat["Close"] > lat["Open"]:
-            cdesc = f"陽線丸坊主(実体{int(brt*100)}%)で買い継続" if brt >= 0.75 and ush <= 0.1 else (f"下ヒゲ({int(lsh*100)}%)で押し目吸収し陽線転換" if lsh >= 0.35 else f"実体{int(brt*100)}%の陽線(引け位置{int(cpos*100)}%)")
-        else:
-            cdesc = f"下ヒゲ({int(lsh*100)}%)で安値圏に機関指値流入" if lsh >= 0.40 else f"前日比{lat['Day_Return']:+.2f}%の調整陰線(引け位置{int(cpos*100)}%)"
-
-        r3v = [round(float(v), 2) for v in df["Vol_Ratio"].tail(3).values]
-        vtr = f"{r3v[0]}倍→{r3v[1]}倍→本日{r3v[2]}倍"
-        delic = f"🔬 <b>機関マイクロストラクチャ診断</b>：{cdesc}。3日出来高【<b>{vtr}</b>】、OFI板不均衡 <b>{ofi_z:+.2f}σ</b>、SmartMoney乖離 <b>{sm_div:+.2f}</b>、Yang-Zhang年率ボラ <b>{yz_vol}%</b>、95%CVaR <b>-{cvar95}%</b>、効率性純度 <b>{eff_pct}%</b>。"
-
-        iraw = 50.0 + vpin * 38.0 + ofi_z * 6.5 + sm_div * 4.5 + (cpos - 0.5) * 20.0 + (8.0 if float(lat["Close"]) >= float(lat["VWAP20"]) else 0.0) + (6.0 if bal and hurst_v >= 0.55 and kal_b > 0 else 0.0)
-        ist = f"🏦 機関アルゴ買い集め検知 (VPIN {vpin:+.2f} / OFI {ofi_z:+.2f}σ / SM {sm_div:+.2f})" if c_inst.iloc[-1] or iraw >= 62 else f"⚖️ 機関オーダーフロー均衡 (VPIN {vpin:+.2f} / OFI {ofi_z:+.2f}σ)"
-        isc = int(min(max(round(iraw), 15), 99))
-
-        b5_data = (b5_live_map or {}).get(code, {"hits": 0, "sent_bonus": 0.0})
-        b5_hits, b5_bonus = b5_data["hits"], (b5_data["sent_bonus"] if b5 else 0.0)
-        b5raw = 50.0 + (min(vacc, 3.0) - 1.0) * 18.0 + (cpos - 0.5) * 30.0 - (25.0 if ush >= 0.38 else 0.0) + (15.0 if c_5ch.iloc[-1] else 0.0) + b5_bonus
-        b5_tag = f" ｜ 5ch実況言及:{b5_hits}件" if b5_hits > 0 else ""
-        b5st = f"🚀 5ch＆短期モメンタム熱狂 (5日加速 {vacc:.2f}倍 / 引け位置{int(cpos*100)}%{b5_tag})" if b5raw >= 62 else f"⚖️ 短期需給・5ch巡回済 (上ヒゲ{int(ush*100)}% / 下ヒゲ{int(lsh*100)}%{b5_tag})"
-        b5sc = int(min(max(round(b5raw), 15), 99))
-
-        if c_inst.iloc[-1]: sig, sub = "🏦 機関VPIN・OFIステルス買い＋VWAP順行", hist[c_inst.reindex(hist.index, fill_value=False)]
-        elif c_5ch.iloc[-1]: sig, sub = "🔥 5ch＆短期モメンタム集中＋高値引け", hist[c_5ch.reindex(hist.index, fill_value=False)]
-        elif lat["Day_Return"] > 0: sig, sub = "📈 陽線トレンド継続", hist[hist["Day_Return"] > 0]
-        else: sig, sub = "☁️ 押し目・調整反発狙い", hist[hist["Day_Return"] <= 0]
+        sub = hist[hist["Day_Return"] > 0] if lat["Day_Return"] > 0 else hist[hist["Day_Return"] <= 0]
         if len(sub) < 5: sub = hist
-
-        tot, wins = len(sub), int(sub["Morning_Up"].sum())
-        prob, i_win = round((wins / tot) * 100, 1), round(float(sub["Intraday_Up"].mean() * 100), 1)
-        tsub = hist[hist["Close"] >= hist["MA20"]]
-        t_win = round(float((tsub["Morning_Up"] | tsub["Intraday_Up"]).mean() * 100), 1) if len(tsub) >= 5 else prob
+        prob = round(float(sub["Morning_Up"].mean() * 100), 1)
+        i_win = round(float(sub["Intraday_Up"].mean() * 100), 1)
+        t_win = round(float((hist["Morning_Up"] | hist["Intraday_Up"]).mean() * 100), 1)
         tot_win = round(prob * 0.5 + i_win * 0.3 + t_win * 0.2, 1)
 
         agap = round(float(sub["Gap_Pct"].mean()), 2)
         wg, lg = sub[sub["Morning_Up"]]["Gap_Pct"], sub[~sub["Morning_Up"]]["Gap_Pct"]
-        awin, aloss = (float(wg.mean()) if len(wg) > 0 else 0.5), (abs(float(lg.mean())) if len(lg) > 0 else 0.5)
-        payoff, edge = round(awin / max(aloss, 0.1), 2), round((prob / 100 * awin) - ((100 - prob) / 100 * aloss), 2)
-
-        w_p = tot_win / 100.0
-        kelly_pct = round(float(np.clip((w_p - ((1.0 - w_p) / max(payoff, 0.2))) * 0.5 * 100.0, 3.0, 35.0)), 1)
+        awin, aloss = (float(wg.mean()) if len(wg) > 0 else 0.6), (abs(float(lg.mean())) if len(lg) > 0 else 0.5)
+        payoff, edge = round(awin / max(aloss, 0.15), 2), round((prob / 100 * awin) - ((100 - prob) / 100 * aloss), 2)
+        kelly_pct = round(float(np.clip(((tot_win/100.0) - ((1.0 - tot_win/100.0) / max(payoff, 0.2))) * 50.0, 5.0, 38.0)), 1)
 
         is_jp = ".T" in code
         ov = ((macro["nk_fut"]["diff"] if macro else 0.0) * 0.5 + (macro["sox"]["diff"] if macro else 0.0) * 0.4) if is_jp else ((macro["sp500"]["diff"] if macro else 0.0) * 0.5 + (macro["sox"]["diff"] if macro else 0.0) * 0.4)
-        pgap = round(agap * 0.5 + ov * 0.6 + max(0.0, (isc - 55) * 0.025), 2)
-
+        pgap = round(agap * 0.5 + ov * 0.5 + max(0.0, (isc - 55) * 0.025), 2)
         cv, atrv = float(lat["Close"]), float(lat["ATR"])
         pest = cv * (1.0 + pgap / 100.0)
+        aisc = int(np.clip(round(tot_win * 0.52 + (isc if bi else 55) * 0.28 + (b5sc if b5 else 55) * 0.20 + (ofi_z * 2.5 if bal else 0)), 25, 99))
 
-        ebonus = ((hurst_v - 0.5) * 18.0 + np.clip(kal_b * 1.2, -5.0, 7.0) + np.clip(ofi_z * 2.5, -4.0, 7.0) + (eff_pct - 50) * 0.08) if bal else 0.0
-        bsc = min(max(prob * 0.55, 10), 46) + min(max((edge + 0.3) * 14, 0), 16)
-        aisc = int(min(max(round(bsc + (round((isc - 50) * 0.32) if bi else 0) + (round((b5sc - 50) * 0.26) if b5 else 0) + ebonus), 15), 99))
-        spow = round(aisc * 0.42 + isc * 0.32 + b5sc * 0.26 + min(float(lat["ATR_Pct"]) * 3.0, 10.0) + max(0.0, ebonus), 1)
-
-        tval = aisc * 0.40 + tot_win * 0.25 + isc * 0.20 + b5sc * 0.15
+        tval = aisc * 0.45 + tot_win * 0.35 + isc * 0.20
         for th, tn, tl, tc, tbg in [
-            (80, 10, "【第10段階：🌟絶対買い】機関OFI/VPIN極大・翌朝爆上げ濃厚", "#fff", "linear-gradient(135deg,#991b1b,#dc2626)"),
-            (75, 9, "【第9段階：🔥絶対買い】機関アルゴ＆5ch需給ロックオン", "#fff", "linear-gradient(135deg,#b91c1c,#ef4444)"),
-            (70, 8, "【第8段階：⭕買い】機関買い集め・強気順張り", "#fff", "linear-gradient(135deg,#c2410c,#ea580c)"),
-            (65, 7, "【第7段階：⭕買い】好需給・VWAP押し目買い優勢", "#fff", "linear-gradient(135deg,#b45309,#d97706)"),
-            (60, 6, "【第6段階：👀様子見(買い寄り)】初動の気配確認後に打診", "#0f172a", "linear-gradient(135deg,#fde047,#facc15)"),
-            (55, 5, "【第5段階：👀様子見(中立)】方向感待ち・深追い禁物", "#f8fafc", "linear-gradient(135deg,#475569,#64748b)"),
-            (-99, 3, "【第3段階：⚠️警戒】上値シコリ玉・様子見推奨", "#fff", "linear-gradient(135deg,#7f1d1d,#991b1b)")
+            (79, 10, "【Lv.10：🌟絶対買い】機関OFI極大・フルリスク勝負圏", "#fff", "linear-gradient(90deg,#0284c7,#2563eb)"),
+            (74, 9, "【Lv.9：🔥強気買い】機関アルゴ＆モメンタム集中", "#fff", "linear-gradient(90deg,#0369a1,#1d4ed8)"),
+            (69, 8, "【Lv.8：⭕買い推奨】機関買い集め・順張り優位", "#fff", "linear-gradient(90deg,#0f766e,#047857)"),
+            (64, 7, "【Lv.7：⭕押し目買い】VWAP反発狙い", "#e2e8f0", "linear-gradient(90deg,#334155,#1e293b)"),
+            (-99, 5, "【Lv.5：👀様子見・選別】方向感確認・少額打診", "#cbd5e1", "linear-gradient(90deg,#1e293b,#0f172a)")
         ]:
             if tval >= th: t_num, t_lbl, t_col, t_bg = tn, tl, tc, tbg; break
 
-        tpv, slv = max(pest, cv) + (atrv * 0.85), cv - (atrv * 0.5)
+        tpv, slv = max(pest, cv) + (atrv * 0.9), cv - (atrv * 0.55)
         rmoney = total_capital * (risk_tolerance_pct / 100.0)
-        sh = max(1, int(rmoney / max(cv - slv, cv * 0.005)))
-        fp = lambda v: f"{v:,.0f}円" if is_jp else f"${v:,.2f}"
+        base_sh = max(1, int(rmoney / max(cv - slv, cv * 0.005)))
+        fp = lambda val: f"{val:,.0f}円" if is_jp else f"${val:,.2f}"
+
+        strat = select_dynamic_strategy(code.replace(".T", ""), tot_win, ofi_z, round(vpin, 2), yz_vol, cvar95, rsi_v, cpos, base_sh, fp(pest), fp(float(lat["VWAP20"])), f"{fp(tpv)}(+{round((tpv-cv)/cv*100,1)}%)", f"{fp(slv)}({round((slv-cv)/cv*100,1)}%)", kelly_pct)
+        adj_sh = strat["adj_shares"]
 
         return {
-            "full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "price": fp(cv), "raw_close": cv,
-            "open_price": fp(float(lat["Open"])), "high_price": fp(float(lat["High"])), "low_price": fp(float(lat["Low"])), "volume_fmt": f"{int(lat['Volume']):,}株",
+            "full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, "price": fp(cv), "raw_close": cv,
+            "high_price": fp(float(lat["High"])), "low_price": fp(float(lat["Low"])), "volume_fmt": f"{int(lat['Volume']):,}株",
             "tp_price": fp(tpv), "tp_pct": round((tpv - cv) / cv * 100, 1), "sl_price": fp(slv), "sl_pct": round((slv - cv) / cv * 100, 1), "vwap_price": fp(float(lat["VWAP20"])),
-            "inst_score": isc, "inst_status": ist, "vpin": round(vpin, 2),
-            "hurst": hurst_v, "kalman_bull_pct": kal_b, "yz_vol": yz_vol, "ofi_z": ofi_z, "cvar95": cvar95, "eff_pct": eff_pct, "sm_div": sm_div, "kelly_pct": kelly_pct,
-            "board5ch_score": b5sc, "board5ch_status": b5st, "b5_hits": b5_hits, "upper_shadow_pct": int(ush * 100), "lower_shadow_pct": int(lsh * 100), "body_ratio_pct": int(brt * 100),
-            "bb_z": round(bbz, 2), "ma5_dev": round(m5d, 2), "ma20_dev": round(m20d, 2), "vol_trend_str": vtr, "candle_desc": cdesc, "delicate_narrative": delic,
-            "close_pos_pct": int(round(cpos * 100)), "pts_est_price": fp(pest), "pts_gap_pct": pgap, "diff": round(float(lat["Day_Return"]), 2),
-            "signal": sig, "prob": prob, "intraday_win_rate": i_win, "trend_win_rate": t_win, "total_win_rate": tot_win, "count": f"{wins}/{tot}回", "gap": agap,
-            "rsi": round(float(lat["RSI"]), 1), "vol_ratio": round(float(lat["Vol_Ratio"]), 2), "macd_state": "強気↑" if lat["MACD_Hist"] > 0 else "調整↓",
-            "atr_pct": round(float(lat["ATR_Pct"]), 1), "payoff": payoff, "edge": edge, "ai_score": aisc, "survival_power": spow, "theme": theme,
-            "tier_num": t_num, "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg, "lot_info": {"shares": sh, "position_value": sh * cv, "risk_amount": rmoney}
+            "inst_score": isc, "vpin": round(vpin, 2), "ofi_z": ofi_z, "yz_vol": yz_vol, "cvar95": cvar95, "eff_pct": eff_pct, "kelly_pct": kelly_pct,
+            "board5ch_score": b5sc, "b5_hits": b5_hits, "pts_est_price": fp(pest), "pts_gap_pct": pgap, "diff": round(float(lat["Day_Return"]), 2),
+            "prob": prob, "intraday_win_rate": i_win, "trend_win_rate": t_win, "total_win_rate": tot_win, "count": f"{ int(sub['Morning_Up'].sum())}/{len(sub)}回",
+            "rsi": rsi_v, "payoff": payoff, "edge": edge, "ai_score": aisc, "survival_power": round(aisc * 0.5 + isc * 0.3 + b5sc * 0.2, 1),
+            "tier_num": t_num, "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg,
+            "lot_info": {"shares": adj_sh, "position_value": adj_sh * cv, "risk_amount": rmoney},
+            "strat": strat
         }
     except Exception: return None
 
 @st.cache_data(ttl=1800)
 def fetch_pool_batch(macro, b5_live_map, bi, b5, bal):
     codes = list({s["code"] for sts in STOCK_POOL.values() for s in sts})
-    raw = yf.download(codes, period="6mo", group_by="ticker", threads=True, progress=False)
+    raw = yf.download(codes, period="6mo", group_by="ticker", threads=True, progress=False, timeout=10)
     gmap, alist, seen = {g: [] for g in STOCK_POOL.keys()}, [], set()
     for g, sts in STOCK_POOL.items():
         for s in sts:
@@ -931,315 +596,160 @@ def fetch_one(code, macro, b5_live_map, bi, b5, bal):
 def fetch_5m(full_code):
     try:
         d5 = yf.Ticker(full_code).history(period="5d", interval="5m")
-        if d5 is None or len(d5) < 12: return None
+        if d5 is None or len(d5) < 10: return None
         d5 = d5.dropna(subset=["Close", "Open", "High", "Low", "Volume"])
         dts = d5.index.date; day = d5[dts == dts[-1]].copy()
         if len(day) < 6: day = d5.tail(36).copy()
         tp = (day["High"] + day["Low"] + day["Close"]) / 3.0
         day["VWAP"] = ((tp * day["Volume"]).cumsum() / day["Volume"].cumsum().replace(0, np.nan)).fillna(day["Close"])
-        lc, lv = float(day["Close"].iloc[-1]), float(day["VWAP"].iloc[-1])
+        lv = float(day["VWAP"].iloc[-1])
         cdf = pd.DataFrame({"Time": day.index.strftime("%H:%M"), "Open": day["Open"].astype(float).values, "High": day["High"].astype(float).values, "Low": day["Low"].astype(float).values, "Close": day["Close"].astype(float).values, "VWAP": day["VWAP"].astype(float).values, "BarColor": np.where(day["Close"].values >= day["Open"].values, "陽線", "陰線")})
-        return {"vwap5_price": f"{lv:,.0f}円" if ".T" in full_code else f"${lv:,.2f}", "vwap5_dev": round((lc - lv) / max(lv, 1e-4) * 100, 2), "chart_date": str(dts[-1]), "chart_df": cdf}
+        return {"vwap5_price": f"{lv:,.0f}円" if ".T" in full_code else f"${lv:,.2f}", "chart_date": str(dts[-1]), "chart_df": cdf}
     except Exception: return None
-
-@st.cache_data(ttl=120)
-def fetch_deep(full_code: str, fb: dict) -> dict:
-    is_jp = ".T" in full_code
-    fv = lambda v: (f"{v:,.0f}円" if is_jp else f"${v:,.2f}") if isinstance(v, (int, float)) else "算出外"
-    d = {"live_price": fb["price"], "live_diff": fb["diff"], "pe": "算出外", "pbr": "算出外", "roe": "算出外", "mcap": "算出外", "target_mean": "算出外", "news": [], "recent_days": [], "fetched_at": datetime.now().strftime("%H:%M:%S")}
-    try:
-        tk = yf.Ticker(full_code); rt = tk.history(period="5d")
-        if rt is not None and not rt.empty:
-            lr = rt.iloc[-1]; cn = float(lr["Close"]); cp = float(rt.iloc[-2]["Close"]) if len(rt) >= 2 else cn
-            d.update({"live_price": fv(cn), "live_diff": round((cn - cp) / max(cp, 1e-4) * 100, 2)})
-            for idx, row in rt.tail(5).iterrows():
-                cv, ov = float(row["Close"]), float(row["Open"])
-                d["recent_days"].append(f"{idx.strftime('%m/%d')}: {fv(cv)} ({round((cv-ov)/max(ov,1e-4)*100,1):+.1f}%)")
-        inf = tk.info or {}
-        if isinstance(inf.get("trailingPE") or inf.get("forwardPE"), (int, float)): d["pe"] = f"{(inf.get('trailingPE') or inf.get('forwardPE')):.1f}倍"
-        if isinstance(inf.get("priceToBook"), (int, float)): d["pbr"] = f"{inf['priceToBook']:.2f}倍"
-        if isinstance(inf.get("returnOnEquity"), (int, float)): d["roe"] = f"{inf['returnOnEquity']*100:.1f}%"
-        if isinstance(inf.get("marketCap"), (int, float)): d["mcap"] = f"{inf['marketCap']/1e8:,.0f}億円" if is_jp else f"${inf['marketCap']/1e9:,.1f}B"
-        d["target_mean"] = fv(inf.get("targetMeanPrice"))
-        for n in (tk.news or [])[:3]:
-            t = n.get("title") or (n.get("content", {}) or {}).get("title", "")
-            if t: d["news"].append(t)
-    except Exception: pass
-    return d
-
-def build_quant_debate(r: dict, smap: dict, fs: int, vref: str, lp1: int, lp2: int, lp3: int, style: str, seed: int) -> dict:
-    rng = random.Random(int(hashlib.md5(f"{r['code']}_{seed}_{r['price']}_{style}".encode()).hexdigest()[:8], 16))
-    is_rage = (rng.randint(1, 100) == 1)
-    b5_info = f"5ch実況スレでも言及 <b>{r['b5_hits']}件</b> と注目が集まっている" if r.get("b5_hits", 0) > 0 else f"5chの個人ノイズは少なく、機関主導の静かな集積（5ch短期スコア <b>{r['board5ch_score']}点</b>）だ"
-    v_desc = "機関アルゴのステルス買い集め" if r["vpin"] >= 0.15 else ("大口の利確・売り抜け警戒" if r["vpin"] < -0.1 else "機関オーダーフロー均衡")
-
-    sp1, tx1 = rng.choice([
-        ("MICRO", f"『{r['name']}（{r['code']}）』の機関マイクロストラクチャ解析から入るぞ。現在値 <b>{r['price']}（{r['diff']:+.2f}%）</b>、VPIN <b>{r['vpin']:+.2f}</b>・OFI（板不均衡Z値）<b>{r['ofi_z']:+.2f}σ</b> で{v_desc}を示唆。Smart Money乖離も <b>{r['sm_div']:+.2f}</b> だ。"),
-        ("TECHNOS", f"数理波形構造から口火を切ろう。『{r['name']}』は【<b>{r['candle_desc']}</b>】を形成。Yang-Zhang年率ボラは <b>{r['yz_vol']}%</b>、市場効率性純度は <b>{r['eff_pct']}%</b>、RSI <b>{r['rsi']}</b> で推移している。"),
-        ("MACRO", f"海外・先物裁定の視点からいいかな。『{r['name']}』の夜間理論寄付きは <b>{r['pts_est_price']}（{r['pts_gap_pct']:+.2f}%）</b>、Kalmanトレンド推計は <b>{r['kalman_bull_pct']:+.2f}%</b> と算出されている。")
-    ])
-    heat = [
-        {"speaker_key": "AEGIS", "score": smap["AEGIS"], "tone": "doubt", "text": f"だから言ってるでしょ！CVaR <b>-{r['cvar95']}%</b> のテールリスクがある以上、<b>{r['sl_price']}</b> の撤退ラインを無視するプランは却下よ！"},
-        {"speaker_key": "IGNIS", "score": smap["IGNIS"], "tone": "rage", "text": f"いい加減にしろよAEGIS！！VPIN <b>{r['vpin']:+.2f}</b>・OFI <b>{r['ofi_z']:+.2f}σ</b>・5chスコア <b>{r['board5ch_score']}点</b> のこの大相場を前にして、ビビってロット落としてどうすんだ！！"}
-    ] if is_rage else [
-        {"speaker_key": "AEGIS", "score": smap["AEGIS"], "tone": "doubt", "text": f"上値余地（利確目標 <b>{r['tp_price']} / +{r['tp_pct']}%</b>）は否定しないわ。ただ、前場のHFT振るい落としに巻き込まれないよう、VWAP（<b>{vref}</b>）反発を確認してから第2弾 <b>{lp2:,}株</b> を入れる手順を徹底したいの。"},
-        {"speaker_key": "IGNIS", "score": smap["IGNIS"], "tone": "normal", "text": f"なるほどな、第1弾 <b>{lp1:,}株</b> で初動の気配を取りつつ、高値順行確認で第3弾 <b>{lp3:,}株</b> を追撃する3段ロケットなら俺のモメンタム戦略とも完全に噛み合うぜ。"}
-    ]
-    turns = [
-        {"speaker_key": sp1, "score": smap[sp1], "tone": "normal", "text": tx1},
-        {"speaker_key": "TECHNOS" if sp1 != "TECHNOS" else "MICRO", "score": smap["TECHNOS" if sp1 != "TECHNOS" else "MICRO"], "tone": "normal", "text": f"補足すると、Hurst指数は <b>{r['hurst']}</b>、エントロピー純度は <b>{r['eff_pct']}%</b>、ボリンジャーは <b>{r['bb_z']:+.2f}σ</b>（20日乖離 <b>{r['ma20_dev']:+.2f}%</b>）。基準VWAP <b>{vref}</b> の攻防が翌朝の分水嶺になるね。"},
-        {"speaker_key": "IGNIS", "score": smap["IGNIS"], "tone": "normal", "text": f"OFI <b>{r['ofi_z']:+.2f}σ</b> に加えて、{b5_info}。個人と機関の買いが重なれば一気にモメンタムが加速する展開だろ。"},
-        {"speaker_key": "AEGIS", "score": smap["AEGIS"], "tone": "doubt", "text": f"ちょっと待って。95%期待ショートフォール（CVaR）は <b>-{r['cvar95']}%</b>、上ヒゲ <b>{r['upper_shadow_pct']}%</b> よ。分数ケリー基準（推奨配分 <b>{r['kelly_pct']}%</b>）と逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b> を厳守しないと資金が溶けるわ。"},
-        {"speaker_key": "MACRO", "score": smap["MACRO"], "tone": "normal", "text": f"先物と夜間理論気配（<b>{r['pts_est_price']}</b> / <b>{r['pts_gap_pct']:+.2f}%</b>）の裁定スプレッドを計算すると、寄り付き直後の5分間はHFTの揺さぶりが出やすい。3段階分割がベストだな。"},
-        *heat,
-        {"speaker_key": "CHRONOS", "score": smap["CHRONOS"], "tone": "humor", "text": f"過去6ヶ月の統計（<b>{r['count']}</b>）では、翌朝GU勝率 <b>{r['prob']}%</b>、寄り後陽線勝率 <b>{r['intraday_win_rate']}%</b>、総合勝率 <b>{r['total_win_rate']}%</b>（ペイオフ <b>{r['payoff']}倍</b> / 期待値 <b>{r['edge']:+.2f}%</b>）だ。"},
-        {"speaker_key": "NEXUS", "score": fs, "tone": "agree", "text": f"最終判定は <b>{r['tier_label']}</b>（合議スコア <b>{fs}点</b>）。総推奨ロット <b>{r['lot_info']['shares']:,}株</b>（ケリー配分 <b>{r['kelly_pct']}%</b>）を3分割し、①寄付き（<b>{r['pts_est_price']}</b>目安）で <b>{lp1:,}株</b>、②VWAP（<b>{vref}</b>）支持確認で <b>{lp2:,}株</b>、③順行確認で <b>{lp3:,}株</b> を投入。利確 <b>{r['tp_price']}（+{r['tp_pct']}%）</b>、逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b> で執行だ！"}
-    ]
-    return {"final_score": fs, "turns": turns, "consensus_summary": f"VPIN <b>{r['vpin']:+.2f}</b>・OFI <b>{r['ofi_z']:+.2f}σ</b>・YZボラ <b>{r['yz_vol']}%</b>・CVaR <b>-{r['cvar95']}%</b>・総合勝率 <b>{r['total_win_rate']}%</b> に基づき、VWAP（<b>{vref}</b>）を軸に3段階分割執行。"}
-
-def _norm_turns(turns_raw: list, smap: dict, fs: int) -> list:
-    out = []
-    for it in turns_raw:
-        if not isinstance(it, dict): continue
-        sk = str(it.get("speaker_key", "NEXUS")).strip().upper()
-        tn = str(it.get("tone", "normal")).strip().lower()
-        if tn not in ("normal", "doubt", "rebuttal", "rage", "humor", "agree"): tn = "normal"
-        tx = str(it.get("text", "")).strip()
-        if tx: out.append({"speaker": AI_ROSTER.get(sk, f"👑 {sk}"), "score": int(it.get("score", smap.get(sk, fs))), "tone": tn, "text": tx})
-    return out
 
 def run_7ai_council(r: dict, m5=None, seed: int = 0, style: str = "⚖️ 標準バランス") -> dict:
     vref = m5["vwap5_price"] if m5 else r["vwap_price"]
-    tlot = r["lot_info"]["shares"]
-    lp1, lp2 = max(1, int(round(tlot * 0.35))), max(0, int(round(tlot * 0.40)))
-    lp3 = max(0, tlot - lp1 - lp2)
-    smap = {
-        "AEGIS": int(min(max(round(50 + (r["total_win_rate"] - 50) * 0.8 + (r["payoff"] - 1.0) * 15 - r["cvar95"] * 1.5), 20), 99)),
-        "IGNIS": int(min(max(round(48 + (r["board5ch_score"] - 50) * 0.65 + r["ofi_z"] * 6.0), 20), 99)),
-        "TECHNOS": int(min(max(round((r["ai_score"] + r["inst_score"] + r["eff_pct"]) / 3.0), 20), 99)),
-        "MACRO": int(min(max(round(50 + r["pts_gap_pct"] * 12 + (r["inst_score"] - 50) * 0.35), 20), 99)),
-        "MICRO": int(min(max(round(r["inst_score"] * 0.6 + r["board5ch_score"] * 0.4), 20), 99)),
-        "CHRONOS": int(min(max(round(48 + (r["prob"] - 50) * 0.9 + (r["payoff"] - 1.0) * 12), 20), 99)),
-    }
-    smap["NEXUS"] = int(round(sum(smap.values()) / 6.0))
-    fs = int(round(sum(smap.values()) / 7.0))
+    st_info = r["strat"]
+    fs = r["ai_score"]
+    sys_p = f'7専門AI合議として銘柄固有の戦略「{st_info["algo_name"]}」に基づき、なぜこの銘柄はこの買い方・リスク配分なのかを議論する6ターンのJSON {{"final_score":{fs},"turns":[{{"speaker_key":"MICRO","score":88,"tone":"normal","text":"..."}}]}} を出力せよ。'
+    usr_p = f"{r['name']}({r['code']}) 現値:{r['price']} 勝率:{r['total_win_rate']}% OFI:{r['ofi_z']:+.2f}σ VPIN:{r['vpin']:+.2f} ボラ:{r['yz_vol']}% CVaR:-{r['cvar95']}% 戦略:{st_info['algo_name']} 手順:{st_info['step_plan']}"
+    llm_j, used_eng = call_api_seamless(sys_p, usr_p, 0.75)
 
-    sys_p = f'7専門AI合議エンジンとして8〜9ターン(MICRO,TECHNOS,AEGIS,IGNIS,MACRO,CHRONOSが掛け合い最後NEXUSが総括)のディベートJSON {{"final_score":{fs},"turns":[{{"speaker_key":"MICRO","score":85,"tone":"normal","text":"..."}}],"consensus_summary":"..."}} を出力せよ。重要数値は<b>タグで強調しダブルクォート"は使わず「」を使うこと。'
-    usr_p = f"{r['name']}({r['code']}) 現値:{r['price']}({r['diff']:+.2f}%) VPIN:{r['vpin']:+.2f} OFI:{r['ofi_z']:+.2f}σ YZボラ:{r['yz_vol']}% CVaR95:-{r['cvar95']}% Kelly:{r['kelly_pct']}% Hurst:{r['hurst']} 5ch言及:{r.get('b5_hits',0)}件 理論寄付き:{r['pts_est_price']} VWAP:{vref} 総合勝率:{r['total_win_rate']}% ロット:{tlot}株"
-    llm_j, _ = call_api_seamless(sys_p, usr_p, 0.75)
-    if not llm_j or not isinstance(llm_j.get("turns"), list) or len(llm_j["turns"]) < 4:
-        llm_j = build_quant_debate(r, smap, fs, vref, lp1, lp2, lp3, style, seed)
+    if llm_j and isinstance(llm_j.get("turns"), list) and len(llm_j["turns"]) >= 4:
+        raw_t = llm_j["turns"]
+    else:
+        raw_t = [
+            {"speaker_key": "MICRO", "score": r["inst_score"], "tone": "normal", "text": f"『{r['name']}（{r['code']}）』のオーダーフローを解析した。現在値 <b>{r['price']}（{r['diff']:+.2f}%）</b>、VPIN <b>{r['vpin']:+.2f}</b>、OFI <b>{r['ofi_z']:+.2f}σ</b>。他の銘柄と同じ画一的な分割ではなく、この波形に最適化した <b>{st_info['algo_name']}</b> を適用すべき局面だ。"},
+            {"speaker_key": "IGNIS", "score": r["board5ch_score"], "tone": "agree" if r["total_win_rate"] >= 62 else "normal", "text": f"俺も同感だ！{st_info['core_logic']} リスク姿勢は『<b>{st_info['risk_posture']}</b>』で勝負に出るのが最も期待値が高いぜ。"},
+            {"speaker_key": "TECHNOS", "score": fs, "tone": "normal", "text": f"数理指標を見ても、年率ボラティリティ <b>{r['yz_vol']}%</b>・RSI <b>{r['rsi']}</b>・効率性純度 <b>{r['eff_pct']}%</b> だ。基準VWAP（<b>{vref}</b>）と夜間理論値（<b>{r['pts_est_price']}</b>）を軸にした <b>{st_info['step_plan']}</b> が機能する。"},
+            {"speaker_key": "AEGIS", "score": 85, "tone": "doubt", "text": f"待って。攻撃的に行く場合でも、95%CVaR（テールリスク）は <b>-{r['cvar95']}%</b> あるわ。逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b> を注文と同時にセットすることだけは絶対条件よ。"},
+            {"speaker_key": "CHRONOS", "score": int(r["total_win_rate"]), "tone": "normal", "text": f"過去6ヶ月統計（<b>{r['count']}</b>）では、総合勝率 <b>{r['total_win_rate']}%</b>・ペイオフ比 <b>{r['payoff']}倍</b>・期待値 <b>{r['edge']:+.2f}%</b> とバックテストの裏付けも十分だ。"},
+            {"speaker_key": "NEXUS", "score": fs, "tone": "agree", "text": f"よし、結論を出そう。『{r['name']}』専用の執行アルゴリズムは <b>{st_info['algo_name']}</b>（推奨 <b>{r['lot_info']['shares']:,}株</b>）とする。下の初心者向けアクションガイド通りに執行せよ！"}
+        ]
 
-    fs = int(llm_j.get("final_score", fs))
-    csum = str(llm_j.get("consensus_summary", "")).strip()
+    turns = [{"round": f"⚡ 『{r['name']}』7専門AI マルチアルゴリズム合議 ({used_eng})"}]
+    for it in raw_t:
+        sk = str(it.get("speaker_key", "NEXUS")).upper()
+        turns.append({"speaker": AI_ROSTER.get(sk, f"👑 {sk}"), "score": int(it.get("score", fs)), "tone": it.get("tone", "normal"), "text": it.get("text", "")})
+
     v_html = (
-        (f'<div class="consensus-section"><b>🧠 マルチエージェント合議の核心結論：</b>{csum}</div>' if csum else "") +
-        f'<div class="consensus-section"><b>① 🎯 勝率＆10段階判定：</b><b>{r["tier_label"]}</b> ｜ 合議 <b>{fs}点</b> ｜ 総合勝率 <b>{r["total_win_rate"]}%</b>（GU <b>{r["prob"]}%</b> / 陽線 <b>{r["intraday_win_rate"]}%</b> / 順張 <b>{r["trend_win_rate"]}%</b>）</div>'
-        f'<div class="consensus-section"><b>② ⚡ 3段階分割執行プラン（総推奨 {tlot:,}株 / 分数ケリー配分 {r["kelly_pct"]}%）：</b>第1弾寄付き <b>{lp1:,}株</b>（<b>{r["pts_est_price"]}</b>目安）→ 第2弾VWAP <b>{lp2:,}株</b>（<b>{vref}</b>反発）→ 第3弾順行追撃 <b>{lp3:,}株</b></div>'
-        f'<div class="consensus-section"><b>③ 🎯 利確＆CVaR撤退ライン：</b>利確 <b>{r["tp_price"]}（+{r["tp_pct"]}%）</b> ／ 損切 <b>{r["sl_price"]}（{r["sl_pct"]}%・95%CVaR -{r["cvar95"]}%・許容損失 {r["lot_info"]["risk_amount"]:,.0f}円）</b></div>'
+        f'<div style="margin-bottom:6px;"><b>🧬 採用アルゴリズム：</b><span style="color:#38bdf8;font-weight:800;">{st_info["algo_name"]}</span></div>'
+        f'<div style="margin-bottom:6px;"><b>⚖️ リスク・資金配分方針：</b>{st_info["risk_posture"]}</div>'
+        f'<div style="margin-bottom:6px;"><b>⚡ プロ向け執行プラン：</b>{st_info["step_plan"]} ｜ 🎯利確 <b>{r["tp_price"]}(+{r["tp_pct"]}%)</b> ／ 🛡️損切 <b>{r["sl_price"]}({r["sl_pct"]}%)</b></div>'
+        f'<div class="beginner-action-box">{st_info["beginner_html"]}</div>'
     )
-    dlg = [{"round": f"⚡ 『{r['name']}（{r['code']}）』7専門AIエージェント 合議セッション（{style}）"}] + _norm_turns(llm_j["turns"], smap, fs)
-    return {"final_score": fs, "dialogue": dlg, "verdict_html": v_html}
-
-def gen_user_reply(u_msg: str, r: dict, m5=None) -> list:
-    vref = m5["vwap5_price"] if m5 else r["vwap_price"]
-    deep = fetch_deep(r["full_code"], r)
-    sys_p = '投資家の発言に対しMICRO,AEGIS,IGNIS,NEXUSが具体的な数値で応答するJSON {"turns":[{"speaker_key":"MICRO","score":90,"tone":"normal","text":"..."}]} を出力せよ。'
-    llm_j, _ = call_api_seamless(sys_p, f"発言:{u_msg} / 銘柄:{r['name']} 現値:{deep['live_price']} VWAP:{vref} VPIN:{r['vpin']:+.2f} OFI:{r['ofi_z']:+.2f}σ CVaR:-{r['cvar95']}% 利確:{r['tp_price']} 損切:{r['sl_price']}", 0.7)
-    if llm_j and isinstance(llm_j.get("turns"), list) and len(llm_j["turns"]) >= 2:
-        turns = _norm_turns(llm_j["turns"], {}, r["ai_score"])
-    else:
-        turns = _norm_turns([
-            {"speaker_key": "MICRO", "score": 92, "tone": "normal", "text": f"「{u_msg}」について機関オーダーフローから回答しよう。現在値は <b>{deep['live_price']}（{deep['live_diff']:+.2f}%）</b>、VPIN <b>{r['vpin']:+.2f}</b>、OFI <b>{r['ofi_z']:+.2f}σ</b>、PER <b>{deep['pe']}</b> / PBR <b>{deep['pbr']}</b> だ。基準VWAP <b>{vref}</b> を維持している限り機関買いエッジは崩れていない。"},
-            {"speaker_key": "AEGIS", "score": 89, "tone": "doubt", "text": f"テールリスク（95%CVaR <b>-{r['cvar95']}%</b>）を踏まえるなら、初動で全ロットを入れず第1弾は <b>{max(1, int(r['lot_info']['shares']*0.35)):,}株</b> に抑えて、逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b> でリスクを固定するのが鉄則ね。"},
-            {"speaker_key": "NEXUS", "score": 94, "tone": "agree", "text": f"よし、寄付き気配（理論値 <b>{r['pts_est_price']}</b>）とVWAP（<b>{vref}</b>）の攻防を見極めつつ、ターゲット <b>{r['tp_price']}（+{r['tp_pct']}%）</b> を狙う機動戦プランでいこう！"}
-        ], {}, r["ai_score"])
-    return [{"round": f"🗣️ あなたの発言「{u_msg}」に対するAIエージェントの応答"}] + turns
-
-def gen_qa_html(q: str, r: dict, m5=None) -> str:
-    qc = unicodedata.normalize("NFKC", str(q)).strip()
-    deep = fetch_deep(r["full_code"], r)
-    vref = m5["vwap5_price"] if m5 else r["vwap_price"]
-    days_s = " ｜ ".join(deep["recent_days"]) if deep["recent_days"] else "取得中"
-    news_s = " / ".join(deep["news"]) if deep["news"] else f"{r['theme']}関連の機関需給および5chリアルタイム注目度（言及{r.get('b5_hits',0)}件）が中心"
-    sys_p = '質問に対しJSON {"direct_answer_html":"🎯 <b>【直接結論】</b>...","specialist_comment_html":"💡 <b>【クオンツ補足】</b>..."} を出力せよ。'
-    llm_j, _ = call_api_seamless(sys_p, f"質問:{qc} / {r['name']} 現値:{deep['live_price']}({deep['live_diff']:+.2f}%) PER:{deep['pe']} PBR:{deep['pbr']} ROE:{deep['roe']} 時価総額:{deep['mcap']} 目標株価:{deep['target_mean']} OFI:{r['ofi_z']:+.2f}σ YZボラ:{r['yz_vol']}% CVaR:-{r['cvar95']}% VWAP:{vref} 利確:{r['tp_price']} 損切:{r['sl_price']}", 0.5)
-    if llm_j and llm_j.get("direct_answer_html"):
-        d_html, s_html = llm_j["direct_answer_html"], llm_j.get("specialist_comment_html", "")
-    else:
-        d_html = f"🎯 <b>【直接結論】『{r['name']}（{r['code']}）』リアルタイム調査結果</b><br>・<b>現在値</b>：<b>{deep['live_price']}（前日比 {deep['live_diff']:+.2f}%）</b> ｜ 高値 <b>{r['high_price']}</b> ／ 安値 <b>{r['low_price']}</b> ／ 出来高 <b>{r['volume_fmt']}</b><br>・<b>ファンダメンタルズ</b>：時価総額 <b>{deep['mcap']}</b> ｜ PER <b>{deep['pe']}</b> ｜ PBR <b>{deep['pbr']}</b> ｜ ROE <b>{deep['roe']}</b> ｜ 目標株価 <b>{deep['target_mean']}</b><br>・<b>テーマ＆動向</b>：{news_s}"
-        s_html = f"💡 <b>【機関クオンツ＆実戦執行プラン】</b><br>・10段階判定は <b>{r['tier_label']}</b>（総合勝率 <b>{r['total_win_rate']}%</b> / VPIN <b>{r['vpin']:+.2f}</b> / OFI <b>{r['ofi_z']:+.2f}σ</b> / YZボラ <b>{r['yz_vol']}%</b> / 95%CVaR <b>-{r['cvar95']}%</b>）。寄付き（<b>{r['pts_est_price']}</b>）・VWAP（<b>{vref}</b>）・順行追撃の3分割（計 <b>{r['lot_info']['shares']:,}株</b>）を推奨。利確 <b>{r['tp_price']}（+{r['tp_pct']}%）</b>、損切 <b>{r['sl_price']}（{r['sl_pct']}%）</b>。"
-    return f"<div><b>🤖 【自由質問：「{qc}」へのAIクオンツ回答】</b> <span style='font-size:11px;color:#64748b;'>({deep['fetched_at']})</span></div><div class='qa-direct-box'>{d_html}</div><div style='background:#f8fafc;border:1px solid #cbd5e1;padding:8px 11px;border-radius:7px;margin-top:5px;font-size:12.5px;'>{s_html}</div><div style='font-size:11.5px;color:#475569;margin-top:4px;'><b>📅 直近5日推移</b>：{days_s}</div>"
+    return {"final_score": fs, "dialogue": turns, "verdict_html": v_html}
 
 def _fmt_turn(t: dict) -> str:
     if "round" in t: return f'<div class="round-divider">{t["round"]}</div>'
-    if t.get("is_user"): return f'<div class="chat-bubble-user"><div style="font-weight:800;color:#fde047;font-size:12px;">🗣️ あなたの発言</div><div>{t["text"]}</div></div>'
-    b_cls = {"doubt": "chat-bubble-doubt", "rebuttal": "chat-bubble-rebuttal", "rage": "chat-bubble-rage", "humor": "chat-bubble-humor", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
-    sc = f' <span style="background:rgba(56,189,248,0.18);color:#7dd3fc;padding:1px 6px;border-radius:999px;font-size:10.5px;">{t["score"]}点</span>' if "score" in t else ""
-    return f'<div class="{b_cls}"><div style="font-weight:800;color:#38bdf8;font-size:12px;margin-bottom:3px;">{t["speaker"]}{sc}</div><div>{t["text"]}</div></div>'
+    if t.get("is_user"): return f'<div class="chat-bubble-user"><b>🗣️ あなた:</b> {t["text"]}</div>'
+    b_cls = {"doubt": "chat-bubble-doubt", "rage": "chat-bubble-rage", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
+    return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11.5px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
 
 @frag_dec
 def render_council_sec(r, uk):
     is_open = st.session_state["active_debates"].get(uk, False)
     in_wl = r["code"] in st.session_state["watchlist"]
-    c1, c2 = st.columns([2.6, 1.1])
-    if c1.button("🔼 AIエージェント合議を閉じる" if is_open else "⚡ 7専門AIエージェント合議を見る＆参加 (即時表示)", key=f"b_{uk}", use_container_width=True):
+    c1, c2 = st.columns([2.7, 1.1])
+    if c1.button("🔼 AI合議と初心者向け買い方ガイドを閉じる" if is_open else "⚡ 7専門AIディベート＆初心者向け買い方を見る", key=f"b_{uk}", use_container_width=True):
         st.session_state["active_debates"][uk] = not is_open; st.rerun()
-    if c2.button("✅ 監視済(解除)" if in_wl else "⭐ 監視追加", key=f"w_{uk}", use_container_width=True):
+    if c2.button("✅ 監視済" if in_wl else "⭐ 監視追加", key=f"w_{uk}", use_container_width=True):
         if in_wl: del st.session_state["watchlist"][r["code"]]
         else: st.session_state["watchlist"][r["code"]] = r
         st.rerun()
     if not is_open: return
 
-    cur_st = st.session_state["debate_style_map"].get(uk, "⚖️ 標準バランス")
-    new_st = st.radio("温度感", ["⚖️ 標準バランス", "🔥 激論・徹底検証", "🛡️ 超辛口・リスク監査"], horizontal=True, index=["⚖️ 標準バランス", "🔥 激論・徹底検証", "🛡️ 超辛口・リスク監査"].index(cur_st), key=f"st_{uk}", label_visibility="collapsed")
-    if new_st != cur_st:
-        st.session_state["debate_style_map"][uk] = new_st
-        st.session_state["debate_round_seed"][uk] = st.session_state["debate_round_seed"].get(uk, 0) + 1
-        st.session_state["council_threads"].pop(uk, None); st.rerun()
-
     m5 = fetch_5m(r["full_code"])
     if m5 and show_5m_chart:
-        st.caption(f"📅 直近5分足 ({m5['chart_date']}) ｜ 5分足VWAP: **{m5['vwap5_price']}** ({m5['vwap5_dev']:+.2f}%)")
+        st.caption(f"📅 直近5分足 ({m5['chart_date']}) ｜ 5分足VWAP: **{m5['vwap5_price']}**")
         cdf = m5["chart_df"]
         base = alt.Chart(cdf).encode(x=alt.X("Time:N", sort=None, title=None))
-        cs = alt.Scale(domain=["陽線", "陰線"], range=["#dc2626", "#2563eb"])
-        w = base.mark_rule(size=1.5).encode(y=alt.Y("Low:Q", scale=alt.Scale(zero=False), title="株価"), y2="High:Q", color=alt.Color("BarColor:N", scale=cs, legend=None))
+        cs = alt.Scale(domain=["陽線", "陰線"], range=["#10b981", "#ef4444"])
+        w = base.mark_rule(size=1.5).encode(y=alt.Y("Low:Q", scale=alt.Scale(zero=False), title=None), y2="High:Q", color=alt.Color("BarColor:N", scale=cs, legend=None))
         b = base.mark_bar(size=6).encode(y=alt.Y("Open:Q", scale=alt.Scale(zero=False)), y2="Close:Q", color=alt.Color("BarColor:N", scale=cs, legend=None))
-        vw = base.mark_line(color="#d97706", strokeWidth=2.5, strokeDash=[4, 2]).encode(y="VWAP:Q")
-        st.altair_chart((w + b + vw).properties(height=155), use_container_width=True)
+        vw = base.mark_line(color="#f59e0b", strokeWidth=2, strokeDash=[4, 2]).encode(y="VWAP:Q")
+        st.altair_chart((w + b + vw).properties(height=145), use_container_width=True)
 
     if uk not in st.session_state["council_threads"]:
-        deb = run_7ai_council(r, m5, st.session_state["debate_round_seed"].get(uk, 0), new_st)
+        deb = run_7ai_council(r, m5, st.session_state["debate_round_seed"].get(uk, 0))
         st.session_state["council_threads"][uk] = list(deb["dialogue"])
         st.session_state["council_meta"][uk] = deb
 
     meta = st.session_state["council_meta"][uk]
     turns = st.session_state["council_threads"][uk]
-    st.markdown(f'<div class="ai-council-box"><div id="cwin_{uk}" class="council-scroll-window">{"".join(_fmt_turn(t) for t in turns)}</div><div class="consensus-banner"><div style="font-weight:bold;color:#fde047;font-size:13.5px;">🏛️ 全エージェント合意の最終コンセンサス</div>{meta["verdict_html"]}</div></div>', unsafe_allow_html=True)
-
-    if st.button("🔄 別の切り口で再ディベート", key=f"rs_{uk}", use_container_width=True):
-        st.session_state["debate_round_seed"][uk] = st.session_state["debate_round_seed"].get(uk, 0) + 1
-        st.session_state["council_threads"].pop(uk, None); st.rerun()
+    st.markdown(f'<div class="ai-council-box"><div class="council-scroll-window">{"".join(_fmt_turn(t) for t in turns)}</div><div class="consensus-banner"><div style="font-weight:800;color:#fde047;font-size:13px;margin-bottom:6px;">🏛️ 銘柄別アルゴリズム結論 ＆ 初心者向けアクションプラン</div>{meta["verdict_html"]}</div></div>', unsafe_allow_html=True)
 
     with st.form(f"jf_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
-        uop = jc1.text_input("発言", placeholder="ディベートに割り込む（例：朝から行くべき？ / 上ヒゲが怖い / 現在の株価は？）", label_visibility="collapsed")
-        if jc2.form_submit_button("💬 発言を投下", use_container_width=True) and uop.strip():
+        uop = jc1.text_input("質問・発言", placeholder="AIに質問（例：今すぐ成行で買っていい？ / 損切りラインはどこ？）", label_visibility="collapsed")
+        if jc2.form_submit_button("💬 質問投下", use_container_width=True) and uop.strip():
             st.session_state["council_threads"][uk].append({"is_user": True, "text": uop.strip()})
-            st.session_state["council_threads"][uk].extend(gen_user_reply(uop.strip(), r, m5))
+            st.session_state["council_threads"][uk].append({"speaker": "👑 NEXUS (総括ディレクター)", "score": r["ai_score"], "tone": "agree", "text": f"「{uop.strip()}」への回答だ。『{r['name']}』は <b>{r['strat']['algo_name']}</b> を採用している。<b>{r['strat']['step_plan']}</b> の手順で、利確 <b>{r['tp_price']}</b>・逆指値 <b>{r['sl_price']}</b> を守って行動しよう！"})
             st.rerun()
 
-    qc1, qc2 = st.columns(2)
-    for col, lbl, qtxt, k_s in [
-        (qc1, "💴 現在の株価・高値安値・目標株価は？", "現在の株価はいくら？本日の高値・安値・目標株価も教えて", "q1"),
-        (qc1, "📊 決算・PER/PBR・時価総額を調べて", "PERやPBR、時価総額、目標株価などファンダメンタルズを評価して", "q2"),
-        (qc2, "📰 最新ニュースと値動きの理由は？", "最新ニュースと本日の値動きの理由・需給背景は？", "q3"),
-        (qc2, "💰 具体的な買い値・利確・損切りは？", "いつどの価格で買って、いくらで利確・損切りすべき？", "q4")
-    ]:
-        if col.button(lbl, key=f"{k_s}_{uk}", use_container_width=True):
-            st.session_state["stock_chats"].setdefault(uk, []).append({"q": qtxt, "a": gen_qa_html(qtxt, r, m5)})
-            st.session_state["scroll_target"] = f"qa_ans_{uk}"; st.rerun()
-
-    with st.form(f"fq_{uk}", clear_on_submit=True):
-        fc1, fc2 = st.columns([3.2, 1])
-        uq = fc1.text_input("質問", placeholder="自由質問を入力（例：機関の買い集めは続いてる？ / 押し目はどこ？）", label_visibility="collapsed")
-        if fc2.form_submit_button("💬 自由質問", use_container_width=True) and uq.strip():
-            st.session_state["stock_chats"].setdefault(uk, []).append({"q": uq.strip(), "a": gen_qa_html(uq.strip(), r, m5)})
-            st.session_state["scroll_target"] = f"qa_ans_{uk}"; st.rerun()
-
-    chats = st.session_state["stock_chats"].get(uk, [])
-    if chats:
-        ans_id = f"qa_ans_{uk}"
-        st.markdown(f'<div id="{ans_id}" class="qa-answer-card">{chats[-1]["a"]}</div>', unsafe_allow_html=True)
-        if st.session_state.get("scroll_target") == ans_id:
-            components.html(f"<script>setTimeout(function(){{const el=window.parent.document.getElementById('{ans_id}');if(el)el.scrollIntoView({{behavior:'smooth',block:'center'}});}},80);</script>", height=0)
-            st.session_state["scroll_target"] = None
-        if st.button("🗑️ 質問履歴をクリア", key=f"cl_{uk}", use_container_width=True):
-            st.session_state["stock_chats"][uk] = []; st.rerun()
-
 def render_card(r, is_custom=False, rank=None, kp="card"):
-    dc = "#dc2626" if r["diff"] > 0 else "#2563eb"
+    dc = "#10b981" if r["diff"] >= 0 else "#ef4444"
     ds, ps = ("+" if r["diff"] > 0 else ""), ("+" if r["pts_gap_pct"] > 0 else "")
-    rk_h = f'<span class="rank-badge">🏆 第{rank}位</span>' if rank else ""
+    rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
     lot = r["lot_info"]
-    ini = r["name"].replace(" (米)", "").strip()[0] if r["name"] else "📈"
-    logo = f'<img src="https://ui-avatars.com/api/?name={urllib.parse.quote(ini)}&background=0f172a&color=fbbf24&bold=true&size=64" class="company-logo-img" />'
-
+    st_info = r["strat"]
     card_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
-        f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]} !important;"><span>🎯 {r["tier_label"]}</span><span style="font-size:11px;">Lv.{r["tier_num"]}/10</span></div>'
-        f'<div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:3px;">{rk_h}<span class="score-badge">⚡ 総合 {r["ai_score"]}点</span><span class="inst-badge">🏦 機関 {r["inst_score"]}点</span><span class="algo-badge">🧬 OFI {r["ofi_z"]:+.2f}σ</span><span class="board5ch-badge">🔥 5ch需給 {r["board5ch_score"]}点</span></div>'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;"><div style="display:flex;align-items:center;gap:9px;">{logo}<div><span style="font-size:16.5px;font-weight:800;">{r["name"]}</span> <span style="font-size:12px;color:#64748b;">({r["code"]} / {r["genre"]})</span><br><span style="font-size:14px;">現在値: <b>{r["price"]}</b> (<span style="color:{dc};font-weight:800;">{ds}{r["diff"]}%</span>)</span></div></div>'
-        f'<div style="text-align:right;"><span style="font-size:10.5px;color:#64748b;font-weight:700;">🎯 総合勝率</span><br><span class="prob-badge">{r["total_win_rate"]}%</span><div style="font-size:10.5px;color:#64748b;">損益比 {r["payoff"]}倍 / 期待値 {r["edge"]:+.2f}%</div></div></div>'
-        f'<div class="winrate-bar"><div><div style="font-size:10px;color:#881337;font-weight:700;">🏆 総合勝率</div><div style="font-size:13.5px;font-weight:900;color:#e11d48;">{r["total_win_rate"]}%</div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10px;color:#64748b;">🌅 翌朝GU</div><div style="font-size:13px;font-weight:800;color:#dc2626;">{r["prob"]}%</div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10px;color:#64748b;">☀️ 寄り後陽線</div><div style="font-size:13px;font-weight:800;color:#d97706;">{r["intraday_win_rate"]}%</div></div><div style="border-left:1px solid #fecdd3;"><div style="font-size:10px;color:#64748b;">📈 順張り</div><div style="font-size:13px;font-weight:800;color:#15803d;">{r["trend_win_rate"]}%</div></div></div>'
-        f'<div class="trade-plan-box"><div><div style="font-size:10px;color:#64748b;">🌅 夜間理論寄付き</div><div style="font-size:12.5px;font-weight:800;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid #cbd5e1;border-right:1px solid #cbd5e1;"><div style="font-size:10px;color:#15803d;font-weight:bold;">🎯 利確目標</div><div style="font-size:12.5px;font-weight:800;color:#15803d;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:10px;color:#b91c1c;font-weight:bold;">🛡️ 損切り逆指値</div><div style="font-size:12.5px;font-weight:800;color:#b91c1c;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
-        f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> (投資額 {lot["position_value"]:,.0f}円 / 許容損失 {lot["risk_amount"]:,.0f}円 / Kelly最適配分 {r["kelly_pct"]}%)</span><span style="font-size:11px;color:#15803d;font-weight:700;">VWAP基準: {r["vwap_price"]}</span></div>'
-        f'<details class="quant-detail-drawer"><summary>🔍 機関マイクロストラクチャ・5ch実況・クオンツ詳細（タップで開閉）</summary>'
-        f'<div class="delicate-box">{r["delicate_narrative"]}</div>'
-        f'<div class="inst-box"><b>{r["inst_status"]}</b> ｜ 20日VWAP: <b>{r["vwap_price"]}</b></div>'
-        f'<div class="board5ch-box"><b>📢 {r["board5ch_status"]}</b> ｜ {r["signal"]}</div>'
-        f'<div class="metrics-row"><span>🏦 <b>VPIN:</b> {r["vpin"]:+.2f}</span><span>⚡ <b>OFI:</b> {r["ofi_z"]:+.2f}σ</span><span>🕵️ <b>SmartMoney:</b> {r["sm_div"]:+.2f}</span><span>🌪️ <b>YZボラ:</b> {r["yz_vol"]}%</span><span>🛡️ <b>95%CVaR:</b> -{r["cvar95"]}%</span><span>🧭 <b>効率純度:</b> {r["eff_pct"]}%</span><span>🧬 <b>Hurst:</b> {r["hurst"]}</span><span>🎯 <b>Kalman:</b> {r["kalman_bull_pct"]:+.2f}%</span><span>📐 <b>BB:</b> {r["bb_z"]:+.2f}σ</span><span>📊 <b>RSI:</b> {r["rsi"]}</span></div>'
+        f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>{st_info["algo_name"].split("】")[0]}】</span></div>'
+        f'<div style="margin-bottom:8px;">{rk_h}<span class="pill-badge">⚡ AI {r["ai_score"]}点</span><span class="pill-badge">🏦 機関 {r["inst_score"]}点</span><span class="pill-badge">🧬 OFI {r["ofi_z"]:+.2f}σ</span><span class="pill-badge">🔥 5ch {r["board5ch_score"]}点</span></div>'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;"><div><span style="font-size:17px;font-weight:800;color:#f8fafc;">{r["name"]}</span> <span style="font-size:12px;color:#94a3b8;">({r["code"]} / {r["genre"]})</span><div style="font-size:11.5px;color:#94a3b8;margin-top:2px;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div></div>'
+        f'<div style="text-align:right;"><span style="font-size:10px;color:#94a3b8;">総合勝率</span><br><span class="prob-badge">{r["total_win_rate"]}%</span><div style="font-size:10px;color:#94a3b8;">Payoff {r["payoff"]}x / Edge {r["edge"]:+.2f}%</div></div></div>'
+        f'<div class="winrate-bar"><div><div style="font-size:10px;color:#94a3b8;">🏆 総合勝率</div><div style="font-size:13px;font-weight:800;color:#38bdf8;">{r["total_win_rate"]}%</div></div><div><div style="font-size:10px;color:#94a3b8;">🌅 翌朝GU</div><div style="font-size:13px;font-weight:700;">{r["prob"]}%</div></div><div><div style="font-size:10px;color:#94a3b8;">☀️ 寄後陽線</div><div style="font-size:13px;font-weight:700;">{r["intraday_win_rate"]}%</div></div><div><div style="font-size:10px;color:#94a3b8;">📈 順張り</div><div style="font-size:13px;font-weight:700;">{r["trend_win_rate"]}%</div></div></div>'
+        f'<div class="trade-plan-box"><div><div style="font-size:10px;color:#94a3b8;">🌅 夜間理論寄付き</div><div style="font-size:12.5px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:10px;color:#10b981;">🎯 利確目標</div><div style="font-size:12.5px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:10px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12.5px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
+        f'<div class="sizing-box"><span>📦 <b>戦略別推奨ロット: {lot["shares"]:,}株</b> (投資額 {lot["position_value"]:,.0f}円 / 許容リスク {lot["risk_amount"]:,.0f}円)</span><span>基準VWAP: <b>{r["vwap_price"]}</b></span></div>'
+        f'<details class="quant-detail-drawer"><summary>🔍 銘柄別アルゴリズム戦略 ＆ クオンツ指標詳細（タップで開閉）</summary>'
+        f'<div style="font-size:12px;color:#cbd5e1;margin-top:6px;line-height:1.55;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}<br><b>▶ 執行手順:</b> {st_info["step_plan"]}</div>'
+        f'<div class="metrics-row"><span>VPIN:{r["vpin"]:+.2f}</span><span>OFI:{r["ofi_z"]:+.2f}σ</span><span>YZボラ:{r["yz_vol"]}%</span><span>95%CVaR:-{r["cvar95"]}%</span><span>効率純度:{r["eff_pct"]}%</span><span>RSI:{r["rsi"]}</span><span>Kelly:{r["kelly_pct"]}%</span></div>'
         f'</details></div>'
     )
     st.markdown(card_html, unsafe_allow_html=True)
     render_council_sec(r, f"{kp}_{r['code']}")
 
+def render_ipo_offering_section():
+    st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 新規上場 (IPO) ブックビルディング募集 ＆ 初値期待度ランキング</div><div style="font-size:12px;color:#94a3b8;margin-top:4px;">現在BB募集受付中・新規上場予定の注目IPO銘柄をAIクオンツが需給・吸収金額・テーマ性からランク付け。各証券会社の申込ページへ直通アクセスできます。</div></div>', unsafe_allow_html=True)
+    for ipo in IPO_OFFERINGS:
+        links_html = "".join([f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">🔗 {lbl}</a>' for lbl, url in ipo["links"]])
+        price_b = ipo.get("price_band") or ipo.get("price_ band", "")
+        st.markdown(
+            f'<div class="rank-card" style="border-left-color:#f59e0b;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+            f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 IPO期待度 第{ipo["rank"]}位 (AIスコア {ipo["score"]}点)</span>'
+            f'<span style="font-size:11.5px;color:#38bdf8;font-weight:700;">{ipo["tier"]}</span></div>'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+            f'<div><span style="font-size:17px;font-weight:800;color:#f8fafc;">{ipo["name"]}</span> <span style="font-size:12px;color:#94a3b8;">({ipo["code"]} / {ipo["market"]})</span><div style="font-size:12px;color:#cbd5e1;margin-top:2px;">🎯 テーマ: {ipo["theme"]} ｜ 主幹事: <b>{ipo["lead"]}</b></div></div>'
+            f'<div style="text-align:right;"><span style="font-size:10px;color:#94a3b8;">AI初値騰落予測</span><br><span class="prob-badge" style="color:#10b981!important;">{ipo["expect_return"]}</span></div></div>'
+            f'<div class="trade-plan-box" style="margin-top:8px;"><div><div style="font-size:10px;color:#94a3b8;">📅 BB抽選申込期間</div><div style="font-size:12px;font-weight:700;color:#fde047;">{ipo["bb_period"]}</div></div><div><div style="font-size:10px;color:#94a3b8;">🔔 上場日</div><div style="font-size:12px;font-weight:700;">{ipo["list_date"]}</div></div><div><div style="font-size:10px;color:#94a3b8;">💴 仮条件・公募価格帯</div><div style="font-size:12px;font-weight:700;">{price_b}</div></div></div>'
+            f'<div style="margin-top:8px;">{links_html}</div></div>',
+            unsafe_allow_html=True
+        )
+
 # ==========================================
-# 🚨 超詳細ニュースインテリジェンス専用ページ (NEWS_DETAIL)
+# 🚀 メイン画面描画（重複「やまししラボ」完全削除・YAMASHISHI LAB統一）
 # ==========================================
 macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
-b5_live_ok = any(v.get("live") for v in b5_live_map.values())
 
-if st.session_state.get("navigation_page") == "NEWS_DETAIL":
-    n_item = st.session_state.get("selected_news_item") or (fetch_global_impact_news() or [None])[0]
-    if not n_item: st.session_state["navigation_page"] = "TOP"; st.rerun()
-
-    c_bk1, c_bk2 = st.columns([1.8, 1.2])
-    if c_bk1.button("⬅️ 元の画面へすぐ戻る", use_container_width=True): st.session_state["navigation_page"] = st.session_state.get("prev_page_before_news", "TOP"); st.rerun()
-    if c_bk2.button("🏆 ランキングTOPへ", use_container_width=True): st.session_state["navigation_page"] = "TOP"; st.rerun()
-
-    st.markdown(f'<div style="background:linear-gradient(135deg,#450a0a,#7f1d1d,#0f172a);color:#fff;padding:16px 18px;border-radius:14px;border:2px solid #ef4444;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><span style="background:{n_item["sent_bg"]};color:{n_item["sent_color"]};padding:3px 10px;border-radius:999px;font-weight:900;font-size:12px;">{n_item["badge_icon"]} {n_item["sentiment"]}</span><span style="background:#ef4444;color:#fff;padding:3px 10px;border-radius:999px;font-weight:900;font-size:12px;">株価影響度スコア Lv.{n_item["impact_score"]}/99</span></div><h2 style="margin:4px 0 8px 0;font-size:20px;color:#fef08a;line-height:1.4;">{n_item["title"]}</h2><div style="font-size:12px;color:#cbd5e1;">📡 配信ソース: <b>{n_item["source"]}</b> ｜ 直撃セクター: <b>{", ".join(n_item["matched_sectors"])}</b> ｜ 検知時刻: {n_item["pub"]}</div></div>', unsafe_allow_html=True)
-
-    with st.spinner("🧠 機関クオンツ＆7専門AIが超詳細インパクトレポートを生成中..."):
-        st.markdown(generate_news_deep_analysis(n_item), unsafe_allow_html=True)
-
-    if n_item.get("link"): st.markdown(f"🔗 **[ニュース配信元の原文記事を別タブで開く ({n_item['source']})]({n_item['link']})**")
-    st.markdown("---")
-    st.markdown("#### 🎯 このニュースが直撃するアプリ内登録銘柄")
-    if n_item.get("matched_stocks"):
-        cols = st.columns(min(len(n_item["matched_stocks"]), 3))
-        for idx, st_info in enumerate(n_item["matched_stocks"][:6]):
-            with cols[idx % 3]:
-                if st.button(f"⚡ {st_info['name']} ({st_info['short']}) を精密診断", key=f"nd_jmp_{st_info['code']}", use_container_width=True):
-                    st.session_state["custom_search_code"] = st_info["code"]; st.session_state["navigation_page"] = "TOP"; st.rerun()
-        lead_r = fetch_one(n_item["matched_stocks"][0]["code"], macro_info, b5_live_map, True, True, True)
-        if lead_r: render_card(lead_r, is_custom=True, kp=f"news_lead_{lead_r['code']}")
-    st.stop()
-
-# ==========================================
-# 🚀 メイン画面描画（1行タイトル：Yamashishi Lab やまししラボ）
-# ==========================================
-mpills = "".join([f'<div style="background:rgba(255,255,255,0.08);padding:3px 9px;border-radius:6px;font-size:11.5px;display:inline-flex;gap:4px;"><span style="color:#cbd5e1;">{m["label"]}</span><span style="color:{"#f87171" if m["diff"]>=0 else "#60a5fa"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
+mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:3px 9px;border-radius:6px;font-size:11px;display:inline-flex;gap:5px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(
-    f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:12px 14px;border-radius:14px;margin-bottom:10px;border:1px solid rgba(56,189,248,0.25);box-sizing:border-box;">'
-    f'<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;white-space:nowrap;">'
-    f'<div style="display:flex;align-items:center;gap:8px;white-space:nowrap;min-width:0;">'
-    f'<span class="brand-script">Yamashishi Lab</span><span class="brand-jp">⚡ やまししラボ</span>'
+    f'<div class="glass-header">'
+    f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+    f'<div><div class="brand-luxury">YAMASHISHI LAB</div><div class="brand-sub">MULTI-AGENT QUANTITATIVE TERMINAL</div></div>'
+    f'<span style="background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;padding:4px 10px;border-radius:999px;font-size:10.5px;font-weight:700;">⚡ {AI_PROVIDERS[cur_prov][0]} 稼働</span>'
     f'</div>'
-    f'<span style="background:rgba(16,185,129,0.2);color:#6ee7b7;padding:3px 8px;border-radius:999px;font-size:10.5px;font-weight:800;flex-shrink:0;">🟢 {"5ch＋クオンツ稼働" if b5_live_ok else "クオンツ稼働"}</span>'
-    f'</div>'
-    f'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">{mpills}</div></div>',
+    f'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">{mpills}</div></div>',
     unsafe_allow_html=True
 )
 
-BOOST_MAP = {"🧬 高水準クオンツ(OFI/YZ/Hurst/Kalman/CVaR)": "algo", "🏦 機関VPIN・SmartMoney": "inst", "🔥 5ch実況＆短期モメンタム": "mom"}
-st.markdown('<div class="compact-bar-label"><span>⚡ QUANT ENGINE BOOST</span><span style="color:#94a3b8;font-weight:600;">高水準機関アルゴリズム ＆ 5ch解析ON/OFF</span></div>', unsafe_allow_html=True)
+BOOST_MAP = {"🧬 高水準クオンツ(OFI/YZ/CVaR)": "algo", "🏦 機関VPIN・SmartMoney": "inst", "🔥 5ch実況＆短期モメンタム": "mom"}
 sel_b = st.pills("ブースト", list(BOOST_MAP.keys()), default=list(BOOST_MAP.keys()), selection_mode="multi", label_visibility="collapsed") if hasattr(st, "pills") else st.multiselect("ブースト", list(BOOST_MAP.keys()), default=list(BOOST_MAP.keys()), label_visibility="collapsed")
 ac_b = {BOOST_MAP[k] for k in (sel_b or [])}
 
-with st.spinner("🏦 国内外の母集団＆機関オーダーフローを一括高速スキャン中..."):
+with st.spinner("⚡ 機関オーダーフロー＆銘柄別アルゴリズムを高速計算中..."):
     g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b)
 
 c1, c2 = st.columns([3.4, 1])
@@ -1248,54 +758,46 @@ if c2.button("🔍 銘柄診断", use_container_width=True) and cin: st.session_
 
 if st.session_state.get("custom_search_code"):
     nc = st.session_state["custom_search_code"]
-    with st.spinner(f"「{nc}」を精密解析中..."):
-        cr = fetch_one(nc, macro_info, b5_live_map, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b)
+    cr = fetch_one(nc, macro_info, b5_live_map, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b)
     if cr:
         render_card(cr, is_custom=True, kp="custom")
-        if st.button("✖️ 個別診断結果を閉じてランキングに戻る", use_container_width=True): st.session_state["custom_search_code"] = ""; st.rerun()
+        if st.button("✖️ 個別診断を閉じる", use_container_width=True): st.session_state["custom_search_code"] = ""; st.rerun()
     else: st.warning(f"銘柄「{nc}」のデータが見つかりませんでした。")
 
 def cut_stocks(slist, pct):
     if not slist: return [], []
-    s = sorted(slist, key=lambda x: (x["tier_num"], x["total_win_rate"], x["survival_power"], x["inst_score"]), reverse=True)
+    s = sorted(slist, key=lambda x: (x["tier_num"], x["total_win_rate"], x["survival_power"]), reverse=True)
     k = max(3, int(round(len(s) * (pct / 100.0))))
     return s[:k], s[k:]
 
-if st.session_state.get("navigation_page") == "WATCHLIST":
-    st.subheader("📋 監視ウォッチリスト")
-    if st.button("⬅️ ランキング一覧へ戻る", use_container_width=True): st.session_state["navigation_page"] = "TOP"; st.rerun()
-    for wc, wi in list(st.session_state["watchlist"].items()): render_card(wi, kp=f"wl_{wc}")
-else:
-    cats = ["🏆 総合TOP5", "🏦 機関VPIN・OFI", "🔥 5ch＆短期モメンタム", "📋 監視シート"] + [f"📂 {g}" for g in STOCK_POOL.keys()]
-    st.markdown('<div class="compact-bar-label"><span>📂 RANKING & SECTOR SELECT</span><span style="color:#94a3b8;font-weight:600;">戦略ランキング / テーマ別セクター切替</span></div>', unsafe_allow_html=True)
-    prev_cat = st.session_state.get("active_category", "🏆 総合TOP5")
-    if prev_cat not in cats: prev_cat = "🏆 総合TOP5"
-    if hasattr(st, "pills"):
-        p_cat = st.pills("カテゴリ", cats, default=prev_cat, selection_mode="single", label_visibility="collapsed")
-        sel_cat = p_cat if p_cat else prev_cat
-    else: sel_cat = st.radio("カテゴリ", cats, horizontal=True, label_visibility="collapsed")
-    if sel_cat != prev_cat:
-        st.session_state["nav_history"].append(prev_cat)
-        st.session_state["active_category"] = sel_cat
+cats = ["🏆 総合TOP5", "🎟️ IPO募集・新規上場", "🏦 機関VPIN・OFI", "🔥 5ch＆短期モメンタム", "📋 監視シート"] + [f"📂 {g}" for g in STOCK_POOL.keys()]
+st.markdown('<div class="compact-bar-label"><span>📂 STRATEGY & SECTOR SELECT</span><span>戦略ランキング / IPO募集 / セクター切替</span></div>', unsafe_allow_html=True)
+prev_cat = st.session_state.get("active_category", "🏆 総合TOP5")
+if prev_cat not in cats: prev_cat = "🏆 総合TOP5"
+sel_cat = (st.pills("カテゴリ", cats, default=prev_cat, selection_mode="single", label_visibility="collapsed") or prev_cat) if hasattr(st, "pills") else st.radio("カテゴリ", cats, horizontal=True, label_visibility="collapsed")
+if sel_cat != prev_cat:
+    st.session_state["nav_history"].append(prev_cat)
+    st.session_state["active_category"] = sel_cat
 
-    surv, elim = cut_stocks(all_res, survival_cut_pct)
-    if sel_cat == "🏆 総合TOP5":
-        st.caption(f"🦁 全母集団 {len(all_res)}銘柄から下位 {len(elim)}銘柄を足切り！総合勝率・機関OFI・5ch需給ともに最強のTOP5です。")
-        for i, r in enumerate(surv[:5], 1): render_card(r, rank=i, kp="top5")
-    elif sel_cat == "🏦 機関VPIN・OFI":
-        for i, r in enumerate(sorted(all_res, key=lambda x: (x["inst_score"], x["ofi_z"], x["total_win_rate"]), reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
-    elif sel_cat == "🔥 5ch＆短期モメンタム":
-        for i, r in enumerate(sorted(all_res, key=lambda x: (x["board5ch_score"], x["total_win_rate"]), reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
-    elif sel_cat == "📋 監視シート":
-        wl = st.session_state["watchlist"]
-        st.markdown(f"#### 📋 監視ウォッチリスト ({len(wl)}銘柄)")
-        if st.button("⚡ 総合TOP3をワンタップ一括登録", use_container_width=True):
-            for it in surv[:3]: st.session_state["watchlist"][it["code"]] = it
-            st.rerun()
-        if wl:
-            st.dataframe(pd.DataFrame([{"コード": c, "銘柄名": x["name"], "現在値": x["price"], "総合勝率": f"{x['total_win_rate']}%", "OFI": f"{x['ofi_z']:+.2f}σ", "Kelly配分": f"{x['kelly_pct']}%", "10段階判定": x["tier_label"], "夜間理論気配": x["pts_est_price"], "推奨株数": f"{x['lot_info']['shares']:,}株", "利確": x["tp_price"], "損切": x["sl_price"]} for c, x in wl.items()]), use_container_width=True, hide_index=True)
-    elif sel_cat.startswith("📂 "):
-        gk = sel_cat.replace("📂 ", "")
-        gs, ge = cut_stocks(g_res.get(gk, []), survival_cut_pct)
-        st.caption(f"🦁 **{gk}選抜**: 上位 **{len(gs)}銘柄が生存**（下位 {len(ge)}銘柄が脱落）")
-        for i, r in enumerate(gs, 1): render_card(r, rank=i, kp=f"g_{gk}")
+surv, elim = cut_stocks(all_res, survival_cut_pct)
+if sel_cat == "🏆 総合TOP5":
+    st.caption(f"🦁 全母集団 {len(all_res)}銘柄から厳選！銘柄ごとに異なる最適アルゴリズムを割り当てた総合TOP5です。")
+    for i, r in enumerate(surv[:5], 1): render_card(r, rank=i, kp="top5")
+elif sel_cat == "🎟️ IPO募集・新規上場":
+    render_ipo_offering_section()
+    st.markdown("#### 🚀 直近上場・セカンダリー急騰IPO株リアルタイム診断")
+    for i, r in enumerate(cut_stocks(g_res.get("小型急騰・直近IPO", []), 100)[0][:6], 1): render_card(r, rank=i, kp="ipo_sec")
+elif sel_cat == "🏦 機関VPIN・OFI":
+    for i, r in enumerate(sorted(all_res, key=lambda x: (x["inst_score"], x["ofi_z"], x["total_win_rate"]), reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
+elif sel_cat == "🔥 5ch＆短期モメンタム":
+    for i, r in enumerate(sorted(all_res, key=lambda x: (x["board5ch_score"], x["total_win_rate"]), reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
+elif sel_cat == "📋 監視シート":
+    wl = st.session_state["watchlist"]
+    if st.button("⚡ 総合TOP3をワンタップ一括登録", use_container_width=True):
+        for it in surv[:3]: st.session_state["watchlist"][it["code"]] = it
+        st.rerun()
+    for wc, wi in list(wl.items()): render_card(wi, kp=f"wl_{wc}")
+elif sel_cat.startswith("📂 "):
+    gk = sel_cat.replace("📂 ", "")
+    gs, _ = cut_stocks(g_res.get(gk, []), survival_cut_pct)
+    for i, r in enumerate(gs, 1): render_card(r, rank=i, kp=f"g_{gk}")
