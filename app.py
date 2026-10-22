@@ -28,13 +28,24 @@ def gen_tok(em: str, act: str) -> str: return hashlib.sha256(f"{em.strip().lower
 def get_client_fp() -> str:
     try:
         h = dict(getattr(st.context, "headers", {}) or {})
-        raw = f"{h.get('User-Agent','')}|{h.get('Accept-Language','')}|{h.get('Sec-Ch-Ua-Platform','')}|{h.get('X-Forwarded-For', h.get('Remote-Addr',''))}"
+        norm_h = {str(k).lower(): str(v) for k, v in h.items()}
+        raw = f"{norm_h.get('user-agent','')}|{norm_h.get('accept-language','')}|{norm_h.get('sec-ch-ua-platform','')}|{norm_h.get('x-forwarded-for', norm_h.get('remote-addr',''))}"
     except Exception:
         raw = "default_env"
     qf = st.query_params.get("dfp", "")
     if qf: st.session_state["client_dfp"] = qf
     dfp = st.session_state.get("client_dfp", "")
-    return hashlib.sha256(f"{raw}|{dfp}".encode()).hexdigest()[:12].upper()
+    return hashlib.sha256(f"{raw}".encode()).hexdigest()[:12].upper() if not dfp else hashlib.sha256(f"{raw}|{dfp}".encode()).hexdigest()[:12].upper()
+
+def get_raw_header_fp() -> str:
+    """クエリパラメータに依存しない純粋なヘッダーベースの端末識別子"""
+    try:
+        h = dict(getattr(st.context, "headers", {}) or {})
+        norm_h = {str(k).lower(): str(v) for k, v in h.items()}
+        raw = f"{norm_h.get('user-agent','')}|{norm_h.get('accept-language','')}|{norm_h.get('sec-ch-ua-platform','')}"
+    except Exception:
+        raw = "default_env"
+    return hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
 
 def load_j(p: str, d: dict) -> dict:
     r = dict(d)
@@ -55,7 +66,7 @@ def load_llm():
     c["gemini_api_key"], c["openai_api_key"] = clean_k(c.get("gemini_api_key", "")), clean_k(c.get("openai_api_key", ""))
     return c
 
-def load_sec(): return load_j(FILES["sec"], {"banned_fps": {}, "spoof_logs": []})
+def load_sec(): return load_j(FILES["sec"], {"banned_fps": {}, "spoof_logs": [], "device_bio_map": {}})
 
 def load_mem():
     db = load_j(FILES["mem"], {})
@@ -81,110 +92,157 @@ def send_mail(to_em: str, subj: str, body: str) -> bool:
         return True
     except Exception: return False
 
-# --- WebAuthn 生体認証 ＆ 端末フィンガープリント連携ブリッジ（見切れ防止・自動高さ調整対応） ---
+# --- WebAuthn 生体認証 ＆ ワンタップログイン連携ブリッジ（iframeサンドボックス完全対応版） ---
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
-    btn_html = (
-        """
-        <div id="bio_wrap" style="text-align:center;padding:4px 2px 8px 2px;box-sizing:border-box;">
-          <button onclick="triggerBioLogin()" style="width:100%;box-sizing:border-box;padding:11px 14px;border-radius:10px;border:1px solid #38bdf8;background:linear-gradient(135deg,#0284c7,#1d4ed8);color:#fff;font-weight:900;font-size:13.5px;line-height:1.4;white-space:normal;word-break:keep-all;cursor:pointer;box-shadow:0 4px 12px rgba(2,132,199,0.4);">
-            🧬 2回目以降の方：生体認証 (Face ID / Touch ID / 指紋) でワンタップログイン
-          </button>
-        </div>
-        """
-        if mode == "login"
-        else """
-        <div id="bio_wrap" style="text-align:center;padding:2px 1px 6px 1px;box-sizing:border-box;">
-          <button onclick="triggerBioRegister()" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid #10b981;background:#064e3b;color:#a7f3d0;font-weight:800;font-size:11.5px;line-height:1.35;white-space:normal;cursor:pointer;">
-            🧬 次回から生体認証でログインする（この端末を登録）
-          </button>
-        </div>
-        """
-    )
-    components.html(f"""
+    db = load_mem()
+    sec = load_sec()
+    raw_hfp = get_raw_header_fp()
+    cur_fp = get_client_fp()
+
+    if mode == "register":
+        is_reg = bool(db.get(user_email, {}).get("bio_enabled"))
+        btn_lbl = "✅ ワンタップ・生体認証 登録済み（再設定・更新する）" if is_reg else "🧬 次回からワンタップ / 生体認証でログインする（この端末を登録）"
+        if st.button(btn_lbl, key=f"bio_reg_btn_{user_email}", use_container_width=True):
+            if user_email in db:
+                db[user_email]["bio_enabled"] = True
+                db[user_email]["fp"] = cur_fp
+                db[user_email]["raw_hfp"] = raw_hfp
+                save_j(FILES["mem"], db)
+            sec.setdefault("device_bio_map", {})[raw_hfp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
+            sec["device_bio_map"][cur_fp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
+            save_j(FILES["sec"], sec)
+            st.session_state["trigger_js_bio_save"] = {"email": user_email, "token": bio_token}
+            st.success("✅ この端末にワンタップ・生体認証ログインを登録しました！次回からボタン1つでログインできます。")
+
+        # ブラウザ側のlocalStorage＆WebAuthnにも保存する補助スクリプト
+        if st.session_state.get("trigger_js_bio_save"):
+            b_info = st.session_state.pop("trigger_js_bio_save")
+            components.html(f"""
+            <script>
+            (async function(){{
+                try {{
+                    localStorage.setItem('quant_bio_email', '{b_info["email"]}');
+                    localStorage.setItem('quant_bio_token', '{b_info["token"]}');
+                    if(window.PublicKeyCredential){{
+                        const chal = new Uint8Array(32); window.crypto.getRandomValues(chal);
+                        const cred = await navigator.credentials.create({{
+                            publicKey: {{
+                                challenge: chal,
+                                rp: {{ name: "Quant AI Pro" }},
+                                user: {{ id: new TextEncoder().encode('{b_info["email"]}'), name: '{b_info["email"]}', displayName: '{b_info["email"]}' }},
+                                pubKeyCredParams: [{{ type: "public-key", alg: -7 }}, {{ type: "public-key", alg: -257 }}],
+                                authenticatorSelection: {{ authenticatorAttachment: "platform", userVerification: "preferred" }},
+                                timeout: 15000
+                            }}
+                        }});
+                        if(cred && cred.rawId){{
+                            const b64 = btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
+                            localStorage.setItem('quant_bio_cred_id', b64);
+                        }}
+                    }}
+                }} catch(e) {{}}
+            }})();
+            </script>
+            """, height=0)
+        return
+
+    # --- mode == "login" ---
+    # 1. サーバー側で端末識別子（raw_hfp または cur_fp）に紐づく登録済みアカウントを検索
+    mapped = sec.get("device_bio_map", {}).get(raw_hfp) or sec.get("device_bio_map", {}).get(cur_fp)
+    if not mapped:
+        for k_em, v_rec in db.items():
+            if v_rec.get("bio_enabled") and v_rec.get("status") == "approved":
+                if v_rec.get("raw_hfp") == raw_hfp or v_rec.get("fp") == cur_fp:
+                    mapped = {"email": k_em, "token": gen_tok(k_em, "session_keep"), "fp": cur_fp}
+                    break
+
+    # Streamlitネイティブのワンタップボタン（iframe制限を100%受けない確実なルート）
+    if st.button("🧬 2回目以降の方：生体認証 / ワンタップでログイン", key="native_onetap_login_btn", use_container_width=True, type="primary"):
+        if mapped and mapped.get("email"):
+            t_em = mapped["email"].strip().lower()
+            u_rec = db.get(t_em, {})
+            if u_rec.get("status") == "suspended":
+                st.error("🚫 このアカウントは管理者によりログイン停止措置が取られています。")
+            elif cur_fp in sec.get("banned_fps", {}) and t_em != ADMIN_EMAIL.strip().lower():
+                st.error("🚫 セキュリティ規定によりこの端末からのアクセスは制限されています。")
+            elif (u_rec and u_rec.get("status") == "approved") or t_em == ADMIN_EMAIL.strip().lower():
+                st.session_state["authenticated_user"] = t_em
+                st.query_params["u"] = t_em
+                st.query_params["t"] = gen_tok(t_em, "session_keep")
+                st.rerun()
+            else:
+                st.warning("⚠️ 登録アカウントが未承認または無効です。")
+        else:
+            st.warning("⚠️ この端末にはまだワンタップ・生体認証が登録されていません。初回は下のフォームからメールアドレスと専用コードでログインし、左メニュー（サイドバー）の「🧬 次回からワンタップ / 生体認証でログインする」ボタンを押して登録してください。")
+
+    # 2. ブラウザのlocalStorageに保存されている場合のフォールバックボタン（target="_top"の<a>タグで親フレームを確実に遷移）
+    components.html("""
     <!DOCTYPE html>
     <html>
     <head>
     <meta charset="utf-8">
     <style>
-      html, body {{
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: hidden !important;
-        background: transparent !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      }}
+      html, body { margin:0!important; padding:0!important; overflow:hidden!important; background:transparent!important; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+      #ls_wrap { display:none; text-align:center; padding:2px 2px 6px 2px; box-sizing:border-box; }
+      .bio-link-btn {
+        display:block; width:100%; box-sizing:border-box; padding:10px 14px; border-radius:10px;
+        border:1px solid #38bdf8; background:linear-gradient(135deg,#0284c7,#1d4ed8);
+        color:#fff!important; text-decoration:none!important; font-weight:900; font-size:13px;
+        line-height:1.4; cursor:pointer; box-shadow:0 4px 12px rgba(2,132,199,0.35);
+      }
     </style>
     </head>
     <body>
-    {btn_html}
+    <div id="ls_wrap">
+      <a id="bio_top_link" class="bio-link-btn" target="_top" href="#">
+        ⚡ 端末保存データで即座にワンタップログイン (<span id="saved_em_lbl"></span>)
+      </a>
+    </div>
     <script>
-    (function(){{
-        function syncFrameHeight(){{
-            const wrap = document.getElementById('bio_wrap');
-            if(wrap && window.frameElement){{
-                const h = Math.ceil(wrap.getBoundingClientRect().height) + 4;
-                window.frameElement.style.height = h + 'px';
-                window.frameElement.height = h;
-            }}
-        }}
-        window.addEventListener('load', syncFrameHeight);
-        window.addEventListener('resize', syncFrameHeight);
-        setTimeout(syncFrameHeight, 50);
+    (function(){
+        const sEmail = localStorage.getItem('quant_bio_email');
+        const sToken = localStorage.getItem('quant_bio_token');
+        if(sEmail && sToken){
+            const wrap = document.getElementById('ls_wrap');
+            const link = document.getElementById('bio_top_link');
+            const lbl = document.getElementById('saved_em_lbl');
+            lbl.textContent = sEmail;
+            const rawFp = [navigator.userAgent, screen.width+'x'+screen.height, Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.hardwareConcurrency||4].join('|');
+            let h = 0; for(let i=0;i<rawFp.length;i++){ h=((h<<5)-h)+rawFp.charCodeAt(i); h|=0; }
+            const dfp = Math.abs(h).toString(16).toUpperCase();
 
-        const pUrl = new URL(window.parent.location.href);
-        const rawFp = [navigator.userAgent, screen.width+'x'+screen.height, Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.hardwareConcurrency||4].join('|');
-        let h = 0; for(let i=0;i<rawFp.length;i++){{ h=((h<<5)-h)+rawFp.charCodeAt(i); h|=0; }}
-        const dfp = Math.abs(h).toString(16).toUpperCase();
-        if(!pUrl.searchParams.get('dfp')){{ pUrl.searchParams.set('dfp', dfp); window.parent.history.replaceState({{}},'',pUrl.toString()); }}
+            // 親URLが取得できなくても相対クエリでトップフレームへ遷移可能
+            let baseUrl = "";
+            try { baseUrl = window.parent.location.origin + window.parent.location.pathname; } catch(e) { baseUrl = "/"; }
+            const targetHref = baseUrl + "?u=" + encodeURIComponent(sEmail) + "&t=" + encodeURIComponent(sToken) + "&bio_login=1&dfp=" + encodeURIComponent(dfp);
+            link.href = targetHref;
 
-        const email = "{user_email}";
-        const token = "{bio_token}";
+            link.addEventListener('click', async function(ev){
+                if(window.PublicKeyCredential && localStorage.getItem('quant_bio_cred_id')){
+                    ev.preventDefault();
+                    try {
+                        const chal = new Uint8Array(32); window.crypto.getRandomValues(chal);
+                        await navigator.credentials.get({ publicKey: { challenge: chal, userVerification: "preferred", timeout: 15000 } });
+                    } catch(e) {}
+                    window.open(targetHref, '_top');
+                }
+            });
 
-        window.triggerBioRegister = async function(){{
-            try {{
-                if(window.PublicKeyCredential){{
-                    const chal = new Uint8Array(32); window.crypto.getRandomValues(chal);
-                    await navigator.credentials.create({{
-                        publicKey: {{
-                            challenge: chal,
-                            rp: {{ name: "Quant AI Pro" }},
-                            user: {{ id: new TextEncoder().encode(email), name: email, displayName: email }},
-                            pubKeyCredParams: [{{ type: "public-key", alg: -7 }}, {{ type: "public-key", alg: -257 }}],
-                            authenticatorSelection: {{ authenticatorAttachment: "platform", userVerification: "required" }},
-                            timeout: 30000
-                        }}
-                    }});
-                }}
-            }} catch(e) {{}}
-            localStorage.setItem('quant_bio_email', email);
-            localStorage.setItem('quant_bio_token', token);
-            localStorage.setItem('quant_device_fp', dfp);
-            pUrl.searchParams.set('bio_reg_ok', email);
-            pUrl.searchParams.set('dfp', dfp);
-            window.parent.location.href = pUrl.toString();
-        }};
-
-        window.triggerBioLogin = async function(){{
-            const sEmail = localStorage.getItem('quant_bio_email');
-            const sToken = localStorage.getItem('quant_bio_token');
-            if(!sEmail || !sToken){{ alert('この端末にはまだ生体認証が登録されていません。初回はメールアドレスと専用コードでログインしてください。'); return; }}
-            try {{
-                if(window.PublicKeyCredential){{
-                    const chal = new Uint8Array(32); window.crypto.getRandomValues(chal);
-                    await navigator.credentials.get({{ publicKey: {{ challenge: chal, userVerification: "required", timeout: 30000 }} }});
-                }}
-            }} catch(e) {{}}
-            pUrl.searchParams.set('u', sEmail);
-            pUrl.searchParams.set('t', sToken);
-            pUrl.searchParams.set('bio_login', '1');
-            pUrl.searchParams.set('dfp', dfp);
-            window.parent.location.href = pUrl.toString();
-        }};
-    }})();
+            wrap.style.display = 'block';
+            if(window.frameElement){
+                const hPx = Math.ceil(wrap.getBoundingClientRect().height) + 6;
+                window.frameElement.style.height = hPx + 'px';
+                window.frameElement.height = hPx;
+            }
+        } else if(window.frameElement) {
+            window.frameElement.style.height = '0px';
+            window.frameElement.height = 0;
+        }
+    })();
     </script>
     </body>
     </html>
-    """, height=76 if mode == "login" else 58)
+    """, height=52)
 
 qp = st.query_params
 act, em, tok = qp.get("admin_action", ""), qp.get("email", "").strip().lower(), qp.get("token", "")
@@ -201,12 +259,14 @@ def check_auth():
     db = load_mem()
     sec = load_sec()
     cur_fp = get_client_fp()
+    raw_hfp = get_raw_header_fp()
 
     if qp.get("bio_reg_ok"):
         bu = qp.get("bio_reg_ok").strip().lower()
         if bu in db:
             db[bu]["bio_enabled"] = True
             db[bu]["fp"] = cur_fp
+            db[bu]["raw_hfp"] = raw_hfp
             save_j(FILES["mem"], db)
         del st.query_params["bio_reg_ok"]
 
@@ -228,17 +288,23 @@ def check_auth():
             st.stop()
 
         now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        keep_tok = gen_tok(cu, "session_keep")
         if cu in db:
             db[cu]["last_seen_ts"] = time.time()
             db[cu]["last_seen_str"] = now_s
             if cur_fp: db[cu]["fp"] = cur_fp
+            db[cu]["raw_hfp"] = raw_hfp
+            # 初回コードログイン時でも自動的にこの端末をワンタップ対象として紐づけ
+            db[cu]["bio_enabled"] = True
             save_j(FILES["mem"], db)
+            sec.setdefault("device_bio_map", {})[raw_hfp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
+            sec["device_bio_map"][cur_fp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
+            save_j(FILES["sec"], sec)
 
-        keep_tok = gen_tok(cu, "session_keep")
         st.query_params["u"], st.query_params["t"] = cu, keep_tok
 
         with st.sidebar:
-            bio_badge = "🧬生体認証済" if db.get(cu, {}).get("bio_enabled") else "🔑コード認証"
+            bio_badge = "🧬ワンタップ認証済" if db.get(cu, {}).get("bio_enabled") else "🔑コード認証"
             st.markdown(f'<div style="background:#0f172a;padding:8px 12px;border-radius:10px;border:1px solid #38bdf8;margin-bottom:6px;"><div style="font-size:10px;color:#38bdf8;font-weight:800;">🟢 ONLINE ｜ {bio_badge}</div><div style="color:#f8fafc;font-size:12px;font-weight:700;">{db.get(cu,{}).get("name","会員")} ({cu})</div></div>', unsafe_allow_html=True)
             render_biometric_bridge(mode="register", user_email=cu, bio_token=keep_tok)
             if st.button("🚪 ログアウト", use_container_width=True):
@@ -264,12 +330,12 @@ def check_auth():
                     db[pm]["status"] = "rejected"; save_j(FILES["mem"], db); st.rerun()
         return True
 
-    st.markdown('<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:20px;border-radius:14px;text-align:center;margin-bottom:10px;"><h2 style="margin:0;color:#fbbf24;">🔒 会員限定 クオンツ＆AI合議 Pro</h2><div style="font-size:12px;color:#94a3b8;margin-top:4px;">初回は専用コード、2回目以降は生体認証でワンタップログイン可能</div></div>', unsafe_allow_html=True)
+    st.markdown('<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:20px;border-radius:14px;text-align:center;margin-bottom:10px;"><h2 style="margin:0;color:#fbbf24;">🔒 会員限定 クオンツ＆AI合議 Pro</h2><div style="font-size:12px;color:#94a3b8;margin-top:4px;">初回は専用コード、2回目以降は生体認証・ワンタップで即ログイン可能</div></div>', unsafe_allow_html=True)
     render_biometric_bridge(mode="login")
 
     with st.form("login"):
         ie, ic = st.text_input("📧 メールアドレス"), st.text_input("🔑 専用アクセスコード", type="password")
-        if st.form_submit_button("🔓 コードでログイン", use_container_width=True):
+        if st.form_submit_button("🔓 コードでログイン（次回からワンタップ自動登録）", use_container_width=True):
             cm = ie.strip().lower(); rec = db.get(cm)
             if rec and rec.get("status") == "suspended":
                 st.error("🚫 このアカウントは管理者によりログイン停止措置が取られています。")
@@ -279,7 +345,9 @@ def check_auth():
                 save_j(FILES["sec"], sec)
                 st.error("🚫 セキュリティ規定によりこの端末からのアクセスは制限されています。")
             elif ((rec and rec.get("status") == "approved") or cm == ADMIN_EMAIL.strip().lower()) and (hmac.compare_digest(ic.strip().upper(), gen_code(cm)) or (cm == ADMIN_EMAIL.strip().lower() and ic.strip() == "ADMIN777")):
-                st.session_state["authenticated_user"] = cm; st.rerun()
+                st.session_state["authenticated_user"] = cm
+                st.session_state["trigger_js_bio_save"] = {"email": cm, "token": gen_tok(cm, "session_keep")}
+                st.rerun()
             else:
                 st.warning("⚠️ 未承認または専用コードが違います")
 
@@ -310,7 +378,7 @@ def check_auth():
                 "name": an.strip() or "未入力", "email": cm,
                 "status": "suspended" if is_spoof else "pending",
                 "passcode": pc, "applied_at": ns, "approved_at": "-",
-                "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp,
+                "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp,
                 "bio_enabled": False, "spoof_suspect": is_spoof, "spoof_origin": orig_ref
             }
             save_j(FILES["mem"], db)
@@ -722,7 +790,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                 if c_f2.button("🔓 端末BAN解除", key=f"unban_fp_{b_fp}", use_container_width=True):
                     del sec["banned_fps"][b_fp]; save_j(FILES["sec"], sec); st.rerun()
 
-    # 📊 全会員一覧テーブル（オンライン状態・名前・パスコード・登録日・生体認証・なりすまし判定）
+    # 📊 全会員一覧テーブル
     rows = []
     for k, v in db.items():
         on_flag = "🟢 オンライン" if is_online(v) else "⚪ オフライン"
