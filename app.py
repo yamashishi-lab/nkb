@@ -155,14 +155,18 @@ def inject_css():
     css = """
     @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
     html,body,[class*="css"]{font-size:15px;}
-    .block-container{padding-top:2rem!important;padding-bottom:3rem!important;max-width:820px!important;}
-    .brand-header-1line{display:flex;align-items:center;justify-content:center;gap:12px;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;width:100%;}
-    .brand-script{font-family:'Great Vibes',cursive!important;font-size:32px!important;font-weight:400!important;color:#fbbf24!important;letter-spacing:1.5px;text-shadow:0 2px 10px rgba(251,191,36,0.45);line-height:1.1;}
-    .brand-jp{font-size:18px!important;font-weight:900!important;color:#f8fafc!important;letter-spacing:1px;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker){position:sticky!important;top:2.75rem!important;z-index:999!important;background:transparent!important;padding:2px 0!important;margin:0 0 8px 0!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;gap:10px!important;width:100%!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button{width:100%!important;min-height:34px!important;height:34px!important;padding:0 10px!important;border-radius:8px!important;background:#1e293b!important;color:#f8fafc!important;border:1px solid #334155!important;}
-    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button p{font-size:13px!important;font-weight:700!important;margin:0!important;white-space:nowrap!important;color:inherit!important;}
+    .block-container{padding-top:3.6rem!important;padding-bottom:3rem!important;padding-left:0.8rem!important;padding-right:0.8rem!important;max-width:820px!important;}
+    .brand-header-1line{display:flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap!important;width:100%;padding:2px 4px;box-sizing:border-box;}
+    .brand-script{font-family:'Great Vibes',cursive!important;font-size:clamp(24px,6vw,32px)!important;font-weight:400!important;color:#fbbf24!important;letter-spacing:1px;text-shadow:0 2px 10px rgba(251,191,36,0.45);line-height:1.25;padding:2px 2px;}
+    .brand-jp{font-size:clamp(14px,3.8vw,18px)!important;font-weight:900!important;color:#f8fafc!important;letter-spacing:0.5px;line-height:1.2;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker){position:sticky!important;top:2.85rem!important;z-index:999!important;background:transparent!important;padding:2px 0!important;margin:0 0 8px 0!important;width:100%!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;gap:5px!important;width:100%!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="column"],
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stColumn"]{min-width:0!important;padding:0!important;flex:1 1 0%!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="column"]:nth-child(2),
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) div[data-testid="stColumn"]:nth-child(2){flex:1.55 1 0%!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button{width:100%!important;min-width:0!important;min-height:32px!important;height:32px!important;padding:0 4px!important;border-radius:8px!important;background:#1e293b!important;color:#f8fafc!important;border:1px solid #334155!important;overflow:hidden!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.top-nav-marker) button p{font-size:clamp(11px,2.8vw,12.5px)!important;font-weight:700!important;margin:0!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;color:inherit!important;line-height:1.1!important;}
     div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker){position:fixed!important;bottom:22px!important;right:22px!important;z-index:999999!important;width:min(430px,93vw)!important;background:linear-gradient(135deg,#450a0a,#7f1d1d,#0f172a)!important;border:2px solid #ef4444!important;border-radius:14px!important;padding:12px 14px!important;box-shadow:0 14px 35px rgba(220,38,38,0.55)!important;}
     div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker) button{background:linear-gradient(90deg,#fef08a,#fde047)!important;color:#0f172a!important;border:none!important;font-weight:900!important;border-radius:8px!important;min-height:38px!important;}
     div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker) button p{color:#0f172a!important;font-weight:900!important;font-size:12.5px!important;white-space:normal!important;line-height:1.35!important;}
@@ -266,8 +270,8 @@ def check_auth():
                     st.rerun()
         return True
 
-    # --- 未ログイン画面（1行タイトル：Yamashishi Lab やまししラボ） ---
-    st.markdown('<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:18px 16px;border-radius:14px;text-align:center;margin-bottom:10px;border:1px solid rgba(251,191,36,0.35);"><div class="brand-header-1line"><span class="brand-script">Yamashishi Lab</span><span class="brand-jp">⚡ やまししラボ</span></div><div style="font-size:12px;color:#94a3b8;margin-top:4px;">初回は専用コード、2回目以降は生体認証・ワンタップで即ログイン可能</div></div>', unsafe_allow_html=True)
+    # --- 未ログイン画面（見切れ防止＆1行タイトル：Yamashishi Lab やまししラボ） ---
+    st.markdown('<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:16px 12px;border-radius:14px;text-align:center;margin-top:4px;margin-bottom:10px;border:1px solid rgba(251,191,36,0.35);box-sizing:border-box;"><div class="brand-header-1line"><span class="brand-script">Yamashishi Lab</span><span class="brand-jp">⚡ やまししラボ</span></div><div style="font-size:11.5px;color:#94a3b8;margin-top:4px;line-height:1.4;">初回は専用コード、2回目以降は生体認証・ワンタップで即ログイン可能</div></div>', unsafe_allow_html=True)
     render_biometric_bridge(mode="login")
 
     with st.form("login"):
@@ -339,7 +343,7 @@ for k, v in [
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
-    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.45, 1])
+    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.55, 1])
     if nav_c1.button("トップ", key="top_nav_btn_top", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] += 1; st.rerun()
     if nav_c2.button(f"合議タブ全て閉じる({open_cnt})" if open_cnt else "合議タブ全て閉じる", key="top_nav_btn_close", use_container_width=True):
@@ -1219,12 +1223,12 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
 # ==========================================
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.08);padding:3px 9px;border-radius:6px;font-size:11.5px;display:inline-flex;gap:4px;"><span style="color:#cbd5e1;">{m["label"]}</span><span style="color:{"#f87171" if m["diff"]>=0 else "#60a5fa"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(
-    f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:14px 18px;border-radius:14px;margin-bottom:10px;border:1px solid rgba(56,189,248,0.25);">'
-    f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;">'
-    f'<div style="display:flex;align-items:baseline;gap:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+    f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:12px 14px;border-radius:14px;margin-bottom:10px;border:1px solid rgba(56,189,248,0.25);box-sizing:border-box;">'
+    f'<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;white-space:nowrap;">'
+    f'<div style="display:flex;align-items:center;gap:8px;white-space:nowrap;min-width:0;">'
     f'<span class="brand-script">Yamashishi Lab</span><span class="brand-jp">⚡ やまししラボ</span>'
     f'</div>'
-    f'<span style="background:rgba(16,185,129,0.2);color:#6ee7b7;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;flex-shrink:0;">🟢 {"5ch実況＋機関クオンツ稼働" if b5_live_ok else "機関クオンツ高速稼働"}</span>'
+    f'<span style="background:rgba(16,185,129,0.2);color:#6ee7b7;padding:3px 8px;border-radius:999px;font-size:10.5px;font-weight:800;flex-shrink:0;">🟢 {"5ch＋クオンツ稼働" if b5_live_ok else "クオンツ稼働"}</span>'
     f'</div>'
     f'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">{mpills}</div></div>',
     unsafe_allow_html=True
