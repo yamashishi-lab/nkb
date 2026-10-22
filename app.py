@@ -6,12 +6,14 @@ import numpy as np
 import altair as alt
 import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, random
 import urllib.parse, urllib.request, urllib.error
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from email.mime.text import MIMEText
 from datetime import datetime
 
 st.set_page_config(page_title="翌朝株価 クオンツ＆AI合議 Pro", page_icon="⚡", layout="centered")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
+dialog_dec = getattr(st, "dialog", getattr(st, "experimental_dialog", None))
 
 ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
 SECRET_KEY = "my_super_secret_quant_key_2026"
@@ -119,7 +121,13 @@ def check_auth():
 
 check_auth()
 
-for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("exhausted_models", set()), ("nav_history", []), ("scroll_target", None), ("scroll_top_trig", 0)]:
+for k, v in [
+    ("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}),
+    ("debate_round_seed", {}), ("debate_style_map", {}), ("watchlist", {}), ("navigation_page", "TOP"),
+    ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("exhausted_models", set()),
+    ("nav_history", []), ("scroll_target", None), ("scroll_top_trig", 0),
+    ("seen_news_ids", set()), ("selected_news_item", None), ("news_ai_cache", {})
+]:
     if k not in st.session_state: st.session_state[k] = v
 
 def inject_css():
@@ -153,6 +161,7 @@ def inject_css():
     }
     div[data-testid="stPills"]{margin-top:-2px!important;margin-bottom:4px!important;}
     .compact-bar-label{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;color:#38bdf8;background:linear-gradient(90deg,#0f172a,#1e293b);padding:5px 12px;border-radius:8px;border-left:3px solid #38bdf8;margin-bottom:4px;}
+    .news-radar-header{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:800;color:#fde047;background:linear-gradient(90deg,#450a0a,#7f1d1d,#0f172a);padding:6px 12px;border-radius:8px;border-left:4px solid #ef4444;margin-bottom:6px;box-shadow:0 2px 10px rgba(239,68,68,0.2);}
     .company-logo-img{width:36px;height:36px;border-radius:8px;background:#fff;padding:2px;border:1px solid #e2e8f0;}
     .rank-card,.search-result-card{background:linear-gradient(180deg,#fff 0%,#f8fafc 100%)!important;color:#0f172a!important;border-radius:14px;padding:13px 14px;margin-bottom:10px;box-shadow:0 4px 14px rgba(15,23,42,0.06);border:1px solid #e2e8f0;border-left:6px solid #e11d48;}
     .rank-card *,.search-result-card *{color:#0f172a;}
@@ -189,7 +198,7 @@ def inject_css():
     .chat-bubble-humor{background:rgba(168,85,247,0.14);border-left:4px solid #c084fc;}
     .chat-bubble-agree{background:rgba(16,185,129,0.14);border-left:4px solid #10b981;}
     .chat-bubble-user{background:linear-gradient(135deg,#1d4ed8,#2563eb);border-radius:9px;padding:8px 11px;margin-bottom:7px;font-size:12.5px;}
-    .consensus-banner{background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #818cf8;border-radius:9px;padding:10px;margin-top:7px;font-size:12px;}
+    .consensus-banner{background:linear-gradient(135deg,#1e1b4b,#312e81);border:1 solid #818cf8;border-radius:9px;padding:10px;margin-top:7px;font-size:12px;}
     .consensus-section{background:rgba(255,255,255,0.07);border-left:3px solid #fbbf24;border-radius:5px;padding:6px 9px;margin-top:5px;}
     .qa-answer-card{background:#fff!important;border:2px solid #3b82f6;border-left:6px solid #1d4ed8;border-radius:9px;padding:11px;margin-top:6px;font-size:12.5px!important;line-height:1.65!important;color:#0f172a!important;}
     .qa-answer-card *{color:#0f172a!important;}
@@ -247,6 +256,259 @@ POOL_COMPACT = {
 }
 STOCK_POOL = {g: [{"code": p.split(":")[0], "name": p.split(":")[1], "theme": p.split(":")[2]} for p in s.split("|")] for g, s in POOL_COMPACT.items()}
 KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": g} for g, its in STOCK_POOL.items() for it in its}
+
+# ==========================================
+# 🌐 世界情勢＆登録銘柄インパクトニュース常時サーチエンジン
+# ==========================================
+NEWS_QUERIES = [
+    ("半導体・AI", "半導体 OR エヌビディア OR TSMC OR アドバンテスト OR 東京エレクトロン OR レーザーテック 株価"),
+    ("防衛・電力・DC", "三菱重工 OR フジクラ OR データセンター OR 原発 OR 防衛省 株価"),
+    ("世界情勢・マクロ", "日銀 OR FRB OR 米国株 OR 為替介入 OR 関税 OR 地政学 日経平均"),
+    ("急騰・グロース", "ストップ高 OR 上方修正 OR 自社株買い OR 決算 急騰 株")
+]
+
+SECTOR_KEYWORDS = {
+    "半導体": ["半導体", "エヌビディア", "NVIDIA", "TSMC", "HBM", "EUV", "ウエハー", "SOX", "エレク", "アドバンテスト", "レーザーテック", "ディスコ", "キオクシア", "マイクロン"],
+    "AI・防衛・主力": ["AI", "人工知能", "防衛", "三菱重", "川崎重", "ソフトバンク", "OpenAI", "クラウド", "メガバンク", "金利", "日銀", "サイバー"],
+    "AI電力・電線": ["データセンター", "光ファイバー", "フジクラ", "電線", "送電", "原発", "電力", "ラピダス", "変圧器"],
+    "宇宙・次世代": ["宇宙", "衛星", "ロケット", "月面", "自動運転", "EV", "テスラ", "ビットコイン", "暗号資産"],
+    "小型急騰・IPO": ["グロース", "IPO", "量子", "上方修正", "自社株買い", "ストップ高", "TOB", "急騰"]
+}
+
+POS_NEWS_WORDS = ("最高益", "上方修正", "増配", "自社株買い", "急伸", "高騰", "ストップ高", "提携", "採用", "補助金", "承認", "好調", "買い推奨", "目標株価引き上げ", "反発", "突破", "過去最高", "大幅増", "黒字")
+NEG_NEWS_WORDS = ("下方修正", "減益", "赤字", "急落", "暴落", "ストップ安", "規制", "関税", "制裁", "流出", "不正", "延期", "利上げ", "インフレ", "懸念", "売り推奨", "目標株価引き下げ", "地政学リスク", "緊迫")
+
+def _fetch_google_rss(q_tuple: tuple) -> list:
+    cat_label, q_str = q_tuple
+    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q_str)}&hl=ja&gl=JP&ceid=JP:ja"
+    items_out = []
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=3.5, context=ctx) as res:
+            xml_bytes = res.read()
+        root = ET.fromstring(xml_bytes)
+        for item in root.findall("./channel/item")[:7]:
+            title = (item.findtext("title") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            pub = (item.findtext("pubDate") or "").strip()
+            desc = re.sub(r"<[^>]+>", " ", item.findtext("description") or "").strip()
+            source = (item.findtext("source") or "Google News").strip()
+            if title:
+                items_out.append({
+                    "title": title, "link": link, "pub": pub,
+                    "desc": desc, "source": source, "cat": cat_label
+                })
+    except Exception:
+        pass
+    return items_out
+
+def _score_and_map_news(raw_item: dict) -> dict:
+    title = raw_item["title"]
+    desc = raw_item.get("desc", "")
+    full_txt = f"{title} {desc}"
+
+    # アプリ内のどの銘柄に影響するかマッピング
+    matched_stocks = []
+    for code, inf in KNOWN_STOCKS.items():
+        c_short = code.replace(".T", "")
+        nm_clean = re.sub(r"\s*\(.*?\)", "", inf["name"]).strip()
+        # 企業名（またはティッカー）がニュースに含まれるか判定
+        if (len(nm_clean) >= 2 and nm_clean in full_txt) or (len(c_short) >= 3 and re.search(r"\b" + re.escape(c_short) + r"\b", full_txt)):
+            matched_stocks.append({"code": code, "short": c_short, "name": inf["name"], "genre": inf["genre"], "theme": inf["theme"]})
+
+    # 直接企業名が無い場合はセクターキーワードから代表銘柄を紐付け
+    matched_sectors = []
+    for sec, kws in SECTOR_KEYWORDS.items():
+        if any(kw in full_txt for kw in kws):
+            matched_sectors.append(sec)
+
+    if not matched_stocks and matched_sectors:
+        for sec in matched_sectors[:2]:
+            for st_it in STOCK_POOL.get(sec, [])[:3]:
+                matched_stocks.append({"code": st_it["code"], "short": st_it["code"].replace(".T", ""), "name": st_it["name"], "genre": sec, "theme": st_it["theme"]})
+
+    # センチメント＆インパクト計算
+    pos_hits = sum(1 for w in POS_NEWS_WORDS if w in full_txt)
+    neg_hits = sum(1 for w in NEG_NEWS_WORDS if w in full_txt)
+    impact_score = min(99, 58 + len(matched_stocks) * 6 + (pos_hits + neg_hits) * 8 + (10 if matched_sectors else 0))
+
+    if pos_hits > neg_hits:
+        sentiment = "📈 強気インパクト (買い材料)"
+        sent_color = "#16a34a"
+        sent_bg = "#dcfce7"
+        badge_icon = "🔥"
+    elif neg_hits > pos_hits:
+        sentiment = "📉 警戒インパクト (売り・リスク材料)"
+        sent_color = "#dc2626"
+        sent_bg = "#fee2e2"
+        badge_icon = "⚠️"
+    else:
+        sentiment = "🌐 重要マクロ・セクター動向"
+        sent_color = "#2563eb"
+        sent_bg = "#dbeafe"
+        badge_icon = "📰"
+
+    nid = hashlib.md5(title.encode("utf-8")).hexdigest()[:10]
+    return {
+        "id": nid,
+        "title": title,
+        "link": raw_item.get("link", ""),
+        "source": raw_item.get("source", "Market Wire"),
+        "pub": raw_item.get("pub", datetime.now().strftime("%H:%M")),
+        "desc": desc if len(desc) > 20 and desc != title else "見出しおよび関連セクターの需給データから、翌朝の寄り付き気配および機関アルゴのバスケット売買に直接影響を与える可能性が高い注目ヘッドラインです。",
+        "cat": raw_item.get("cat", "市場速報"),
+        "impact_score": impact_score,
+        "sentiment": sentiment,
+        "sent_color": sent_color,
+        "sent_bg": sent_bg,
+        "badge_icon": badge_icon,
+        "matched_stocks": matched_stocks[:5],
+        "matched_sectors": matched_sectors or [raw_item.get("cat", "全セクター")]
+    }
+
+@st.cache_data(ttl=180)
+def fetch_global_impact_news() -> list:
+    raw_list = []
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        for res in ex.map(_fetch_google_rss, NEWS_QUERIES):
+            raw_list.extend(res)
+
+    # 重複除去＆スコアリング
+    seen_titles = set()
+    scored_news = []
+    for item in raw_list:
+        t_clean = re.sub(r"\s*-\s*[^-]+$", "", item["title"]).strip()
+        if t_clean in seen_titles or len(t_clean) < 10:
+            continue
+        seen_titles.add(t_clean)
+        item["title"] = t_clean
+        s_item = _score_and_map_news(item)
+        if s_item["impact_score"] >= 62:
+            scored_news.append(s_item)
+
+    scored_news.sort(key=lambda x: x["impact_score"], reverse=True)
+    return scored_news[:8]
+
+def generate_news_deep_analysis(news_item: dict) -> str:
+    nid = news_item["id"]
+    if nid in st.session_state["news_ai_cache"]:
+        return st.session_state["news_ai_cache"][nid]
+
+    stocks_str = "、".join([f"{s['name']}({s['short']})" for s in news_item["matched_stocks"]]) or "日米主力ハイテク・指数先物"
+    sys_p = '機関クオンツアナリストとしてニュースが株価に与える影響をJSON {"summary":"ニュースの核心背景と市場が反応するポイント(2〜3文)","impact_mechanism":"機関投資家・HFTアルゴ・個人信用需給がどう動くか","action_plan":"翌朝の寄り付き・VWAPに対する具体的な立ち回り"} で出力せよ。'
+    usr_p = f"見出し:{news_item['title']}\nカテゴリ:{news_item['cat']} / 判定:{news_item['sentiment']}\n関連銘柄:{stocks_str}\n概要:{news_item['desc']}"
+
+    llm_j, used_eng = call_api_seamless(sys_p, usr_p, 0.5)
+    if llm_j and llm_j.get("summary"):
+        html_out = (
+            f"<div style='font-size:13px;line-height:1.65;color:#0f172a;'>"
+            f"<div style='margin-bottom:8px;'><b>🔎 ニュースの深層・背景（{used_eng}）：</b><br>{llm_j.get('summary','')}</div>"
+            f"<div style='margin-bottom:8px;'><b>🏦 機関アルゴ・需給への波及メカニズム：</b><br>{llm_j.get('impact_mechanism','')}</div>"
+            f"<div style='background:#eff6ff;border-left:4px solid #2563eb;padding:8px 10px;border-radius:6px;'><b>⚡ 翌朝トレード実戦アクション：</b><br>{llm_j.get('action_plan','')}</div>"
+            f"</div>"
+        )
+    else:
+        is_bull = "強気" in news_item["sentiment"]
+        html_out = (
+            f"<div style='font-size:13px;line-height:1.65;color:#0f172a;'>"
+            f"<div style='margin-bottom:8px;'><b>🔎 ニュースの深層・背景：</b><br>『{news_item['title']}』は、<b>{', '.join(news_item['matched_sectors'])}</b>セクター全体のバリュエーションと翌朝の先物・夜間PTS気配に直接波及する重要カタリストです。特にアプリ内監視銘柄である <b>{stocks_str}</b> においてオーダーフローの偏りが発生しやすい局面です。</div>"
+            f"<div style='margin-bottom:8px;'><b>🏦 機関アルゴ・需給への波及メカニズム：</b><br>"
+            + ("ポジティブ・サプライズにより、寄付き前から海外勢のバスケット買いと空売り勢の買い戻し（ショートカバー）が重なり、OFI（板不均衡）が急上昇しやすい波形です。" if is_bull else "ヘッドラインリスクに反応するHFT（高頻度取引）のアルゴリズム売りが出やすく、寄り付き直後は下値での流動性確認とCVaR（テールリスク）管理が最優先となります。")
+            + f"</div>"
+            f"<div style='background:#eff6ff;border-left:4px solid #2563eb;padding:8px 10px;border-radius:6px;'><b>⚡ 翌朝トレード実戦アクション：</b><br>"
+            + ("成行での高値掴みを避け、寄付きで第1弾（35%）を打診後、5分足VWAPでの支持を確認してから追撃ロットを入れる分割エントリーが有効です。" if is_bull else "寄付き直後のギャップダウンや狼狽売りが一巡し、5分足VWAPを回復するまでは様子見を徹底。逆指値ラインを厳守してください。")
+            + f"</div></div>"
+        )
+    st.session_state["news_ai_cache"][nid] = html_out
+    return html_out
+
+def _render_news_detail_body(n_item: dict):
+    st.markdown(
+        f'<div style="background:{n_item["sent_bg"]};color:{n_item["sent_color"]};padding:6px 12px;border-radius:8px;font-weight:800;font-size:12.5px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+        f'<span>{n_item["badge_icon"]} {n_item["sentiment"]}</span>'
+        f'<span>株価影響度: Lv.{n_item["impact_score"]}/99</span></div>',
+        unsafe_allow_html=True
+    )
+    st.markdown(f"#### {n_item['title']}")
+    st.caption(f"📡 配信元: **{n_item['source']}** ｜ セクター: **{', '.join(n_item['matched_sectors'])}** ｜ 取得: {n_item['pub']}")
+
+    if n_item.get("matched_stocks"):
+        st.markdown("**🎯 このニュースが直撃するアプリ内銘柄（タップで個別精密診断へジャンプ）：**")
+        cols = st.columns(min(len(n_item["matched_stocks"]), 3))
+        for idx, st_info in enumerate(n_item["matched_stocks"][:3]):
+            with cols[idx]:
+                if st.button(f"🔍 {st_info['name']} ({st_info['short']})", key=f"jmp_{n_item['id']}_{st_info['code']}", use_container_width=True):
+                    st.session_state["custom_search_code"] = st_info["code"]
+                    st.session_state["selected_news_item"] = None
+                    st.rerun()
+
+    with st.spinner("🧠 AIクオンツが株価・翌朝寄り付きへの影響を解析中..."):
+        analysis_html = generate_news_deep_analysis(n_item)
+    st.markdown(analysis_html, unsafe_allow_html=True)
+
+    if n_item.get("link"):
+        st.markdown(f"🔗 [元記事・ニュースソース全文をブラウザで開く]({n_item['link']})")
+
+if dialog_dec:
+    @dialog_dec("🚨 株価影響ニュース ＆ 機関クオンツ詳細解析", width="large")
+    def show_news_modal(n_item: dict):
+        _render_news_detail_body(n_item)
+        if st.button("✖️ 詳細ウィンドウを閉じる", use_container_width=True):
+            st.session_state["selected_news_item"] = None
+            st.rerun()
+
+def render_breaking_news_radar(enable_toast: bool = True):
+    news_list = fetch_global_impact_news()
+    if not news_list:
+        return
+
+    # 新着の重大ニュースを見出しだけポップアップ通知（st.toast）
+    if enable_toast and hasattr(st, "toast"):
+        new_cnt = 0
+        for n in news_list:
+            if n["id"] not in st.session_state["seen_news_ids"]:
+                st.session_state["seen_news_ids"].add(n["id"])
+                if new_cnt < 2:
+                    st.toast(f"🚨 【株価影響ニュース検知】\n{n['title'][:46]}...", icon=n["badge_icon"])
+                    new_cnt += 1
+
+    st.markdown(
+        f'<div class="news-radar-header">'
+        f'<span>🚨 世界情勢＆登録銘柄 リアルタイム重大ニュース速報（見出しクリックで詳細＆影響銘柄を表示）</span>'
+        f'<span style="font-size:11px;color:#fca5a5;">常時自動サーチ稼働中 ({len(news_list)}件検知)</span>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    # 上位3件の見出しをワンクリックボタンとして横並び/縦並び表示
+    for n in news_list[:3]:
+        s_names = "・".join([s["name"].replace(" (米)", "") for s in n["matched_stocks"][:2]])
+        tag_str = f"【{s_names}】" if s_names else f"【{n['cat']}】"
+        btn_label = f"{n['badge_icon']} [影響度{n['impact_score']}] {tag_str} {n['title']}"
+        if st.button(btn_label, key=f"headline_btn_{n['id']}", use_container_width=True):
+            st.session_state["selected_news_item"] = n
+            if dialog_dec:
+                show_news_modal(n)
+
+    # 4件目以降は折りたたみで一覧表示
+    if len(news_list) > 3:
+        with st.expander(f"📰 さらに他の株価影響ヘッドラインを見る（他 {len(news_list)-3} 件）"):
+            for n in news_list[3:]:
+                s_names = "・".join([s["name"].replace(" (米)", "") for s in n["matched_stocks"][:2]])
+                tag_str = f"【{s_names}】" if s_names else f"【{n['cat']}】"
+                if st.button(f"{n['badge_icon']} [影響度{n['impact_score']}] {tag_str} {n['title']}", key=f"headline_sub_{n['id']}", use_container_width=True):
+                    st.session_state["selected_news_item"] = n
+                    if dialog_dec:
+                        show_news_modal(n)
+
+    # st.dialog非対応環境向けのフォールバック展開カード
+    if not dialog_dec and st.session_state.get("selected_news_item"):
+        with st.container(border=True):
+            _render_news_detail_body(st.session_state["selected_news_item"])
+            if st.button("✖️ 詳細を閉じる", key="close_fallback_news", use_container_width=True):
+                st.session_state["selected_news_item"] = None
+                st.rerun()
 
 def _fetch_board_url(u: str) -> str:
     ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
@@ -345,7 +607,7 @@ def build_quant_debate(r: dict, smap: dict, fs: int, vref: str, lp1: int, lp2: i
 
     tech_pool = [
         f"補足すると、Hurst指数は <b>{r['hurst']}</b>、エントロピー純度は <b>{r['eff_pct']}%</b>、ボリンジャーは <b>{r['bb_z']:+.2f}σ</b>（20日乖離 <b>{r['ma20_dev']:+.2f}%</b>）に位置している。基準VWAP <b>{vref}</b> の攻防が翌朝の分水嶺になるね。",
-        f"Yang-Zhangボラティリティ <b>{r['yz_vol']}%</b> と日중ATR <b>{r['atr_pct']}%</b> の比率を見ると、夜間ギャップ耐性が高い波形だ。上ヒゲ <b>{r['upper_shadow_pct']}%</b>・下ヒゲ <b>{r['lower_shadow_pct']}%</b>・引け位置 <b>{r['close_pos_pct']}%</b> で純度は高い。",
+        f"Yang-Zhangボラティリティ <b>{r['yz_vol']}%</b> と日中ATR <b>{r['atr_pct']}%</b> の比率を見ると、夜間ギャップ耐性が高い波形だ。上ヒゲ <b>{r['upper_shadow_pct']}%</b>・下ヒゲ <b>{r['lower_shadow_pct']}%</b>・引け位置 <b>{r['close_pos_pct']}%</b> で純度は高い。",
         f"5日線乖離 <b>{r['ma5_dev']:+.2f}%</b> と出来高倍率 <b>{r['vol_ratio']}倍</b>、さらにSmart Money指数 <b>{r['sm_div']:+.2f}</b> のバランスが絶妙だな。"
     ]
     ignis_1 = [
@@ -416,6 +678,16 @@ if sc1.button("⬆️ ページTOP", use_container_width=True): st.session_state
 if sc2.button("📋 監視リスト", use_container_width=True): st.session_state["navigation_page"] = "WATCHLIST"; st.rerun()
 
 st.sidebar.markdown("---")
+st.sidebar.header("🚨 ニュース速報レーダー設定")
+toggle_fn = getattr(st.sidebar, "toggle", st.sidebar.checkbox)
+enable_news_radar = toggle_fn("🌐 世界情勢＆銘柄ニュース常時監視", value=True)
+enable_news_toast = toggle_fn("🔔 重大ニュース見出しポップアップ通知", value=True)
+if st.sidebar.button("🔄 最新ニュースを今すぐ再サーチ", use_container_width=True):
+    fetch_global_impact_news.clear()
+    st.session_state["seen_news_ids"] = set()
+    st.rerun()
+
+st.sidebar.markdown("---")
 st.sidebar.header("🧠 LLM マルチエージェント設定")
 llm_cfg = load_llm()
 llm_prov = st.sidebar.radio("AIコアエンジン選択", ["gemini", "openai"], format_func=lambda x: "🔵 Gemini API (429自動切替)" if x == "gemini" else "🟢 OpenAI API", horizontal=True, index=0 if llm_cfg.get("provider", "gemini") == "gemini" else 1)
@@ -455,7 +727,6 @@ st.sidebar.header("💰 資金管理＆表示設定")
 total_capital = st.sidebar.number_input("総投資資金 (円 / ドル)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
 risk_tolerance_pct = st.sidebar.slider("1トレード許容リスク (%)", 0.5, 5.0, 2.0, 0.5)
 survival_cut_pct = st.sidebar.slider("弱肉強食・各タブ選抜率 (%)", 40, 100, 70, 10)
-toggle_fn = getattr(st.sidebar, "toggle", st.sidebar.checkbox)
 show_5m_chart = toggle_fn("📈 5分足＆VWAP描画", value=True)
 
 if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower():
@@ -493,7 +764,6 @@ def calc_inst_quant_suite(df: pd.DataFrame) -> dict:
     v = df["Volume"].values.astype(float)
     n = len(c)
 
-    # 1. Rescaled Hurst Exponent & 1D Kalman State Space Filter
     hurst = 0.52
     if n >= 30:
         lags = np.arange(2, 12)
@@ -504,7 +774,6 @@ def calc_inst_quant_suite(df: pd.DataFrame) -> dict:
         pp = p_e + 0.03; kg = pp / (pp + 0.12); x_e += kg * (z - x_e); p_e = (1.0 - kg) * pp
     kalman_bull = round((c[-1] - x_e) / max(x_e, 1e-4) * 100, 2)
 
-    # 2. Yang-Zhang Volatility Estimator (機関標準オーバーナイト＋ザラ場統合ボラティリティ)
     yz_vol = 28.0
     if n >= 21:
         log_ho = np.log(np.maximum(h[1:] / np.maximum(o[1:], 1e-4), 1e-4))
@@ -518,7 +787,6 @@ def calc_inst_quant_suite(df: pd.DataFrame) -> dict:
         yz_var = max(o_var + k_yz * c_var + (1.0 - k_yz) * rs_var, 1e-8)
         yz_vol = round(float(np.sqrt(yz_var * 252.0) * 100.0), 1)
 
-    # 3. Order Flow Imbalance (OFI) Z-Score (板吸収・成行不均衡の標準化スコア)
     hl_range = np.maximum(h - l, 1e-4)
     signed_flow = ((2.0 * c - h - l) / hl_range) * v
     if n >= 20:
@@ -529,7 +797,6 @@ def calc_inst_quant_suite(df: pd.DataFrame) -> dict:
     else:
         ofi_z = 0.0
 
-    # 4. Tail-Risk Conditional Value at Risk (CVaR 95% / Expected Shortfall)
     rets = np.diff(c) / np.maximum(c[:-1], 1e-4) * 100.0
     if len(rets) >= 20:
         q05 = np.percentile(rets, 5)
@@ -538,7 +805,6 @@ def calc_inst_quant_suite(df: pd.DataFrame) -> dict:
     else:
         cvar95 = 3.5
 
-    # 5. Shannon Market Efficiency / Entropy Purity (ノイズ対トレンド純度)
     if n >= 15:
         net_move = abs(c[-1] - c[-15])
         path_move = max(float(np.sum(np.abs(np.diff(c[-15:])))), 1e-4)
@@ -546,7 +812,6 @@ def calc_inst_quant_suite(df: pd.DataFrame) -> dict:
     else:
         eff_pct = 55
 
-    # 6. Smart Money Accumulation Divergence (価格と出来高加重フローのダイバージェンス)
     v_norm = v / max(float(np.mean(v[-20:])), 1.0)
     sm_flow = np.mean(((c[-5:] - o[-5:]) / hl_range[-5:]) * v_norm[-5:])
     p_mom = (c[-1] - c[-6]) / max(c[-6], 1e-4) * 10.0 if n >= 6 else 0.0
@@ -653,7 +918,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, bi=True, b5
         awin, aloss = (float(wg.mean()) if len(wg) > 0 else 0.5), (abs(float(lg.mean())) if len(lg) > 0 else 0.5)
         payoff, edge = round(awin / max(aloss, 0.1), 2), round((prob / 100 * awin) - ((100 - prob) / 100 * aloss), 2)
 
-        # Half-Kelly Optimal Fraction (機関ケリー基準による最適資金配分率)
         w_p = tot_win / 100.0
         raw_kelly = w_p - ((1.0 - w_p) / max(payoff, 0.2))
         kelly_pct = round(float(np.clip(raw_kelly * 0.5 * 100.0, 3.0, 35.0)), 1)
@@ -902,7 +1166,6 @@ def render_council_sec(r, uk):
     turns = st.session_state["council_threads"][uk]
     wid = f"cwin_{uk}"
 
-    # アニメーション待機なし：一括即時レンダリング
     st.markdown(f'<div class="ai-council-box"><div id="{wid}" class="council-scroll-window">{"".join(_fmt_turn(t) for t in turns)}</div><div class="consensus-banner"><div style="font-weight:bold;color:#fde047;font-size:13.5px;">🏛️ 全エージェント合意の最終コンセンサス</div>{meta["verdict_html"]}</div></div>', unsafe_allow_html=True)
 
     if st.button("🔄 別の切り口で再ディベート", key=f"rs_{uk}", use_container_width=True):
@@ -982,6 +1245,10 @@ b5_live_map = fetch_5ch_live()
 b5_live_ok = any(v.get("live") for v in b5_live_map.values())
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.08);padding:3px 9px;border-radius:6px;font-size:11.5px;display:inline-flex;gap:4px;"><span style="color:#cbd5e1;">{m["label"]}</span><span style="color:{"#f87171" if m["diff"]>=0 else "#60a5fa"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(f'<div style="background:linear-gradient(135deg,#090d16,#1e293b);color:#f8fafc;padding:14px 18px;border-radius:14px;margin-bottom:10px;border:1px solid rgba(56,189,248,0.25);"><div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:10px;color:#38bdf8;font-weight:800;">INSTITUTIONAL ALGO (OFI / YZ-VOL / CVaR / KELLY) & 5CH LIVE</div><h1 style="margin:2px 0 0 0;font-size:19px;color:#fff;font-weight:900;">⚡ 翌朝株価 クオンツ＆AIエージェント合議 Pro</h1></div><span style="background:rgba(16,185,129,0.2);color:#6ee7b7;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;">🟢 {"5ch実況＋機関クオンツ高速稼働" if b5_live_ok else "機関クオンツ高速稼働中"}</span></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;">{mpills}</div></div>', unsafe_allow_html=True)
+
+# 🚨 世界情勢＆登録銘柄インパクトニュース速報レーダー（見出しポップアップ＆クリック詳細モーダル）
+if enable_news_radar:
+    render_breaking_news_radar(enable_toast=enable_news_toast)
 
 BOOST_MAP = {"🧬 OFI/YZ/Hurst/Kalman": "algo", "🏦 機関VPIN・SmartMoney": "inst", "🔥 5ch＆短期モメンタム": "mom", "💥 20日高値突破": "sq", "🚨 翌朝特買い": "tok"}
 st.markdown('<div class="compact-bar-label"><span>⚡ QUANT ENGINE BOOST</span><span style="color:#94a3b8;font-weight:600;">タップで機関解析ファクターを即時ON/OFF</span></div>', unsafe_allow_html=True)
