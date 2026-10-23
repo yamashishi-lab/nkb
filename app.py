@@ -202,7 +202,7 @@ def inject_css():
         background:transparent!important;
         height:auto!important;
         pointer-events:none!important;
-        z-index:2147483640!important;
+        z-index:999990!important;
     }
     header[data-testid="stHeader"] button,
     header[data-testid="stHeader"] [data-testid="stSidebarCollapseButton"],
@@ -212,19 +212,19 @@ def inject_css():
         display:flex!important;
         visibility:visible!important;
         opacity:1!important;
-        z-index:2147483647!important;
+        z-index:999999!important;
     }
     div[data-testid="collapsedControl"]{
         display:flex!important;
         visibility:visible!important;
         pointer-events:auto!important;
-        z-index:2147483647!important;
+        z-index:999999!important;
     }
     div[data-testid="collapsedControl"] button{
         pointer-events:auto!important;
         display:flex!important;
         visibility:visible!important;
-        z-index:2147483647!important;
+        z-index:999999!important;
     }
     header[data-testid="stHeader"] [data-testid="stToolbar"]{
         display:none!important;
@@ -233,24 +233,33 @@ def inject_css():
     section[data-testid="stSidebar"]{
         background-color:#0b0f19!important;
         border-right:1px solid rgba(148,163,184,0.15)!important;
-        z-index:2147483644!important;
+        z-index:999995!important;
+    }
+
+    /* ポップオーバー・ドロップダウンメニューの完全表示確保（最前面へ） */
+    div[data-baseweb="popover"],
+    div[data-baseweb="menu"],
+    ul[data-baseweb="menu"],
+    div[role="listbox"] {
+        z-index: 2147483647 !important;
+        background-color: #0b0f19 !important;
+        border: 1px solid rgba(56,189,248,0.4) !important;
+    }
+    div[data-baseweb="select"] {
+        z-index: auto !important;
     }
     
     .block-container{padding-top:3.6rem!important;padding-bottom:3rem!important;padding-left:0.75rem!important;padding-right:0.75rem!important;max-width:840px!important;}
     .brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,24px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;display:block;width:100%;}
     .brand-sub{font-family:'JetBrains Mono',monospace;font-size:clamp(8.5px,2.2vw,10.5px);color:#64748b;letter-spacing:1.2px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     
-    div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stElementContainer"] div.top-nav-marker),
-    div[data-testid="stVerticalBlock"] > div:has(> div.element-container div.top-nav-marker),
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(div.top-nav-marker),
-    div[data-testid="stVerticalBlock"]:has(> div > div.top-nav-marker),
-    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"] div.top-nav-marker),
+    /* 上部固定ナビゲーションバー */
     .fixed-top-nav-bar{
         position:fixed!important;
         top:0.45rem!important;
         left:50%!important;
         transform:translateX(-50%)!important;
-        z-index:2147483640!important;
+        z-index:999980!important;
         width:min(680px,calc(100vw - 7.2rem))!important;
         background:rgba(5,8,17,0.94)!important;
         backdrop-filter:blur(14px)!important;
@@ -266,7 +275,6 @@ def inject_css():
     div[data-testid="stElementContainer"]:has(div.top-nav-marker),
     div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}
     
-    div:has(> div > div.top-nav-marker) div[data-testid="stHorizontalBlock"],
     .fixed-top-nav-bar div[data-testid="stHorizontalBlock"]{
         display:flex!important;
         flex-direction:row!important;
@@ -280,8 +288,6 @@ def inject_css():
         pointer-events:auto!important;
     }
     
-    div:has(> div > div.top-nav-marker) div[data-testid="column"],
-    div:has(> div > div.top-nav-marker) div[data-testid="stColumn"],
     .fixed-top-nav-bar div[data-testid="column"],
     .fixed-top-nav-bar div[data-testid="stColumn"]{
         min-width:0!important;
@@ -292,12 +298,10 @@ def inject_css():
         pointer-events:auto!important;
     }
     
-    div:has(> div > div.top-nav-marker) div[data-testid="column"]:nth-child(2),
-    div:has(> div > div.top-nav-marker) div[data-testid="stColumn"]:nth-child(2),
     .fixed-top-nav-bar div[data-testid="column"]:nth-child(2),
     .fixed-top-nav-bar div[data-testid="stColumn"]:nth-child(2){flex:1.45 1 0%!important;}
     
-    div:has(> div > div.top-nav-marker) button,
+    /* ボタン通常状態：通常色（濃紺） */
     .fixed-top-nav-bar button{
         width:100%!important;
         min-width:0!important;
@@ -315,13 +319,35 @@ def inject_css():
         pointer-events:auto!important;
         cursor:pointer!important;
         position:relative!important;
-        z-index:2147483640!important;
+        outline:none!important;
+        transition:background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     }
     
-    div:has(> div > div.top-nav-marker) button:hover,
-    .fixed-top-nav-bar button:hover{border-color:#38bdf8!important;color:#38bdf8!important;}
+    /* マウスホバー時 */
+    .fixed-top-nav-bar button:hover{
+        border-color:#38bdf8!important;
+        color:#38bdf8!important;
+    }
+
+    /* 押した後のフォーカス残留を無効化（離したら通常色に戻る） */
+    .fixed-top-nav-bar button:focus,
+    .fixed-top-nav-bar button:focus-visible{
+        background:rgba(15,23,42,0.92)!important;
+        color:#f8fafc!important;
+        border-color:rgba(56,189,248,0.25)!important;
+        outline:none!important;
+        box-shadow:0 4px 12px rgba(0,0,0,0.45)!important;
+    }
     
-    div:has(> div > div.top-nav-marker) button p,
+    /* 押している瞬間（Active）だけ青色発光 */
+    .fixed-top-nav-bar button:active{
+        background:#0284c7!important;
+        color:#ffffff!important;
+        border-color:#38bdf8!important;
+        box-shadow:0 0 10px rgba(56,189,248,0.7)!important;
+        transform:scale(0.98);
+    }
+    
     .fixed-top-nav-bar button p{
         font-size:clamp(10px,2.6vw,11.5px)!important;
         font-weight:700!important;
@@ -539,16 +565,14 @@ components.html(
             let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
             if(box && box.querySelector('[data-testid="stHorizontalBlock"]')){{
                 box.classList.add('fixed-top-nav-bar');
-                box.style.setProperty('z-index', '2147483640', 'important');
+                box.style.setProperty('z-index', '999980', 'important');
                 box.style.setProperty('pointer-events', 'auto', 'important');
-                let p = box.parentElement;
-                while(p && p !== doc.body){{
-                    const st = window.parent.getComputedStyle(p);
-                    if(st.transform && st.transform !== 'none') p.style.setProperty('transform', 'none', 'important');
-                    if(st.filter && st.filter !== 'none') p.style.setProperty('filter', 'none', 'important');
-                    if(st.perspective && st.perspective !== 'none') p.style.setProperty('perspective', 'none', 'important');
-                    p = p.parentElement;
-                }}
+                
+                // ボタンからフォーカスを外すリスナーをバインド
+                box.querySelectorAll('button').forEach(btn => {{
+                    btn.addEventListener('mouseup', function(){{ this.blur(); }});
+                    btn.addEventListener('mouseleave', function(){{ this.blur(); }});
+                }});
             }}
         }}
         fixTopNav();
@@ -1551,7 +1575,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
             "IGNISとして発言。熱血特攻型。暴言には怒り、熱い話には全力で乗り、Webの勢いを買って煽れ。",
             "TECHNOSとして発言。数理、工学、客観的事実に基づいてユーザーの質問に明快に回答せよ。",
             "MACROとして発言。世界市場、地政学、マクロの視点から堂々と持論を述べよ。",
-            "NEXUSとして発言。全体の議論を受け止め、自然な人間の言葉で最終結論をまとめよ。"
+            "NEXUSとして発言。全体の議論を受け止め、自然な人間の言葉で最終結論をまとめよ"
         ]
         sys_multi = 'あなたは感情と個性を備えたリアルなAIディベーターです。定型句コピペ（〜についてだが等）は完全禁止。質問には直接的かつ人間らしく（喜怒哀楽を込めて）返答してください。JSON形式 {"score":90,"tone":"agree","text":"..."} のみ出力。toneは agree, normal, doubt, rage のいずれか。'
 
@@ -1850,7 +1874,7 @@ elif sel_cat == "🏛️ 機関最新ミクロ構造TOP10":
 elif sel_cat == "🚨 重大ニュース＆連動株":
     st.caption("📰 最新マーケット重大ニュースと、そのニュースによって株価が連動・波及しやすい銘柄の一覧です。")
     for n_item in all_impact_news:
-        st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="font-size:11px;color:#f87171;font-weight:800;">🚨 {n_item["cat"]} ｜ {n_item["source"]}</div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-4px 0;">{n_item["title"]}</div><div style="font-size:11.5px;color:#cbd5e1;">{n_item["detail"]["mechanism"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="font-size:11px;color:#f87171;font-weight:800;">🚨 {n_item["cat"]} ｜ {n_item["source"]}</div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-bottom:4px;">{n_item["title"]}</div><div style="font-size:11.5px;color:#cbd5e1;">{n_item["detail"]["mechanism"]}</div></div>', unsafe_allow_html=True)
         if st.button("🔥 このニュースの詳細レポート＆連動株を見る", key=f"tab_n_{n_item['id']}", use_container_width=True):
             st.session_state["selected_news_item"] = n_item; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
 elif sel_cat == "🎟️ IPO募集・新規上場":
