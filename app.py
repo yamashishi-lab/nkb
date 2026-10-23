@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.text import MIMEText
 from datetime import datetime
 
-# 初期状態を「collapsed（閉じた状態）」に修正
+# 初期状態は「collapsed（閉じた状態）」
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
@@ -199,53 +199,60 @@ def inject_css():
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
-    /* ヘッダー全体の透明化と安全化 */
-    header[data-testid="stHeader"]{
-        background:transparent!important;
-        height:2.8rem!important;
-        pointer-events:none!important;
-        z-index:999990!important;
-    }
-    
-    /* サイドバー開閉タブ（CollapsedControl）を左上に絶対常駐表示 */
-    div[data-testid="collapsedControl"]{
-        display:flex!important;
-        visibility:visible!important;
-        opacity:1!important;
-        pointer-events:auto!important;
-        position:fixed!important;
-        top:0.45rem!important;
-        left:0.5rem!important;
-        z-index:2147483647!important;
-        background:rgba(15,23,42,0.95)!important;
-        border:1px solid rgba(56,189,248,0.4)!important;
-        border-radius:8px!important;
-        box-shadow:0 4px 14px rgba(0,0,0,0.6)!important;
-    }
-    div[data-testid="collapsedControl"] button{
-        display:flex!important;
-        visibility:visible!important;
-        opacity:1!important;
-        pointer-events:auto!important;
-        color:#38bdf8!important;
+    /* ─────────────────────────────────────────────────────────────
+       【重要】サイドバー開閉ボタンの絶対視覚化＆クリック完全保証
+       ───────────────────────────────────────────────────────────── */
+    div[data-testid="collapsedControl"],
+    button[data-testid="stSidebarCollapseButton"],
+    header[data-testid="stHeader"] button[kind="header"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        position: fixed !important;
+        top: 8px !important;
+        left: 10px !important;
+        z-index: 2147483647 !important; /* 最高優先レイヤー */
+        background: #0f172a !important;
+        color: #38bdf8 !important;
+        border: 1px solid rgba(56,189,248,0.45) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.85) !important;
+        width: 34px !important;
+        height: 34px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
     }
 
-    header[data-testid="stHeader"] [data-testid="stSidebarCollapseButton"]{
-        pointer-events:auto!important;
-        display:flex!important;
-        visibility:visible!important;
-        opacity:1!important;
-        z-index:2147483647!important;
+    div[data-testid="collapsedControl"] svg,
+    button[data-testid="stSidebarCollapseButton"] svg {
+        fill: #38bdf8 !important;
+        stroke: #38bdf8 !important;
+        width: 20px !important;
+        height: 20px !important;
+        display: block !important;
+        visibility: visible !important;
     }
 
-    header[data-testid="stHeader"] [data-testid="stToolbar"]{
-        display:none!important;
+    /* ヘッダー自体の背景を透明化しつつ、開閉ボタンのクリックは阻害しない */
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+        height: 0px !important;
+        z-index: 999990 !important;
+        pointer-events: none !important;
     }
 
-    section[data-testid="stSidebar"]{
-        background-color:#0b0f19!important;
-        border-right:1px solid rgba(148,163,184,0.15)!important;
-        z-index:999995!important;
+    /* ツールバーのみ非表示（開閉ボタンは巻き込まない） */
+    header[data-testid="stHeader"] [data-testid="stToolbar"] {
+        display: none !important;
+    }
+
+    /* サイドバー本体 */
+    section[data-testid="stSidebar"] {
+        background-color: #0b0f19 !important;
+        border-right: 1px solid rgba(148,163,184,0.15) !important;
+        z-index: 999995 !important;
     }
 
     /* ポップオーバー・ドロップダウンメニューの完全表示確保（最前面へ） */
@@ -261,149 +268,430 @@ def inject_css():
         z-index: auto !important;
     }
     
-    .block-container{padding-top:3.6rem!important;padding-bottom:3rem!important;padding-left:0.75rem!important;padding-right:0.75rem!important;max-width:840px!important;}
-    .brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,24px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;display:block;width:100%;}
-    .brand-sub{font-family:'JetBrains Mono',monospace;font-size:clamp(8.5px,2.2vw,10.5px);color:#64748b;letter-spacing:1.2px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .block-container {
+        padding-top: 3.6rem !important;
+        padding-bottom: 3rem !important;
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+        max-width: 840px !important;
+    }
+    .brand-luxury {
+        font-family: 'Cinzel',serif !important;
+        font-size: clamp(16px,4.2vw,24px) !important;
+        font-weight: 800 !important;
+        letter-spacing: clamp(1px,0.5vw,3px) !important;
+        background: linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.25;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        display: block;
+        width: 100%;
+    }
+    .brand-sub {
+        font-family: 'JetBrains Mono',monospace;
+        font-size: clamp(8.5px,2.2vw,10.5px);
+        color: #64748b;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     
-    /* 上部固定ナビゲーションバー */
-    .fixed-top-nav-bar{
-        position:fixed!important;
-        top:0.45rem!important;
-        left:50%!important;
-        transform:translateX(-50%)!important;
-        z-index:999980!important;
-        width:min(680px,calc(100vw - 7.2rem))!important;
-        background:rgba(5,8,17,0.94)!important;
-        backdrop-filter:blur(14px)!important;
-        border:none!important;
-        border-radius:9px!important;
-        outline:none!important;
-        box-shadow:0 6px 20px rgba(0,0,0,0.75)!important;
-        padding:4px 6px!important;
-        margin:0!important;
-        pointer-events:auto!important;
+    /* 上部固定ナビゲーションバー（左上ボタンと被らないよう安全マージン） */
+    .fixed-top-nav-bar {
+        position: fixed !important;
+        top: 0.45rem !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        z-index: 999980 !important;
+        width: min(640px, calc(100vw - 6.5rem)) !important;
+        background: rgba(5,8,17,0.94) !important;
+        backdrop-filter: blur(14px) !important;
+        border: none !important;
+        border-radius: 9px !important;
+        outline: none !important;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.75) !important;
+        padding: 4px 6px !important;
+        margin: 0 !important;
+        pointer-events: auto !important;
     }
     
     div[data-testid="stElementContainer"]:has(div.top-nav-marker),
-    div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}
+    div.element-container:has(div.top-nav-marker) {
+        display: none !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+    }
     
-    .fixed-top-nav-bar div[data-testid="stHorizontalBlock"]{
-        display:flex!important;
-        flex-direction:row!important;
-        flex-wrap:nowrap!important;
-        align-items:center!important;
-        gap:5px!important;
-        width:100%!important;
-        border:none!important;
-        background:transparent!important;
-        box-shadow:none!important;
-        pointer-events:auto!important;
+    .fixed-top-nav-bar div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 5px !important;
+        width: 100% !important;
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        pointer-events: auto !important;
     }
     
     .fixed-top-nav-bar div[data-testid="column"],
-    .fixed-top-nav-bar div[data-testid="stColumn"]{
-        min-width:0!important;
-        flex:1 1 0%!important;
-        padding:0!important;
-        border:none!important;
-        background:transparent!important;
-        pointer-events:auto!important;
+    .fixed-top-nav-bar div[data-testid="stColumn"] {
+        min-width: 0 !important;
+        flex: 1 1 0% !important;
+        padding: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        pointer-events: auto !important;
     }
     
     .fixed-top-nav-bar div[data-testid="column"]:nth-child(2),
-    .fixed-top-nav-bar div[data-testid="stColumn"]:nth-child(2){flex:1.45 1 0%!important;}
-    
-    /* ボタン通常状態：通常色（濃紺） */
-    .fixed-top-nav-bar button{
-        width:100%!important;
-        min-width:0!important;
-        height:28px!important;
-        min-height:28px!important;
-        max-height:28px!important;
-        padding:0 4px!important;
-        margin:0!important;
-        border-radius:7px!important;
-        background:rgba(15,23,42,0.92)!important;
-        backdrop-filter:blur(10px)!important;
-        color:#f8fafc!important;
-        border:1px solid rgba(56,189,248,0.25)!important;
-        box-shadow:0 4px 12px rgba(0,0,0,0.45)!important;
-        pointer-events:auto!important;
-        cursor:pointer!important;
-        position:relative!important;
-        outline:none!important;
-        transition:background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    .fixed-top-nav-bar div[data-testid="stColumn"]:nth-child(2) {
+        flex: 1.45 1 0% !important;
     }
     
-    /* マウスホバー時 */
-    .fixed-top-nav-bar button:hover{
-        border-color:#38bdf8!important;
-        color:#38bdf8!important;
+    /* 上部ナビボタン基本色 */
+    .fixed-top-nav-bar button {
+        width: 100% !important;
+        min-width: 0 !important;
+        height: 28px !important;
+        min-height: 28px !important;
+        max-height: 28px !important;
+        padding: 0 4px !important;
+        margin: 0 !important;
+        border-radius: 7px !important;
+        background: rgba(15,23,42,0.92) !important;
+        backdrop-filter: blur(10px) !important;
+        color: #f8fafc !important;
+        border: 1px solid rgba(56,189,248,0.25) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.45) !important;
+        pointer-events: auto !important;
+        cursor: pointer !important;
+        position: relative !important;
+        outline: none !important;
+        transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    
+    .fixed-top-nav-bar button:hover {
+        border-color: #38bdf8 !important;
+        color: #38bdf8 !important;
     }
 
-    /* 押した後のフォーカス残留を無効化（離したら通常色に戻る） */
+    /* 離したら通常色に戻る */
     .fixed-top-nav-bar button:focus,
-    .fixed-top-nav-bar button:focus-visible{
-        background:rgba(15,23,42,0.92)!important;
-        color:#f8fafc!important;
-        border-color:rgba(56,189,248,0.25)!important;
-        outline:none!important;
-        box-shadow:0 4px 12px rgba(0,0,0,0.45)!important;
+    .fixed-top-nav-bar button:focus-visible {
+        background: rgba(15,23,42,0.92) !important;
+        color: #f8fafc !important;
+        border-color: rgba(56,189,248,0.25) !important;
+        outline: none !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.45) !important;
     }
     
-    /* 押している瞬間（Active）だけ青色発光 */
-    .fixed-top-nav-bar button:active{
-        background:#0284c7!important;
-        color:#ffffff!important;
-        border-color:#38bdf8!important;
-        box-shadow:0 0 10px rgba(56,189,248,0.7)!important;
-        transform:scale(0.98);
+    /* 押している瞬間だけ青色発光 */
+    .fixed-top-nav-bar button:active {
+        background: #0284c7 !important;
+        color: #ffffff !important;
+        border-color: #38bdf8 !important;
+        box-shadow: 0 0 10px rgba(56,189,248,0.7) !important;
+        transform: scale(0.98);
     }
     
-    .fixed-top-nav-bar button p{
-        font-size:clamp(10px,2.6vw,11.5px)!important;
-        font-weight:700!important;
-        margin:0!important;
-        padding:0!important;
-        white-space:nowrap!important;
-        overflow:hidden!important;
-        text-overflow:ellipsis!important;
-        line-height:1!important;
-        pointer-events:none!important;
+    .fixed-top-nav-bar button p {
+        font-size: clamp(10px,2.6vw,11.5px) !important;
+        font-weight: 700 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        line-height: 1 !important;
+        pointer-events: none !important;
     }
     
     div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stElementContainer"] div.floating-news-popup-marker),
-    div[data-testid="stVerticalBlock"] > div:has(> div.element-container div.floating-news-popup-marker){position:fixed!important;bottom:16px!important;right:16px!important;z-index:99999!important;width:min(395px,93vw)!important;background:rgba(12,18,34,0.97)!important;backdrop-filter:blur(18px)!important;border:1px solid rgba(239,68,68,0.65)!important;border-left:4px solid #ef4444!important;border-radius:12px!important;padding:11px 13px!important;box-shadow:0 16px 38px rgba(0,0,0,0.85)!important;}
+    div[data-testid="stVerticalBlock"] > div:has(> div.element-container div.floating-news-popup-marker) {
+        position: fixed !important;
+        bottom: 16px !important;
+        right: 16px !important;
+        z-index: 99999 !important;
+        width: min(395px,93vw) !important;
+        background: rgba(12,18,34,0.97) !important;
+        backdrop-filter: blur(18px) !important;
+        border: 1px solid rgba(239,68,68,0.65) !important;
+        border-left: 4px solid #ef4444 !important;
+        border-radius: 12px !important;
+        padding: 11px 13px !important;
+        box-shadow: 0 16px 38px rgba(0,0,0,0.85) !important;
+    }
     div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker) div[data-testid="stElementContainer"]:has(div.floating-news-popup-marker),
-    div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker) div.element-container:has(div.floating-news-popup-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;}
-    .glass-header{background:radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);border:1px solid rgba(148,163,184,0.18);border-radius:14px;padding:14px 14px;margin-bottom:10px;box-shadow:0 10px 28px rgba(0,0,0,0.45);box-sizing:border-box;width:100%;overflow:hidden;}
-    .compact-bar-label{display:flex;justify-content:space-between;font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#94a3b8;background:#0f172a;padding:5px 11px;border-radius:7px;border-left:3px solid #a855f7;margin-bottom:5px;}
-    .rank-card,.search-result-card{background:linear-gradient(180deg,#0f172a 0%,#090d16 100%)!important;color:#f8fafc!important;border-radius:14px;padding:13px 14px;margin-bottom:11px;box-shadow:0 8px 24px rgba(0,0,0,0.45);border:1px solid rgba(148,163,184,0.16);border-left:4px solid #38bdf8;}
-    .search-result-card{border-left-color:#f59e0b;}
-    .prob-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:800;color:#38bdf8!important;white-space:nowrap;}
-    .expect-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:900;color:#fde047!important;white-space:nowrap;}
-    .pill-badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;margin-right:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#e2e8f0;}
-    .quantum-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;margin-right:4px;background:linear-gradient(90deg,rgba(168,85,247,0.22),rgba(56,189,248,0.22));border:1px solid rgba(168,85,247,0.55);color:#e9d5ff;}
-    .inst-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;margin-right:4px;background:linear-gradient(90deg,rgba(16,185,129,0.2),rgba(56,189,248,0.2));border:1px solid rgba(16,185,129,0.55);color:#a7f3d0;}
-    .winrate-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;background:rgba(15,23,42,0.85)!important;border:1px solid rgba(148,163,184,0.15);border-radius:8px;padding:6px 4px;margin-top:7px;text-align:center;}
-    .signal-10tier-badge{display:flex;justify-content:space-between;align-items:center;padding:5px 10px;border-radius:7px;font-size:11.5px;font-weight:800;margin-bottom:7px;gap:6px;flex-wrap:wrap;}
-    .trade-plan-box{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:6px;background:rgba(2,6,23,0.7)!important;padding:6px 4px;border-radius:8px;border:1px solid rgba(148,163,184,0.15);text-align:center;}
-    .sizing-box{background:rgba(16,185,129,0.08)!important;border:1px solid rgba(16,185,129,0.28);border-radius:8px;padding:5px 10px;margin-top:6px;font-size:11px;color:#d1fae5;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;}
-    details.quant-detail-drawer{margin-top:6px;background:rgba(2,6,23,0.55);border:1px solid rgba(168,85,247,0.25);border-radius:8px;padding:5px 10px;}
-    details.quant-detail-drawer summary{font-size:11px;font-weight:700;color:#c084fc!important;cursor:pointer;list-style:none;}
-    .metrics-row{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:5px;font-size:10.5px;font-family:'JetBrains Mono',monospace;background:rgba(15,23,42,0.9)!important;padding:5px 8px;border-radius:6px;color:#cbd5e1;}
-    .ai-council-box{background:#070b14;color:#f8fafc!important;border-radius:11px;padding:11px;margin-top:6px;margin-bottom:9px;border:1px solid rgba(168,85,247,0.35);}
-    .council-scroll-window{max-height:480px;overflow-y:auto;padding:9px;background:#04070e;border:1px solid rgba(255,255,255,0.07);border-radius:8px;margin-bottom:8px;scroll-behavior:smooth;}
-    .round-divider{text-align:center;margin:8px 0;padding:5px 10px;background:rgba(168,85,247,0.18);border-left:4px solid #a855f7;color:#e9d5ff!important;font-size:11.5px;font-weight:800;border-radius:4px;}
-    .chat-bubble-ai,.chat-bubble-doubt,.chat-bubble-rage,.chat-bubble-agree{border-radius:8px;padding:7px 10px;margin-bottom:6px;font-size:12px;line-height:1.55;background:rgba(255,255,255,0.04);border-left:3px solid #38bdf8;}
-    .chat-bubble-doubt{border-left-color:#f59e0b;background:rgba(245,158,11,0.07);}
-    .chat-bubble-rage{border-left-color:#ef4444;background:rgba(239,68,68,0.12);}
-    .chat-bubble-agree{border-left-color:#a855f7;background:rgba(168,85,247,0.11);}
-    .chat-bubble-user{background:rgba(37,99,235,0.30);border-left:4px solid #60a5fa;border-radius:8px;padding:8px 11px;margin:8px 0 6px 0;font-size:12.5px;box-shadow:0 2px 8px rgba(0,0,0,0.3);scroll-margin-top:6px;}
-    .consensus-banner{background:linear-gradient(135deg,#0f172a,#1e1b4b);border:1px solid rgba(168,85,247,0.45);border-radius:9px;padding:10px;margin-top:7px;font-size:12px;}
-    .beginner-action-box{background:linear-gradient(135deg,rgba(16,185,129,0.14),rgba(6,78,59,0.25));border:1px solid #10b981;border-left:4px solid #10b981;border-radius:8px;padding:9px 11px;margin-top:7px;color:#ecfdf5;font-size:12px;line-height:1.6;}
-    .ipo-link-btn{display:inline-block;background:#1e293b;color:#38bdf8!important;border:1px solid #334155;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none!important;margin-right:5px;margin-top:4px;}
-    .ipo-link-btn:hover{background:#38bdf8;color:#0f172a!important;}
+    div[data-testid="stVerticalBlock"] > div:has(div.floating-news-popup-marker) div.element-container:has(div.floating-news-popup-marker) {
+        display: none !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .glass-header {
+        background: radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);
+        border: 1px solid rgba(148,163,184,0.18);
+        border-radius: 14px;
+        padding: 14px 14px;
+        margin-bottom: 10px;
+        box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+        box-sizing: border-box;
+        width: 100%;
+        overflow: hidden;
+    }
+    .compact-bar-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        color: #94a3b8;
+        background: #0f172a;
+        padding: 5px 11px;
+        border-radius: 7px;
+        border-left: 3px solid #a855f7;
+        margin-bottom: 5px;
+    }
+    .rank-card,.search-result-card {
+        background: linear-gradient(180deg,#0f172a 0%,#090d16 100%) !important;
+        color: #f8fafc !important;
+        border-radius: 14px;
+        padding: 13px 14px;
+        margin-bottom: 11px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+        border: 1px solid rgba(148,163,184,0.16);
+        border-left: 4px solid #38bdf8;
+    }
+    .search-result-card {
+        border-left-color: #f59e0b;
+    }
+    .prob-badge {
+        font-family: 'JetBrains Mono',monospace;
+        font-size: clamp(14px,3.8vw,16.5px);
+        font-weight: 800;
+        color: #38bdf8 !important;
+        white-space: nowrap;
+    }
+    .expect-badge {
+        font-family: 'JetBrains Mono',monospace;
+        font-size: clamp(14px,3.8vw,16.5px);
+        font-weight: 900;
+        color: #fde047 !important;
+        white-space: nowrap;
+    }
+    .pill-badge {
+        display: inline-block;
+        padding: 2px 7px;
+        border-radius: 6px;
+        font-size: 10px;
+        font-weight: 700;
+        margin-right: 4px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.12);
+        color: #e2e8f0;
+    }
+    .quantum-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 10px;
+        font-weight: 800;
+        margin-right: 4px;
+        background: linear-gradient(90deg,rgba(168,85,247,0.22),rgba(56,189,248,0.22));
+        border: 1px solid rgba(168,85,247,0.55);
+        color: #e9d5ff;
+    }
+    .inst-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 10px;
+        font-weight: 800;
+        margin-right: 4px;
+        background: linear-gradient(90deg,rgba(16,185,129,0.2),rgba(56,189,248,0.2));
+        border: 1px solid rgba(16,185,129,0.55);
+        color: #a7f3d0;
+    }
+    .winrate-bar {
+        display: grid;
+        grid-template-columns: repeat(4,1fr);
+        gap: 5px;
+        background: rgba(15,23,42,0.85) !important;
+        border: 1px solid rgba(148,163,184,0.15);
+        border-radius: 8px;
+        padding: 6px 4px;
+        margin-top: 7px;
+        text-align: center;
+    }
+    .signal-10tier-badge {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 5px 10px;
+        border-radius: 7px;
+        font-size: 11.5px;
+        font-weight: 800;
+        margin-bottom: 7px;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .trade-plan-box {
+        display: grid;
+        grid-template-columns: repeat(3,1fr);
+        gap: 5px;
+        margin-top: 6px;
+        background: rgba(2,6,23,0.7) !important;
+        padding: 6px 4px;
+        border-radius: 8px;
+        border: 1px solid rgba(148,163,184,0.15);
+        text-align: center;
+    }
+    .sizing-box {
+        background: rgba(16,185,129,0.08) !important;
+        border: 1px solid rgba(16,185,129,0.28);
+        border-radius: 8px;
+        padding: 5px 10px;
+        margin-top: 6px;
+        font-size: 11px;
+        color: #d1fae5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    details.quant-detail-drawer {
+        margin-top: 6px;
+        background: rgba(2,6,23,0.55);
+        border: 1px solid rgba(168,85,247,0.25);
+        border-radius: 8px;
+        padding: 5px 10px;
+    }
+    details.quant-detail-drawer summary {
+        font-size: 11px;
+        font-weight: 700;
+        color: #c084fc !important;
+        cursor: pointer;
+        list-style: none;
+    }
+    .metrics-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 8px;
+        margin-top: 5px;
+        font-size: 10.5px;
+        font-family: 'JetBrains Mono',monospace;
+        background: rgba(15,23,42,0.9) !important;
+        padding: 5px 8px;
+        border-radius: 6px;
+        color: #cbd5e1;
+    }
+    .ai-council-box {
+        background: #070b14;
+        color: #f8fafc !important;
+        border-radius: 11px;
+        padding: 11px;
+        margin-top: 6px;
+        margin-bottom: 9px;
+        border: 1px solid rgba(168,85,247,0.35);
+    }
+    .council-scroll-window {
+        max-height: 480px;
+        overflow-y: auto;
+        padding: 9px;
+        background: #04070e;
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 8px;
+        margin-bottom: 8px;
+        scroll-behavior: smooth;
+    }
+    .round-divider {
+        text-align: center;
+        margin: 8px 0;
+        padding: 5px 10px;
+        background: rgba(168,85,247,0.18);
+        border-left: 4px solid #a855f7;
+        color: #e9d5ff !important;
+        font-size: 11.5px;
+        font-weight: 800;
+        border-radius: 4px;
+    }
+    .chat-bubble-ai,.chat-bubble-doubt,.chat-bubble-rage,.chat-bubble-agree {
+        border-radius: 8px;
+        padding: 7px 10px;
+        margin-bottom: 6px;
+        font-size: 12px;
+        line-height: 1.55;
+        background: rgba(255,255,255,0.04);
+        border-left: 3px solid #38bdf8;
+    }
+    .chat-bubble-doubt {
+        border-left-color: #f59e0b;
+        background: rgba(245,158,11,0.07);
+    }
+    .chat-bubble-rage {
+        border-left-color: #ef4444;
+        background: rgba(239,68,68,0.12);
+    }
+    .chat-bubble-agree {
+        border-left-color: #a855f7;
+        background: rgba(168,85,247,0.11);
+    }
+    .chat-bubble-user {
+        background: rgba(37,99,235,0.30);
+        border-left: 4px solid #60a5fa;
+        border-radius: 8px;
+        padding: 8px 11px;
+        margin: 8px 0 6px 0;
+        font-size: 12.5px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        scroll-margin-top: 6px;
+    }
+    .consensus-banner {
+        background: linear-gradient(135deg,#0f172a,#1e1b4b);
+        border: 1px solid rgba(168,85,247,0.45);
+        border-radius: 9px;
+        padding: 10px;
+        margin-top: 7px;
+        font-size: 12px;
+    }
+    .beginner-action-box {
+        background: linear-gradient(135deg,rgba(16,185,129,0.14),rgba(6,78,59,0.25));
+        border: 1px solid #10b981;
+        border-left: 4px solid #10b981;
+        border-radius: 8px;
+        padding: 9px 11px;
+        margin-top: 7px;
+        color: #ecfdf5;
+        font-size: 12px;
+        line-height: 1.6;
+    }
+    .ipo-link-btn {
+        display: inline-block;
+        background: #1e293b;
+        color: #38bdf8 !important;
+        border: 1px solid #334155;
+        padding: 4px 9px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        text-decoration: none !important;
+        margin-right: 5px;
+        margin-top: 4px;
+    }
+    .ipo-link-btn:hover {
+        background: #38bdf8;
+        color: #0f172a !important;
+    }
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{" ".join(l.strip() for l in css.splitlines() if l.strip())}</style>', unsafe_allow_html=True)
 
@@ -567,10 +855,35 @@ if st.session_state.get("scroll_target_id"):
     """
     st.session_state["scroll_target_id"] = ""
 
+# ─────────────────────────────────────────────────────────────
+# JavaScript自動救出＆監視インターセプター
+# ─────────────────────────────────────────────────────────────
 components.html(
     f"""<script>
     (function(){{
         const doc = window.parent.document;
+        
+        function enforceSidebarButton(){{
+            // サイドバー開閉に関連する全要素を徹底走査して強制表示
+            const selectors = [
+                '[data-testid="collapsedControl"]',
+                '[data-testid="stSidebarCollapseButton"]',
+                'button[kind="header"]',
+                'header button[aria-label="Open sidebar"]',
+                'header button[aria-label="Close sidebar"]'
+            ];
+            
+            selectors.forEach(sel => {{
+                doc.querySelectorAll(sel).forEach(el => {{
+                    el.style.setProperty('display', 'flex', 'important');
+                    el.style.setProperty('visibility', 'visible', 'important');
+                    el.style.setProperty('opacity', '1', 'important');
+                    el.style.setProperty('pointer-events', 'auto', 'important');
+                    el.style.setProperty('z-index', '2147483647', 'important');
+                }});
+            }});
+        }}
+
         function fixTopNav(){{
             const marker = doc.querySelector('.top-nav-marker');
             if(!marker) return;
@@ -586,15 +899,15 @@ components.html(
                 }});
             }}
         }}
+
+        enforceSidebarButton();
         fixTopNav();
+        setInterval(enforceSidebarButton, 400); // DOMの再描画に追従
         setTimeout(fixTopNav, 100);
         setTimeout(fixTopNav, 300);
-        setTimeout(fixTopNav, 800);
 
         function scrollToTopAbsolute(){{
-            try {{
-                window.parent.scrollTo(0, 0);
-            }} catch(e){{}}
+            try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
             const targets = [
                 doc.documentElement,
                 doc.body,
@@ -1798,7 +2111,7 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     det = tn["detail"]
     st.markdown(
         f'<div class="glass-header" style="border-left:4px solid #ef4444;">'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:gap:6px;">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
         f'<span class="pill-badge" style="background:#ef4444;color:#fff;border:none;">🚨 重大ニュース徹底深掘りレポート</span>'
         f'<span class="quantum-badge">⚛️ 量子波及スコア {tn["impact_score"]}点 ｜ {tn["source"]}</span></div>'
         f'<div style="font-size:18px;font-weight:800;color:#f8fafc;margin-top:8px;line-height:1.45;">{tn["title"]}</div>'
