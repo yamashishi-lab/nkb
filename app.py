@@ -700,7 +700,7 @@ if cu_Now:
     db_Now = load_mem()
     mdb_Now = load_mail_db()
     u_name_Now = db_Now.get(cu_Now, {}).get("name", "会員")
-    my_msgs = [m for m in mdb_Now.get("messages", []) if m.get("member_email"] == cu_Now]
+    my_msgs = [m for m in mdb_Now.get("messages", []) if m.get("member_email") == cu_Now]
     unread_admin_replies = [m for m in my_msgs if m.get("sender_role") == "admin" and not m.get("read_by_member", False)]
     if unread_admin_replies:
         st.sidebar.markdown(
@@ -884,7 +884,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                             now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             t_name = db.get(target_em, {}).get("name", "会員")
                             for m in mdb.get("messages", []):
-                                if m.get("member_email"] == target_em and m.get("sender_role") == "member":
+                                if m.get("member_email") == target_em and m.get("sender_role") == "member":
                                     m["read_by_admin"] = True
                             mdb.setdefault("messages", []).insert(0, {
                                 "id": hashlib.md5(f"adm_{target_em}_{now_s}".encode()).hexdigest()[:8],
@@ -907,8 +907,8 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
         else:
             st.markdown("#### 📬 会員別メッセージスレッド一覧（最新順）")
             for idx_m, mem_em in enumerate(member_order):
-                mem_name = db.get(mem_em, {}).get("name") or next((m.get("member_name") for m in all_msgs if m.get("member_email"] == mem_em), "会員")
-                thread_msgs = [m for m in all_msgs if m.get("member_email"] == mem_em]
+                mem_name = db.get(mem_em, {}).get("name") or next((m.get("member_name") for m in all_msgs if m.get("member_email") == mem_em), "会員")
+                thread_msgs = [m for m in all_msgs if m.get("member_email") == mem_em]
                 unread_cnt = sum(1 for m in thread_msgs if m.get("sender_role") == "member" and not m.get("read_by_admin", False))
                 badge_html = f'<span class="pill-badge" style="background:#ef4444;color:#fff;border:none;">🔴 未読 {unread_cnt}件</span>' if unread_cnt else '<span class="pill-badge" style="color:#10b981;">✅ 確認済</span>'
                 latest_badge = '<span class="quantum-badge">⚡ 直前メッセージ送信会員</span>' if idx_m == 0 else ''
@@ -937,7 +937,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                     if qr_c2.form_submit_button("↩️ 即時返信", use_container_width=True) and qr_txt.strip():
                         now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         for m in mdb.get("messages", []):
-                            if m.get("member_email"] == mem_em and m.get("sender_role") == "member":
+                            if m.get("member_email") == mem_em and m.get("sender_role") == "member":
                                 m["read_by_admin"] = True
                         mdb.setdefault("messages", []).insert(0, {
                             "id": hashlib.md5(f"qr_{mem_em}_{now_s}".encode()).hexdigest()[:8],
