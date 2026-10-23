@@ -294,7 +294,7 @@ def check_auth():
                 if cu in db: db[cu]["last_seen_ts"] = 0; save_j(FILES["mem"], db)
                 st.session_state["authenticated_user"] = None; st.query_params.clear(); st.rerun()
         if cu == ADMIN_EMAIL.strip().lower():
-            pend = [v for v in db.values() if v.get("status") == "pending"]
+            pend = [v for v in db.values() if v.get("status"] == "pending"]
             mdb_Now = load_mail_db()
             unread_msgs = [m for m in mdb_Now.get("messages", []) if m.get("sender_role") == "member" and not m.get("read_by_admin", False)]
             spoof_cnt = len(sec.get("spoof_logs", []))
@@ -878,7 +878,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                 c_b1.markdown(f"💀 **{binfo.get('name','不明')}** (`{bem}`) ｜ BAN日時: {binfo.get('banned_at','-')} ｜ 端末FP: `{binfo.get('fp','-')}`")
                 if c_b2.button("🔓 永久BAN解除", key=f"unban_{bem}", use_container_width=True):
                     sec.get("banned_emails", {}).pop(bem, None)
-                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email") == bem]:
+                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email"] == bem]:
                         sec["banned_fps"].pop(fp_k, None)
                     for pin_k in [k_p for k_p, v_p in sec.get("banned_pins", {}).items() if v_p == bem]:
                         sec["banned_pins"].pop(pin_k, None)
@@ -1258,7 +1258,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0) -> dict:
             turns.append({"speaker": AI_ROSTER.get(sk, f"👑 {sk}"), "score": int(it.get("score", fs)), "tone": it.get("tone", "normal"), "text": it.get("text", "")})
 
     v_html = (
-        f'<div style="margin-bottom:5px;"><b>🔥 銘柄総合期待度：</b><span style="color:#fde047;font-size:14px;font-weight:900;">{r["expect_pct"]}%</span> ｜ <b>🏛️ 機関ミクロ構造：</b><span style="color:#a7f3d0;font-weight:800;">{r["ms_regime']}（Kyle吸収 {r["kyle_stealth"]}% ／ Hurst指数 {r["hurst"]}）</span></div>'
+        f'<div style="margin-bottom:5px;"><b>🔥 銘柄総合期待度：</b><span style="color:#fde047;font-size:14px;font-weight:900;">{r["expect_pct"]}%</span> ｜ <b>🏛️ 機関ミクロ構造：</b><span style="color:#a7f3d0;font-weight:800;">{r["ms_regime']}（Kyle吸収 {r["kyle_stealth"]}% ／ Hurst指数 {r["hurst']}）</span></div>'
         f'<div style="margin-bottom:5px;"><b>⚛️ 量子波動ステータス：</b><span style="color:#e9d5ff;font-weight:800;">{r["q_state"]}（量子Q {r["q_score"]}点 ／ トンネル突破率 {r["q_tunnel"]}%）</span></div>'
         f'<div style="margin-bottom:5px;"><b>🧬 採用買い方アルゴリズム：</b><span style="color:#38bdf8;font-weight:800;">{st_info["algo_name"]}</span></div>'
         f'<div style="margin-bottom:5px;"><b>⚡ プロ向け執行プラン：</b>{st_info["step_plan"]} ｜ 🎯利確 <b>{r["tp_price"]}(+{r["tp_pct"]}%)</b> ／ 🛡️損切 <b>{r["sl_price"]}({r["sl_pct"]}%)</b></div>'
@@ -1330,7 +1330,7 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
         f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>基準VWAP: <b>{r["vwap_price"]}</b></span></div>'
         f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 🏛️ 機関ミクロ構造(Kyleλ・Hurst) ＆ 買い方戦略詳細（タップで開閉）</summary>'
         f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:5px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br><span style="color:#a7f3d0;">{r["ms_regime"]}</span> ｜ <span style="color:#e9d5ff;">{r["q_state"]}</span><br>{st_info["core_logic"]}<br><b>▶ 買い方執行手順:</b> {st_info["step_plan"]}</div>'
-        f'<div class="metrics-row"><span>期待度:{r["expect_pct"]}%</span><span>量子Q:{r["q_score"]}点</span><span>機関ミクロ:{r["ms_score"]}点</span><span>Kyle吸収:{r["kyle_stealth"]}%</span><span>Hurst指数:{r["hurst"]}</span><span>LULD引力:{r["luld_magnet"]}🥣</span><span>OFI:{r["ofi_z"]:+.2f}σ</span><span>95%CVaR:-{r["cvar95"]}%</span></div>'
+        f'<div class="metrics-row"><span>期待度:{r["expect_pct"]}%</span><span>量子Q:{r["q_score"]}点</span><span>機関ミクロ:{r["ms_score"]}点</span><span>Kyle吸収:{r["kyle_stealth"]}%</span><span>Hurst指数:{r["hurst"]}</span><span>LULD引力:{r["luld_magnet"]}%</span><span>OFI:{r["ofi_z"]:+.2f}σ</span><span>95%CVaR:-{r["cvar95"]}%</span></div>'
         f'</details></div>'
     )
     st.markdown(card_html, unsafe_allow_html=True)
@@ -1481,7 +1481,7 @@ elif sel_cat == "🎟️ IPO募集・新規上場":
 elif sel_cat == "🏦 機関VPIN・OFI":
     for i, r in enumerate(sorted(all_res, key=lambda x: (x["inst_score"], x["ofi_z"], x["expect_pct"]), reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
 elif sel_cat == "🔥 5ch＆短期モメンタム":
-    for i, r in enumerate(sorted(all_res, key=lambda x: (x["board5ch_score"], x["expect_pct"]), reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
+    for i, r in enumerate(sorted(all_res, key=lambda x: (x["board5ch_score"], x["expect_pct"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
 elif sel_cat == "📋 監視シート":
     wl = st.session_state["watchlist"]
     if st.button("⚡ 総合TOP3をワンタップ一括登録", use_container_width=True):
