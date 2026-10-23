@@ -208,7 +208,6 @@ def inject_css():
         z-index: 1000000 !important;
     }
     
-    /* ヘッダー内部の要素をクリック可能に復元 */
     header[data-testid="stHeader"] * {
         pointer-events: auto !important;
     }
@@ -241,7 +240,6 @@ def inject_css():
         transition: all 0.2s ease !important;
     }
 
-    /* アイコン（SVG）が背景と同化して消えないようシアン色で光らせる */
     div[data-testid="collapsedControl"] svg,
     div[data-testid="stSidebarCollapsedControl"] svg,
     button[data-testid="stSidebarCollapseButton"] svg,
@@ -1032,7 +1030,7 @@ DYNAMIC_DYNAMIC_POOLS = {
     "宇宙・次世代": [
         {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星"},
         {"code": "186A.T", "name": "アストロスケール", "theme": "宇宙デブリ除去"},
-        {"code": "9348.T", "ispace", "theme": "月面輸送"},
+        {"code": "9348.T", "name": "ispace", "theme": "月面輸送"},
         {"code": "9412.T", "name": "スカパーJSAT", "theme": "衛星・防衛宇宙"},
         {"code": "7203.T", "name": "トヨタ自動車", "theme": "全固体電池"},
         {"code": "TSLA", "name": "テスラ (米)", "theme": "自動運転・ロボ"},
