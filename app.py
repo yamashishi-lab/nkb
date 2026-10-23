@@ -199,15 +199,72 @@ def inject_css():
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
-    /* ヘッダーの透明化 */
+    /* ─────────────────────────────────────────────────────────────
+       【重要】Streamlit純正サイドバー開閉ボタンの左上常駐・完全救出
+       ───────────────────────────────────────────────────────────── */
+    div[data-testid="collapsedControl"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        position: fixed !important;
+        top: 8px !important;
+        left: 8px !important;
+        z-index: 2147483647 !important; /* 最前面レイヤー */
+        width: 32px !important;
+        height: 32px !important;
+        background: #0f172a !important;
+        border: 1px solid rgba(56,189,248,0.5) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.8) !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    
+    div[data-testid="collapsedControl"] button {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        width: 100% !important;
+        height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        color: #38bdf8 !important;
+        cursor: pointer !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    div[data-testid="collapsedControl"] svg {
+        display: block !important;
+        visibility: visible !important;
+        width: 18px !important;
+        height: 18px !important;
+        stroke: #38bdf8 !important;
+        fill: #38bdf8 !important;
+    }
+
+    /* サイドバー内部の閉じるボタン（開いた状態の時） */
+    button[data-testid="stSidebarCollapseButton"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        z-index: 2147483647 !important;
+    }
+
+    /* ヘッダー自体の背景を透明化し、左上ボタンのクリックを遮断しない */
     header[data-testid="stHeader"] {
         background: transparent !important;
         height: 2.8rem !important;
-        pointer-events: none !important;
         z-index: 999990 !important;
+        pointer-events: none !important;
     }
-    
-    /* ツールバーのみ非表示（右上のStreamlitメニュー等） */
+
+    /* ツールバーのみ非表示（右上のStreamlit標準メニュー等） */
     header[data-testid="stHeader"] [data-testid="stToolbar"] {
         display: none !important;
     }
@@ -265,14 +322,14 @@ def inject_css():
         text-overflow: ellipsis;
     }
     
-    /* 上部固定ナビゲーションバー（左上メニューボタンと干渉しないよう位置調整） */
+    /* 上部固定ナビゲーションバー（左上32pxボタンと完全に被らないクリアランス配置） */
     .fixed-top-nav-bar {
         position: fixed !important;
         top: 0.45rem !important;
-        left: calc(50% + 18px) !important;
+        left: calc(50% + 24px) !important;
         transform: translateX(-50%) !important;
         z-index: 999980 !important;
-        width: min(530px, calc(100vw - 8.5rem)) !important;
+        width: min(520px, calc(100vw - 8.8rem)) !important;
         background: rgba(5,8,17,0.94) !important;
         backdrop-filter: blur(14px) !important;
         border: none !important;
@@ -820,87 +877,13 @@ if st.session_state.get("scroll_target_id"):
     st.session_state["scroll_target_id"] = ""
 
 # ─────────────────────────────────────────────────────────────
-# 独立サイドバー開閉トグルボタン注入（純粋サイドバー専用・小型化）
+# 上部ナビ固定化およびスクロール制御
 # ─────────────────────────────────────────────────────────────
 components.html(
     f"""<script>
     (function(){{
         const doc = window.parent.document;
         
-        function injectIndependentSidebarToggle(){{
-            if (doc.getElementById('yamashishi-sidebar-toggle-btn')) return;
-            
-            const btn = doc.createElement('button');
-            btn.id = 'yamashishi-sidebar-toggle-btn';
-            btn.innerHTML = '⚡';
-            btn.setAttribute('title', 'サイドバーメニュー開閉');
-            btn.setAttribute('aria-label', 'Toggle Sidebar');
-            
-            // 左上に固定、28pxの小型スクエアボタン
-            Object.assign(btn.style, {{
-                position: 'fixed',
-                top: '7px',
-                left: '8px',
-                width: '28px',
-                height: '28px',
-                minWidth: '28px',
-                minHeight: '28px',
-                zIndex: '2147483647',
-                background: '#0f172a',
-                color: '#38bdf8',
-                border: '1px solid rgba(56,189,248,0.5)',
-                borderRadius: '7px',
-                padding: '0',
-                fontSize: '13px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.7)',
-                pointerEvents: 'auto',
-                transition: 'all 0.15s ease'
-            }});
-            
-            btn.onmouseover = function(){{
-                btn.style.background = '#0284c7';
-                btn.style.color = '#ffffff';
-                btn.style.borderColor = '#38bdf8';
-            }};
-            btn.onmouseout = function(){{
-                btn.style.background = '#0f172a';
-                btn.style.color = '#38bdf8';
-                btn.style.borderColor = 'rgba(56,189,248,0.5)';
-            }};
-
-            // サイドバー開閉専用の純粋ハンドラ（他のメニューを絶対開かない）
-            btn.onclick = function(e){{
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // サイドバー開閉専用の要素のみを厳格に指定
-                const collapseBtn = doc.querySelector('button[data-testid="stSidebarCollapseButton"]')
-                                 || doc.querySelector('[data-testid="collapsedControl"] button')
-                                 || doc.querySelector('[data-testid="collapsedControl"]');
-                
-                if (collapseBtn) {{
-                    collapseBtn.click();
-                    return;
-                }}
-                
-                // ネイティブボタンがDOMにない場合の直接切り替え
-                const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-                if (sidebar) {{
-                    const isClosed = sidebar.getAttribute('aria-expanded') === 'false';
-                    sidebar.setAttribute('aria-expanded', isClosed ? 'true' : 'false');
-                    sidebar.style.display = isClosed ? 'block' : 'none';
-                    sidebar.style.visibility = isClosed ? 'visible' : 'hidden';
-                }}
-            }};
-
-            doc.body.appendChild(btn);
-        }}
-
         function fixTopNav(){{
             const marker = doc.querySelector('.top-nav-marker');
             if(!marker) return;
@@ -917,9 +900,7 @@ components.html(
             }}
         }}
 
-        injectIndependentSidebarToggle();
         fixTopNav();
-        setInterval(injectIndependentSidebarToggle, 400);
         setTimeout(fixTopNav, 100);
         setTimeout(fixTopNav, 300);
 
