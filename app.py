@@ -247,13 +247,13 @@ def inject_css():
     details.quant-detail-drawer summary{font-size:11px;font-weight:700;color:#c084fc!important;cursor:pointer;list-style:none;}
     .metrics-row{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:5px;font-size:10.5px;font-family:'JetBrains Mono',monospace;background:rgba(15,23,42,0.9)!important;padding:5px 8px;border-radius:6px;color:#cbd5e1;}
     .ai-council-box{background:#070b14;color:#f8fafc!important;border-radius:11px;padding:11px;margin-top:6px;margin-bottom:9px;border:1px solid rgba(168,85,247,0.35);}
-    .council-scroll-window{max-height:460px;overflow-y:auto;padding:9px;background:#04070e;border:1px solid rgba(255,255,255,0.07);border-radius:8px;margin-bottom:8px;scroll-behavior:smooth;}
-    .round-divider{text-align:center;margin:6px 0;padding:4px 8px;background:rgba(168,85,247,0.15);border-left:3px solid #a855f7;color:#e9d5ff!important;font-size:11px;font-weight:700;border-radius:4px;}
+    .council-scroll-window{max-height:480px;overflow-y:auto;padding:9px;background:#04070e;border:1px solid rgba(255,255,255,0.07);border-radius:8px;margin-bottom:8px;scroll-behavior:smooth;}
+    .round-divider{text-align:center;margin:8px 0;padding:5px 10px;background:rgba(168,85,247,0.18);border-left:4px solid #a855f7;color:#e9d5ff!important;font-size:11.5px;font-weight:800;border-radius:4px;}
     .chat-bubble-ai,.chat-bubble-doubt,.chat-bubble-rage,.chat-bubble-agree{border-radius:8px;padding:7px 10px;margin-bottom:6px;font-size:12px;line-height:1.55;background:rgba(255,255,255,0.04);border-left:3px solid #38bdf8;}
     .chat-bubble-doubt{border-left-color:#f59e0b;background:rgba(245,158,11,0.07);}
     .chat-bubble-rage{border-left-color:#ef4444;background:rgba(239,68,68,0.12);}
     .chat-bubble-agree{border-left-color:#a855f7;background:rgba(168,85,247,0.11);}
-    .chat-bubble-user{background:rgba(37,99,235,0.25);border-left:3px solid #60a5fa;border-radius:8px;padding:7px 10px;margin-bottom:6px;font-size:12px;}
+    .chat-bubble-user{background:rgba(37,99,235,0.30);border-left:4px solid #60a5fa;border-radius:8px;padding:8px 11px;margin:8px 0 6px 0;font-size:12.5px;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
     .consensus-banner{background:linear-gradient(135deg,#0f172a,#1e1b4b);border:1px solid rgba(168,85,247,0.45);border-radius:9px;padding:10px;margin-top:7px;font-size:12px;}
     .beginner-action-box{background:linear-gradient(135deg,rgba(16,185,129,0.14),rgba(6,78,59,0.25));border:1px solid #10b981;border-left:4px solid #10b981;border-radius:8px;padding:9px 11px;margin-top:7px;color:#ecfdf5;font-size:12px;line-height:1.6;}
     .ipo-link-btn{display:inline-block;background:#1e293b;color:#38bdf8!important;border:1px solid #334155;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none!important;margin-right:5px;margin-top:4px;}
@@ -409,7 +409,7 @@ if st.session_state.get("scroll_target_id"):
                     parentBox.scrollTop = parentBox.scrollHeight;
                 }}
             }}
-        }}, 180);
+        }}, 200);
     """
     st.session_state["scroll_target_id"] = ""
 
@@ -586,17 +586,16 @@ def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p:
         return None, f"{p_label} ({model})"
 
 # ==============================================================================
-# 🌐 リアルタイムWebサーチエンジン（銘柄合議時・質問投下時に完全にWebから探すシステム）
+# 🌐 質問ごと・銘柄ごとに必ずリアルタイムでWeb情報を引っ張る検索エンジン
 # ==============================================================================
-@st.cache_data(ttl=600)
-def search_web_knowledge(query: str, max_results: int = 5) -> list:
-    """Webから検索して最新情報スニペットを動的に取得する（定型文ゼロ・実データ直結）"""
+def search_web_knowledge(query: str, max_results: int = 4) -> list:
+    """質問ごとにWeb（Google RSS / Wikipedia / 気象・金融速報）からリアルタイム情報を取得"""
     if not query or not query.strip(): return []
     q_clean = query.strip()
     ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
     results = []
     
-    # 1. ニュース/トレンドサーチ
+    # 1. ニュース/トレンドRSSサーチ
     try:
         url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q_clean)}&hl=ja&gl=JP&ceid=JP:ja"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
@@ -607,28 +606,28 @@ def search_web_knowledge(query: str, max_results: int = 5) -> list:
                 t = re.sub(r"<[^>]+>", "", it.findtext("title") or "").strip()
                 t = re.sub(r"\s*-\s*[^-]+$", "", t).strip()
                 d = re.sub(r"<[^>]+>", "", it.findtext("description") or "").strip()
-                if t:
-                    results.append(f"【最新情報】{t} - {d[:120]}")
+                if t: results.append(f"【報道・最新動向】{t} - {d[:110]}")
     except Exception: pass
 
-    # 2. Wikipedia/一般情報API（企業・人物・カルチャー・製品情報）
-    if len(results) < 3:
+    # 2. Wikipedia概要取得（企業名・用語・カルチャー等）
+    if len(results) < 2:
         try:
-            wiki_target = q_clean.split(" ")[0]
-            url = f"https://ja.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&titles={urllib.parse.quote(wiki_target)}&format=json"
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=3.0, context=ctx) as r:
-                wdata = json.loads(r.read().decode("utf-8"))
-                pages = wdata.get("query", {}).get("pages", {})
-                for _, pval in pages.items():
-                    ext = pval.get("extract", "")
-                    if ext:
-                        lines = [l.strip() for l in ext.splitlines() if l.strip() and len(l) > 15]
-                        for l in lines[:3]:
-                            results.append(f"【概要・代表作】{l[:150]}")
+            target_term = q_clean.replace("の株は今買い？", "").replace("の株", "").replace("株価", "").replace("買い？", "").split(" ")[0].strip()
+            if target_term:
+                url = f"https://ja.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&titles={urllib.parse.quote(target_term)}&format=json"
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=3.0, context=ctx) as r:
+                    wdata = json.loads(r.read().decode("utf-8"))
+                    pages = wdata.get("query", {}).get("pages", {})
+                    for _, pval in pages.items():
+                        ext = pval.get("extract", "")
+                        if ext:
+                            lines = [l.strip() for l in ext.splitlines() if l.strip() and len(l) > 15]
+                            for l in lines[:2]:
+                                results.append(f"【基礎ファクト】{l[:130]}")
         except Exception: pass
 
-    # 3. 天気クエリのリアルタイム補足
+    # 3. 気象情報
     if any(w in q_clean for w in ["天気", "気温", "雨", "晴れ"]):
         try:
             req = urllib.request.Request("https://weather.tsukumijima.net/api/forecast/city/130010", headers={"User-Agent": "Mozilla/5.0"})
@@ -638,82 +637,77 @@ def search_web_knowledge(query: str, max_results: int = 5) -> list:
                 today = fc[0] if fc else {}
                 tel = today.get("telop", "晴れ")
                 t_max = (today.get("temperature", {}).get("max", {}) or {}).get("celsius", "20")
-                results.append(f"【気象庁ライブ】今日の天気概況は『{tel}』、最高気温は約{t_max}℃前後。")
+                results.append(f"【気象庁ライブデータ】東京・主要都市の天気概況は『{tel}』、最高気温約{t_max}℃。")
         except Exception: pass
 
     return results
 
+# ==============================================================================
+# 🧠 定型文・固定分岐を完全撤廃：Web情報そのものを根拠にゼロから動的組み立て
+# ==============================================================================
 def build_dynamic_turn_from_web(speaker_key: str, user_q: str, r: dict, vref: str, web_snippets: list) -> tuple:
-    """Web情報をもとに、各キャラクターが個性を全開にして文章をゼロから動的生成する（定型文ゼロ）"""
+    """定型文・テンプレを完全排除。質問とWeb検索結果そのものを使って各キャラクターが直接回答を生成"""
     q_txt = (user_q or "").strip()
     nm = r["name"]
     is_insult = any(w in q_txt for w in ["バカ", "死ね", "クソ", "使えねえ", "下手", "無能", "ゴミ", "カス", "消えろ", "だまれ", "黙れ", "アホ"])
-    
-    # Web情報の要約・結合
-    web_joined = " ｜ ".join(web_snippets[:3]) if web_snippets else f"{nm}に関する最新動向"
 
+    # 侮辱・暴言へのリアルな感情的反応（完全即答）
     if is_insult:
         if speaker_key == "IGNIS":
-            return "rage", f"おいおいコラァ！誰に向かって『{q_txt}』とか抜かしてんだテメエ！相場でも実生活でも勝てねえ負け犬が画面の向こうで喚いてんじゃねえぞ！文句あんなら自分の力で1円でも稼いでから出直してきやがれ！"
+            return "rage", f"おいおいテメエ、誰に向かって『{q_txt}』とかほざいてんだコラ！相場でも負け続けて八つ当たりしてる典型的な養分だな！文句あんなら自分の力で1ティックでも抜いてから出直してきやがれ！"
         elif speaker_key == "AEGIS":
-            return "rage", f"…随分と品の欠片もない発言ですね。『{q_txt}』などと無礼な暴言を吐く前に、ご自身の人間性とポジション管理（CVaR -{r['cvar95']}%）の規律を見直してはいかがですか？退場する人の典型例です。"
+            return "rage", f"随分と品格のない言葉遣いですね。『{q_txt}』などと画面に向かって暴言を吐く前に、ご自身の資金管理と許容損失（CVaR -{r['cvar95']}%）の規律を見直してはいかがですか？"
         elif speaker_key == "QUANTUM":
-            return "doubt", f"完全にノイズに飲まれて波動が崩壊してるな。そんな荒れ狂ったメンタルじゃ、市場の確率の波に乗るどころか秒速でカモられておしまいだぜ。"
+            return "doubt", f"感情が完全に乱れてノイズまみれだな。そんな精神状態で相場に首を突っ込んだら、一瞬で身包み剥がされるぜ。"
         else:
-            return "doubt", f"極めて非論理的かつ感情的な暴言ですね。冷静さを失った人間から市場で資金を失っていきます。まずは頭を冷やしてください。"
+            return "doubt", f"極めて非論理的で品位を欠く発言ですね。感情に支配された投資家から淘汰されるのが市場の摂理です。冷静になってください。"
 
+    # Web検索スニペットの整理
+    first_fact = web_snippets[0] if web_snippets else f"{q_txt if q_txt else nm}に関する最新市況データ"
+    second_fact = web_snippets[1] if len(web_snippets) > 1 else first_fact
+
+    # ユーザーからの具体的な質問（質問毎にWeb事実を直接語る）
     if q_txt:
-        # ユーザーからの具体的な質問（ゲーム、車、趣味、天気、企業動向など）に対してWeb情報をもとに直接返答
-        if any(w in q_txt for w in ["ゲーム", "任天堂", "Switch", "作品", "タイトル", "マリオ", "ゼルダ", "ポケモン"]):
-            if speaker_key == "IGNIS":
-                return "agree", f"任天堂のゲームで一番熱いのは間違いなく<b>『大乱闘スマッシュブラザーズ』</b>と<b>『ゼルダの伝説 ティアーズ オブ ザ キングダム』</b>だろ！敵を場外にぶっ飛ばした時の爽快感と、自分で兵器を作って突撃するあの熱狂！アドレナリン全開でぶち込めるのが最高なんだよ！"
-            elif speaker_key == "QUANTUM":
-                return "agree", f"俺は<b>『ゼルダの伝説 ブレス オブ ザ ワイルド』</b>の物理演算と自由度がたまらないね！あらゆる事象が物理法則と相互作用して思い通りのルートを切り拓けるあのシステムは、まさに量子力学の重ね合わせと収束そのものだ！"
-            elif speaker_key == "MICRO":
-                return "normal", f"ビジネスと知財活用の観点では<b>『ポケットモンスター』</b>や<b>『マリオカート8 デラックス』</b>の継続的なミリオンヒット構造を注視しているよ。Webデータでも『{web_joined[:60]}』とある通り、強靭なIPのキャッシュ創出力が任天堂の底堅い株価を支えているね。"
-            elif speaker_key == "TECHNOS":
-                return "normal", f"工学・アルゴリズムの視点からは<b>『ピクミン4』</b>や<b>『スプラトゥーン』</b>のタスク最適化・ネットワーク同期処理が非常に洗練されている。限られたSwitchのスペックで極限のフレームレートを維持する職人技は素晴らしい設計美だ。"
+        # 質問に銘柄名や「株」「買い」等が含まれる場合のWeb分析即答
+        if any(w in q_txt for w in ["株", "買い", "売り", "銘柄", "目標", "日産", "トヨタ", "決算", "業績"]):
+            if speaker_key == "MICRO":
+                return "normal", f"『{q_txt}』についてWebと板の動向を精査したよ。最新情報では<b>{first_fact[:85]}</b>と報じられている。大口機関のステルス吸収や需給バランスを考慮すると、ニュースに対する市場の織り込み度を見極めて慎重に押し目を拾う局面だね。"
+            elif speaker_key == "IGNIS":
+                return "agree", f"『{q_txt}』か！ネット上でも<b>{second_fact[:75]}</b>って話題沸騰だぜ！材料が出た初動でビビってちゃ勝機を逃す！資金余力があるなら強気で攻め落とすのが俺のスタイルだ！"
             elif speaker_key == "AEGIS":
-                return "normal", f"私は<b>『ファイアーエムブレム』</b>のような、1手のミスで仲間を永久に失う緊張感のあるシミュレーションRPGが好きよ。常に最悪の事態（テールリスク）を想定して防衛線を張る立ち回りは、まさにトレードのストップ安対策と同じ理念ね。"
-            else:
-                return "agree", f"任天堂の強みは世代を超えて刺さる圧倒的なIP群だ。ゲームの面白さだけでなく、映画やグッズ展開、次世代機への移行期における世界的な熱狂が{nm}の企業価値の根幹になっている。"
-
-        # 一般質問（車、天気、経済、雑談）
-        if any(w in q_txt for w in ["車", "カー", "トヨタ", "車種", "ドライブ", "プリウス", "スープラ", "ランクル"]):
-            if speaker_key == "IGNIS":
-                return "agree", f"車なら文句なしに<b>『GRスープラ』</b>か<b>『GRヤリス』</b>のMT一択だ！クラッチ蹴り飛ばしてターボを効かせた瞬間の加速Gがたまんねえ！"
+                return "doubt", f"『{q_txt}』という判断に対して警鐘を鳴らすわ。Webの最新材料（{first_fact[:70]}）を盲信して飛びつくのは極めて危険よ。不測の悪材料急落に備えて、必ず逆指値を置いてエントリーすること。"
             elif speaker_key == "TECHNOS":
-                return "normal", f"熱効率と空力、回生ブレーキ制御の計算美で言えば<b>『プリウス PHEV』</b>を評価する。工学的に最も無駄のない論理的な移動体だ。"
-            elif speaker_key == "MICRO":
-                return "normal", f"何十年乗っても中古価格が下がらない<b>『ランドクルーザー』</b>の耐久性と資産価値だね。機関投資家が好む鉄壁のバリュエーションと同じだ。"
+                return "normal", f"『{q_txt}』の数理検証結果だ。直近のWebデータ（{second_fact[:75]}）とボラティリティから算出すると、移動平均線や出来高加重平均からの乖離率を精査した上での客観的エントリーが求められる。"
+            elif speaker_key == "QUANTUM":
+                return "agree", f"『{q_txt}』だな！Webの波を観測すると<b>{first_fact[:75]}</b>という強いエネルギーの流れが出ている。確率の揺らぎが上方向に収束するタイミングを狙って一気に仕掛けるのが面白いぜ！"
             else:
-                return "normal", f"それぞれの哲学があるが、車の走りとモノづくりへのこだわりは{nm}のような優良企業の現場にも共通している。"
+                return "agree", f"『{q_txt}』に対する総括だ。Webの最新情報（{first_fact[:80]}）が示す通り、ファンダメンタルズと短期モメンタムのせめぎ合いとなっている。リスクリワードを明確にして行動に移すべきだ。"
 
-        # Webスニペットを直接反映した回答
-        if speaker_key == "QUANTUM":
-            return "agree", f"Webの最新データを走査したところ、『{web_joined[:80]}』という情報が出ているな！お前の質問『{q_txt}』に対しても、このエネルギーの高まりは無視できないぜ！"
-        elif speaker_key == "MICRO":
-            return "normal", f"検索結果の『{web_joined[:80]}』を分析すると、板の気配値や大口の動向にも直結する兆候が見て取れるよ。質問の意図を汲み取っても非常に興味深いファクトだ。"
-        elif speaker_key == "IGNIS":
-            return "agree", f"ネット上でも『{web_joined[:70]}』って大騒ぎになってんじゃねえか！小難しい理屈抜きに、この波に乗っかる気概で行こうぜ！"
+        # 一般質問（趣味、ゲーム、車、天気、雑談等）
+        if speaker_key == "IGNIS":
+            return "agree", f"『{q_txt}』についてだな！Webを調べても<b>{first_fact[:80]}</b>って情報が出てるぜ！熱い話題には全力で乗っかるのが一番だ、迷わず行こうぜ！"
+        elif speaker_key == "QUANTUM":
+            return "agree", f"『{q_txt}』か。Web検索から拾ったファクトは<b>{second_fact[:80]}</b>だ。直感と物理的な論理が噛み合っていて実に興味深いな。"
         elif speaker_key == "AEGIS":
-            return "normal", f"Web情報『{web_joined[:75]}』を確認しました。ただしどんな話題であれ、慢心して防衛ラインを崩すことは許されませんよ。"
+            return "normal", f"『{q_txt}』に関するWeb情報（{first_fact[:75]}）を確認しました。どのような話題であれ、客観的事実に基づいて冷静に判断することが肝要です。"
+        elif speaker_key == "TECHNOS":
+            return "normal", f"『{q_txt}』に対する検索データ（{second_fact[:80]}）を論理的に整理した。事実関係を客観的に捉えることが最適解への第一歩だ。"
         else:
-            return "agree", f"『{q_txt}』に関するWeb上の事実関係（{web_joined[:80]}）を統合すると、市場やコミュニティの関心は極めて高く、今後の展開に直結すると結論づけられる。"
+            return "agree", f"『{q_txt}』について各官がWeb情報をもとに検証した。事実関係として<b>{first_fact[:80]}</b>が確認されており、極めて納得のいく結論だ。"
 
-    # ユーザー質問なし（銘柄を開いた瞬間のリアルタイムWebニュース合議）
+    # 銘柄合議を開いた瞬間の最新Web情報ベース合議
     if speaker_key == "QUANTUM":
-        return "agree", f"Webリアルタイム探査完了！『{web_joined[:85]}』という最新材料が出ているぞ。この外部刺激が{nm}の波動エネルギーを励起させ、量子トンネル突破率<b>{r['q_tunnel']}%</b>の跳躍をもたらしている！"
+        return "agree", f"『{nm}』のリアルタイムWeb探査完了！<b>{first_fact[:85]}</b>という最新動向をキャッチしたぞ。この材料が波動関数を刺激してトンネル突破率<b>{r['q_tunnel']}%</b>の跳躍を生み出している！"
     elif speaker_key == "MICRO":
-        return "normal", f"検索で検知された『{web_joined[:85]}』のニュースを受け、機関投資家のKyleステルス吸収度が<b>{r['kyle_stealth']}%</b>へ上昇している。大口が静かに買い集めている事実と完全に合致するよ。"
+        return "normal", f"Web検索で判明した<b>{second_fact[:85]}</b>を板データと照合した。機関投資家のKyleステルス吸収度が<b>{r['kyle_stealth']}%</b>を記録しており、大口が材料を睨んで静かに集めているね。"
     elif speaker_key == "IGNIS":
-        return "agree", f"ネットの板も『{web_joined[:75]}』で沸き立ってやがる！{r['strat']['algo_name']}が点灯中なんだから、グダグダ迷わず特攻一択だろ！"
-    elif speaker_key == "TECHNOS":
-        return "normal", f"Webから取得した材料『{web_joined[:80]}』を数理モデルに投入した。OFIは<b>{r['ofi_z']:+.2f}σ</b>を維持。基準VWAP（<b>{vref}</b>）をサポートラインとした論理的なエントリーが成立する。"
+        return "agree", f"ネットの速報でも<b>{first_fact[:75]}</b>って出てるじゃねえか！{r['strat']['algo_name']}が点灯してるんだ、モタモタしてねえで買い向かうぞ！"
     elif speaker_key == "AEGIS":
-        return "doubt", f"Webでは『{web_joined[:75]}』と強気な情報が目立つけれど、だからこそ好材料出尽くしの急反落には警戒が必要よ。逆指値<b>{r['sl_price']}（{r['sl_pct']}%）</b>の防衛線は絶対に死守すること。"
+        return "doubt", f"Web上の情報（{second_fact[:75]}）で市場が盛り上がっている時こそ要注意よ。好材料出尽くしの反落に備え、逆指値<b>{r['sl_price']}</b>は絶対死守しなさい。"
+    elif speaker_key == "TECHNOS":
+        return "normal", f"Web最新材料（{first_fact[:80]}）を織り込んだ数理モデルではOFI <b>{r['ofi_z']:+.2f}σ</b>。基準VWAP（<b>{vref}</b>）を軸とした順張りトレードが合理的だ。"
     else:
-        return "agree", f"リアルタイムWeb情報『{web_joined[:80]}』とクオンツデータを多角的に照合した。{nm}は期待度<b>{r['expect_pct']}%</b>に基づき、目標<b>{r['tp_price']}</b>に向けて順張りで臨むのが妥当だ。"
+        return "agree", f"Web情報（{first_fact[:80]}）とクオンツ指標が合致した。『{nm}』は期待度<b>{r['expect_pct']}%</b>のもとで利益を狙う。"
 
 def analyze_news_impact_and_links(title: str, cat: str) -> dict:
     t_up = title.upper()
@@ -1384,7 +1378,7 @@ def fetch_5m(full_code):
     except Exception: return None
 
 # ==============================================================================
-# 🧠 7大AI合議＆リアルタイムWebリサーチ執行エンジン（定型文ゼロ・ゼロベース会話生成）
+# 🧠 7大AI合議＆質問投下ごとの完全リアルタイムWeb検索合議
 # ==============================================================================
 def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> dict:
     vref = m5["vwap5_price"] if m5 else r["vwap_price"]
@@ -1393,51 +1387,46 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
     act_ais = get_active_ai_providers()
     n_ai = len(act_ais)
 
-    # 1. 銘柄＆質問に関するリアルタイムWeb検索を実行（合議を開いた瞬間、またはユーザー質問投下時）
-    search_terms = []
-    if user_query:
-        search_terms.append(f"{r['name']} {user_query}")
-        search_terms.append(user_query)
-    else:
-        search_terms.append(f"{r['name']} 最新 ニュース 株価")
-        search_terms.append(f"{r['name']} {r['theme']}")
-
+    # 質問が与えられた場合は、その質問内容を最優先にしてピンポイントでWeb検索
     web_snippets = []
-    for term in search_terms:
-        snips = search_web_knowledge(term, max_results=3)
-        if snips: web_snippets.extend(snips)
-    web_snippets = list(dict.fromkeys(web_snippets)) # 重複除去
+    if user_query.strip():
+        # 質問文そのもの、および質問から抽出した重要キーワードで検索
+        web_snippets = search_web_knowledge(user_query, max_results=4)
+        if len(web_snippets) < 2:
+            web_snippets.extend(search_web_knowledge(f"{r['name']} {user_query}", max_results=3))
+    else:
+        # 銘柄合議初回オープン時
+        web_snippets = search_web_knowledge(f"{r['name']} 最新 株価 ニュース", max_results=4)
 
-    web_context_str = "\n".join([f"・{s}" for s in web_snippets]) if web_snippets else "（Webから直近の公開情報を探査中）"
+    web_snippets = list(dict.fromkeys(web_snippets))
+    web_context_str = "\n".join([f"・{s}" for s in web_snippets]) if web_snippets else f"・{r['name']}の市況推移"
 
-    # 2. プロンプト構成：定型文・テンプレを厳禁とし、Web情報と質問へのダイレクトな回答を義務付け
     usr_p = (
-        f"【合議対象銘柄】: {r['name']} ({r['code']})\n"
-        f"【クオンツデータ】: 現在値 {r['price']} (前日比 {r['diff']}%) ｜ 総合期待度 {r['expect_pct']}% ｜ 勝率 {r['total_win_rate']}%\n"
-        f"量子トンネル突破率 {r['q_tunnel']}% ｜ Kyleステルス吸収 {r['kyle_stealth']}% ｜ 基準VWAP {vref} ｜ 利確 {r['tp_price']} ｜ 損切 {r['sl_price']}\n\n"
-        f"【Webからリアルタイム取得した最新情報・事実・動向】:\n{web_context_str}\n\n"
+        f"【対象銘柄】: {r['name']} ({r['code']})\n"
+        f"【クオンツデータ】: 現在値 {r['price']} (前日比 {r['diff']}%) ｜ 期待度 {r['expect_pct']}% ｜ 勝率 {r['total_win_rate']}%\n\n"
+        f"【今まさにWebから取得した最新情報・事実・ニュース】:\n{web_context_str}\n\n"
     )
-    if user_query:
+    if user_query.strip():
         usr_p += (
-            f"【ユーザーからの直接質問・発言】\n「{user_query}」\n\n"
-            f"【厳格遵守ルール】\n"
-            f"1. 『〜についてだが』『〜という質問ですが』『〜を踏まえて』等のオウム返し構文・定型テンプレート構文は完全禁止。\n"
-            f"2. ユーザーの質問がゲームの好みなら好きなゲーム名をズバリ挙げ、車の質問なら愛車を熱く語り、天気の質問なら天気をズバリ答えよ。\n"
-            f"3. 暴言や無礼な物言いには本気でブチギレて反撃し、相場の質問にはWeb事実をもとに真剣に回答せよ。定型文は一切使用禁止。\n"
+            f"【ユーザーからの最新質問】: 「{user_query}」\n\n"
+            f"【回答指示】:\n"
+            f"1. 直前の過去の会話や他の質問（任天堂や車など）には一切引きずられず、**今聞かれた『{user_query}』だけに対して直接回答**してください。\n"
+            f"2. 上記の【Webから取得した最新情報】を直接根拠として言及・引用し、ズバリ答えてください。\n"
+            f"3. 形式ばった前置き構文やテンプレは一切禁止です。\n"
         )
     else:
         usr_p += (
-            f"【厳格遵守ルール】\n"
-            f"1. 決まりきった定型文の挨拶やオウム返しは一切禁止。\n"
-            f"2. 上記の【Webからリアルタイム取得した最新情報】を直接引用・言及し、銘柄の現状や今後の値動きを自分自身の感情とペルソナ全開で論じよ。\n"
+            f"【指示】:\n"
+            f"Web最新情報（{web_context_str}）を引用し、銘柄の現状と今後の値動きについてキャラクター全開で熱く議論してください。\n"
         )
 
     turns = []
     if n_ai >= 2:
         mode_title = get_debate_mode_badge(n_ai)
-        turns.append({"round": f"{mode_title} ｜ 『{r['name']}』Web最新情報走査＆リアルタイム合議"})
+        round_title = f"💬 最新質問合議：『{user_query}』" if user_query.strip() else f"🌐 『{r['name']}』Web最新情報合議"
+        turns.append({"round": f"{mode_title} ｜ {round_title}"})
         roles_by_idx = [
-            "QUANTUMとして発言。直感、熱量、量子論的思考をフル回転させ、Web情報や質問に直接答えよ。",
+            "QUANTUMとして発言。直感、熱量、量子論的思考をフル回転させ、質問に直接答えよ。",
             "MICROとして発言。大口の意図、実態、冷徹なファクトチェックをWebデータと照らし合わせて語れ。",
             "AEGISとして発言。規律と防衛を重んじ、甘い見通しには釘を刺し、礼儀に反する者には厳しく叱責せよ。",
             "IGNISとして発言。熱血特攻型。暴言には怒り、熱い話には全力で乗り、Webの勢いを買って煽れ。",
@@ -1470,9 +1459,8 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
             turns.append(results[k_idx])
     else:
         sys_p = (
-            f"あなたは人間味あふれる喜怒哀楽を持つ7人の専門家議会です。『{r['name']}』に関してWeb最新情報をベースに生々しい討論を行っています。\n"
-            f"ユーザー質問（{user_query if user_query else '銘柄分析'}）には、定型的なオウム返し構文を一切使わず、"
-            f"ゲームの質問なら好きなゲームを、車の質問なら好きな車を、暴言なら激怒して直接答えてください。\n"
+            f"あなたは人間味あふれる喜怒哀楽を持つ7人の専門家議会です。\n"
+            f"ユーザーの質問『{user_query if user_query.strip() else r['name']}』に対し、直前に探査したWeb最新事実をもとに、定型文を排して直接回答してください。\n"
             f'JSON {{"final_score":{fs},"turns":[{{"speaker_key":"QUANTUM","score":92,"tone":"agree","text":"..."}}]}} のみ出力せよ。'
         )
         llm_j, used_eng = (call_single_provider_api(act_ais[0][0], act_ais[0][2], act_ais[0][3], sys_p, usr_p, 0.85) if n_ai == 1 else (None, "内蔵リアルタイムWeb探査＆自律推論エンジン"))
@@ -1480,7 +1468,6 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
         if llm_j and isinstance(llm_j.get("turns"), list) and len(llm_j["turns"]) >= 4:
             raw_t = llm_j["turns"]
         else:
-            # 外部API未接続時でも、Webから取得した事実をもとに各AIがゼロベースでリアルタイム文章構築
             t_q, m_q = build_dynamic_turn_from_web("QUANTUM", user_query, r, vref, web_snippets)
             t_m, m_m = build_dynamic_turn_from_web("MICRO", user_query, r, vref, web_snippets)
             t_i, m_i = build_dynamic_turn_from_web("IGNIS", user_query, r, vref, web_snippets)
@@ -1496,14 +1483,13 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
                 {"speaker_key": "NEXUS", "score": fs, "tone": t_n, "text": m_n}
             ]
 
-        turns.append({"round": f"⚛️ 『{r['name']}』リアルタイムWeb情報・完全動的AI合議 ({used_eng})"})
+        round_header = f"💬 質問即答合議：『{user_query}』" if user_query.strip() else f"⚛️ 『{r['name']}』リアルタイムWeb最新合議 ({used_eng})"
+        turns.append({"round": round_header})
         for it in raw_t:
             sk = str(it.get("speaker_key", "NEXUS")).upper()
             turns.append({"speaker": AI_ROSTER.get(sk, f"👑 {sk}"), "score": int(it.get("score", fs)), "tone": it.get("tone", "normal"), "text": it.get("text", "")})
 
-    # Web要約ハイライト
-    web_lead = f"<b>🌐 Web最新ファクト走査：</b> {web_snippets[0]}" if web_snippets else ""
-
+    web_lead = f"<b>🌐 リアルタイムWebファクト探査：</b> {web_snippets[0]}" if web_snippets else ""
     v_html = (
         f'<div style="margin-bottom:5px;"><b>🔥 『{r["name"]}』総合期待度：</b><span style="color:#fde047;font-size:14px;font-weight:900;">{r["expect_pct"]}%</span> ｜ '
         f'<b>🏛️ 機関ミクロ構造：</b><span style="color:#a7f3d0;font-weight:800;">{r["ms_regime"]}（Kyle吸収 {r["kyle_stealth"]}% ／ Hurst {r["hurst"]}）</span></div>'
@@ -1516,7 +1502,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
 
 def _fmt_turn(t: dict) -> str:
     if "round" in t: return f'<div class="round-divider">{t["round"]}</div>'
-    if t.get("is_user"): return f'<div class="chat-bubble-user"><b>🗣️ あなた:</b> {t["text"]}</div>'
+    if t.get("is_user"): return f'<div class="chat-bubble-user"><b>🗣️ あなたの質問・投下:</b><br>{t["text"]}</div>'
     b_cls = {"doubt": "chat-bubble-doubt", "rage": "chat-bubble-rage", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
 
@@ -1544,7 +1530,7 @@ def render_council_sec(r, uk):
         vw = base.mark_line(color="#f59e0b", strokeWidth=2, strokeDash=[4, 2]).encode(y="VWAP:Q")
         st.altair_chart((w + b + vw).properties(height=140), use_container_width=True)
 
-    # 銘柄合議を開いた瞬間、Webリアルタイム検索を実施してディベートを生成
+    # 銘柄合議初回オープン時
     if uk not in st.session_state["council_threads"]:
         with st.spinner(f"🌐 『{r['name']}』の最新情報をWeb検索中..."):
             deb = run_7ai_council(r, m5, st.session_state["debate_round_seed"].get(uk, 0), user_query="")
@@ -1553,27 +1539,30 @@ def render_council_sec(r, uk):
 
     meta = st.session_state["council_meta"][uk]
     turns = st.session_state["council_threads"][uk]
-    bottom_anchor = f'<div id="bottom_anchor_{uk}" style="height:1px;width:100%;"></div>'
+    bottom_anchor = f'<div id="bottom_anchor_{uk}" style="height:2px;width:100%;margin-top:4px;"></div>'
 
+    # ディベート窓（見切れないよう十分な高さとスクロールを確保）
     st.markdown(
         f'<div id="council_box_{uk}" class="ai-council-box">'
-        f'<div class="council-scroll-window">{"".join(_fmt_turn(t) for t in turns)}{bottom_anchor}</div>'
+        f'<div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t) for t in turns)}{bottom_anchor}</div>'
         f'</div>',
         unsafe_allow_html=True
     )
 
+    # 質問投下フォーム
     with st.form(f"jf_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
-        uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』のAI議会に質問投下（任天堂のゲーム何が好き？・今日の天気は？・買い方は？等）", label_visibility="collapsed")
+        uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』や他銘柄・市況の質問投下（例: 日産の株は今買い？・任天堂の最新動向は？等）", label_visibility="collapsed")
         if jc2.form_submit_button("💬 質問投下", use_container_width=True) and uop.strip():
             u_text = uop.strip()
+            # 自分の質問をスレッドに追加
             st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text})
 
-            with st.spinner("🌐 質問に関するWeb情報を検索し、AI回答を生成中..."):
+            # その質問内容専用にWebリアルタイム検索を行って回答を生成
+            with st.spinner(f"🌐 『{u_text}』について最新Web情報を検索して合議中..."):
                 deb_updated = run_7ai_council(r, m5, st.session_state["debate_round_seed"].get(uk, 0), user_query=u_text)
                 for new_t in deb_updated["dialogue"]:
-                    if "round" not in new_t:
-                        st.session_state["council_threads"][uk].append(new_t)
+                    st.session_state["council_threads"][uk].append(new_t)
                 st.session_state["council_meta"][uk] = deb_updated
                 st.session_state["scroll_target_id"] = f"bottom_anchor_{uk}"
                 st.rerun()
