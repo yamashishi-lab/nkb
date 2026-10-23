@@ -967,7 +967,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                 c_b1.markdown(f"💀 **{binfo.get('name','不明')}** (`{bem}`) ｜ BAN日時: {binfo.get('banned_at','-')} ｜ 端末FP: `{binfo.get('fp','-')}`")
                 if c_b2.button("🔓 永久BAN解除", key=f"unban_{bem}", use_container_width=True):
                     sec.get("banned_emails", {}).pop(bem, None)
-                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email"] == bem]:
+                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email") == bem]:
                         sec["banned_fps"].pop(fp_k, None)
                     for pin_k in [k_p for k_p, v_p in sec.get("banned_pins", {}).items() if v_p == bem]:
                         sec["banned_pins"].pop(pin_k, None)
@@ -1151,7 +1151,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         lat = df.iloc[-1]; hist = df.iloc[:-1].dropna(subset=["Next_Open", "Next_Close", "MA20"])
         if len(hist) < 5: return None
         vpin, vacc, cpos, rsi_v = float(lat["VPIN_5d"]), float(lat["Vol_Accel_5d"]), float(lat["Close_Pos"]), round(float(lat["RSI"]), 1)
-        isc = int(np.clip(round(72 + vpin * 36 + ofi_z * 6.5 + (cpos - 0.5) * 20), 45, 99))
+        isc = int(np.clip(round(72 + vpin * 36 +ofi_z * 6.5 + (cpos - 0.5) * 20), 45, 99))
         b5_hits = (b5_live_map or {}).get(code, {}).get("hits", 0)
         b5sc = int(np.clip(round(70 + (min(vacc, 3.0) - 1.0) * 18 + (cpos - 0.5) * 28 + b5_hits * 2.5), 45, 99))
 
@@ -1308,7 +1308,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
         for k_idx in sorted(results.keys()):
             turns.append(results[k_idx])
     else:
-        sys_p = f'あなたは人間味と感情（熱狂、懐疑、怒り、ユーモア）を持つ7人のクオンツ専門家だ。『{r["name"]}』のデータや「{st_info["algo_name"]}」に基づき討論する。ユーザーの質問({user_query if user_query else "なし"})が入力された場合は、その話題に合わせた自然な会話やツッコミを必ず混ぜよ。6ターンのJSON {{"final_score":{fs},"turns":[{{"speaker_key":"QUANTUM","score":92,"tone":"agree","text":"..."}}]}} を出力せよ。'
+        sys_p = f'あなたは人間味と感情（熱狂、懐疑、怒り、ユーモア）を持つ7人のクオンツ専門家だ。『{r["name"]}』のデータや環「{st_info["algo_name"]}」に基づき討論する。ユーザーの質問({user_query if user_query else "なし"})が入力された場合は、その話題に合わせた自然な会話やツッコミを必ず混ぜよ。6ターンのJSON {{"final_score":{fs},"turns":[{{"speaker_key":"QUANTUM","score":92,"tone":"agree","text":"..."}}]}} を出力せよ。'
         llm_j, used_eng = (call_single_provider_api(act_ais[0][0], act_ais[0][2], act_ais[0][3], sys_p, usr_p, 0.78) if n_ai == 1 else (None, "内蔵量子＆機関ミクロ推論エンジン"))
         
         if llm_j and isinstance(llm_j.get("turns"), list) and len(llm_j["turns"]) >= 4:
