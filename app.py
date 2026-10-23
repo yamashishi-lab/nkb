@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.text import MIMEText
 from datetime import datetime
 
-# 初期状態は「collapsed（閉じた状態）」
+# 初期状態は閉じた状態（collapsed）
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
@@ -200,71 +200,26 @@ def inject_css():
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
     /* ─────────────────────────────────────────────────────────────
-       【重要】Streamlit純正サイドバー開閉ボタンの左上常駐・完全救出
+       【重要】Streamlit純正ヘッダーおよび純正サイドバーボタンの正常化
        ───────────────────────────────────────────────────────────── */
-    div[data-testid="collapsedControl"] {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-        position: fixed !important;
-        top: 8px !important;
-        left: 8px !important;
-        z-index: 2147483647 !important; /* 最前面レイヤー */
-        width: 32px !important;
-        height: 32px !important;
-        background: #0f172a !important;
-        border: 1px solid rgba(56,189,248,0.5) !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.8) !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
-    
-    div[data-testid="collapsedControl"] button {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-        width: 100% !important;
-        height: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        border: none !important;
+    header[data-testid="stHeader"] {
         background: transparent !important;
-        color: #38bdf8 !important;
-        cursor: pointer !important;
-        align-items: center !important;
-        justify-content: center !important;
+        pointer-events: auto !important; /* クリック判定を絶対に阻害しない */
+        z-index: 999990 !important;
     }
 
-    div[data-testid="collapsedControl"] svg {
-        display: block !important;
-        visibility: visible !important;
-        width: 18px !important;
-        height: 18px !important;
-        stroke: #38bdf8 !important;
-        fill: #38bdf8 !important;
-    }
-
-    /* サイドバー内部の閉じるボタン（開いた状態の時） */
+    /* 一番最初のStreamlit標準サイドバー開閉ボタン（常時クリック可能） */
+    div[data-testid="collapsedControl"],
     button[data-testid="stSidebarCollapseButton"] {
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
+        cursor: pointer !important;
         z-index: 2147483647 !important;
     }
 
-    /* ヘッダー自体の背景を透明化し、左上ボタンのクリックを遮断しない */
-    header[data-testid="stHeader"] {
-        background: transparent !important;
-        height: 2.8rem !important;
-        z-index: 999990 !important;
-        pointer-events: none !important;
-    }
-
-    /* ツールバーのみ非表示（右上のStreamlit標準メニュー等） */
+    /* 右上の不要なStreamlit設定ツールバーのみ非表示 */
     header[data-testid="stHeader"] [data-testid="stToolbar"] {
         display: none !important;
     }
@@ -322,14 +277,14 @@ def inject_css():
         text-overflow: ellipsis;
     }
     
-    /* 上部固定ナビゲーションバー（左上32pxボタンと完全に被らないクリアランス配置） */
+    /* 上部固定ナビゲーションバー（左上の純正ボタンと重ならないクリアランス） */
     .fixed-top-nav-bar {
         position: fixed !important;
         top: 0.45rem !important;
-        left: calc(50% + 24px) !important;
+        left: 54% !important;
         transform: translateX(-50%) !important;
         z-index: 999980 !important;
-        width: min(520px, calc(100vw - 8.8rem)) !important;
+        width: min(520px, calc(100vw - 8.5rem)) !important;
         background: rgba(5,8,17,0.94) !important;
         backdrop-filter: blur(14px) !important;
         border: none !important;
@@ -876,9 +831,6 @@ if st.session_state.get("scroll_target_id"):
     """
     st.session_state["scroll_target_id"] = ""
 
-# ─────────────────────────────────────────────────────────────
-# 上部ナビ固定化およびスクロール制御
-# ─────────────────────────────────────────────────────────────
 components.html(
     f"""<script>
     (function(){{
