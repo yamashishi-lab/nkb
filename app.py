@@ -373,7 +373,7 @@ def check_auth():
 
 check_auth()
 
-for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("selected_news_item", None), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("last_cat", "🏆 総合TOP5"), ("nav_history", []), ("scroll_top_trig", 0), ("dismissed_news_ids", set()), ("show_ai_guide", False)]:
+for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}), ("council_meta", {}), ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"), ("selected_news_item", None), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"), ("last_cat", "🏆 総合TOP5"), ("nav_history", []), ("scroll_top_trig", 0), ("dismissed_news_ids", set()), ("show_ai_guide", False), ("scroll_target_id", "")]:
     if k not in st.session_state: st.session_state[k] = v
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
@@ -396,6 +396,19 @@ with st.container():
             st.session_state["active_category"] = "🏆 総合TOP5"
             st.session_state["last_cat"] = "🏆 総合TOP5"
         st.rerun()
+
+scroll_target_js = ""
+if st.session_state.get("scroll_target_id"):
+    tid = st.session_state.get("scroll_target_id")
+    scroll_target_js = f"""
+        setTimeout(function(){{
+            const el = window.parent.document.getElementById('{tid}');
+            if(el){{
+                el.scrollIntoView({{behavior: 'smooth', block: 'center'}});
+            }}
+        }}, 200);
+    """
+    st.session_state["scroll_target_id"] = ""
 
 components.html(
     f"""<script>
@@ -428,6 +441,7 @@ components.html(
                 const a=doc.querySelector('[data-testid="stAppViewContainer"]');if(a)a.scrollTo({{top:0,behavior:'instant'}});
             }}catch(e){{}}
         }}
+        {scroll_target_js}
     }})();
     </script>""",
     height=0
@@ -953,7 +967,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                 c_b1.markdown(f"💀 **{binfo.get('name','不明')}** (`{bem}`) ｜ BAN日時: {binfo.get('banned_at','-')} ｜ 端末FP: `{binfo.get('fp','-')}`")
                 if c_b2.button("🔓 永久BAN解除", key=f"unban_{bem}", use_container_width=True):
                     sec.get("banned_emails", {}).pop(bem, None)
-                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email") == bem]:
+                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email"] == bem]:
                         sec["banned_fps"].pop(fp_k, None)
                     for pin_k in [k_p for k_p, v_p in sec.get("banned_pins", {}).items() if v_p == bem]:
                         sec["banned_pins"].pop(pin_k, None)
@@ -1276,7 +1290,6 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
             if j_res and isinstance(j_res.get("text"), str) and j_res["text"].strip():
                 return idx, {"speaker": f"{plbl} ({pmod})", "score": int(j_res.get("score", fs)), "tone": j_res.get("tone", "agree"), "text": j_res["text"]}
             
-            # フォールバック時もユーザーの質問に応じた内容を生成
             if user_query:
                 fb_text = f"おっと、ユーザーの「{user_query}」という問いかけだな！『{r['name']}』のトレード分析とは少し違うが、車や雑談の話題も大歓迎だぜ。だが相場のほうも期待度 <b>{r['expect_pct']}%</b> で <b>{st_info['algo_name']}</b> がガッツリ稼ぎにいくから見逃すなよ！"
             else:
@@ -1388,7 +1401,7 @@ def render_council_sec(r, uk):
 
     meta = st.session_state["council_meta"][uk]
     turns = st.session_state["council_threads"][uk]
-    st.markdown(f'<div class="ai-council-box"><div class="council-scroll-window">{"".join(_fmt_turn(t) for t in turns)}</div><div class="consensus-banner"><div style="font-weight:800;color:#fde047;font-size:12.5px;margin-bottom:5px;">🏛️ 量子×機関ミクロ構造 最終結論 ＆ 買い方アクションプラン</div>{meta["verdict_html"]}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div id="council_box_{uk}" class="ai-council-box"><div class="council-scroll-window">{"".join(_fmt_turn(t) for t in turns)}</div><div class="consensus-banner"><div style="font-weight:800;color:#fde047;font-size:12.5px;margin-bottom:5px;">🏛️ 量子×機関ミクロ構造 最終結論 ＆ 買い方アクションプラン</div>{meta["verdict_html"]}</div></div>', unsafe_allow_html=True)
 
     with st.form(f"jf_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
@@ -1397,10 +1410,10 @@ def render_council_sec(r, uk):
             u_text = uop.strip()
             st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text})
             
-            # ユーザーの質問を考慮した動的な議論の再生成
             deb_updated = run_7ai_council(r, m5, st.session_state["debate_round_seed"].get(uk, 0), user_query=u_text)
             st.session_state["council_threads"][uk] = list(deb_updated["dialogue"])
             st.session_state["council_meta"][uk] = deb_updated
+            st.session_state["scroll_target_id"] = f"council_box_{uk}"
             st.rerun()
 
 def render_card(r, is_custom=False, rank=None, kp="card"):
