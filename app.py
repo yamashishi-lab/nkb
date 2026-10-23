@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.text import MIMEText
 from datetime import datetime
 
-st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered")
+st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="expanded")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
 ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
@@ -197,7 +197,25 @@ def inject_css():
     css = """
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
-    header[data-testid="stHeader"]{display:none!important;visibility:hidden!important;pointer-events:none!important;height:0!important;}
+    
+    header[data-testid="stHeader"]{
+        background:transparent!important;
+        height:auto!important;
+        pointer-events:none!important;
+    }
+    header[data-testid="stHeader"] *{
+        pointer-events:auto!important;
+    }
+    header[data-testid="stHeader"] [data-testid="stToolbar"]{
+        display:none!important;
+    }
+
+    section[data-testid="stSidebar"]{
+        background-color:#0b0f19!important;
+        border-right:1px solid rgba(148,163,184,0.15)!important;
+        z-index:2147483646!important;
+    }
+    
     .block-container{padding-top:3.6rem!important;padding-bottom:3rem!important;padding-left:0.75rem!important;padding-right:0.75rem!important;max-width:840px!important;}
     .brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,24px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;display:block;width:100%;}
     .brand-sub{font-family:'JetBrains Mono',monospace;font-size:clamp(8.5px,2.2vw,10.5px);color:#64748b;letter-spacing:1.2px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -212,7 +230,7 @@ def inject_css():
         top:0.45rem!important;
         left:50%!important;
         transform:translateX(-50%)!important;
-        z-index:2147483647!important;
+        z-index:2147483645!important;
         width:min(680px,calc(100vw - 7.2rem))!important;
         background:rgba(5,8,17,0.94)!important;
         backdrop-filter:blur(14px)!important;
@@ -277,7 +295,7 @@ def inject_css():
         pointer-events:auto!important;
         cursor:pointer!important;
         position:relative!important;
-        z-index:2147483647!important;
+        z-index:2147483645!important;
     }
     
     div:has(> div > div.top-nav-marker) button:hover,
@@ -501,7 +519,7 @@ components.html(
             let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
             if(box && box.querySelector('[data-testid="stHorizontalBlock"]')){{
                 box.classList.add('fixed-top-nav-bar');
-                box.style.setProperty('z-index', '2147483647', 'important');
+                box.style.setProperty('z-index', '2147483645', 'important');
                 box.style.setProperty('pointer-events', 'auto', 'important');
                 let p = box.parentElement;
                 while(p && p !== doc.body){{
