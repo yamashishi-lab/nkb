@@ -200,27 +200,29 @@ def inject_css():
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
     /* ─────────────────────────────────────────────────────────────
-       サイドバー開閉ボタンの強制表示 ＆ スタイリング（確実な可視化とクリック保証）
+       サイドバー開閉ボタンの絶対可視化＆クリック保証（Streamlit全バージョン完全対応）
        ───────────────────────────────────────────────────────────── */
     header[data-testid="stHeader"] {
         background: transparent !important;
         pointer-events: none !important;
-        z-index: 1000000 !important;
+        height: 3.5rem !important;
+        z-index: 999990 !important;
     }
     
+    /* ヘッダー内部の要素をクリック可能に復元 */
     header[data-testid="stHeader"] * {
         pointer-events: auto !important;
     }
 
-    /* 開いた状態・閉じた状態の双方のサイドバー開閉ボタンを強制可視化 */
-    div[data-testid="collapsedControl"],
-    div[data-testid="stSidebarCollapsedControl"],
-    button[data-testid="stSidebarCollapseButton"],
-    button[data-testid="baseButton-headerNoPadding"],
-    button[kind="headerNoPadding"],
+    /* 左上の標準サイドバー開閉ボタン（開時・閉時の全セレクタを網羅） */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
     button[aria-label*="sidebar" i],
-    button[aria-label*="Sidebar" i] {
-        display: inline-flex !important;
+    button[aria-label*="Sidebar" i],
+    header button[kind="headerNoPadding"],
+    header button[data-testid="baseButton-headerNoPadding"] {
+        display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
@@ -228,37 +230,43 @@ def inject_css():
         z-index: 2147483647 !important;
         position: fixed !important;
         top: 0.5rem !important;
-        left: 0.5rem !important;
-        background: rgba(15, 23, 42, 0.85) !important;
-        border: 1px solid rgba(56, 189, 248, 0.4) !important;
-        border-radius: 8px !important;
+        left: 0.6rem !important;
         width: 36px !important;
         height: 36px !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+        background: rgba(15, 23, 42, 0.95) !important;
+        border: 1px solid rgba(56, 189, 248, 0.5) !important;
+        border-radius: 8px !important;
         align-items: center !important;
         justify-content: center !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.7) !important;
         transition: all 0.2s ease !important;
     }
 
-    div[data-testid="collapsedControl"] svg,
-    div[data-testid="stSidebarCollapsedControl"] svg,
-    button[data-testid="stSidebarCollapseButton"] svg,
+    /* 内部アイコン（SVG）の着色・可視化 */
+    [data-testid="collapsedControl"] svg,
+    [data-testid="stSidebarCollapsedControl"] svg,
+    [data-testid="stSidebarCollapseButton"] svg,
     button[aria-label*="sidebar" i] svg {
-        color: #38bdf8 !important;
-        fill: #38bdf8 !important;
-        stroke: #38bdf8 !important;
         display: block !important;
         visibility: visible !important;
         opacity: 1 !important;
+        width: 20px !important;
+        height: 20px !important;
+        color: #38bdf8 !important;
+        fill: #38bdf8 !important;
+        stroke: #38bdf8 !important;
     }
 
-    div[data-testid="collapsedControl"]:hover,
-    button[data-testid="stSidebarCollapseButton"]:hover {
-        background: rgba(56, 189, 248, 0.2) !important;
+    [data-testid="collapsedControl"]:hover,
+    [data-testid="stSidebarCollapseButton"]:hover {
+        background: rgba(56, 189, 248, 0.25) !important;
         border-color: #38bdf8 !important;
+        transform: scale(1.05);
     }
 
-    /* 右上の不要な設定ツールバーのみ非表示 */
+    /* 右上の設定メニューのみ非表示 */
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] {
         display: none !important;
@@ -316,14 +324,14 @@ def inject_css():
         text-overflow: ellipsis;
     }
     
-    /* 上部固定ナビゲーションバー（左上アイコンと絶対に重ならないよう配慮） */
+    /* 上部固定ナビゲーションバー（左上アイコンと物理的に被らないよう右へオフセット） */
     .fixed-top-nav-bar {
         position: fixed !important;
         top: 0.45rem !important;
-        left: calc(50% + 20px) !important;
+        left: calc(50% + 24px) !important;
         transform: translateX(-50%) !important;
         z-index: 999980 !important;
-        width: min(500px, calc(100vw - 6rem)) !important;
+        width: min(480px, calc(100vw - 6.5rem)) !important;
         background: rgba(5,8,17,0.94) !important;
         backdrop-filter: blur(14px) !important;
         border: none !important;
@@ -823,7 +831,7 @@ for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 
-# 元通りの3ボタン配置
+# 上部固定ナビゲーションバー
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
     nav_c1, nav_c2, nav_c3 = st.columns([1, 1.45, 1])
@@ -876,42 +884,6 @@ components.html(
     (function(){{
         const doc = window.parent.document;
         
-        function enforceSidebarButton(){{
-            try {{
-                const btnSelectors = [
-                    'div[data-testid="collapsedControl"]',
-                    'div[data-testid="stSidebarCollapsedControl"]',
-                    'button[data-testid="stSidebarCollapseButton"]',
-                    'button[data-testid="baseButton-headerNoPadding"]',
-                    'button[aria-label*="sidebar" i]',
-                    'button[aria-label*="Sidebar" i]'
-                ];
-                
-                let foundBtn = null;
-                for (let sel of btnSelectors) {{
-                    const el = doc.querySelector(sel);
-                    if(el) {{
-                        foundBtn = el;
-                        el.style.setProperty('display', 'inline-flex', 'important');
-                        el.style.setProperty('visibility', 'visible', 'important');
-                        el.style.setProperty('opacity', '1', 'important');
-                        el.style.setProperty('pointer-events', 'auto', 'important');
-                        el.style.setProperty('z-index', '2147483647', 'important');
-                        el.style.setProperty('position', 'fixed', 'important');
-                        el.style.setProperty('top', '8px', 'important');
-                        el.style.setProperty('left', '8px', 'important');
-                        
-                        const svg = el.querySelector('svg');
-                        if(svg) {{
-                            svg.style.setProperty('color', '#38bdf8', 'important');
-                            svg.style.setProperty('fill', '#38bdf8', 'important');
-                            svg.style.setProperty('stroke', '#38bdf8', 'important');
-                        }}
-                    }}
-                }}
-            }} catch(e){{}}
-        }}
-
         function fixTopNav(){{
             try {{
                 const marker = doc.querySelector('.top-nav-marker');
@@ -927,10 +899,7 @@ components.html(
             }} catch(e){{}}
         }}
 
-        enforceSidebarButton();
         fixTopNav();
-        setTimeout(enforceSidebarButton, 80);
-        setTimeout(enforceSidebarButton, 300);
         setTimeout(fixTopNav, 100);
 
         function scrollToTopAbsolute(){{
