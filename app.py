@@ -450,14 +450,19 @@ with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
     nav_c1, nav_c2, nav_c3 = st.columns([1, 1.45, 1])
     if nav_c1.button("⬆️ トップ", key="top_nav_top", use_container_width=True):
-        st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] += 1; st.rerun()
+        st.session_state["navigation_page"] = "TOP"
+        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+        st.rerun()
     if nav_c2.button(f"✖ 合議全て閉じる({open_cnt})" if open_cnt else "✖ 合議全て閉じる", key="top_nav_close", use_container_width=True):
-        st.session_state["active_debates"] = {}; st.rerun()
+        st.session_state["active_debates"] = {}
+        st.rerun()
     if nav_c3.button("↩️ 戻る", key="top_nav_back", use_container_width=True):
         if st.session_state.get("navigation_page") != "TOP":
-            st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] += 1
-        elif st.session_state.get("custom_search_code"): st.session_state["custom_search_code"] = ""
-        elif st.session_state["nav_history"]:
+            st.session_state["navigation_page"] = "TOP"
+            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+        elif st.session_state.get("custom_search_code"):
+            st.session_state["custom_search_code"] = ""
+        elif st.session_state.get("nav_history") and len(st.session_state["nav_history"]) > 0:
             popped = st.session_state["nav_history"].pop()
             st.session_state["active_category"] = popped
             st.session_state["last_cat"] = popped
@@ -512,13 +517,38 @@ components.html(
         setTimeout(fixTopNav, 100);
         setTimeout(fixTopNav, 300);
         setTimeout(fixTopNav, 800);
+
+        function scrollToTopAbsolute(){{
+            try {{
+                window.parent.scrollTo(0, 0);
+            }} catch(e){{}}
+            const targets = [
+                doc.documentElement,
+                doc.body,
+                doc.querySelector('section.main'),
+                doc.querySelector('[data-testid="stAppViewContainer"]'),
+                doc.querySelector('[data-testid="stMainBlockContainer"]')
+            ];
+            targets.forEach(el => {{
+                if(el){{
+                    try {{
+                        el.scrollTop = 0;
+                        if(typeof el.scrollTo === 'function') el.scrollTo(0, 0);
+                    }} catch(e){{}}
+                }}
+            }});
+            const topAnchor = doc.getElementById('page_top_anchor');
+            if(topAnchor && typeof topAnchor.scrollIntoView === 'function'){{
+                topAnchor.scrollIntoView({{behavior: 'instant', block: 'start'}});
+            }}
+        }}
+
         if({st.session_state['scroll_top_trig']} > 0 && window.parent._lastScrollTrig !== {st.session_state['scroll_top_trig']}){{
             window.parent._lastScrollTrig = {st.session_state['scroll_top_trig']};
-            try{{
-                window.parent.scrollTo({{top:0,behavior:'instant'}});
-                const m=doc.querySelector('section.main');if(m)m.scrollTo({{top:0,behavior:'instant'}});
-                const a=doc.querySelector('[data-testid="stAppViewContainer"]');if(a)a.scrollTo({{top:0,behavior:'instant'}});
-            }}catch(e){{}}
+            scrollToTopAbsolute();
+            requestAnimationFrame(scrollToTopAbsolute);
+            setTimeout(scrollToTopAbsolute, 50);
+            setTimeout(scrollToTopAbsolute, 200);
         }}
         {scroll_target_js}
     }})();
@@ -954,7 +984,7 @@ if enable_news_popup and st.session_state.get("navigation_page") != "NEWS_DETAIL
             )
             c_n1, c_n2 = st.columns([2.2, 1])
             if c_n1.button("🔥 ニュース詳細＆連動株を見る", key=f"open_n_{tn['id']}", use_container_width=True, type="primary"):
-                st.session_state["selected_news_item"] = tn; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] += 1; st.rerun()
+                st.session_state["selected_news_item"] = tn; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
             if c_n2.button("✖ 閉じる", key=f"cls_n_{tn['id']}", use_container_width=True):
                 st.session_state["dismissed_news_ids"].add(tn["id"]); st.rerun()
 
@@ -1723,9 +1753,9 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     for other_n in all_impact_news:
         if other_n["id"] == tn["id"]: continue
         if st.button(f"📌 {other_n['title']} ({other_n['source']})", key=f"sw_n_{other_n['id']}", use_container_width=True):
-            st.session_state["selected_news_item"] = other_n; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] += 1; st.rerun()
+            st.session_state["selected_news_item"] = other_n; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
     if st.button("⬅️ メインランキング画面へ戻る", use_container_width=True, type="primary"):
-        st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] += 1; st.rerun()
+        st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
     st.stop()
 
 c1, c2 = st.columns([3.4, 1])
@@ -1753,20 +1783,21 @@ if st.session_state.get("active_category") not in cats:
     st.session_state["active_category"] = "🏆 総合TOP5"
 
 def _on_cat_change():
-    nw = st.session_state.get("active_category")
+    nw = st.session_state.get("active_category_selector")
     ol = st.session_state.get("last_cat", "🏆 総合TOP5")
-    if not nw:
-        st.session_state["active_category"] = ol
-    elif nw != ol:
+    if nw and nw != ol:
         st.session_state["nav_history"].append(ol)
         st.session_state["last_cat"] = nw
+        st.session_state["active_category"] = nw
+
+cat_index = cats.index(st.session_state["active_category"]) if st.session_state["active_category"] in cats else 0
 
 if hasattr(st, "pills"):
-    st.pills("カテゴリ", cats, selection_mode="single", label_visibility="collapsed", key="active_category", on_change=_on_cat_change)
+    st.pills("カテゴリ", cats, default=cats[cat_index], selection_mode="single", label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
 else:
-    st.radio("カテゴリ", cats, horizontal=True, label_visibility="collapsed", key="active_category", on_change=_on_cat_change)
+    st.radio("カテゴリ", cats, index=cat_index, horizontal=True, label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
 
-sel_cat = st.session_state.get("active_category") or st.session_state.get("last_cat", "🏆 総合TOP5")
+sel_cat = st.session_state.get("active_category") or "🏆 総合TOP5"
 
 surv, _ = cut_stocks(all_res, survival_cut_pct)
 if sel_cat == "🏆 総合TOP5":
@@ -1783,7 +1814,7 @@ elif sel_cat == "🚨 重大ニュース＆連動株":
     for n_item in all_impact_news:
         st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="font-size:11px;color:#f87171;font-weight:800;">🚨 {n_item["cat"]} ｜ {n_item["source"]}</div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-4px 0;">{n_item["title"]}</div><div style="font-size:11.5px;color:#cbd5e1;">{n_item["detail"]["mechanism"]}</div></div>', unsafe_allow_html=True)
         if st.button("🔥 このニュースの詳細レポート＆連動株を見る", key=f"tab_n_{n_item['id']}", use_container_width=True):
-            st.session_state["selected_news_item"] = n_item; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] += 1; st.rerun()
+            st.session_state["selected_news_item"] = n_item; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
 elif sel_cat == "🎟️ IPO募集・新規上場":
     render_ipo_offering_section()
     st.markdown("#### 🚀 直近上場・セカンダリー急騰IPO株リアルタイム診断")
