@@ -953,7 +953,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                 c_b1.markdown(f"💀 **{binfo.get('name','不明')}** (`{bem}`) ｜ BAN日時: {binfo.get('banned_at','-')} ｜ 端末FP: `{binfo.get('fp','-')}`")
                 if c_b2.button("🔓 永久BAN解除", key=f"unban_{bem}", use_container_width=True):
                     sec.get("banned_emails", {}).pop(bem, None)
-                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email"] == bem]:
+                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email") == bem]:
                         sec["banned_fps"].pop(fp_k, None)
                     for pin_k in [k_p for k_p, v_p in sec.get("banned_pins", {}).items() if v_p == bem]:
                         sec["banned_pins"].pop(pin_k, None)
@@ -1085,7 +1085,6 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
             "beginner_html": f"<b>🔰 スイングトレード実践手順（📈 数日〜1週間のトレンドに乗る！）</b><br>① 初日は資金の半分強（<b>{l1:,}株</b>）を買ってポジションを作ります。<br>② 数日後に少し下がったところで残りの <b>{l2:,}株</b> を買い増し、目標の <b>{tp_str}</b> までゆったり保有します。"
         }
 
-    # デイトレード (デフォルト)
     sh = max(1, int(round(base_sh * 1.65)))
     return {
         "algo_name": f"🔥 [{st_prefix}] 情報精度S級・全ツッパ一括特攻型アルゴリズム",
@@ -1299,7 +1298,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0) -> dict:
             {"speaker_key": "MICRO", "score": r["ms_score"], "tone": "normal", "text": f"QUANTUM、興奮しすぎだ。だが確かに機関ミクロ構造のデータを見ると、Kyleの氷山ステルス吸収度が <b>{r['kyle_stealth']}%</b>、Hurst指数が <b>{r['hurst']}</b>（{r['ms_regime']}）を示している。水面下で機関の買い集めが着実に進んでいるのは事実だな。"},
             {"speaker_key": "IGNIS", "score": r["board5ch_score"], "tone": "agree", "text": f"ははは、控えめに言うなよMICRO！ <b>{st_info['algo_name']}</b> が発動してるんだから、迷わず『<b>{st_info['risk_posture']}</b>』で特攻するに決まってるだろ！乗り遅れる奴は置いていくぜ！"},
             {"speaker_key": "TECHNOS", "score": fs, "tone": "normal", "text": f"IGNIS、お前のその勢いだけのトレードはいつか痛い目を見るぞ。数理的に見ればOFI <b>{r['ofi_z']:+.2f}σ</b>・VPIN <b>{r['vpin']:+.2f}</b> だ。基準VWAP（<b>{vref}</b>）の押し目を冷静に拾うのが一番堅実だ。"},
-            {"speaker_key": "AEGIS", "score": 88, "tone": "doubt", "text": f"TECHNOSの言う通りよ！最近の地政学やAI投資への慎重論を忘れたの？どれだけ期待度が高くても、95%CVaR（<b>-{r['cvar95']}%</b>）と逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b> を怠ったら一巻の終わりよ。そこだけは絶対に守りなさい！"},
+            {"speaker_key": "AEGIS", "score": 88, "tone": "doubt", "text": f"TECHNOSの言う通りよ！最近の地政学やAI投資への慎重論を忘れたの？どれだけ期待度が高くても、95%CVaR（<b>-{r['cvar95']}%</b>）と逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b> を怠ったら一巻の終わりよ。そこだけは必ず守りなさい！"},
             {"speaker_key": "NEXUS", "score": fs, "tone": "agree", "text": f"よし、議論はそこまでだ！熱い議論だが全員の意見はまとまった。『{r['name']}』は期待度 <b>{r['expect_pct']}%</b> のもと、下記の実行プランで最高の利益を抜くぞ！"}
         ]
         turns.append({"round": f"⚛️ 『{r['name']}』量子QWM-7 × 機関ミクロ構造 専門AI合議 ({used_eng})"})
@@ -1493,7 +1492,7 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     for other_n in all_impact_news:
         if other_n["id"] == tn["id"]: continue
         if st.button(f"📌 {other_n['title']} ({other_n['source']})", key=f"sw_n_{other_n['id']}", use_container_width=True):
-            st.session_state["selected_news_item"] = other_n; st.session_state["scroll_top_trig"] += 1; st.rerun()
+            st.session_state["selected_news_item"] = other_n; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] += 1; st.rerun()
     if st.button("⬅️ メインランキング画面へ戻る", use_container_width=True, type="primary"):
         st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] += 1; st.rerun()
     st.stop()
