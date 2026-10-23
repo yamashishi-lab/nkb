@@ -204,23 +204,31 @@ def inject_css():
        ───────────────────────────────────────────────────────────── */
     header[data-testid="stHeader"] {
         background: transparent !important;
-        pointer-events: auto !important;
+        pointer-events: none !important; /* 背景透過＆クリック通過（下の要素を邪魔しない） */
         z-index: 999990 !important;
     }
 
-    /* 左上の標準サイドバー開閉ボタン */
+    header[data-testid="stHeader"] * {
+        pointer-events: auto !important; /* ヘッダー内の要素（ボタン等）はクリック有効 */
+    }
+
+    /* 左上の標準サイドバー開閉ボタン (バージョン差異対応) */
     div[data-testid="collapsedControl"],
-    button[data-testid="stSidebarCollapseButton"] {
-        display: flex !important;
+    div[data-testid="stSidebarCollapsedControl"],
+    button[data-testid="stSidebarCollapseButton"],
+    button[kind="header"] {
+        display: inline-flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
         cursor: pointer !important;
         z-index: 2147483647 !important;
+        position: relative !important;
     }
 
     /* 右上の設定メニューのみ非表示 */
-    header[data-testid="stHeader"] [data-testid="stToolbar"] {
+    header[data-testid="stHeader"] [data-testid="stToolbar"],
+    header[data-testid="stHeader"] [data-testid="stActionButtons"] {
         display: none !important;
     }
 
