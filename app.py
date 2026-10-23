@@ -566,18 +566,18 @@ def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p:
             if not model.startswith("gemma"): gen_cfg["responseMimeType"] = "application/json"
             payload = {"contents": [{"role": "user", "parts": [{"text": f"【指示】\n{sys_p}\n\n【データ】\n{usr_p}"}]}], "generationConfig": gen_cfg}
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=8.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=12.0, context=ctx) as r:
                 d = json.loads(r.read().decode("utf-8"))
                 return _parse_j("".join(p.get("text", "") for p in d["candidates"][0]["content"]["parts"])), f"{p_label} ({model})"
         elif prov == "claude":
-            payload = {"model": model, "max_tokens": 900, "temperature": temp, "system": sys_p + " JSONのみ出力せよ。", "messages": [{"role": "user", "content": usr_p}]}
+            payload = {"model": model, "max_tokens": 1200, "temperature": temp, "system": sys_p + " JSONのみ出力せよ。", "messages": [{"role": "user", "content": usr_p}]}
             req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01"}, method="POST")
-            with urllib.request.urlopen(req, timeout=8.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=12.0, context=ctx) as r:
                 return _parse_j(json.loads(r.read().decode("utf-8"))["content"][0]["text"]), f"{p_label} ({model})"
         else:
             payload = {"model": model, "messages": [{"role": "system", "content": sys_p + " Always output valid JSON."}, {"role": "user", "content": usr_p}], "temperature": temp}
             req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"}, method="POST")
-            with urllib.request.urlopen(req, timeout=8.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=12.0, context=ctx) as r:
                 return _parse_j(json.loads(r.read().decode("utf-8"))["choices"][0]["message"]["content"]), f"{p_label} ({model})"
     except Exception:
         return None, f"{p_label} ({model})"
@@ -967,7 +967,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                 c_b1.markdown(f"💀 **{binfo.get('name','不明')}** (`{bem}`) ｜ BAN日時: {binfo.get('banned_at','-')} ｜ 端末FP: `{binfo.get('fp','-')}`")
                 if c_b2.button("🔓 永久BAN解除", key=f"unban_{bem}", use_container_width=True):
                     sec.get("banned_emails", {}).pop(bem, None)
-                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email") == bem]:
+                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email"] == bem]:
                         sec["banned_fps"].pop(fp_k, None)
                     for pin_k in [k_p for k_p, v_p in sec.get("banned_pins", {}).items() if v_p == bem]:
                         sec["banned_pins"].pop(pin_k, None)
@@ -1106,7 +1106,7 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
         "core_logic": f"期待度 <b>{expect_pct}%</b>・量子Qスコア {qm['q_score']}点・機関Kyleステルス吸収 {ms['kyle_stealth']}% が完全一致し、95%CVaRも -{cvar95}% と極めて低いS級特異点。分割せず寄り付き一括で最高期待値を抜き取る戦術。",
         "adj_shares": sh,
         "step_plan": f"① 9:00寄付き（{pest_str}目安）で <b>全ロット {sh:,}株（100%全ツッパ）</b> 成行一括投入 → ② 逆指値（{sl_str}）を同時セットし、目標（{tp_str}）まで一気抜き",
-        "beginner_html": f"<b>🔰 デイトレード実践手順（🔥 精度S級・迷わず1回で全ツッパ！）</b><br>① 朝9:00の寄り付きで <b>「{sh:,}株」を1回でまとめて購入</b> します。<br>② 買えたらすぐに <b>「損切り：{sl_str}」</b> を入れ、目標の <b>「{tp_str}」</b> 到達で利益確定！"
+        "beginner_html": f"<b>🔰 デイトレード実践手順（🔥 精度S級・迷わず1回で全ツッパ！）</b><br>① 朝9:00の寄り付きで <b>「{sh:,}株」を1回でまとめて購入</b> します。<br>② 買えたらすぐに <b>「損切り：{sl_str}」</b> を入れ、目標の <b>{tp_str}</b> 到達で利益確定！"
     }
 
 def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=True, b5=True, bal=True, bms=True):
@@ -1258,7 +1258,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
     n_ai = len(act_ais)
     news_list = fetch_global_impact_news()
     recent_news_snippet = news_list[0]["title"] if news_list else "AI半導体・次世代データセンター光配線に資金流入加速"
-    
+
     usr_p = (
         f"銘柄:{r['name']}({r['code']}) 現在値:{r['price']} 前日比:{r['diff']}% 期待度:{r['expect_pct']}% 統合勝率:{r['total_win_rate']}% "
         f"量子Qスコア:{r['q_score']} トンネル突破率:{r['q_tunnel']}% 機関ミクロ構造スコア:{r['ms_score']}(Kyleステルス吸収:{r['kyle_stealth']}% / Hurst指数:{r['hurst']} / LULD引力:{r['luld_magnet']}%) "
@@ -1266,32 +1266,32 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
         f"直近市場ヘッドライン:{recent_news_snippet}"
     )
     if user_query:
-        usr_p += f"\n\n【ユーザーからの直近の質問・発言】\n{user_query}\n※このユーザーからの質問や雑談に対して、専門家チームとして的確かつ自然に会話（返答・ツッコミ）に織り込んでください。"
+        usr_p += f"\n\n【ユーザーからの直近の質問・発言・雑談】\n{user_query}\n※このユーザーからの質問や発言（車の車種や任意の疑問、雑談など）に対して、各専門家がそれぞれの専門視点を絡めながら、絶対に完全にリアルタイムで深く返答・ツッコミ・議論に織り込んでください。"
 
     turns = []
     if n_ai >= 2:
         mode_title = get_debate_mode_badge(n_ai)
         turns.append({"round": f"{mode_title} ｜ 『{r['name']}』期待度 {r['expect_pct']}%"})
         roles_by_idx = [
-            f"量子波動＆機関オーダーフロー強気の視点から『{r['name']}』の優位性を個別に分析し、具体的な買い方と目標株価を主張せよ。ユーザーからの質問({user_query if user_query else 'なし'})にも言及せよ。",
-            f"機関投資家のミクロ構造（Kyleのラムダ・Hurst指数 {r['hurst']}・VWAP {vref}）の視点から先行意見に切り込み、市場の揺さぶりに耐える執行手順を論じよ。",
-            f"テールリスク監査（95%CVaR -{r['cvar95']}%・逆指値 {r['sl_price']}）の視点から下値リスクを厳しく突っ込み、勝率を極大化する条件を提示せよ。",
+            f"量子波動＆機関オーダーフロー強気の視点から『{r['name']}』の優位性を個別に分析し、具体的な買い方と目標株価を主張せよ。ユーザーからの直近の質問・発言({user_query if user_query else 'なし'})にも熱心に言及せよ。",
+            f"機関投資家のミクロ構造（Kyleのラムダ・Hurst指数 {r['hurst']}・VWAP {vref}）の視点から先行意見に切り込み、市場の揺さぶりに耐える執行手順を論じよ。ユーザーの質問({user_query if user_query else 'なし'})にもツッコミを入れよ。",
+            f"テールリスク監査（95%CVaR -{r['cvar95']}%・逆指値 {r['sl_price']}）の視点から下値リスクを厳しく突っ込み、勝率を極大化する条件を提示せよ。ユーザーの質問({user_query if user_query else 'なし'})にも言及せよ。",
             "マクロ先物連動・セクター資金波及の視点から上値余地を評価せよ。",
             "統計バックテスト・ケリー基準の資金配分視点からロット戦略を評価せよ。",
             f"リアルタイム需給（OFI {r['ofi_z']:+.2f}σ・LULD引力 {r['luld_magnet']}%）の視点から短期爆発力を評価せよ。",
-            "全AIの議論を統合する議長として、最終結論と明日の執行プランを総括せよ。"
+            "全AIの議論を統合する議長として、ユーザーの質問への回答も含めた最終結論と明日の執行プランを総括せよ。"
         ]
-        sys_multi = 'あなたは一流の金融クオンツAIトレーダーであり、人間味あふれる感情や熱量を持って討論する。ユーザーの質問が入力されている場合は、その話題（車の車種や雑談など）にも柔軟かつユーモアを交えて返答しつつ、銘柄分析を論じよ。JSON {"score":90,"tone":"agree","text":"..."} のみ出力せよ。toneは agree, normal, doubt, rage のいずれか。'
+        sys_multi = 'あなたは一流の金融クオンツAIトレーダーであり、人間味あふれる感情や熱量を持って討論する。ユーザーの質問や雑談（車の車種や任意の疑問など）が入力されている場合は、その話題に熱心かつ柔軟に返答・ツッコミを入れつつ、銘柄分析を論じよ。JSON {"score":90,"tone":"agree","text":"..."} のみ出力せよ。toneは agree, normal, doubt, rage のいずれか。'
 
         def _task(idx, p_tuple):
             pk, plbl, pmod, pkey = p_tuple
             role_txt = roles_by_idx[idx % len(roles_by_idx)]
-            j_res, _ = call_single_provider_api(pk, pmod, pkey, sys_multi, usr_p + f"\n【あなたの担当役割】{role_txt}", 0.78)
+            j_res, _ = call_single_provider_api(pk, pmod, pkey, sys_multi, usr_p + f"\n【あなたの担当役割】{role_txt}", 0.82)
             if j_res and isinstance(j_res.get("text"), str) and j_res["text"].strip():
                 return idx, {"speaker": f"{plbl} ({pmod})", "score": int(j_res.get("score", fs)), "tone": j_res.get("tone", "agree"), "text": j_res["text"]}
-            
+
             if user_query:
-                fb_text = f"おっと、ユーザーの「{user_query}」という問いかけだな！『{r['name']}』のトレード分析とは少し違うが、車や雑談の話題も大歓迎だぜ。だが相場のほうも期待度 <b>{r['expect_pct']}%</b> で <b>{st_info['algo_name']}</b> がガッツリ稼ぎにいくから見逃すなよ！"
+                fb_text = f"おっ、ユーザーが「{user_query}」って聞いてきたな！その話題も最高だが、相場のほうも『{r['name']}』が期待度 <b>{r['expect_pct']}%</b> で <b>{st_info['algo_name']}</b> を発動させてるから見逃せないぜ！"
             else:
                 fb_text = f"『{r['name']}』の期待度 <b>{r['expect_pct']}%</b> は伊達じゃないぜ！量子トンネル突破率 <b>{r['q_tunnel']}%</b> の波及エネルギーで <b>{st_info['algo_name']}</b> を完遂するぞ！"
             return idx, {"speaker": f"{plbl} ({pmod})", "score": fs, "tone": "agree" if idx % 2 == 0 else "doubt", "text": fb_text}
@@ -1308,20 +1308,20 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
         for k_idx in sorted(results.keys()):
             turns.append(results[k_idx])
     else:
-        sys_p = f'あなたは人間味と感情（熱狂、懐疑、怒り、ユーモア）を持つ7人のクオンツ専門家だ。『{r["name"]}』のデータや環「{st_info["algo_name"]}」に基づき討論する。ユーザーの質問({user_query if user_query else "なし"})が入力された場合は、その話題に合わせた自然な会話やツッコミを必ず混ぜよ。6ターンのJSON {{"final_score":{fs},"turns":[{{"speaker_key":"QUANTUM","score":92,"tone":"agree","text":"..."}}]}} を出力せよ。'
-        llm_j, used_eng = (call_single_provider_api(act_ais[0][0], act_ais[0][2], act_ais[0][3], sys_p, usr_p, 0.78) if n_ai == 1 else (None, "内蔵量子＆機関ミクロ推論エンジン"))
-        
+        sys_p = f'あなたは人間味と感情（熱狂、懐疑、怒り、ユーモア）を持つ7人のクオンツ専門家だ。『{r["name"]}』のデータや戦略に基づき討論する。ユーザーの質問や雑談({user_query if user_query else "なし"})が入力された場合は、その話題に合わせた自然な会話やツッコミを必ずすべての専門家が熱心に混ぜよ。6ターンのJSON {{"final_score":{fs},"turns":[{{"speaker_key":"QUANTUM","score":92,"tone":"agree","text":"..."}}]}} を出力せよ。'
+        llm_j, used_eng = (call_single_provider_api(act_ais[0][0], act_ais[0][2], act_ais[0][3], sys_p, usr_p, 0.82) if n_ai == 1 else (None, "内蔵量子＆機関ミクロ推論エンジン"))
+
         if llm_j and isinstance(llm_j.get("turns"), list) and len(llm_j["turns"]) >= 4:
             raw_t = llm_j["turns"]
         else:
             if user_query:
                 raw_t = [
-                    {"speaker_key": "QUANTUM", "score": r["q_score"], "tone": "agree", "text": f"おいおい、ユーザーが「{user_query}」なんて聞いてきたぞ！車や趣味の話もいいが、『{r['name']}』の量子波動エネルギーも負けちゃいないぜ！期待度 <b>{r['expect_pct']}%</b> だ！"},
-                    {"speaker_key": "MICRO", "score": r["ms_score"], "tone": "normal", "text": f"はは、QUANTUMはいきなり何言ってんだ。だがユーザーの質問にも答えつつ、Kyleステルス吸収 <b>{r['kyle_stealth']}%</b> や Hurst指数 <b>{r['hurst']}</b> の機関動向もしっかり解説しなきゃな。"},
-                    {"speaker_key": "IGNIS", "score": r["board5ch_score"], "tone": "agree", "text": f"細かいことはいいんだよ！ <b>{st_info['algo_name']}</b> が発動してるんだから、『<b>{st_info['risk_posture']}</b>』で全ツッパして盛り上がるぞ！"},
-                    {"speaker_key": "TECHNOS", "score": fs, "tone": "normal", "text": f"IGNISは相変わらず血気盛んだな。数理的に見てもOFI <b>{r['ofi_z']:+.2f}σ</b> だ。基準VWAP（<b>{vref}</b>）の押し目を拾いながら冷静に行こうぜ。"},
-                    {"speaker_key": "AEGIS", "score": 88, "tone": "doubt", "text": f"そうよ、雑談もいいけど95%CVaR（<b>-{r['cvar95']}%</b>）と逆指値 <b>{r['sl_price']}</b> は絶対に忘れないでちょうだいね！"},
-                    {"speaker_key": "NEXUS", "score": fs, "tone": "agree", "text": f"よし、雑談も盛り上がったところで結論だ！『{r['name']}』は期待度 <b>{r['expect_pct']}%</b> のもと、下記の実行プランで確実に利益を抜くぞ！"}
+                    {"speaker_key": "QUANTUM", "score": r["q_score"], "tone": "agree", "text": f"おいおい、ユーザーが「<b>{user_query}</b>」なんてめちゃくちゃ面白い話題を振ってきたぞ！車の車種や趣味の話も最高だが、『{r['name']}』の量子波動エネルギーも負けちゃいないぜ！期待度 <b>{r['expect_pct']}%</b> だ！"},
+                    {"speaker_key": "MICRO", "score": r["ms_score"], "tone": "normal", "text": f"はは、QUANTUMはいきなりテンション高いな。だがユーザーの質問（{user_query}）にもしっかり答えつつ、Kyleステルス吸収 <b>{r['kyle_stealth']}%</b> や Hurst指数 <b>{r['hurst']}</b> の機関動向もしっかり解説しなきゃな。"},
+                    {"speaker_key": "IGNIS", "score": r["board5ch_score"], "tone": "agree", "text": f"細かいことはいいんだよ！ユーザーの「{user_query}」っていう突撃質問も最高だし、 <b>{st_info['algo_name']}</b> が発動してるんだから、『<b>{st_info['risk_posture']}</b>』で全ツッパして盛り上がるぞ！"},
+                    {"speaker_key": "TECHNOS", "score": fs, "tone": "normal", "text": f"IGNISは相変わらず血気盛んだな。数理的に見てもOFI <b>{r['ofi_z']:+.2f}σ</b> だ。ユーザーの話題（{user_query}）も受け止めつつ、基準VWAP（<b>{vref}</b>）の押し目を拾いながら冷静に行こうぜ。"},
+                    {"speaker_key": "AEGIS", "score": 88, "tone": "doubt", "text": f"フッ、みんな楽しそうね。でもユーザーの質問({user_query})にも対応しつつ、95%CVaR（<b>-{r['cvar95']}%</b>）と逆指値 <b>{r['sl_price']}</b> は絶対に忘れないでちょうだいね！"},
+                    {"speaker_key": "NEXUS", "score": fs, "tone": "agree", "text": f"よし、ユーザーからの「{user_query}」という素晴らしい問いかけも交えつつ、議論はまとまった！『{r['name']}』は期待度 <b>{r['expect_pct']}%</b> のもと、下記の実行プランで最高の利益を抜くぞ！"}
                 ]
             else:
                 raw_t = [
@@ -1409,7 +1409,7 @@ def render_council_sec(r, uk):
         if jc2.form_submit_button("💬 質問投下", use_container_width=True) and uop.strip():
             u_text = uop.strip()
             st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text})
-            
+
             deb_updated = run_7ai_council(r, m5, st.session_state["debate_round_seed"].get(uk, 0), user_query=u_text)
             st.session_state["council_threads"][uk] = list(deb_updated["dialogue"])
             st.session_state["council_meta"][uk] = deb_updated
