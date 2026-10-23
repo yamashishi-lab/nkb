@@ -202,9 +202,29 @@ def inject_css():
         background:transparent!important;
         height:auto!important;
         pointer-events:none!important;
+        z-index:2147483640!important;
     }
-    header[data-testid="stHeader"] *{
+    header[data-testid="stHeader"] button,
+    header[data-testid="stHeader"] [data-testid="stSidebarCollapseButton"],
+    header[data-testid="stHeader"] [data-testid="baseButton-header"],
+    header[data-testid="stHeader"] [data-testid="collapsedControl"]{
         pointer-events:auto!important;
+        display:flex!important;
+        visibility:visible!important;
+        opacity:1!important;
+        z-index:2147483647!important;
+    }
+    div[data-testid="collapsedControl"]{
+        display:flex!important;
+        visibility:visible!important;
+        pointer-events:auto!important;
+        z-index:2147483647!important;
+    }
+    div[data-testid="collapsedControl"] button{
+        pointer-events:auto!important;
+        display:flex!important;
+        visibility:visible!important;
+        z-index:2147483647!important;
     }
     header[data-testid="stHeader"] [data-testid="stToolbar"]{
         display:none!important;
@@ -213,7 +233,7 @@ def inject_css():
     section[data-testid="stSidebar"]{
         background-color:#0b0f19!important;
         border-right:1px solid rgba(148,163,184,0.15)!important;
-        z-index:2147483646!important;
+        z-index:2147483644!important;
     }
     
     .block-container{padding-top:3.6rem!important;padding-bottom:3rem!important;padding-left:0.75rem!important;padding-right:0.75rem!important;max-width:840px!important;}
@@ -230,7 +250,7 @@ def inject_css():
         top:0.45rem!important;
         left:50%!important;
         transform:translateX(-50%)!important;
-        z-index:2147483645!important;
+        z-index:2147483640!important;
         width:min(680px,calc(100vw - 7.2rem))!important;
         background:rgba(5,8,17,0.94)!important;
         backdrop-filter:blur(14px)!important;
@@ -295,7 +315,7 @@ def inject_css():
         pointer-events:auto!important;
         cursor:pointer!important;
         position:relative!important;
-        z-index:2147483645!important;
+        z-index:2147483640!important;
     }
     
     div:has(> div > div.top-nav-marker) button:hover,
@@ -519,7 +539,7 @@ components.html(
             let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
             if(box && box.querySelector('[data-testid="stHorizontalBlock"]')){{
                 box.classList.add('fixed-top-nav-bar');
-                box.style.setProperty('z-index', '2147483645', 'important');
+                box.style.setProperty('z-index', '2147483640', 'important');
                 box.style.setProperty('pointer-events', 'auto', 'important');
                 let p = box.parentElement;
                 while(p && p !== doc.body){{
