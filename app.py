@@ -11,7 +11,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.text import MIMEText
 from datetime import datetime
 
-st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="expanded")
+# 初期状態を「collapsed（閉じた状態）」に修正
+st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
 ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
@@ -198,34 +199,45 @@ def inject_css():
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
+    /* ヘッダー全体の透明化と安全化 */
     header[data-testid="stHeader"]{
         background:transparent!important;
-        height:auto!important;
+        height:2.8rem!important;
         pointer-events:none!important;
         z-index:999990!important;
     }
-    header[data-testid="stHeader"] button,
-    header[data-testid="stHeader"] [data-testid="stSidebarCollapseButton"],
-    header[data-testid="stHeader"] [data-testid="baseButton-header"],
-    header[data-testid="stHeader"] [data-testid="collapsedControl"]{
+    
+    /* サイドバー開閉タブ（CollapsedControl）を左上に絶対常駐表示 */
+    div[data-testid="collapsedControl"]{
+        display:flex!important;
+        visibility:visible!important;
+        opacity:1!important;
+        pointer-events:auto!important;
+        position:fixed!important;
+        top:0.45rem!important;
+        left:0.5rem!important;
+        z-index:2147483647!important;
+        background:rgba(15,23,42,0.95)!important;
+        border:1px solid rgba(56,189,248,0.4)!important;
+        border-radius:8px!important;
+        box-shadow:0 4px 14px rgba(0,0,0,0.6)!important;
+    }
+    div[data-testid="collapsedControl"] button{
+        display:flex!important;
+        visibility:visible!important;
+        opacity:1!important;
+        pointer-events:auto!important;
+        color:#38bdf8!important;
+    }
+
+    header[data-testid="stHeader"] [data-testid="stSidebarCollapseButton"]{
         pointer-events:auto!important;
         display:flex!important;
         visibility:visible!important;
         opacity:1!important;
-        z-index:999999!important;
+        z-index:2147483647!important;
     }
-    div[data-testid="collapsedControl"]{
-        display:flex!important;
-        visibility:visible!important;
-        pointer-events:auto!important;
-        z-index:999999!important;
-    }
-    div[data-testid="collapsedControl"] button{
-        pointer-events:auto!important;
-        display:flex!important;
-        visibility:visible!important;
-        z-index:999999!important;
-    }
+
     header[data-testid="stHeader"] [data-testid="stToolbar"]{
         display:none!important;
     }
@@ -568,7 +580,6 @@ components.html(
                 box.style.setProperty('z-index', '999980', 'important');
                 box.style.setProperty('pointer-events', 'auto', 'important');
                 
-                // ボタンからフォーカスを外すリスナーをバインド
                 box.querySelectorAll('button').forEach(btn => {{
                     btn.addEventListener('mouseup', function(){{ this.blur(); }});
                     btn.addEventListener('mouseleave', function(){{ this.blur(); }});
@@ -1575,7 +1586,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
             "IGNISとして発言。熱血特攻型。暴言には怒り、熱い話には全力で乗り、Webの勢いを買って煽れ。",
             "TECHNOSとして発言。数理、工学、客観的事実に基づいてユーザーの質問に明快に回答せよ。",
             "MACROとして発言。世界市場、地政学、マクロの視点から堂々と持論を述べよ。",
-            "NEXUSとして発言。全体の議論を受け止め、自然な人間の言葉で最終結論をまとめよ"
+            "NEXUSとして発言。全体の議論を受け止め、自然な人間の言葉で最終結論をまとめよ。"
         ]
         sys_multi = 'あなたは感情と個性を備えたリアルなAIディベーターです。定型句コピペ（〜についてだが等）は完全禁止。質問には直接的かつ人間らしく（喜怒哀楽を込めて）返答してください。JSON形式 {"score":90,"tone":"agree","text":"..."} のみ出力。toneは agree, normal, doubt, rage のいずれか。'
 
@@ -1787,7 +1798,7 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     det = tn["detail"]
     st.markdown(
         f'<div class="glass-header" style="border-left:4px solid #ef4444;">'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:gap:6px;">'
         f'<span class="pill-badge" style="background:#ef4444;color:#fff;border:none;">🚨 重大ニュース徹底深掘りレポート</span>'
         f'<span class="quantum-badge">⚛️ 量子波及スコア {tn["impact_score"]}点 ｜ {tn["source"]}</span></div>'
         f'<div style="font-size:18px;font-weight:800;color:#f8fafc;margin-top:8px;line-height:1.45;">{tn["title"]}</div>'
