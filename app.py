@@ -294,7 +294,7 @@ def check_auth():
                 if cu in db: db[cu]["last_seen_ts"] = 0; save_j(FILES["mem"], db)
                 st.session_state["authenticated_user"] = None; st.query_params.clear(); st.rerun()
         if cu == ADMIN_EMAIL.strip().lower():
-            pend = [v for v in db.values() if v.get("status"] == "pending"]
+            pend = [v for v in db.values() if v.get("status") == "pending"]
             mdb_Now = load_mail_db()
             unread_msgs = [m for m in mdb_Now.get("messages", []) if m.get("sender_role") == "member" and not m.get("read_by_admin", False)]
             spoof_cnt = len(sec.get("spoof_logs", []))
@@ -878,7 +878,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                 c_b1.markdown(f"💀 **{binfo.get('name','不明')}** (`{bem}`) ｜ BAN日時: {binfo.get('banned_at','-')} ｜ 端末FP: `{binfo.get('fp','-')}`")
                 if c_b2.button("🔓 永久BAN解除", key=f"unban_{bem}", use_container_width=True):
                     sec.get("banned_emails", {}).pop(bem, None)
-                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email"] == bem]:
+                    for fp_k in [k_fp for k_fp, v_fp in sec.get("banned_fps", {}).items() if v_fp.get("email") == bem]:
                         sec["banned_fps"].pop(fp_k, None)
                     for pin_k in [k_p for k_p, v_p in sec.get("banned_pins", {}).items() if v_p == bem]:
                         sec["banned_pins"].pop(pin_k, None)
@@ -1481,7 +1481,7 @@ elif sel_cat == "🎟️ IPO募集・新規上場":
 elif sel_cat == "🏦 機関VPIN・OFI":
     for i, r in enumerate(sorted(all_res, key=lambda x: (x["inst_score"], x["ofi_z"], x["expect_pct"]), reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
 elif sel_cat == "🔥 5ch＆短期モメンタム":
-    for i, r in enumerate(sorted(all_res, key=lambda x: (x["board5ch_score"], x["expect_pct"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
+    for i, r in enumerate(sorted(all_res, key=lambda x: (x["board5ch_score"], x["expect_pct"]), reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
 elif sel_cat == "📋 監視シート":
     wl = st.session_state["watchlist"]
     if st.button("⚡ 総合TOP3をワンタップ一括登録", use_container_width=True):
