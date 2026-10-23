@@ -253,7 +253,7 @@ def inject_css():
     .chat-bubble-doubt{border-left-color:#f59e0b;background:rgba(245,158,11,0.07);}
     .chat-bubble-rage{border-left-color:#ef4444;background:rgba(239,68,68,0.12);}
     .chat-bubble-agree{border-left-color:#a855f7;background:rgba(168,85,247,0.11);}
-    .chat-bubble-user{background:rgba(37,99,235,0.30);border-left:4px solid #60a5fa;border-radius:8px;padding:8px 11px;margin:8px 0 6px 0;font-size:12.5px;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+    .chat-bubble-user{background:rgba(37,99,235,0.30);border-left:4px solid #60a5fa;border-radius:8px;padding:8px 11px;margin:8px 0 6px 0;font-size:12.5px;box-shadow:0 2px 8px rgba(0,0,0,0.3);scroll-margin-top:6px;}
     .consensus-banner{background:linear-gradient(135deg,#0f172a,#1e1b4b);border:1px solid rgba(168,85,247,0.45);border-radius:9px;padding:10px;margin-top:7px;font-size:12px;}
     .beginner-action-box{background:linear-gradient(135deg,rgba(16,185,129,0.14),rgba(6,78,59,0.25));border:1px solid #10b981;border-left:4px solid #10b981;border-radius:8px;padding:9px 11px;margin-top:7px;color:#ecfdf5;font-size:12px;line-height:1.6;}
     .ipo-link-btn{display:inline-block;background:#1e293b;color:#38bdf8!important;border:1px solid #334155;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none!important;margin-right:5px;margin-top:4px;}
@@ -403,13 +403,16 @@ if st.session_state.get("scroll_target_id"):
         setTimeout(function(){{
             const el = window.parent.document.getElementById('{tid}');
             if(el){{
-                el.scrollIntoView({{behavior: 'smooth', block: 'end'}});
                 const parentBox = el.closest('.council-scroll-window');
                 if(parentBox){{
-                    parentBox.scrollTop = parentBox.scrollHeight;
+                    const pRect = parentBox.getBoundingClientRect();
+                    const eRect = el.getBoundingClientRect();
+                    parentBox.scrollTop += (eRect.top - pRect.top) - 4;
+                }} else {{
+                    el.scrollIntoView({{behavior: 'smooth', block: 'start'}});
                 }}
             }}
-        }}, 200);
+        }}, 220);
     """
     st.session_state["scroll_target_id"] = ""
 
@@ -585,17 +588,11 @@ def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p:
     except Exception:
         return None, f"{p_label} ({model})"
 
-# ==============================================================================
-# 🌐 質問ごと・銘柄ごとに必ずリアルタイムでWeb情報を引っ張る検索エンジン
-# ==============================================================================
 def search_web_knowledge(query: str, max_results: int = 4) -> list:
-    """質問ごとにWeb（Google RSS / Wikipedia / 気象・金融速報）からリアルタイム情報を取得"""
     if not query or not query.strip(): return []
     q_clean = query.strip()
     ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
     results = []
-    
-    # 1. ニュース/トレンドRSSサーチ
     try:
         url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q_clean)}&hl=ja&gl=JP&ceid=JP:ja"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
@@ -609,7 +606,6 @@ def search_web_knowledge(query: str, max_results: int = 4) -> list:
                 if t: results.append(f"【報道・最新動向】{t} - {d[:110]}")
     except Exception: pass
 
-    # 2. Wikipedia概要取得（企業名・用語・カルチャー等）
     if len(results) < 2:
         try:
             target_term = q_clean.replace("の株は今買い？", "").replace("の株", "").replace("株価", "").replace("買い？", "").split(" ")[0].strip()
@@ -627,7 +623,6 @@ def search_web_knowledge(query: str, max_results: int = 4) -> list:
                                 results.append(f"【基礎ファクト】{l[:130]}")
         except Exception: pass
 
-    # 3. 気象情報
     if any(w in q_clean for w in ["天気", "気温", "雨", "晴れ"]):
         try:
             req = urllib.request.Request("https://weather.tsukumijima.net/api/forecast/city/130010", headers={"User-Agent": "Mozilla/5.0"})
@@ -642,16 +637,11 @@ def search_web_knowledge(query: str, max_results: int = 4) -> list:
 
     return results
 
-# ==============================================================================
-# 🧠 定型文・固定分岐を完全撤廃：Web情報そのものを根拠にゼロから動的組み立て
-# ==============================================================================
 def build_dynamic_turn_from_web(speaker_key: str, user_q: str, r: dict, vref: str, web_snippets: list) -> tuple:
-    """定型文・テンプレを完全排除。質問とWeb検索結果そのものを使って各キャラクターが直接回答を生成"""
     q_txt = (user_q or "").strip()
     nm = r["name"]
     is_insult = any(w in q_txt for w in ["バカ", "死ね", "クソ", "使えねえ", "下手", "無能", "ゴミ", "カス", "消えろ", "だまれ", "黙れ", "アホ"])
 
-    # 侮辱・暴言へのリアルな感情的反応（完全即答）
     if is_insult:
         if speaker_key == "IGNIS":
             return "rage", f"おいおいテメエ、誰に向かって『{q_txt}』とかほざいてんだコラ！相場でも負け続けて八つ当たりしてる典型的な養分だな！文句あんなら自分の力で1ティックでも抜いてから出直してきやがれ！"
@@ -662,13 +652,10 @@ def build_dynamic_turn_from_web(speaker_key: str, user_q: str, r: dict, vref: st
         else:
             return "doubt", f"極めて非論理的で品位を欠く発言ですね。感情に支配された投資家から淘汰されるのが市場の摂理です。冷静になってください。"
 
-    # Web検索スニペットの整理
     first_fact = web_snippets[0] if web_snippets else f"{q_txt if q_txt else nm}に関する最新市況データ"
     second_fact = web_snippets[1] if len(web_snippets) > 1 else first_fact
 
-    # ユーザーからの具体的な質問（質問毎にWeb事実を直接語る）
     if q_txt:
-        # 質問に銘柄名や「株」「買い」等が含まれる場合のWeb分析即答
         if any(w in q_txt for w in ["株", "買い", "売り", "銘柄", "目標", "日産", "トヨタ", "決算", "業績"]):
             if speaker_key == "MICRO":
                 return "normal", f"『{q_txt}』についてWebと板の動向を精査したよ。最新情報では<b>{first_fact[:85]}</b>と報じられている。大口機関のステルス吸収や需給バランスを考慮すると、ニュースに対する市場の織り込み度を見極めて慎重に押し目を拾う局面だね。"
@@ -683,7 +670,6 @@ def build_dynamic_turn_from_web(speaker_key: str, user_q: str, r: dict, vref: st
             else:
                 return "agree", f"『{q_txt}』に対する総括だ。Webの最新情報（{first_fact[:80]}）が示す通り、ファンダメンタルズと短期モメンタムのせめぎ合いとなっている。リスクリワードを明確にして行動に移すべきだ。"
 
-        # 一般質問（趣味、ゲーム、車、天気、雑談等）
         if speaker_key == "IGNIS":
             return "agree", f"『{q_txt}』についてだな！Webを調べても<b>{first_fact[:80]}</b>って情報が出てるぜ！熱い話題には全力で乗っかるのが一番だ、迷わず行こうぜ！"
         elif speaker_key == "QUANTUM":
@@ -695,7 +681,6 @@ def build_dynamic_turn_from_web(speaker_key: str, user_q: str, r: dict, vref: st
         else:
             return "agree", f"『{q_txt}』について各官がWeb情報をもとに検証した。事実関係として<b>{first_fact[:80]}</b>が確認されており、極めて納得のいく結論だ。"
 
-    # 銘柄合議を開いた瞬間の最新Web情報ベース合議
     if speaker_key == "QUANTUM":
         return "agree", f"『{nm}』のリアルタイムWeb探査完了！<b>{first_fact[:85]}</b>という最新動向をキャッチしたぞ。この材料が波動関数を刺激してトンネル突破率<b>{r['q_tunnel']}%</b>の跳躍を生み出している！"
     elif speaker_key == "MICRO":
@@ -860,13 +845,12 @@ if cu_Now:
                 st.success("✅ 管理者にメッセージを送信しました！")
     if my_msgs:
         with st.sidebar.expander(f"📬 管理者とのメッセージ履歴 ({len(my_msgs)}件)", expanded=bool(unread_admin_replies)):
-            if unread_admin_replies:
-                if st.button("✅ 新着返信を既読にする", key="mark_read_mem", use_container_width=True):
-                    for m in mdb_Now.get("messages", []):
-                        if m.get("member_email") == cu_Now and m.get("sender_role") == "admin":
-                            m["read_by_member"] = True
-                    save_j(FILES["mail"], mdb_Now)
-                    st.rerun()
+            if st.button("✅ 新着返信を既読にする", key="mark_read_mem", use_container_width=True):
+                for m in mdb_Now.get("messages", []):
+                    if m.get("member_email") == cu_Now and m.get("sender_role") == "admin":
+                        m["read_by_member"] = True
+                save_j(FILES["mail"], mdb_Now)
+                st.rerun()
             for m in my_msgs[:15]:
                 is_adm = m.get("sender_role") == "admin"
                 bg_c = "rgba(16,185,129,0.14)" if is_adm else "rgba(56,189,248,0.10)"
@@ -1377,9 +1361,6 @@ def fetch_5m(full_code):
         return {"vwap5_price": f"{lv:,.0f}円" if ".T" in full_code else f"${lv:,.2f}", "chart_date": str(dts[-1]), "chart_df": cdf}
     except Exception: return None
 
-# ==============================================================================
-# 🧠 7大AI合議＆質問投下ごとの完全リアルタイムWeb検索合議
-# ==============================================================================
 def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> dict:
     vref = m5["vwap5_price"] if m5 else r["vwap_price"]
     st_info = r["strat"]
@@ -1387,15 +1368,12 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
     act_ais = get_active_ai_providers()
     n_ai = len(act_ais)
 
-    # 質問が与えられた場合は、その質問内容を最優先にしてピンポイントでWeb検索
     web_snippets = []
     if user_query.strip():
-        # 質問文そのもの、および質問から抽出した重要キーワードで検索
         web_snippets = search_web_knowledge(user_query, max_results=4)
         if len(web_snippets) < 2:
             web_snippets.extend(search_web_knowledge(f"{r['name']} {user_query}", max_results=3))
     else:
-        # 銘柄合議初回オープン時
         web_snippets = search_web_knowledge(f"{r['name']} 最新 株価 ニュース", max_results=4)
 
     web_snippets = list(dict.fromkeys(web_snippets))
@@ -1500,9 +1478,11 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
     )
     return {"final_score": fs, "dialogue": turns, "verdict_html": v_html}
 
-def _fmt_turn(t: dict) -> str:
+def _fmt_turn(t: dict, idx: int = 0) -> str:
     if "round" in t: return f'<div class="round-divider">{t["round"]}</div>'
-    if t.get("is_user"): return f'<div class="chat-bubble-user"><b>🗣️ あなたの質問・投下:</b><br>{t["text"]}</div>'
+    if t.get("is_user"):
+        dom_id_attr = f' id="{t["dom_id"]}"' if t.get("dom_id") else ""
+        return f'<div class="chat-bubble-user"{dom_id_attr}><b>🗣️ あなたの質問・投下:</b><br>{t["text"]}</div>'
     b_cls = {"doubt": "chat-bubble-doubt", "rage": "chat-bubble-rage", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
 
@@ -1530,7 +1510,6 @@ def render_council_sec(r, uk):
         vw = base.mark_line(color="#f59e0b", strokeWidth=2, strokeDash=[4, 2]).encode(y="VWAP:Q")
         st.altair_chart((w + b + vw).properties(height=140), use_container_width=True)
 
-    # 銘柄合議初回オープン時
     if uk not in st.session_state["council_threads"]:
         with st.spinner(f"🌐 『{r['name']}』の最新情報をWeb検索中..."):
             deb = run_7ai_council(r, m5, st.session_state["debate_round_seed"].get(uk, 0), user_query="")
@@ -1539,32 +1518,28 @@ def render_council_sec(r, uk):
 
     meta = st.session_state["council_meta"][uk]
     turns = st.session_state["council_threads"][uk]
-    bottom_anchor = f'<div id="bottom_anchor_{uk}" style="height:2px;width:100%;margin-top:4px;"></div>'
 
-    # ディベート窓（見切れないよう十分な高さとスクロールを確保）
     st.markdown(
         f'<div id="council_box_{uk}" class="ai-council-box">'
-        f'<div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t) for t in turns)}{bottom_anchor}</div>'
+        f'<div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t, i) for i, t in enumerate(turns))}</div>'
         f'</div>',
         unsafe_allow_html=True
     )
 
-    # 質問投下フォーム
     with st.form(f"jf_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
         uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』や他銘柄・市況の質問投下（例: 日産の株は今買い？・任天堂の最新動向は？等）", label_visibility="collapsed")
         if jc2.form_submit_button("💬 質問投下", use_container_width=True) and uop.strip():
             u_text = uop.strip()
-            # 自分の質問をスレッドに追加
-            st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text})
+            new_dom_id = f"user_q_anchor_{uk}_{int(time.time()*1000)}"
+            st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text, "dom_id": new_dom_id})
 
-            # その質問内容専用にWebリアルタイム検索を行って回答を生成
             with st.spinner(f"🌐 『{u_text}』について最新Web情報を検索して合議中..."):
                 deb_updated = run_7ai_council(r, m5, st.session_state["debate_round_seed"].get(uk, 0), user_query=u_text)
                 for new_t in deb_updated["dialogue"]:
                     st.session_state["council_threads"][uk].append(new_t)
                 st.session_state["council_meta"][uk] = deb_updated
-                st.session_state["scroll_target_id"] = f"bottom_anchor_{uk}"
+                st.session_state["scroll_target_id"] = new_dom_id
                 st.rerun()
 
     st.markdown(
