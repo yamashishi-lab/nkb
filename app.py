@@ -1236,7 +1236,7 @@ def fetch_5m(full_code):
         return {"vwap5_price": f"{lv:,.0f}円" if ".T" in full_code else f"${lv:,.2f}", "chart_date": str(dts[-1]), "chart_df": cdf}
     except Exception: return None
 
-def run_7ai_council(r: dict, m5=None, seed: int = 0) -> dict:
+def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> dict:
     vref = m5["vwap5_price"] if m5 else r["vwap_price"]
     st_info = r["strat"]
     fs = r["ai_score"]
@@ -1244,19 +1244,22 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0) -> dict:
     n_ai = len(act_ais)
     news_list = fetch_global_impact_news()
     recent_news_snippet = news_list[0]["title"] if news_list else "AI半導体・次世代データセンター光配線に資金流入加速"
+    
     usr_p = (
         f"銘柄:{r['name']}({r['code']}) 現在値:{r['price']} 前日比:{r['diff']}% 期待度:{r['expect_pct']}% 統合勝率:{r['total_win_rate']}% "
         f"量子Qスコア:{r['q_score']} トンネル突破率:{r['q_tunnel']}% 機関ミクロ構造スコア:{r['ms_score']}(Kyleステルス吸収:{r['kyle_stealth']}% / Hurst指数:{r['hurst']} / LULD引力:{r['luld_magnet']}%) "
         f"OFI:{r['ofi_z']:+.2f}σ VPIN:{r['vpin']:+.2f} 95%CVaR:-{r['cvar95']}% 基準VWAP:{vref} 採用戦略:{st_info['algo_name']} 執行:{st_info['step_plan']} "
         f"直近市場ヘッドライン:{recent_news_snippet}"
     )
+    if user_query:
+        usr_p += f"\n\n【ユーザーからの直近の質問・発言】\n{user_query}\n※このユーザーからの質問や雑談に対して、専門家チームとして的確かつ自然に会話（返答・ツッコミ）に織り込んでください。"
 
     turns = []
     if n_ai >= 2:
         mode_title = get_debate_mode_badge(n_ai)
         turns.append({"round": f"{mode_title} ｜ 『{r['name']}』期待度 {r['expect_pct']}%"})
         roles_by_idx = [
-            f"量子波動＆機関オーダーフロー強気の視点から『{r['name']}』の優位性を個別に分析し、具体的な買い方と目標株価を主張せよ。直近の市場ニュース({recent_news_snippet})とも結びつけろ。",
+            f"量子波動＆機関オーダーフロー強気の視点から『{r['name']}』の優位性を個別に分析し、具体的な買い方と目標株価を主張せよ。ユーザーからの質問({user_query if user_query else 'なし'})にも言及せよ。",
             f"機関投資家のミクロ構造（Kyleのラムダ・Hurst指数 {r['hurst']}・VWAP {vref}）の視点から先行意見に切り込み、市場の揺さぶりに耐える執行手順を論じよ。",
             f"テールリスク監査（95%CVaR -{r['cvar95']}%・逆指値 {r['sl_price']}）の視点から下値リスクを厳しく突っ込み、勝率を極大化する条件を提示せよ。",
             "マクロ先物連動・セクター資金波及の視点から上値余地を評価せよ。",
@@ -1264,7 +1267,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0) -> dict:
             f"リアルタイム需給（OFI {r['ofi_z']:+.2f}σ・LULD引力 {r['luld_magnet']}%）の視点から短期爆発力を評価せよ。",
             "全AIの議論を統合する議長として、最終結論と明日の執行プランを総括せよ。"
         ]
-        sys_multi = 'あなたは一流の金融クオンツAIトレーダーであり、人間味あふれる感情や熱量（時には強気の自信、時には慎重な懸念や辛口なツッコミ）を持って討論する。直近の市場状況や銘柄ニュースをリアルタイムで踏まえ、JSON {"score":90,"tone":"agree","text":"..."} のみ出力せよ。toneは agree, normal, doubt, rage のいずれか。'
+        sys_multi = 'あなたは一流の金融クオンツAIトレーダーであり、人間味あふれる感情や熱量を持って討論する。ユーザーの質問が入力されている場合は、その話題（車の車種や雑談など）にも柔軟かつユーモアを交えて返答しつつ、銘柄分析を論じよ。JSON {"score":90,"tone":"agree","text":"..."} のみ出力せよ。toneは agree, normal, doubt, rage のいずれか。'
 
         def _task(idx, p_tuple):
             pk, plbl, pmod, pkey = p_tuple
@@ -1272,12 +1275,13 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0) -> dict:
             j_res, _ = call_single_provider_api(pk, pmod, pkey, sys_multi, usr_p + f"\n【あなたの担当役割】{role_txt}", 0.78)
             if j_res and isinstance(j_res.get("text"), str) and j_res["text"].strip():
                 return idx, {"speaker": f"{plbl} ({pmod})", "score": int(j_res.get("score", fs)), "tone": j_res.get("tone", "agree"), "text": j_res["text"]}
-            fb_txts = [
-                f"おいおい、『{r['name']}』の期待度 <b>{r['expect_pct']}%</b> は伊達じゃないぜ！直近のヘッドライン（{recent_news_snippet}）を見ても、量子トンネル突破率 <b>{r['q_tunnel']}%</b> の波及エネルギーは半端ない。<b>{st_info['algo_name']}</b> で一気に抜きに行くぞ！",
-                f"待て待て、冷静になれよ。Kyleステルス吸収 <b>{r['kyle_stealth']}%</b> や Hurst指数 <b>{r['hurst']}</b> は確かに魅力的だが、足元の市場全体のボラティリティを忘れていないか？基準VWAP（<b>{vref}</b>）を割ったら即座に撤退する規律が絶対だ。",
-                f"フッ、綺麗事ばかり言うな。95%CVaR（<b>-{r['cvar95']}%</b>）のテールリスクを舐めると痛い目を見るぞ。『{r['name']}』の逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b> は絶対にずらすなよ！"
-            ]
-            return idx, {"speaker": f"{plbl} ({pmod})", "score": fs, "tone": "agree" if idx % 2 == 0 else "doubt", "text": fb_txts[idx % len(fb_txts)]}
+            
+            # フォールバック時もユーザーの質問に応じた内容を生成
+            if user_query:
+                fb_text = f"おっと、ユーザーの「{user_query}」という問いかけだな！『{r['name']}』のトレード分析とは少し違うが、車や雑談の話題も大歓迎だぜ。だが相場のほうも期待度 <b>{r['expect_pct']}%</b> で <b>{st_info['algo_name']}</b> がガッツリ稼ぎにいくから見逃すなよ！"
+            else:
+                fb_text = f"『{r['name']}』の期待度 <b>{r['expect_pct']}%</b> は伊達じゃないぜ！量子トンネル突破率 <b>{r['q_tunnel']}%</b> の波及エネルギーで <b>{st_info['algo_name']}</b> を完遂するぞ！"
+            return idx, {"speaker": f"{plbl} ({pmod})", "score": fs, "tone": "agree" if idx % 2 == 0 else "doubt", "text": fb_text}
 
         task_list = [(0, act_ais[0]), (1, act_ais[1]), (2, act_ais[0]), (3, act_ais[1])] if n_ai == 2 else [(i, p) for i, p in enumerate(act_ais)]
         results = {}
@@ -1291,16 +1295,31 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0) -> dict:
         for k_idx in sorted(results.keys()):
             turns.append(results[k_idx])
     else:
-        sys_p = f'あなたは人間味と感情（熱狂、懐疑、怒り、ユーモア）を持つ7人のクオンツ専門家だ。『{r["name"]}』の直近ヘッドライン({recent_news_snippet})や独自の戦略「{st_info["algo_name"]}」に基づき、臨場感あふれる白熱の議論を行う6ターンのJSON {{"final_score":{fs},"turns":[{{"speaker_key":"QUANTUM","score":92,"tone":"agree","text":"..."}}]}} を出力せよ。'
+        sys_p = f'あなたは人間味と感情（熱狂、懐疑、怒り、ユーモア）を持つ7人のクオンツ専門家だ。『{r["name"]}』のデータや「{st_info["algo_name"]}」に基づき討論する。ユーザーの質問({user_query if user_query else "なし"})が入力された場合は、その話題に合わせた自然な会話やツッコミを必ず混ぜよ。6ターンのJSON {{"final_score":{fs},"turns":[{{"speaker_key":"QUANTUM","score":92,"tone":"agree","text":"..."}}]}} を出力せよ。'
         llm_j, used_eng = (call_single_provider_api(act_ais[0][0], act_ais[0][2], act_ais[0][3], sys_p, usr_p, 0.78) if n_ai == 1 else (None, "内蔵量子＆機関ミクロ推論エンジン"))
-        raw_t = llm_j["turns"] if (llm_j and isinstance(llm_j.get("turns"), list) and len(llm_j["turns"]) >= 4) else [
-            {"speaker_key": "QUANTUM", "score": r["q_score"], "tone": "agree", "text": f"おいみんな、『{r['name']}（{r['code']}）』の足元チャートを見たか！？直近の市場ニュース（{recent_news_snippet}）とも完全にリンクして、複素波動関数のエネルギーが爆発寸前だ！期待度 <b>{r['expect_pct']}%</b>、量子トンネル突破率はなんと <b>{r['q_tunnel']}%</b> に達しているぞ！"},
-            {"speaker_key": "MICRO", "score": r["ms_score"], "tone": "normal", "text": f"QUANTUM、興奮しすぎだ。だが確かに機関ミクロ構造のデータを見ると、Kyleの氷山ステルス吸収度が <b>{r['kyle_stealth']}%</b>、Hurst指数が <b>{r['hurst']}</b>（{r['ms_regime']}）を示している。水面下で機関の買い集めが着実に進んでいるのは事実だな。"},
-            {"speaker_key": "IGNIS", "score": r["board5ch_score"], "tone": "agree", "text": f"ははは、控えめに言うなよMICRO！ <b>{st_info['algo_name']}</b> が発動してるんだから、迷わず『<b>{st_info['risk_posture']}</b>』で特攻するに決まってるだろ！乗り遅れる奴は置いていくぜ！"},
-            {"speaker_key": "TECHNOS", "score": fs, "tone": "normal", "text": f"IGNIS、お前のその勢いだけのトレードはいつか痛い目を見るぞ。数理的に見ればOFI <b>{r['ofi_z']:+.2f}σ</b>・VPIN <b>{r['vpin']:+.2f}</b> だ。基準VWAP（<b>{vref}</b>）の押し目を冷静に拾うのが一番堅実だ。"},
-            {"speaker_key": "AEGIS", "score": 88, "tone": "doubt", "text": f"TECHNOSの言う通りよ！最近の地政学やAI投資への慎重論を忘れたの？どれだけ期待度が高くても、95%CVaR（<b>-{r['cvar95']}%</b>）と逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b> を怠ったら一巻の終わりよ。そこだけは必ず守りなさい！"},
-            {"speaker_key": "NEXUS", "score": fs, "tone": "agree", "text": f"よし、議論はそこまでだ！熱い議論だが全員の意見はまとまった。『{r['name']}』は期待度 <b>{r['expect_pct']}%</b> のもと、下記の実行プランで最高の利益を抜くぞ！"}
-        ]
+        
+        if llm_j and isinstance(llm_j.get("turns"), list) and len(llm_j["turns"]) >= 4:
+            raw_t = llm_j["turns"]
+        else:
+            if user_query:
+                raw_t = [
+                    {"speaker_key": "QUANTUM", "score": r["q_score"], "tone": "agree", "text": f"おいおい、ユーザーが「{user_query}」なんて聞いてきたぞ！車や趣味の話もいいが、『{r['name']}』の量子波動エネルギーも負けちゃいないぜ！期待度 <b>{r['expect_pct']}%</b> だ！"},
+                    {"speaker_key": "MICRO", "score": r["ms_score"], "tone": "normal", "text": f"はは、QUANTUMはいきなり何言ってんだ。だがユーザーの質問にも答えつつ、Kyleステルス吸収 <b>{r['kyle_stealth']}%</b> や Hurst指数 <b>{r['hurst']}</b> の機関動向もしっかり解説しなきゃな。"},
+                    {"speaker_key": "IGNIS", "score": r["board5ch_score"], "tone": "agree", "text": f"細かいことはいいんだよ！ <b>{st_info['algo_name']}</b> が発動してるんだから、『<b>{st_info['risk_posture']}</b>』で全ツッパして盛り上がるぞ！"},
+                    {"speaker_key": "TECHNOS", "score": fs, "tone": "normal", "text": f"IGNISは相変わらず血気盛んだな。数理的に見てもOFI <b>{r['ofi_z']:+.2f}σ</b> だ。基準VWAP（<b>{vref}</b>）の押し目を拾いながら冷静に行こうぜ。"},
+                    {"speaker_key": "AEGIS", "score": 88, "tone": "doubt", "text": f"そうよ、雑談もいいけど95%CVaR（<b>-{r['cvar95']}%</b>）と逆指値 <b>{r['sl_price']}</b> は絶対に忘れないでちょうだいね！"},
+                    {"speaker_key": "NEXUS", "score": fs, "tone": "agree", "text": f"よし、雑談も盛り上がったところで結論だ！『{r['name']}』は期待度 <b>{r['expect_pct']}%</b> のもと、下記の実行プランで確実に利益を抜くぞ！"}
+                ]
+            else:
+                raw_t = [
+                    {"speaker_key": "QUANTUM", "score": r["q_score"], "tone": "agree", "text": f"おいみんな、『{r['name']}（{r['code']}）』の足元チャートを見たか！？直近の市場ニュースとも完全にリンクして、複素波動関数のエネルギーが爆発寸前だ！期待度 <b>{r['expect_pct']}%</b>、量子トンネル突破率はなんと <b>{r['q_tunnel']}%</b> に達しているぞ！"},
+                    {"speaker_key": "MICRO", "score": r["ms_score"], "tone": "normal", "text": f"QUANTUM、興奮しすぎだ。だが確かに機関ミクロ構造のデータを見ると、Kyleの氷山ステルス吸収度が <b>{r['kyle_stealth']}%</b>、Hurst指数が <b>{r['hurst']}</b>（{r['ms_regime']}）を示している。水面下で機関の買い集めが着実に進んでいるのは事実だな。"},
+                    {"speaker_key": "IGNIS", "score": r["board5ch_score"], "tone": "agree", "text": f"ははは、控えめに言うなよMICRO！ <b>{st_info['algo_name']}</b> が発動してるんだから、迷わず『<b>{st_info['risk_posture']}</b>』で特攻するに決まってるだろ！乗り遅れる奴は置いていくぜ！"},
+                    {"speaker_key": "TECHNOS", "score": fs, "tone": "normal", "text": f"IGNIS、お前のその勢いだけのトレードはいつか痛い目を見るぞ。数理的に見ればOFI <b>{r['ofi_z']:+.2f}σ</b>・VPIN <b>{r['vpin']:+.2f}</b> だ。基準VWAP（<b>{vref}</b>）の押し目を冷静に拾うのが一番堅実だ。"},
+                    {"speaker_key": "AEGIS", "score": 88, "tone": "doubt", "text": f"フッ、綺麗事ばかり言うな。95%CVaR（<b>-{r['cvar95']}%</b>）のテールリスクを舐めると痛い目を見るぞ。『{r['name']}』の逆指値 <b>{r['sl_price']}（{r['sl_pct']}%）</b> は絶対にずらすなよ！"},
+                    {"speaker_key": "NEXUS", "score": fs, "tone": "agree", "text": f"よし、議論はそこまでだ！熱い議論だが全員の意見はまとまった。『{r['name']}』は期待度 <b>{r['expect_pct']}%</b> のもと、下記の実行プランで最高の利益を抜くぞ！"}
+                ]
+
         turns.append({"round": f"⚛️ 『{r['name']}』量子QWM-7 × 機関ミクロ構造 専門AI合議 ({used_eng})"})
         for it in raw_t:
             sk = str(it.get("speaker_key", "NEXUS")).upper()
@@ -1363,7 +1382,7 @@ def render_council_sec(r, uk):
         st.altair_chart((w + b + vw).properties(height=140), use_container_width=True)
 
     if uk not in st.session_state["council_threads"]:
-        deb = run_7ai_council(r, m5, st.session_state["debate_round_seed"].get(uk, 0))
+        deb = run_7ai_council(r, m5, st.session_state["debate_round_seed"].get(uk, 0), user_query="")
         st.session_state["council_threads"][uk] = list(deb["dialogue"])
         st.session_state["council_meta"][uk] = deb
 
@@ -1373,23 +1392,15 @@ def render_council_sec(r, uk):
 
     with st.form(f"jf_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
-        uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』のAI議会に何でも質問・雑談しよう（例：最近の相場どう思う？・下手くそ！ 等）", label_visibility="collapsed")
+        uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』のAI議会に何でも質問・雑談しよう（例：車の車種何が好き？・最近の相場どう思う？ 等）", label_visibility="collapsed")
         if jc2.form_submit_button("💬 質問投下", use_container_width=True) and uop.strip():
             u_text = uop.strip()
             st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text})
             
-            u_text_lower = u_text.lower()
-            if any(w in u_text_lower for w in ["バカ", "アホ", "クソ", "下手くそ", "詐欺", "無能", "うざい", "死ね"]):
-                reply_tone = "rage"
-                reply_text = f"なんだと！？こっちは最先端の量子波動エンジンと機関ミクロ構造で本気で分析してんだよ！文句があるならテメェで勝手に全ツッパして溶かしてみな！…っと、失礼。感情的になっちまったぜ。だが『{r['name']}』の実力は本物だ。しっかりついてきな！"
-            elif any(w in u_text_lower for w in ["天気", "飯", "猫", "犬", "こんにちは", "おっす", "雑談", "元気"]):
-                reply_tone = "agree"
-                reply_text = f"ははっ、急にそんな雑談を振ってくるとは面白い奴だな！こっちは24時間休まずAI合議で市場を監視してるぜ。『{r['name']}』の分析ついでに、もっと気軽に何でも話してくれよな！"
-            else:
-                reply_tone = "agree"
-                reply_text = f"「{u_text}」だな。よくぞ聞いてくれた！『{r['name']}』は期待度 <b>{r['expect_pct']}%</b>・機関Kyle吸収 <b>{r['kyle_stealth']}%</b>・95%CVaR <b>-{r['cvar95']}%</b> に基づき <b>{r['strat']['algo_name']}</b> を選定している。<b>{r['strat']['step_plan']}</b> の手順で、利確 <b>{r['tp_price']}</b>・逆指値 <b>{r['sl_price']}</b> を守って完璧に利益を抜くぞ！"
-
-            st.session_state["council_threads"][uk].append({"speaker": "🔥 IGNIS & ⚛️ QUANTUM", "score": r["q_score"], "tone": reply_tone, "text": reply_text})
+            # ユーザーの質問を考慮した動的な議論の再生成
+            deb_updated = run_7ai_council(r, m5, st.session_state["debate_round_seed"].get(uk, 0), user_query=u_text)
+            st.session_state["council_threads"][uk] = list(deb_updated["dialogue"])
+            st.session_state["council_meta"][uk] = deb_updated
             st.rerun()
 
 def render_card(r, is_custom=False, rank=None, kp="card"):
