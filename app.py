@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.text import MIMEText
 from datetime import datetime
 
-# 初期状態は閉じた状態（collapsed）
+# 初期状態設定
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
@@ -200,17 +200,21 @@ def inject_css():
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
     /* ─────────────────────────────────────────────────────────────
-       【重要】Streamlit純正ヘッダーおよび純正サイドバーボタンの正常化
+       【完全修復】Streamlit純正ヘッダーおよびサイドバー開閉UIの最前面・常時表示化
        ───────────────────────────────────────────────────────────── */
     header[data-testid="stHeader"] {
         background: transparent !important;
-        pointer-events: auto !important; /* クリック判定を絶対に阻害しない */
+        pointer-events: auto !important;
         z-index: 999990 !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
 
-    /* 一番最初のStreamlit標準サイドバー開閉ボタン（常時クリック可能） */
-    div[data-testid="collapsedControl"],
-    button[data-testid="stSidebarCollapseButton"] {
+    /* 左上の標準サイドバー開閉ボタン（全バージョンのセレクタを網羅） */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    header[data-testid="stHeader"] button {
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
@@ -219,12 +223,12 @@ def inject_css():
         z-index: 2147483647 !important;
     }
 
-    /* 右上の不要なStreamlit設定ツールバーのみ非表示 */
+    /* Streamlit標準の右側メニュー/デプロイボタンのみ非表示（開閉ボタンは絶対に消さない） */
     header[data-testid="stHeader"] [data-testid="stToolbar"] {
         display: none !important;
     }
 
-    /* サイドバー本体 */
+    /* サイドバー本体の重なり順と背景 */
     section[data-testid="stSidebar"] {
         background-color: #0b0f19 !important;
         border-right: 1px solid rgba(148,163,184,0.15) !important;
@@ -245,7 +249,7 @@ def inject_css():
     }
     
     .block-container {
-        padding-top: 3.6rem !important;
+        padding-top: 3.8rem !important;
         padding-bottom: 3rem !important;
         padding-left: 0.75rem !important;
         padding-right: 0.75rem !important;
@@ -277,14 +281,14 @@ def inject_css():
         text-overflow: ellipsis;
     }
     
-    /* 上部固定ナビゲーションバー（左上の純正ボタンと重ならないクリアランス） */
+    /* 上部固定ナビゲーションバー（左上開閉ボタンを塞がないようクリアランスを約65px確保） */
     .fixed-top-nav-bar {
         position: fixed !important;
         top: 0.45rem !important;
-        left: 54% !important;
+        left: calc(50% + 24px) !important;
         transform: translateX(-50%) !important;
         z-index: 999980 !important;
-        width: min(520px, calc(100vw - 8.5rem)) !important;
+        width: min(540px, calc(100vw - 6.5rem)) !important;
         background: rgba(5,8,17,0.94) !important;
         backdrop-filter: blur(14px) !important;
         border: none !important;
@@ -328,12 +332,6 @@ def inject_css():
         pointer-events: auto !important;
     }
     
-    .fixed-top-nav-bar div[data-testid="column"]:nth-child(2),
-    .fixed-top-nav-bar div[data-testid="stColumn"]:nth-child(2) {
-        flex: 1.45 1 0% !important;
-    }
-    
-    /* 上部ナビボタン基本色 */
     .fixed-top-nav-bar button {
         width: 100% !important;
         min-width: 0 !important;
@@ -360,7 +358,6 @@ def inject_css():
         color: #38bdf8 !important;
     }
 
-    /* 離したら通常色に戻る */
     .fixed-top-nav-bar button:focus,
     .fixed-top-nav-bar button:focus-visible {
         background: rgba(15,23,42,0.92) !important;
@@ -370,7 +367,6 @@ def inject_css():
         box-shadow: 0 4px 12px rgba(0,0,0,0.45) !important;
     }
     
-    /* 押している瞬間だけ青色発光 */
     .fixed-top-nav-bar button:active {
         background: #0284c7 !important;
         color: #ffffff !important;
@@ -380,7 +376,7 @@ def inject_css():
     }
     
     .fixed-top-nav-bar button p {
-        font-size: clamp(10px,2.6vw,11.5px) !important;
+        font-size: clamp(10px,2.4vw,11.5px) !important;
         font-weight: 700 !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -788,12 +784,25 @@ for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
-    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.45, 1])
+    # 左上に「☰ 設定」ボタンを設けて、万が一純正ボタンが押せない場合でも確実にサイドバーを開閉可能にする
+    nav_c0, nav_c1, nav_c2, nav_c3 = st.columns([1.1, 0.9, 1.4, 0.9])
+    if nav_c0.button("☰ メニュー設定", key="top_nav_sidebar_toggle", use_container_width=True):
+        components.html("""
+        <script>
+        (function() {
+            const doc = window.parent.document;
+            const btn = doc.querySelector('[data-testid="stSidebarCollapseButton"]') || 
+                        doc.querySelector('[data-testid="collapsedControl"]') || 
+                        doc.querySelector('header button');
+            if (btn) { btn.click(); }
+        })();
+        </script>
+        """, height=0)
     if nav_c1.button("⬆️ トップ", key="top_nav_top", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
         st.rerun()
-    if nav_c2.button(f"✖ 合議全て閉じる({open_cnt})" if open_cnt else "✖ 合議全て閉じる", key="top_nav_close", use_container_width=True):
+    if nav_c2.button(f"✖ 合議閉じる({open_cnt})" if open_cnt else "✖ 合議閉じる", key="top_nav_close", use_container_width=True):
         st.session_state["active_debates"] = {}
         st.rerun()
     if nav_c3.button("↩️ 戻る", key="top_nav_back", use_container_width=True):
@@ -836,6 +845,36 @@ components.html(
     (function(){{
         const doc = window.parent.document;
         
+        function forceExposeSidebarControl(){{
+            // 純正サイドバー開閉アイコンをすべて探して最前面へ強制配置
+            const selectors = [
+                '[data-testid="collapsedControl"]',
+                '[data-testid="stSidebarCollapseButton"]',
+                'button[aria-label="Open sidebar"]',
+                'button[aria-label="Close sidebar"]',
+                'header[data-testid="stHeader"] button'
+            ];
+            selectors.forEach(sel => {{
+                doc.querySelectorAll(sel).forEach(el => {{
+                    el.style.setProperty('display', 'flex', 'important');
+                    el.style.setProperty('visibility', 'visible', 'important');
+                    el.style.setProperty('opacity', '1', 'important');
+                    el.style.setProperty('pointer-events', 'auto', 'important');
+                    el.style.setProperty('z-index', '2147483647', 'important');
+                    el.style.setProperty('position', 'relative', 'important');
+                }});
+            }});
+
+            const header = doc.querySelector('header[data-testid="stHeader"]');
+            if(header) {{
+                header.style.setProperty('display', 'block', 'important');
+                header.style.setProperty('visibility', 'visible', 'important');
+                header.style.setProperty('opacity', '1', 'important');
+                header.style.setProperty('pointer-events', 'auto', 'important');
+                header.style.setProperty('z-index', '999990', 'important');
+            }}
+        }}
+
         function fixTopNav(){{
             const marker = doc.querySelector('.top-nav-marker');
             if(!marker) return;
@@ -850,11 +889,13 @@ components.html(
                     btn.addEventListener('mouseleave', function(){{ this.blur(); }});
                 }});
             }}
+            forceExposeSidebarControl();
         }}
 
         fixTopNav();
         setTimeout(fixTopNav, 100);
         setTimeout(fixTopNav, 300);
+        setTimeout(forceExposeSidebarControl, 600);
 
         function scrollToTopAbsolute(){{
             try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
