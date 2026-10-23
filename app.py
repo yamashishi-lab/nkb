@@ -1257,9 +1257,8 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0) -> dict:
             sk = str(it.get("speaker_key", "NEXUS")).upper()
             turns.append({"speaker": AI_ROSTER.get(sk, f"👑 {sk}"), "score": int(it.get("score", fs)), "tone": it.get("tone", "normal"), "text": it.get("text", "")})
 
-    # 修正完了箇所（内側のダブルクォーテーションをシングルクォーテーションに変更）
     v_html = (
-        f'<div style="margin-bottom:5px;"><b>🔥 銘柄総合期待度：</b><span style="color:#fde047;font-size:14px;font-weight:900;">{r["expect_pct"]}%</span> ｜ <b>🏛️ 機関ミクロ構造：</b><span style="color:#a7f3d0;font-weight:800;">{r["ms_regime"]}（Kyle吸収 {r["kyle_stealth"]}% ／ Hurst指数 {r["hurst"]}）</span></div>'
+        f'<div style="margin-bottom:5px;"><b>🔥 銘柄総合期待度：</b><span style="color:#fde047;font-size:14px;font-weight:900;">{r["expect_pct"]}%</span> ｜ <b>🏛️ 機関ミクロ構造：</b><span style="color:#a7f3d0;font-weight:800;">{r["ms_regime']}（Kyle吸収 {r["kyle_stealth"]}% ／ Hurst指数 {r["hurst"]}）</span></div>'
         f'<div style="margin-bottom:5px;"><b>⚛️ 量子波動ステータス：</b><span style="color:#e9d5ff;font-weight:800;">{r["q_state"]}（量子Q {r["q_score"]}点 ／ トンネル突破率 {r["q_tunnel"]}%）</span></div>'
         f'<div style="margin-bottom:5px;"><b>🧬 採用買い方アルゴリズム：</b><span style="color:#38bdf8;font-weight:800;">{st_info["algo_name"]}</span></div>'
         f'<div style="margin-bottom:5px;"><b>⚡ プロ向け執行プラン：</b>{st_info["step_plan"]} ｜ 🎯利確 <b>{r["tp_price"]}(+{r["tp_pct"]}%)</b> ／ 🛡️損切 <b>{r["sl_price"]}({r["sl_pct"]}%)</b></div>'
@@ -1331,7 +1330,7 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
         f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>基準VWAP: <b>{r["vwap_price"]}</b></span></div>'
         f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 🏛️ 機関ミクロ構造(Kyleλ・Hurst) ＆ 買い方戦略詳細（タップで開閉）</summary>'
         f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:5px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br><span style="color:#a7f3d0;">{r["ms_regime"]}</span> ｜ <span style="color:#e9d5ff;">{r["q_state"]}</span><br>{st_info["core_logic"]}<br><b>▶ 買い方執行手順:</b> {st_info["step_plan"]}</div>'
-        f'<div class="metrics-row"><span>期待度:{r["expect_pct"]}%</span><span>量子Q:{r["q_score"]}点</span><span>機関ミクロ:{r["ms_score"]}点</span><span>Kyle吸収:{r["kyle_stealth"]}%</span><span>Hurst指数:{r["hurst"]}</span><span>LULD引力:{r["luld_magnet"]}%</span><span>OFI:{r["ofi_z"]:+.2f}σ</span><span>95%CVaR:-{r["cvar95"]}%</span></div>'
+        f'<div class="metrics-row"><span>期待度:{r["expect_pct"]}%</span><span>量子Q:{r["q_score"]}点</span><span>機関ミクロ:{r["ms_score"]}点</span><span>Kyle吸収:{r["kyle_stealth"]}%</span><span>Hurst指数:{r["hurst"]}</span><span>LULD引力:{r["luld_magnet"]}🥣</span><span>OFI:{r["ofi_z"]:+.2f}σ</span><span>95%CVaR:-{r["cvar95"]}%</span></div>'
         f'</details></div>'
     )
     st.markdown(card_html, unsafe_allow_html=True)
@@ -1378,7 +1377,7 @@ st.markdown(
 sel_b = st.pills("アルゴリズムON/OFF", list(BOOST_MAP.keys()), default=list(BOOST_MAP.keys()), selection_mode="multi", label_visibility="collapsed") if hasattr(st, "pills") else st.multiselect("アルゴリズムON/OFF", list(BOOST_MAP.keys()), default=list(BOOST_MAP.keys()), label_visibility="collapsed")
 ac_b = {BOOST_MAP[k] for k in (sel_b or [])}
 
-with st.spinner("⚛️ 量子波動関数 ψ(x,t) ＆ 機関ミクロ構造(Kyle-λ・Hurst)を高速計算中..."):
+with st.spinner("⚛️ 量子波動関数 ψ(x,t) ＆ 機関ミクロ構造(Kyleλ・Hurst)を高速計算中..."):
     g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b)
 
 if st.session_state.get("navigation_page") == "NEWS_DETAIL":
