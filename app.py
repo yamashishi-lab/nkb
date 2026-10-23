@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.text import MIMEText
 from datetime import datetime
 
+# st.set_page_configは最初に1度だけ呼び出す
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
@@ -1259,7 +1260,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0) -> dict:
 
     v_html = (
         f'<div style="margin-bottom:5px;"><b>🔥 銘柄総合期待度：</b><span style="color:#fde047;font-size:14px;font-weight:900;">{r["expect_pct"]}%</span> ｜ <b>🏛️ 機関ミクロ構造：</b><span style="color:#a7f3d0;font-weight:800;">{r["ms_regime']}（Kyle吸収 {r["kyle_stealth"]}% ／ Hurst指数 {r["hurst']}）</span></div>'
-        f'<div style="margin-bottom:5px;"><b>⚛️ 量子波動ステータス：</b><span style="color:#e9d5ff;font-weight:800;">{r["q_state"]}（量子Q {r["q_score"]}点 ／ トンネル突破率 {r["q_tunnel']}%）</span></div>'
+        f'<div style="margin-bottom:5px;"><b>⚛️ 量子波動ステータス：</b><span style="color:#e9d5ff;font-weight:800;">{r["q_state"]}（量子Q {r["q_score"]}点 ／ トンネル突破率 {r["q_tunnel"]}%）</span></div>'
         f'<div style="margin-bottom:5px;"><b>🧬 採用買い方アルゴリズム：</b><span style="color:#38bdf8;font-weight:800;">{st_info["algo_name"]}</span></div>'
         f'<div style="margin-bottom:5px;"><b>⚡ プロ向け執行プラン：</b>{st_info["step_plan"]} ｜ 🎯利確 <b>{r["tp_price"]}(+{r["tp_pct"]}%)</b> ／ 🛡️損切 <b>{r["sl_price"]}({r["sl_pct"]}%)</b></div>'
         f'<div class="beginner-action-box">{st_info["beginner_html"]}</div>'
