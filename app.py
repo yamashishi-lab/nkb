@@ -1283,12 +1283,29 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0) -> dict:
             sk = str(it.get("speaker_key", "NEXUS")).upper()
             turns.append({"speaker": AI_ROSTER.get(sk, f"👑 {sk}"), "score": int(it.get("score", fs)), "tone": it.get("tone", "normal"), "text": it.get("text", "")})
 
+    r_name = r['name']
+    r_expect = r['expect_pct']
+    r_ms_regime = r['ms_regime']
+    r_kyle = r['kyle_stealth']
+    r_hurst = r['hurst']
+    r_q_state = r['q_state']
+    r_q_score = r['q_score']
+    r_q_tunnel = r['q_tunnel']
+    st_algo = st_info['algo_name']
+    st_plan = st_info['step_plan']
+    r_tp_price = r['tp_price']
+    r_tp_pct = r['tp_pct']
+    r_sl_price = r['sl_price']
+    r_sl_pct = r['sl_pct']
+    st_beginner = st_info['beginner_html']
+
     v_html = (
-        f'<div style="margin-bottom:5px;"><b>🔥 『{r["name"]}』総合期待度：</b><span style="color:#fde047;font-size:14px;font-weight:900;">{r["expect_pct"]}%</span> ｜ <b>🏛️ 機関ミクロ構造：</b><span style="color:#a7f3d0;font-weight:800;">{r["ms_regime"]}（Kyle吸収 {r["kyle_stealth"]}% ／ Hurst指数 {r["hurst']}）</span></div>'
-        f'<div style="margin-bottom:5px;"><b>⚛️ 量子波動ステータス：</b><span style="color:#e9d5ff;font-weight:800;">{r["q_state"]}（量子Q {r["q_score"]}点 ／ トンネル突破率 {r["q_tunnel"]}%）</span></div>'
-        f'<div style="margin-bottom:5px;"><b>🧬 採用買い方アルゴリズム：</b><span style="color:#38bdf8;font-weight:800;">{st_info["algo_name"]}</span></div>'
-        f'<div style="margin-bottom:5px;"><b>⚡ プロ向け執行プラン：</b>{st_info["step_plan"]} ｜ 🎯利確 <b>{r["tp_price"]}(+{r["tp_pct"]}%)</b> ／ 🛡️損切 <b>{r["sl_price"]}({r["sl_pct"]}%)</b></div>'
-        f'<div class="beginner-action-box">{st_info["beginner_html"]}</div>'
+        f'<div style="margin-bottom:5px;"><b>🔥 『{r_name}』総合期待度：</b><span style="color:#fde047;font-size:14px;font-weight:900;">{r_expect}%</span> ｜ '
+        f'<b>🏛️ 機関ミクロ構造：</b><span style="color:#a7f3d0;font-weight:800;">{r_ms_regime}（Kyle吸収 {r_kyle}% ／ Hurst指数 {r_hurst}）</span></div>'
+        f'<div style="margin-bottom:5px;"><b>⚛️ 量子波動ステータス：</b><span style="color:#e9d5ff;font-weight:800;">{r_q_state}（量子Q {r_q_score}点 ／ トンネル突破率 {r_q_tunnel}%）</span></div>'
+        f'<div style="margin-bottom:5px;"><b>🧬 採用買い方アルゴリズム：</b><span style="color:#38bdf8;font-weight:800;">{st_algo}</span></div>'
+        f'<div style="margin-bottom:5px;"><b>⚡ プロ向け執行プラン：</b>{st_plan} ｜ 🎯利確 <b>{r_tp_price}(+{r_tp_pct}%)</b> ／ 🛡️損切 <b>{r_sl_price}({r_sl_pct}%)</b></div>'
+        f'<div class="beginner-action-box">{st_beginner}</div>'
     )
     return {"final_score": fs, "dialogue": turns, "verdict_html": v_html}
 
