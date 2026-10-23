@@ -200,33 +200,67 @@ def inject_css():
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
     /* ─────────────────────────────────────────────────────────────
-       Streamlit純正ヘッダーおよび左上サイドバー開閉アイコンの完全可視化＆クリック保証
+       サイドバー開閉ボタンの強制表示 ＆ スタイリング（確実な可視化とクリック保証）
        ───────────────────────────────────────────────────────────── */
     header[data-testid="stHeader"] {
         background: transparent !important;
-        pointer-events: none !important; /* 背景透過＆クリック通過（下の要素を邪魔しない） */
-        z-index: 999990 !important;
+        pointer-events: none !important;
+        z-index: 1000000 !important;
     }
-
+    
+    /* ヘッダー内部の要素をクリック可能に復元 */
     header[data-testid="stHeader"] * {
-        pointer-events: auto !important; /* ヘッダー内の要素（ボタン等）はクリック有効 */
+        pointer-events: auto !important;
     }
 
-    /* 左上の標準サイドバー開閉ボタン (バージョン差異対応) */
+    /* 開いた状態・閉じた状態の双方のサイドバー開閉ボタンを強制可視化 */
     div[data-testid="collapsedControl"],
     div[data-testid="stSidebarCollapsedControl"],
     button[data-testid="stSidebarCollapseButton"],
-    button[kind="header"] {
+    button[data-testid="baseButton-headerNoPadding"],
+    button[kind="headerNoPadding"],
+    button[aria-label*="sidebar" i],
+    button[aria-label*="Sidebar" i] {
         display: inline-flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
         cursor: pointer !important;
         z-index: 2147483647 !important;
-        position: relative !important;
+        position: fixed !important;
+        top: 0.5rem !important;
+        left: 0.5rem !important;
+        background: rgba(15, 23, 42, 0.85) !important;
+        border: 1px solid rgba(56, 189, 248, 0.4) !important;
+        border-radius: 8px !important;
+        width: 36px !important;
+        height: 36px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+        transition: all 0.2s ease !important;
     }
 
-    /* 右上の設定メニューのみ非表示 */
+    /* アイコン（SVG）が背景と同化して消えないようシアン色で光らせる */
+    div[data-testid="collapsedControl"] svg,
+    div[data-testid="stSidebarCollapsedControl"] svg,
+    button[data-testid="stSidebarCollapseButton"] svg,
+    button[aria-label*="sidebar" i] svg {
+        color: #38bdf8 !important;
+        fill: #38bdf8 !important;
+        stroke: #38bdf8 !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    div[data-testid="collapsedControl"]:hover,
+    button[data-testid="stSidebarCollapseButton"]:hover {
+        background: rgba(56, 189, 248, 0.2) !important;
+        border-color: #38bdf8 !important;
+    }
+
+    /* 右上の不要な設定ツールバーのみ非表示 */
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] {
         display: none !important;
@@ -236,7 +270,7 @@ def inject_css():
     section[data-testid="stSidebar"] {
         background-color: #0b0f19 !important;
         border-right: 1px solid rgba(148,163,184,0.15) !important;
-        z-index: 999995 !important;
+        z-index: 1000005 !important;
     }
 
     div[data-baseweb="popover"],
@@ -252,7 +286,7 @@ def inject_css():
     }
     
     .block-container {
-        padding-top: 3.6rem !important;
+        padding-top: 3.8rem !important;
         padding-bottom: 3rem !important;
         padding-left: 0.75rem !important;
         padding-right: 0.75rem !important;
@@ -284,14 +318,14 @@ def inject_css():
         text-overflow: ellipsis;
     }
     
-    /* 上部固定ナビゲーションバー（左上アイコンと物理的に被らないよう配置） */
+    /* 上部固定ナビゲーションバー（左上アイコンと絶対に重ならないよう配慮） */
     .fixed-top-nav-bar {
         position: fixed !important;
         top: 0.45rem !important;
-        left: 55% !important;
+        left: calc(50% + 20px) !important;
         transform: translateX(-50%) !important;
         z-index: 999980 !important;
-        width: min(510px, calc(100vw - 8.5rem)) !important;
+        width: min(500px, calc(100vw - 6rem)) !important;
         background: rgba(5,8,17,0.94) !important;
         backdrop-filter: blur(14px) !important;
         border: none !important;
@@ -844,6 +878,42 @@ components.html(
     (function(){{
         const doc = window.parent.document;
         
+        function enforceSidebarButton(){{
+            try {{
+                const btnSelectors = [
+                    'div[data-testid="collapsedControl"]',
+                    'div[data-testid="stSidebarCollapsedControl"]',
+                    'button[data-testid="stSidebarCollapseButton"]',
+                    'button[data-testid="baseButton-headerNoPadding"]',
+                    'button[aria-label*="sidebar" i]',
+                    'button[aria-label*="Sidebar" i]'
+                ];
+                
+                let foundBtn = null;
+                for (let sel of btnSelectors) {{
+                    const el = doc.querySelector(sel);
+                    if(el) {{
+                        foundBtn = el;
+                        el.style.setProperty('display', 'inline-flex', 'important');
+                        el.style.setProperty('visibility', 'visible', 'important');
+                        el.style.setProperty('opacity', '1', 'important');
+                        el.style.setProperty('pointer-events', 'auto', 'important');
+                        el.style.setProperty('z-index', '2147483647', 'important');
+                        el.style.setProperty('position', 'fixed', 'important');
+                        el.style.setProperty('top', '8px', 'important');
+                        el.style.setProperty('left', '8px', 'important');
+                        
+                        const svg = el.querySelector('svg');
+                        if(svg) {{
+                            svg.style.setProperty('color', '#38bdf8', 'important');
+                            svg.style.setProperty('fill', '#38bdf8', 'important');
+                            svg.style.setProperty('stroke', '#38bdf8', 'important');
+                        }}
+                    }}
+                }}
+            }} catch(e){{}}
+        }}
+
         function fixTopNav(){{
             try {{
                 const marker = doc.querySelector('.top-nav-marker');
@@ -859,7 +929,10 @@ components.html(
             }} catch(e){{}}
         }}
 
+        enforceSidebarButton();
         fixTopNav();
+        setTimeout(enforceSidebarButton, 80);
+        setTimeout(enforceSidebarButton, 300);
         setTimeout(fixTopNav, 100);
 
         function scrollToTopAbsolute(){{
@@ -959,7 +1032,7 @@ DYNAMIC_DYNAMIC_POOLS = {
     "宇宙・次世代": [
         {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星"},
         {"code": "186A.T", "name": "アストロスケール", "theme": "宇宙デブリ除去"},
-        {"code": "9348.T", "name": "ispace", "theme": "月面輸送"},
+        {"code": "9348.T", "ispace", "theme": "月面輸送"},
         {"code": "9412.T", "name": "スカパーJSAT", "theme": "衛星・防衛宇宙"},
         {"code": "7203.T", "name": "トヨタ自動車", "theme": "全固体電池"},
         {"code": "TSLA", "name": "テスラ (米)", "theme": "自動運転・ロボ"},
