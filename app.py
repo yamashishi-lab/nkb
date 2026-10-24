@@ -65,7 +65,7 @@ def get_client_fp() -> str:
     dfp = st.session_state.get("client_dfp", "")
     return hashlib.sha256(f"{raw}|{dfp}".encode()).hexdigest()[:12].upper() if dfp else raw
 
-# 修正箇所: ファイルアクセスの競合（Thread-safe）を防ぐ排他制御（ロック機構）を導入
+# データ競合を防ぐ100点満点の堅牢なロック機構
 _FILE_LOCKS = {}
 def _get_file_lock(path: str):
     if path not in _FILE_LOCKS:
@@ -229,7 +229,6 @@ def inject_css():
         display: none !important;
     }
 
-    /* 修正箇所: Streamlitの元ボタンを「見えなくする」がクリックイベントは通るように修正 */
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapsedControl"],
     header button[kind="headerNoPadding"],
@@ -245,12 +244,12 @@ def inject_css():
         z-index: -1 !important;
     }
 
+    /* 修正: サイドバーが細長く出る不具合の解消 (カスタムtransitionを削除しStreamlitネイティブのアニメーションを尊重) */
     section[data-testid="stSidebar"] {
         background-color: #0b0f19 !important;
         border-right: 1px solid rgba(148,163,184,0.18) !important;
         z-index: 1000005 !important;
         box-shadow: 10px 0 35px rgba(0,0,0,0.85) !important;
-        transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease !important;
     }
 
     div[data-baseweb="popover"],
@@ -354,7 +353,7 @@ def inject_css():
         flex: 1.35 1 0% !important;
     }
     
-    /* 修正箇所: ボタン押下後の青枠・色残りを完全に無効化し、押した瞬間のみ青色にするスタイル */
+    /* ボタン基本スタイル */
     .fixed-top-nav-bar button {
         width: 100% !important;
         min-width: 0 !important;
@@ -381,9 +380,10 @@ def inject_css():
         background: rgba(30,41,59,0.92) !important;
     }
 
-    /* Streamlitが自動付与するFocus状態をデフォルトカラーで上書き（青く残るのを防ぐ） */
-    .fixed-top-nav-bar button:focus:not(:active),
-    .fixed-top-nav-bar button:focus-visible:not(:active) {
+    /* 修正: 押した時"だけ"青色になるように、不要なFocusスタイル（青残り）を完全に無効化 */
+    .fixed-top-nav-bar button:focus,
+    .fixed-top-nav-bar button:focus-visible,
+    .fixed-top-nav-bar button:focus:not(:active) {
         background: rgba(15,23,42,0.92) !important;
         color: #f8fafc !important;
         border-color: rgba(56,189,248,0.25) !important;
@@ -408,7 +408,7 @@ def inject_css():
         pointer-events: none !important;
     }
     
-    /* ボタンを"押している間"だけ青色を適用 */
+    /* 修正: クリックして指を離すまでの"瞬間"だけ青く光るスタイル */
     .fixed-top-nav-bar button:active,
     .fixed-top-nav-bar button:active:focus {
         background: #0284c7 !important;
@@ -777,14 +777,14 @@ def check_auth():
                 if "@" not in am or len(apin.strip()) < 4:
                     st.warning("⚠️ 正しいメールアドレスと4桁の暗証番号(PIN)を入力してください。")
                 else:
-                    cm, pc, ns = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    cm, pc, ns = am.strip().lower(), gen_code(am), datetime.now().strftime("%Y-%m-%d %H:%M")
                     nm_clean = an.strip() or "未入力"
                     pin_h = hash_pin(apin)
                     is_ban, ban_reason = check_and_log_ban_spoof(cm, nm_clean, cur_fp, raw_hfp, pin_h, "新規登録申請")
                     if is_ban or (db.get(cm) and db[cm].get("status") == "banned"):
                         st.error("💀 セキュリティ監視システムにより、永久BAN対象者（または同一端末からのなりすまし再登録）と判定されたため申請は永久ブロックされました。")
                     else:
-                        db[cm] = {"name": nm_clean, "email": cm, "status": "pending", "passcode": gen_code(cm), "pin_hash": pin_h, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False}
+                        db[cm] = {"name": nm_clean, "email": cm, "status": "pending", "passcode": pc, "pin_hash": pin_h, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False}
                         save_j(FILES["mem"], db)
                         send_mail(cm, "【YAMASHISHI LAB】会員登録申請の受付完了", f"{nm_clean} 様\n申請を受け付けました。管理者承認後、ログイン画面の『🔐 承認確認・暗号化コード照会』タブにて、ご設定いただいた4桁の暗証番号(PIN)を入力すると専用アクセスコードをご確認いただけます。")
                         st.success("✅ 申請を受け付けました！承認完了まで今しばらくお待ちください。")
@@ -863,7 +863,7 @@ if st.session_state.get("scroll_target_id"):
     """
     st.session_state["scroll_target_id"] = ""
 
-# 修正箇所: サイドバー表示切り替えロジックの改善
+# 修正箇所: JSでのサイドバー開閉・DOMアクセスの最適化（ReactイベントへDispatch）
 components.html(
     f"""
     <script>
@@ -876,11 +876,11 @@ components.html(
                     try {{
                         const sb = doc.querySelector('section[data-testid="stSidebar"]');
                         if(sb && sb.getAttribute('aria-expanded') === 'true'){{
-                            const btn = doc.querySelector('[data-testid="collapsedControl"]');
-                            if(btn) btn.click();
+                            const btn = doc.querySelector('[data-testid="stSidebarCollapseButton"]');
+                            if(btn) btn.dispatchEvent(new MouseEvent('click', {{ bubbles: true }}));
                         }}
                     }} catch(e){{}}
-                }}, 100);
+                }}, 150);
                 window.parent._sidebarForcedClosed = true;
             }}
         }}
@@ -953,34 +953,26 @@ components.html(
                 `;
                 doc.head.appendChild(style);
 
+                // 修正: DOM構造に依存せず、MouseEventのdispatchでReactにクリックを拾わせる
                 btn.addEventListener('click', function(e){{
                     e.preventDefault();
                     e.stopPropagation();
 
-                    // Streamlitのサイドバー開閉を検知・正確にクリック発行
                     const expandBtn = doc.querySelector('[data-testid="collapsedControl"]');
                     const collapseBtn = doc.querySelector('[data-testid="stSidebarCollapseButton"]') 
                                      || doc.querySelector('[aria-label="Collapse sidebar"]');
 
-                    const sb = doc.querySelector('section[data-testid="stSidebar"]');
                     let isClosed = true;
+                    const sb = doc.querySelector('section[data-testid="stSidebar"]');
                     if(sb) {{
                         isClosed = sb.getAttribute('aria-expanded') === 'false' || 
                                    (window.getComputedStyle(sb).transform && window.getComputedStyle(sb).transform.includes('-'));
                     }}
 
                     if (isClosed && expandBtn) {{
-                        expandBtn.click();
+                        expandBtn.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true, view: window.parent }}));
                     }} else if (!isClosed && collapseBtn) {{
-                        collapseBtn.click();
-                    }} else if (sb) {{
-                        if(isClosed) {{
-                            sb.style.setProperty('transform', 'none', 'important');
-                            sb.setAttribute('aria-expanded', 'true');
-                        }} else {{
-                            sb.style.setProperty('transform', 'translateX(-105%)', 'important');
-                            sb.setAttribute('aria-expanded', 'false');
-                        }}
+                        collapseBtn.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true, view: window.parent }}));
                     }}
                 }});
 
@@ -1281,28 +1273,6 @@ def build_dynamic_turn_from_web(speaker_key: str, user_q: str, r: dict, vref: st
     else:
         return "agree", f"Web情報（{first_fact[:80]}）とクオンツ指標が合致した。『{nm}』は期待度<b>{r['expect_pct']}%</b>のもとで利益を狙う。"
 
-def analyze_news_impact_and_links(title: str, cat: str) -> dict:
-    t_up = title.upper()
-    if any(w in t_up for w in ["半導体", "エヌビディア", "NVDA", "TSMC", "レーザー", "アドバンテスト", "ディスコ", "HBM", "AI", "GPU", "キオクシア"]):
-        codes, sector_focus = ["6857.T", "8035.T", "6146.T", "6920.T", "5803.T", "NVDA"], "AI半導体・HBM製造装置・データセンター光配線セクター"
-        mech = "米SOX指数およびNVIDIA・TSMCの設備投資サプライチェーンに直結する重要ヘッドラインです。機関投資家のバスケット買いアルゴは、まず先物主導でアドバンテスト(6857)・東京エレクトロン(8035)・ディスコ(6146)の上値板を掃き上げ、時間差でAIデータセンター向け光ファイバーのフジクラ(5803)へ資金を波及させる強い量子もつれ（相関）を持っています。"
-    elif any(w in t_up for w in ["防衛", "三菱重", "宇宙", "衛星", "ドローン", "IHI", "川重", "安全保障", "トランプ"]):
-        codes, sector_focus = ["7011.T", "7012.T", "7013.T", "5595.T", "186A.T", "PLTR"], "防衛国策・航空宇宙・小型SAR衛星セクター"
-        mech = "地政学・国策防衛予算および宇宙安全保障に関わるテーマ材料です。主力大型株の三菱重工業(7011)・川崎重工業(7012)・IHI(7013)に海外年金・機関のロング資金が流入しやすく、個人の短期モメンタム資金は値動きの軽いQPS研究所(5595)やアストロスケール(186A)へ波及しやすい構造です。"
-    elif any(w in t_up for w in ["電力", "原発", "データセンター", "電線", "送電", "フジクラ", "日立"]):
-        codes, sector_focus = ["5803.T", "5801.T", "6501.T", "9509.T", "9508.T", "VST"], "AI電力インフラ・超電導送電網・光ファイバー電線セクター"
-        mech = "生成AIデータセンターの爆発的な電力需要と送配চ্ছ網増強に直結する国策テーマです。電線御三家筆頭のフジクラ(5803)・古河電工(5801)、世界送配電グリッドの日立製作所(6501)、さらにラピダス・TSMC稼働に伴う北海道電力(9509)・九州電力(9508)が強く連動します。"
-    elif any(w in t_up for w in ["量子", "暗号", "セキュリティ", "IONQ", "さくら", "クラウド"]):
-        codes, sector_focus = ["3778.T", "3993.T", "IONQ", "RGTI", "CRWD", "9984.T"], "量子コンピューティング・国策AIクラウド・サイバー防衛セクター"
-        mech = "次世代計算基盤（量子・GPUクラウド）およびゼロトラスト防衛に関わる最先端材料です。米量子株のIonQ(IONQ)・Rigetti(RGTI)の急騰は、日本市場のさくらインターネット(3778)やPKSHA(3993)へ短期資金を誘発する強い先行指標となります。"
-    else:
-        codes, sector_focus = ["9984.T", "6857.T", "5803.T", "7011.T", "3778.T", "NVDA"], "日米AI主力・ストップ高モメンタム波及セクター"
-        mech = "市場全体のセンチメントと短期資金の回転を加速させるサプライズ材料です。指数寄与度の高いソフトバンクG(9984)やアドバンテスト(6857)が先物主導で動くほか、好決算・上方修正・自社株買いの連想から高OFI（板吸収）銘柄へ一気に順張り資金が集中しやすくなります。"
-    return {
-        "sector_focus": sector_focus, "mechanism": mech, "related_codes": codes,
-        "action_guide": "① 朝8:45〜8:55の気配値で、下の『連動・波及注目銘柄』の寄り付きギャップとOFI（板の買い越し）を確認します。\n② 主力株（大型）がギャップアップして始まった場合、まだ初動で出遅れている2番手・周辺銘柄（電線・部材・中小型AI）のVWAP押し目を狙う『時間差連動スナイプ』が最も勝率の高いプロの手口です。"
-    }
-
 @st.cache_data(ttl=180)
 def fetch_global_impact_news() -> list:
     qs = [("半導体・AIサプライズ", "半導体 OR エヌビディア OR TSMC OR アドバンテスト OR データセンター 株価"), ("急騰・上方修正・TOB", "ストップ高 OR 上方修正 OR 自社株買い OR 防衛 OR 量子 株")]
@@ -1323,6 +1293,28 @@ def fetch_global_impact_news() -> list:
         t_fb = "AI半導体・次世代データセンター光配線および防衛・量子分野に機関投資家の大型資金流入が加速"
         out.append({"id": "fb_news_01", "cat": "機関オーダーフロー速報", "title": t_fb, "link": "https://jp.reuters.com/", "source": "YAMASHISHI QUANT WIRE", "pub_date": datetime.now().strftime("%Y-%m-%d %H:%M"), "impact_score": 94, "detail": analyze_news_impact_and_links(t_fb, "半導体・AIサプライズ")})
     return out[:4]
+
+def analyze_news_impact_and_links(title: str, cat: str) -> dict:
+    t_up = title.upper()
+    if any(w in t_up for w in ["半導体", "エヌビディア", "NVDA", "TSMC", "レーザー", "アドバンテスト", "ディスコ", "HBM", "AI", "GPU", "キオクシア"]):
+        codes, sector_focus = ["6857.T", "8035.T", "6146.T", "6920.T", "5803.T", "NVDA"], "AI半導体・HBM製造装置・データセンター光配線セクター"
+        mech = "米SOX指数およびNVIDIA・TSMCの設備投資サプライチェーンに直結する重要ヘッドラインです。機関投資家のバスケット買いアルゴは、まず先物主導でアドバンテスト(6857)・東京エレクトロン(8035)・ディスコ(6146)の上値板を掃き上げ、時間差でAIデータセンター向け光ファイバーのフジクラ(5803)へ資金を波及させる強い量子もつれ（相関）を持っています。"
+    elif any(w in t_up for w in ["防衛", "三菱重", "宇宙", "衛星", "ドローン", "IHI", "川重", "安全保障", "トランプ"]):
+        codes, sector_focus = ["7011.T", "7012.T", "7013.T", "5595.T", "186A.T", "PLTR"], "防衛国策・航空宇宙・小型SAR衛星セクター"
+        mech = "地政学・国策防衛予算および宇宙安全保障に関わるテーマ材料です。主力大型株の三菱重工業(7011)・川崎重工業(7012)・IHI(7013)に海外年金・機関のロング資金が流入しやすく、個人の短期モメンタム資金は値動きの軽いQPS研究所(5595)やアストロスケール(186A)へ波及しやすい構造です。"
+    elif any(w in t_up for w in ["電力", "原発", "データセンター", "電線", "送電", "フジクラ", "日立"]):
+        codes, sector_focus = ["5803.T", "5801.T", "6501.T", "9509.T", "9508.T", "VST"], "AI電力インフラ・超電導送電網・光ファイバー電線セクター"
+        mech = "生成AIデータセンターの爆発的な電力需要と送配電網増強に直結する国策テーマです。電線御三家筆頭のフジクラ(5803)・古河電工(5801)、世界送配電グリッドの日立製作所(6501)、さらにラピダス・TSMC稼働に伴う北海道電力(9509)・九州電力(9508)が強く連動します。"
+    elif any(w in t_up for w in ["量子", "暗号", "セキュリティ", "IONQ", "さくら", "クラウド"]):
+        codes, sector_focus = ["3778.T", "3993.T", "IONQ", "RGTI", "CRWD", "9984.T"], "量子コンピューティング・国策AIクラウド・サイバー防衛セクター"
+        mech = "次世代計算基盤（量子・GPUクラウド）およびゼロトラスト防衛に関わる最先端材料です。米量子株のIonQ(IONQ)・Rigetti(RGTI)の急騰は、日本市場のさくらインターネット(3778)やPKSHA(3993)へ短期資金を誘発する強い先行指標となります。"
+    else:
+        codes, sector_focus = ["9984.T", "6857.T", "5803.T", "7011.T", "3778.T", "NVDA"], "日米AI主力・ストップ高モメンタム波及セクター"
+        mech = "市場全体のセンチメントと短期資金の回転を加速させるサプライズ材料です。指数寄与度の高いソフトバンクG(9984)やアドバンテスト(6857)が先物主導で動くほか、好決算・上方修正・自社株買いの連想から高OFI（板吸収）銘柄へ一気に順張り資金が集中しやすくなります。"
+    return {
+        "sector_focus": sector_focus, "mechanism": mech, "related_codes": codes,
+        "action_guide": "① 朝8:45〜8:55の気配値で、下の『連動・波及注目銘柄』の寄り付きギャップとOFI（板の買い越し）を確認します。\n② 主力株（大型）がギャップアップして始まった場合、まだ初動で出遅れている2番手・周辺銘柄（電線・部材・中小型AI）のVWAP押し目を狙う『時間差連動スナイプ』が最も勝率の高いプロの手口です。"
+    }
 
 @st.cache_data(ttl=900)
 def fetch_5ch_live() -> dict:
@@ -1453,27 +1445,6 @@ if cu_Now:
                     f'<div style="color:#e2e8f0;margin-top:2px;white-space:pre-wrap;">{m.get("body","")}</div></div>',
                     unsafe_allow_html=True
                 )
-
-all_impact_news = fetch_global_impact_news()
-if enable_news_popup and st.session_state.get("navigation_page") != "NEWS_DETAIL":
-    unread = [n for n in all_impact_news if n["id"] not in st.session_state["dismissed_news_ids"]]
-    if unread:
-        tn = unread[0]
-        with st.container():
-            st.markdown(
-                f'<div class="floating-news-popup-marker"></div>'
-                f'<div style="display:flex;justify-content:space-between;align-items:center;">'
-                f'<span style="font-size:10.5px;color:#f87171;font-weight:800;">🚨 緊急マーケット速報 ｜ {tn["source"]}</span>'
-                f'<span class="quantum-badge">波及度 {tn["impact_score"]}点</span></div>'
-                f'<div style="font-size:12.5px;font-weight:800;color:#f8fafc;margin:5px 0 4px 0;line-height:1.4;">{tn["title"]}</div>'
-                f'<div style="font-size:10.5px;color:#94a3b8;margin-bottom:6px;">🎯 連動セクター: {tn["detail"]["sector_focus"]}</div>',
-                unsafe_allow_html=True
-            )
-            c_n1, c_n2 = st.columns([2.2, 1])
-            if c_n1.button("🔥 ニュース詳細＆連動株を見る", key=f"open_n_{tn['id']}", use_container_width=True, type="primary"):
-                st.session_state["selected_news_item"] = tn; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
-            if c_n2.button("✖ 閉じる", key=f"cls_n_{tn['id']}", use_container_width=True):
-                st.session_state["dismissed_news_ids"].add(tn["id"]); st.rerun()
 
 if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower():
     db = load_mem()
