@@ -252,7 +252,7 @@ DYNAMIC_DYNAMIC_POOLS = {
     "AI・防衛・主力": [
         {"code": "9984.T", "name": "ソフトバンクG", "theme": "AI投資・先物主役"},
         {"code": "3778.T", "name": "さくらネット", "theme": "国策GPUクラウド"},
-        {"code": "7011.T", "name": "三菱重工業", "theme": "防衛・宇宙国策主力"},
+        {"07011.T": "7011.T", "code": "7011.T", "name": "三菱重工業", "theme": "防衛・宇宙国策主力"},
         {"code": "7012.T", "name": "川崎重工業", "theme": "防衛・航空エンジン"},
         {"code": "7013.T", "name": "IHI", "theme": "航空宇宙・防衛"},
         {"code": "3993.T", "name": "PKSHA", "theme": "AIアルゴリズム"},
@@ -371,20 +371,31 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
     return {"ms_score": ms_score, "hurst": hurst, "kyle_stealth": kyle_stealth, "luld_magnet": luld_magnet, "ms_regime": ms_regime}
 
 # ==========================================
-# 7. CSS（ボタン横一列・タップ青発光・上部見切れ完全解消）
+# 7. CSS（緑の線完全除去・固定追従ナビ・青発光・見切れ修復）
 # ==========================================
 def inject_css():
     css = """
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
-    html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700;800&display=swap');
     
-    header[data-testid="stHeader"] {
+    /* 画面最上部の緑色/装飾バー・プログレスラインを完全消去 */
+    header, [data-testid="stDecoration"], [data-testid="stHeader"], div[class*="stDecoration"] {
         background: transparent !important;
-        pointer-events: none !important;
-        height: 2.8rem !important;
-        z-index: 999990 !important;
+        background-color: transparent !important;
+        background-image: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        height: 0px !important;
+        display: none !important;
     }
     
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: 14px;
+        background-color: #040711;
+        color: #e2e8f0;
+    }
+
+    /* サイドバー開閉ボタンの配置担保 */
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapsedControl"] {
         opacity: 1 !important;
@@ -392,145 +403,184 @@ def inject_css():
         visibility: visible !important;
         position: fixed !important;
         left: 10px !important;
-        top: 6px !important;
-        z-index: 10000005 !important;
-        pointer-events: auto !important;
+        top: 10px !important;
+        z-index: 999999 !important;
         background: rgba(15,23,42,0.92) !important;
         border: 1px solid rgba(56,189,248,0.4) !important;
         border-radius: 8px !important;
-        padding: 4px !important;
+        padding: 5px !important;
         color: #38bdf8 !important;
     }
 
     section[data-testid="stSidebar"] {
-        background-color: #0b0f19 !important;
+        background-color: #090d16 !important;
         border-right: 1px solid rgba(148,163,184,0.18) !important;
-        z-index: 10000010 !important;
-        box-shadow: 10px 0 35px rgba(0,0,0,0.85) !important;
+        z-index: 1000000 !important;
     }
 
     .block-container {
-        padding-top: 3.2rem !important;
-        padding-bottom: 2.5rem !important;
+        padding-top: 4.8rem !important; /* 固定ナビバーが被らないように十分な余白 */
+        padding-bottom: 3rem !important;
         padding-left: 0.6rem !important;
         padding-right: 0.6rem !important;
-        max-width: 840px !important;
+        max-width: 860px !important;
     }
 
-    /* 上部固定横並びボタンバー */
-    .fixed-top-nav-bar {
+    /* 完全に固定追従し、サイドバーボタンとShareボタンの下で横一列に中央配置されるナビバー */
+    .fixed-floating-navbar-wrapper {
         position: fixed !important;
-        top: 6px !important;
+        top: 10px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        z-index: 9999999 !important;
-        width: min(390px, calc(100vw - 4.5rem)) !important;
-        background: rgba(8, 12, 22, 0.95) !important;
-        backdrop-filter: blur(14px) !important;
-        border: 1px solid rgba(56, 189, 248, 0.4) !important;
-        border-radius: 10px !important;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.85) !important;
-        padding: 3px 5px !important;
-        margin: 0 !important;
+        z-index: 99999 !important;
+        width: min(390px, calc(100vw - 80px)) !important;
         pointer-events: auto !important;
     }
 
-    /* 横一列強制コンテナ */
-    .fixed-top-nav-bar div[data-testid="stHorizontalBlock"] {
+    .fixed-floating-navbar-inner {
+        background: rgba(8, 13, 24, 0.94) !important;
+        backdrop-filter: blur(16px) !important;
+        border: 1px solid rgba(56, 189, 248, 0.35) !important;
+        border-radius: 12px !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.9), 0 0 15px rgba(56, 189, 248, 0.15) !important;
+        padding: 4px 6px !important;
+    }
+
+    /* Streamlitのカラムを強制的に1行で横並び */
+    .fixed-floating-navbar-inner div[data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
         align-items: center !important;
         justify-content: space-between !important;
-        gap: 5px !important;
+        gap: 6px !important;
         width: 100% !important;
     }
 
-    .fixed-top-nav-bar div[data-testid="column"],
-    .fixed-top-nav-bar div[data-testid="stColumn"] {
+    .fixed-floating-navbar-inner div[data-testid="column"],
+    .fixed-floating-navbar-inner div[data-testid="stColumn"] {
         flex: 1 1 0% !important;
         min-width: 0 !important;
         width: 33.33% !important;
     }
 
-    /* ボタンデザイン：タップ時のみネオンブルー */
-    .fixed-top-nav-bar button {
+    /* ナビボタンのスタイリング：通常は高級感あるダーク、押した瞬間のみネオンブルー発光 */
+    .fixed-floating-navbar-inner button {
         width: 100% !important;
-        height: 30px !important;
-        min-height: 30px !important;
-        padding: 0 2px !important;
-        border-radius: 6px !important;
-        background: #0f172a !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        padding: 0 4px !important;
+        border-radius: 8px !important;
+        background: linear-gradient(180deg, #111827 0%, #0b1120 100%) !important;
         color: #f1f5f9 !important;
         border: 1px solid rgba(148, 163, 184, 0.25) !important;
         cursor: pointer !important;
-        transition: transform 0.08s ease, background-color 0.08s ease, border-color 0.08s ease !important;
+        transition: transform 0.06s ease, background 0.06s ease, border-color 0.06s ease !important;
         user-select: none !important;
         -webkit-tap-highlight-color: transparent !important;
     }
 
-    .fixed-top-nav-bar button:active,
-    .fixed-top-nav-bar button:focus:active {
+    .fixed-floating-navbar-inner button p {
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.2px !important;
+        white-space: nowrap !important;
+        margin: 0 !important;
+        line-height: 30px !important;
+    }
+
+    /* タップ・クリック時のみ鮮烈なブルーに発光 */
+    .fixed-floating-navbar-inner button:active,
+    .fixed-floating-navbar-inner button:focus:active {
         background: #2563eb !important;
         color: #ffffff !important;
         border-color: #60a5fa !important;
-        box-shadow: 0 0 12px rgba(37,99,235,0.9) !important;
-        transform: scale(0.95) !important;
+        box-shadow: 0 0 14px rgba(37, 99, 235, 0.95) !important;
+        transform: scale(0.94) !important;
     }
 
-    .fixed-top-nav-bar button p {
-        font-size: 11px !important;
-        font-weight: 700 !important;
-        white-space: nowrap !important;
-        margin: 0 !important;
-        line-height: 28px !important;
+    /* ログイン画面の超洗練ヘッダー＆グリッド */
+    .login-brand-wrapper {
+        text-align: center;
+        padding: 30px 16px 22px 16px;
+        background: radial-gradient(circle at 50% 20%, rgba(56, 189, 248, 0.12), transparent 70%), linear-gradient(180deg, #0d1527 0%, #060a14 100%);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 16px;
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7);
+        margin-top: 10px;
+        margin-bottom: 20px;
+        position: relative;
+        overflow: hidden;
     }
-
+    .login-brand-wrapper::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 20%;
+        right: 20%;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #38bdf8, #a855f7, transparent);
+    }
     .brand-luxury {
-        font-family: 'Cinzel',serif !important;
-        font-size: clamp(15px,4vw,22px) !important;
-        font-weight: 800 !important;
-        letter-spacing: clamp(1px,0.5vw,2.5px) !important;
-        background: linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);
+        font-family: 'Cinzel', serif !important;
+        font-size: clamp(19px, 5.2vw, 27px) !important;
+        font-weight: 900 !important;
+        letter-spacing: 3px !important;
+        background: linear-gradient(90deg, #ffffff 0%, #38bdf8 55%, #c084fc 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        line-height: 1.2;
+        line-height: 1.15;
     }
     .brand-sub {
-        font-family: 'JetBrains Mono',monospace;
-        font-size: clamp(8px,2vw,10px);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: clamp(8px, 2vw, 10px);
         color: #64748b;
-        letter-spacing: 1.1px;
+        letter-spacing: 1.6px;
         text-transform: uppercase;
+        margin-top: 5px;
     }
-    
+    .login-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: rgba(56, 189, 248, 0.08);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        color: #38bdf8;
+        font-size: 9.5px;
+        font-weight: 700;
+        margin-top: 12px;
+        letter-spacing: 0.5px;
+    }
+
     .glass-header {
-        background: radial-gradient(circle at top right,rgba(168,85,247,0.12),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);
+        background: radial-gradient(circle at top right, rgba(168,85,247,0.12), transparent 60%), linear-gradient(145deg,#0f172a 0%,#070b14 100%);
         border: 1px solid rgba(148,163,184,0.18);
         border-radius: 12px;
-        padding: 11px 13px;
+        padding: 12px 14px;
         margin-bottom: 8px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.45);
     }
-    .rank-card,.search-result-card {
+    .rank-card, .search-result-card {
         background: linear-gradient(180deg,#0f172a 0%,#090d16 100%) !important;
         color: #f8fafc !important;
         border-radius: 12px;
-        padding: 12px 13px;
-        margin-bottom: 10px;
+        padding: 13px 14px;
+        margin-bottom: 12px;
         box-shadow: 0 8px 22px rgba(0,0,0,0.45);
         border: 1px solid rgba(148,163,184,0.16);
         border-left: 4px solid #38bdf8;
     }
     .prob-badge {
-        font-family: 'JetBrains Mono',monospace;
-        font-size: clamp(13px,3.6vw,16px);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: clamp(13px, 3.6vw, 16px);
         font-weight: 800;
         color: #38bdf8 !important;
     }
     .expect-badge {
-        font-family: 'JetBrains Mono',monospace;
-        font-size: clamp(13px,3.6vw,16px);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: clamp(13px, 3.6vw, 16px);
         font-weight: 900;
         color: #fde047 !important;
     }
@@ -552,7 +602,7 @@ def inject_css():
         font-size: 9.5px;
         font-weight: 800;
         margin-right: 4px;
-        background: linear-gradient(90deg,rgba(168,85,247,0.22),rgba(56,189,248,0.22));
+        background: linear-gradient(90deg, rgba(168,85,247,0.22), rgba(56,189,248,0.22));
         border: 1px solid rgba(168,85,247,0.55);
         color: #e9d5ff;
     }
@@ -563,18 +613,18 @@ def inject_css():
         font-size: 9.5px;
         font-weight: 800;
         margin-right: 4px;
-        background: linear-gradient(90deg,rgba(16,185,129,0.2),rgba(56,189,248,0.2));
+        background: linear-gradient(90deg, rgba(16,185,129,0.2), rgba(56,189,248,0.2));
         border: 1px solid rgba(16,185,129,0.55);
         color: #a7f3d0;
     }
     .winrate-bar {
         display: grid;
-        grid-template-columns: repeat(4,1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 5px;
         background: rgba(15,23,42,0.85) !important;
         border: 1px solid rgba(148,163,184,0.15);
         border-radius: 7px;
-        padding: 5px 4px;
+        padding: 6px 4px;
         margin-top: 6px;
         text-align: center;
     }
@@ -582,7 +632,7 @@ def inject_css():
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 4px 8px;
+        padding: 5px 9px;
         border-radius: 6px;
         font-size: 11px;
         font-weight: 800;
@@ -591,7 +641,7 @@ def inject_css():
     }
     .trade-plan-box {
         display: grid;
-        grid-template-columns: repeat(3,1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 4px;
         margin-top: 5px;
         background: rgba(2,6,23,0.7) !important;
@@ -632,12 +682,23 @@ def inject_css():
         gap: 4px 7px;
         margin-top: 5px;
         font-size: 10px;
-        font-family: 'JetBrains Mono',monospace;
+        font-family: 'JetBrains Mono', monospace;
         background: rgba(15,23,42,0.9) !important;
         padding: 5px 7px;
         border-radius: 5px;
         color: #cbd5e1;
     }
+    
+    /* 重大情報の埋め込みアラートカード（精度バッジの直下に配置） */
+    .catalyst-inline-card {
+        background: linear-gradient(135deg, rgba(220, 38, 38, 0.16) 0%, rgba(15, 23, 42, 0.95) 100%);
+        border: 1.5px solid #ef4444;
+        border-radius: 9px;
+        padding: 10px 12px;
+        margin: 7px 0 9px 0;
+        box-shadow: 0 4px 18px rgba(239, 68, 68, 0.25);
+    }
+
     .ai-council-box {
         background: #070b14;
         color: #f8fafc !important;
@@ -650,7 +711,7 @@ def inject_css():
     .council-scroll-window {
         max-height: 480px;
         overflow-y: auto;
-        padding: 8px;
+        padding: 10px 8px;
         background: #04070e;
         border: 1px solid rgba(255,255,255,0.07);
         border-radius: 8px;
@@ -668,7 +729,7 @@ def inject_css():
         font-weight: 800;
         border-radius: 4px;
     }
-    .chat-bubble-ai,.chat-bubble-doubt,.chat-bubble-rage,.chat-bubble-agree {
+    .chat-bubble-ai, .chat-bubble-doubt, .chat-bubble-rage, .chat-bubble-agree {
         border-radius: 7px;
         padding: 8px 10px;
         margin-bottom: 8px;
@@ -680,16 +741,18 @@ def inject_css():
     .chat-bubble-doubt { border-left-color: #f59e0b; background: rgba(245,158,11,0.07); }
     .chat-bubble-rage { border-left-color: #ef4444; background: rgba(239,68,68,0.12); }
     .chat-bubble-agree { border-left-color: #a855f7; background: rgba(168,85,247,0.11); }
+    
+    /* 投下質問バブル（見切れを防ぐスクロール余白） */
     .chat-bubble-user {
         background: linear-gradient(135deg, rgba(30,58,138,0.92), rgba(15,23,42,0.98)) !important;
         border: 1.5px solid #60a5fa !important;
         border-left: 5px solid #38bdf8 !important;
         border-radius: 7px !important;
         padding: 8px 11px !important;
-        margin: 10px 0 6px 0 !important;
+        margin: 12px 0 8px 0 !important;
         font-size: 12.5px !important;
         color: #ffffff !important;
-        scroll-margin-top: 10px;
+        scroll-margin-top: 35px; /* 上部見切れを完全解消 */
     }
     .consensus-banner {
         background: linear-gradient(135deg,#0f172a,#1e1b4b);
@@ -761,7 +824,7 @@ def check_major_catalyst(code: str, name: str, genre: str) -> dict:
     }
 
 # ==========================================
-# 9. 認証＆セッション管理
+# 9. 認証＆セッション管理（ログイン画面のスタイリッシュ刷新）
 # ==========================================
 def check_auth():
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
@@ -827,10 +890,12 @@ def check_auth():
                     st.rerun()
             return True
 
+    # スタイリッシュで気品のあるログイン画面
     st.markdown(
-        '<div class="glass-header" style="text-align:center;padding:20px 14px;margin-top:10px;">'
+        '<div class="login-brand-wrapper">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
-        '<div class="brand-sub" style="margin-top:3px;">QUANTUM WAVEFUNCTION & MULTI-AGENT TERMINAL</div>'
+        '<div class="brand-sub">QUANTUM WAVEFUNCTION & MULTI-AGENT TERMINAL</div>'
+        '<div class="login-status-pill"><span>⚡</span> HIGH PRECISION QUANTUM & AGI ENGINE 2026</div>'
         '</div>',
         unsafe_allow_html=True
     )
@@ -840,7 +905,7 @@ def check_auth():
         with get_db() as conn:
             m_row = conn.execute("SELECT email, status, name, pin_hash FROM members WHERE bio_enabled = 1 AND (raw_hfp = ? OR fp = ?)", (raw_hfp, cur_fp)).fetchone()
         
-        if st.button("🧬 登録済み端末：生体認証 / ワンタップで即ログイン", use_container_width=True, type="primary"):
+        if st.button("🧬 登録済み端末：ワンタップ即時認証", use_container_width=True, type="primary"):
             if m_row:
                 t_em = m_row["email"].strip().lower()
                 is_adm = (t_em == ADMIN_EMAIL or is_seed_admin_email(t_em))
@@ -852,9 +917,9 @@ def check_auth():
                     st.query_params["u"], st.query_params["t"] = t_em, gen_tok(t_em, "session_keep")
                     st.rerun()
             else:
-                st.warning("⚠️ この端末は未登録です。以下のフォームから通常ログインしてください。")
+                st.warning("⚠️ この端末はワンタップ未登録です。以下のフォームから通常ログインしてください。")
 
-        st.markdown('<div style="text-align:center;color:#64748b;margin:10px 0;font-size:11px;">— または メールアドレス＆パスコード認証 —</div>', unsafe_allow_html=True)
+        st.markdown('<div style="text-align:center;color:#64748b;margin:12px 0 8px 0;font-size:11px;letter-spacing:1px;">— または メール＆パスコード認証 —</div>', unsafe_allow_html=True)
 
         with st.form("manual_login_form"):
             in_email = st.text_input("メールアドレス", placeholder="admin または 登録済みアドレス")
@@ -892,33 +957,37 @@ def check_auth():
 check_auth()
 
 # ==========================================
-# 10. セッション状態＆上部ナビゲーションバー（横一列・タップ青発光・見切れ修正）
+# 10. セッション状態＆上部固定追従ナビゲーションバー（確実なクリック応答）
 # ==========================================
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
     ("watchlist", {}), ("navigation_page", "TOP"), ("selected_news_item", None),
     ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
     ("last_cat", "🏆 総合TOP5"), ("nav_history", []), ("scroll_top_trig", 0),
-    ("scroll_target_id", ""), ("catalyst_dialog_item", None)
+    ("scroll_target_id", ""), ("catalyst_dialog_item", None),
+    ("expanded_catalysts", {})
 ]:
     if k not in st.session_state: st.session_state[k] = v
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 
-# 上部固定バー（HTMLコンテナで覆ってCSSで完全横一列を保証）
-st.markdown('<div class="fixed-top-nav-bar">', unsafe_allow_html=True)
+# 上部中央配置・完全追従ナビゲーションバー
+st.markdown('<div class="fixed-floating-navbar-wrapper"><div class="fixed-floating-navbar-inner">', unsafe_allow_html=True)
 nav_c1, nav_c2, nav_c3 = st.columns([1, 1, 1])
+
 with nav_c1:
     if st.button("⬆️ トップ", key="nav_btn_top", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"
         st.session_state["custom_search_code"] = ""
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
         st.rerun()
+
 with nav_c2:
-    btn_lbl = f"✖ 閉じる({open_cnt})" if open_cnt else "✖ 閉じる"
+    btn_lbl = f"✖ 合議閉じる({open_cnt})" if open_cnt else "✖ 合議閉じる"
     if st.button(btn_lbl, key="nav_btn_close", use_container_width=True):
         st.session_state["active_debates"] = {}
         st.rerun()
+
 with nav_c3:
     if st.button("↩️ 戻る", key="nav_btn_back", use_container_width=True):
         if st.session_state.get("navigation_page") != "TOP":
@@ -934,9 +1003,10 @@ with nav_c3:
             st.session_state["active_category"] = "🏆 総合TOP5"
             st.session_state["last_cat"] = "🏆 総合TOP5"
         st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
 
-# 質問投下時の見切れ完全防止スクリプト
+st.markdown('</div></div>', unsafe_allow_html=True)
+
+# 質問投下時の見切れ完全防止スクリプト（1回目も確実に発火・位置合わせ）
 scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
     tid = st.session_state.get("scroll_target_id")
@@ -947,16 +1017,16 @@ if st.session_state.get("scroll_target_id"):
                 if(el){{
                     const parentBox = el.closest('.council-scroll-window');
                     if(parentBox){{
-                        // 質問がスクロール窓上部に余裕をもって綺麗に収まるよう配置
+                        // 1回目の投下質問でも上部に十分な余白（30px）を確保してスクロール
                         const pRect = parentBox.getBoundingClientRect();
                         const eRect = el.getBoundingClientRect();
-                        parentBox.scrollTop += (eRect.top - pRect.top) - 15;
+                        parentBox.scrollTop += (eRect.top - pRect.top) - 30;
                     }} else {{
                         el.scrollIntoView({{behavior: 'smooth', block: 'start'}});
                     }}
                 }}
             }} catch(e){{}}
-        }}, 180);
+        }}, 200);
     """
     st.session_state["scroll_target_id"] = ""
 
@@ -982,44 +1052,25 @@ components.html(
 )
 
 # ==========================================
-# 11. 重大情報モーダル表示関数
+# 11. 重大情報（各銘柄カードの精度直下に埋め込みポップアップ）
 # ==========================================
-def render_catalyst_popup_modal(cat_info: dict, r: dict):
-    st.markdown(f"### 🚨 重大情報速報：{r['name']} ({r['code']})")
-    st.markdown(f"**【発表タイトル】**\n#### {cat_info['title']}")
-    
-    c1, c2 = st.columns(2)
-    c1.metric("情報信頼度スコア", f"{cat_info['reliability']}%", delta="S級カタリスト" if cat_info['reliability']>=80 else "要監視")
-    c2.metric("一次情報ソース", cat_info['source'])
-
-    st.markdown("---")
-    st.markdown("#### 🔍 情報の詳細内容と背景")
-    st.write(cat_info["detailed_impact"])
-    st.caption(f"配信日時: {cat_info.get('pubDate', 'リアルタイム取得')} ｜ 検知キーワード: {', '.join(cat_info['keywords'])}")
-    if cat_info.get("url"):
-        st.markdown(f"👉 [**報道ソースの元記事を開く (外部サイト)**]({cat_info['url']})")
-
-    st.markdown("---")
-    st.markdown("#### ⚡ 株価変動を一緒にしそうな関連銘柄一覧")
-    rel_cols = st.columns(max(1, len(cat_info["related_stocks"])))
-    for i, stock in enumerate(cat_info["related_stocks"]):
-        with rel_cols[i]:
-            st.markdown(
-                f'<div style="background:rgba(15,23,42,0.9);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:8px;text-align:center;">'
-                f'<div style="font-weight:800;font-size:12px;color:#f8fafc;">{stock["name"]}</div>'
-                f'<div style="font-size:10px;color:#38bdf8;">{stock["code"]}</div>'
-                f'<div style="font-size:9.5px;color:#94a3b8;margin-top:2px;">{stock["theme"]}</div>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-
-if dialog_dec:
-    @dialog_dec("🚨 重大情報（カタリスト）分析レポート")
-    def show_catalyst_dialog(cat_info, r): render_catalyst_popup_modal(cat_info, r)
-else:
-    def show_catalyst_dialog(cat_info, r):
-        with st.expander("🚨 【重大情報】詳細内容・信頼度・関連連動銘柄", expanded=True):
-            render_catalyst_popup_modal(cat_info, r)
+def render_inline_catalyst_box(cat_info: dict, r: dict, kp: str):
+    """各銘柄の精度直下に直接開閉し、上下関係の誤解を完全に防ぐインライン詳細ボックス"""
+    st.markdown(
+        f'<div class="catalyst-inline-card">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+        f'<span style="font-size:12px;font-weight:900;color:#ef4444;">🚨 【{r["name"]}】株価急変の重大カタリスト検知</span>'
+        f'<span style="font-size:10px;color:#fde047;font-weight:800;background:rgba(239,68,68,0.25);padding:2px 7px;border-radius:4px;border:1px solid #ef4444;">信頼度 {cat_info["reliability"]}%</span>'
+        f'</div>'
+        f'<div style="font-weight:800;font-size:12.5px;color:#f8fafc;margin-bottom:4px;">📰 {cat_info["title"]}</div>'
+        f'<div style="font-size:11px;color:#cbd5e1;line-height:1.55;margin-bottom:6px;">{cat_info["detailed_impact"]}</div>'
+        f'<div style="font-size:9.5px;color:#94a3b8;display:flex;justify-content:space-between;align-items:center;">'
+        f'<span>一次ソース: {cat_info["source"]} ｜ 検知: {", ".join(cat_info["keywords"])}</span>'
+        f'{"<a href=\x27" + cat_info["url"] + "\x27 target=\x27_blank\x27 style=\x27color:#38bdf8;text-decoration:none;font-weight:700;\x27>👉 元記事を開く</a>" if cat_info.get("url") else ""}'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
 
 # ==========================================
 # 12. クオンツ解析エンジン ＆ 戦略ディスパッチャ
@@ -1264,7 +1315,7 @@ macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
 
 # ==========================================
-# 14. 討論会・本格リアルタイムオンラインAGI知能エンジン（不自然な定型文完全禁止）
+# 14. 討論会・本格リアルタイムオンラインAGI知能エンジン
 # ==========================================
 AI_ROSTER = {
     "QUANTUM": "⚛️ QUANTUM (量子開放系・理論物理知能)",
@@ -1277,7 +1328,6 @@ AI_ROSTER = {
 }
 
 def search_live_web_snippets(query: str, max_results: int = 5) -> list:
-    """リアルタイムでWebから該当質問・銘柄に関する最新情報を抽出"""
     if not query or not query.strip(): return []
     q_clean = query.strip()
     ctx = ssl.create_default_context()
@@ -1297,37 +1347,23 @@ def search_live_web_snippets(query: str, max_results: int = 5) -> list:
     return results
 
 def detect_query_intent(user_q: str, stock_name: str) -> str:
-    """ユーザーの質問意図（株・投資に関する質問か、日常雑談・ゲーム・一般知識か）を正確に判別"""
     if not user_q or not user_q.strip():
         return "STOCK_GENERAL"
-    
     q = user_q.lower()
-    
-    # 日常会話・ゲーム・雑談判定
     casual_kws = ["ゲーム", "好き", "何が好き", "遊ぶ", "趣味", "任天堂", "おすすめ", "switch", "マリオ", "ゼルダ", "ポケモン", "ドラクエ", "アニメ", "映画", "ご飯", "ランチ", "天気", "誰"]
     if any(kw in q for kw in casual_kws) and not any(kw in q for kw in ["株価", "決算", "買い", "売り", "チャート", "利確", "損切", "pts"]):
         return "CASUAL_CHAT"
-    
-    # 決算・IR・業績
     if any(kw in q for kw in ["決算", "上方修正", "下方修正", "業績", "配当", "増配", "利益", "tob"]):
         return "EARNINGS_CATALYST"
-        
-    # 明日の寄り付き・短期売買戦略
     if any(kw in q for kw in ["明日", "寄り付き", "いくら", "pts", "成行", "エントリー", "何株", "勝てる", "デイトレ"]):
         return "ENTRY_STRATEGY"
-        
     return "STOCK_INQUIRY"
 
 def synthesize_dynamic_agi_dialogue(speaker: str, user_q: str, r: dict, vref: str, web_snippets: list, intent: str) -> tuple:
-    """定型文を完全禁止し、オンライン情報と質問内容に100%即した本物のAGI対話を生成"""
     nm = r["name"]
     fact1 = web_snippets[0] if web_snippets else f"{nm}に関する直近の市場関心"
     fact2 = web_snippets[1] if len(web_snippets) > 1 else fact1
 
-    # ========================================================
-    # ケース1：日常会話・ゲーム・一般雑談（任天堂のゲームなど）
-    # ※株の数理用語を無理やり使わず、質問内容に深く回答する
-    # ========================================================
     if intent == "CASUAL_CHAT":
         q_clean = user_q.strip()
         if "任天堂" in q_clean or "ゲーム" in q_clean:
@@ -1341,10 +1377,9 @@ def synthesize_dynamic_agi_dialogue(speaker: str, user_q: str, r: dict, vref: st
                 return "normal", f"最新動向を見てもSwitch後継機の話題がWebで持ちきりですね。私はコミュニティや市場に長年支持され続ける『マリオカート8 デラックス』の驚異的なロングセラー構造に惹かれます。"
             elif speaker == "TECHNOS":
                 return "normal", f"ゲームデザインの数理的完成度なら『メトロイド ドレッド』や歴代の『ゼルダの伝説 ブレス オブ ザ ワイルド』の導線設計を挙げます。プレイヤーに気付かせず最適解へ導くアルゴリズムは芸術です。"
-            else: # NEXUS
+            else:
                 return "agree", f"各自の個性がよく出た回答ですね。任天堂の真髄は『誰もが熱中できる普遍的な体験価値』にあります。質問者さんの好みのジャンルに合わせて、これらの中からぜひ選んでみてください。"
         else:
-            # 一般雑談
             if speaker == "QUANTUM":
                 return "normal", f"『{q_clean}』についての問い、興味深いですね。固定観念を外し多角的な視点から本質を捉え直すと、非常に本質的なテーマが見えてきます。"
             elif speaker == "IGNIS":
@@ -1358,11 +1393,7 @@ def synthesize_dynamic_agi_dialogue(speaker: str, user_q: str, r: dict, vref: st
             else:
                 return "agree", f"AGIチーム全体で意見を統合しました。疑問や対話を深めたい点があれば、いつでも遠慮なく投げかけてください。"
 
-    # ========================================================
-    # ケース2：株・銘柄・決算・投資戦略に関する本格合議
-    # ========================================================
     if intent == "EARNINGS_CATALYST":
-        # 決算・材料特化
         if speaker == "QUANTUM":
             return "agree", f"Web速報『{fact1[:45]}』を確認。決算・材料をきっかけに不連続なボラティリティ変化が発生しています。エネルギー励起によるトレンド加速に注目です。"
         elif speaker == "MICRO":
@@ -1377,7 +1408,6 @@ def synthesize_dynamic_agi_dialogue(speaker: str, user_q: str, r: dict, vref: st
             return "agree", f"材料の初動インパクトは強力。目標株価 <b>{r['tp_price']}</b> を見据えつつ、防衛ラインを遵守したエントリーを推奨します。"
 
     elif intent == "ENTRY_STRATEGY":
-        # エントリー・買い方
         if speaker == "QUANTUM":
             return "agree", f"寄り付き（予想 {r['pts_est_price']} 付近）でのポテンシャル突破確率を評価。初動のモメンタムが乗るタイミングでの執行が最も期待値が高いと判断します。"
         elif speaker == "MICRO":
@@ -1392,7 +1422,6 @@ def synthesize_dynamic_agi_dialogue(speaker: str, user_q: str, r: dict, vref: st
             return "agree", f"結論として、朝9:00の寄り付き成行で <b>{r['lot_info']['shares']:,}株</b> のエントリーを承認。約定と同時に損切り逆指値を置く規律を徹底してください。"
 
     else:
-        # 銘柄全般・デフォルトの高度分析
         if speaker == "QUANTUM":
             return "agree", f"『{nm}』に関する最新情勢『{fact1[:42]}』を解析。統計的エネルギー状態は良好で、上位レジスタンス突破の強いシグナルが検出されています。"
         elif speaker == "MICRO":
@@ -1409,22 +1438,13 @@ def synthesize_dynamic_agi_dialogue(speaker: str, user_q: str, r: dict, vref: st
 def run_7ai_council(r: dict, m5=None, user_query: str = "") -> dict:
     vref = m5["vwap5_price"] if m5 else r["vwap_price"]
     st_info = r["strat"]
-    
     intent = detect_query_intent(user_query, r["name"])
     
-    # 検索クエリの最適化（質問内容を最優先で検索）
-    if user_query:
-        search_q = user_query.strip()
-    else:
-        search_q = f"{r['name']} 最新 株価 ニュース"
-        
+    search_q = user_query.strip() if user_query else f"{r['name']} 最新 株価 ニュース"
     web_snippets = search_live_web_snippets(search_q, max_results=4)
 
     turns = []
-    if not user_query:
-        round_title = f"🌐 『{r['name']}』リアルタイムWeb知能合議"
-    else:
-        round_title = f"💬 投下質問『{user_query}』に関するリアルタイム合議"
+    round_title = f"💬 投下質問『{user_query}』に関するリアルタイム合議" if user_query else f"🌐 『{r['name']}』リアルタイムWeb知能合議"
     turns.append({"round": round_title})
 
     speakers = ["QUANTUM", "MICRO", "IGNIS", "AEGIS", "TECHNOS", "NEXUS"]
@@ -1526,18 +1546,30 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
     st_info = r["strat"]
     cat = r.get("catalyst", {})
     has_cat = cat.get("has_major", False)
+    cat_key = f"cat_exp_{kp}_{r['code']}"
 
-    top_c1, top_c2 = st.columns([3, 1])
-    with top_c2:
-        if has_cat:
-            if st.button("🚨 重大情報あり", key=f"cat_btn_{kp}_{r['code']}", help="株価急変の重大材料が検知されました。クリックで詳細を表示"):
-                show_catalyst_dialog(cat, r)
-
+    # 銘柄カードメイン描画
     card_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
         f'<div style="margin-bottom:6px;">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点 (WKB透過{r["q_tunnel"]}%)</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点 (Kyle吸収{r["kyle_stealth"]}%)</span><span class="pill-badge">🧬 OFI {r["ofi_z"]:+.2f}σ</span></div>'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="min-width:0;flex:1;"><span style="font-size:15px;font-weight:800;color:#f8fafc;">{r["name"]}</span> <span style="font-size:11px;color:#94a3b8;">({r["code"]} / {r["genre"]})</span><div style="font-size:10.5px;color:#94a3b8;margin-top:2px;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div></div>'
+    )
+    st.markdown(card_html, unsafe_allow_html=True)
+
+    # 重大情報がある場合：精度バッジの直下に「🚨 重大情報速報」ボタン＆インライン展開
+    if has_cat:
+        is_cat_opened = st.session_state["expanded_catalysts"].get(cat_key, False)
+        btn_cat_txt = "🔽 🚨 重大情報速報を閉じる" if is_cat_opened else "🚨 重大情報速報あり（タップで詳細表示）"
+        if st.button(btn_cat_txt, key=f"btn_{cat_key}", use_container_width=True):
+            st.session_state["expanded_catalysts"][cat_key] = not is_cat_opened
+            st.rerun()
+
+        if is_cat_opened:
+            render_inline_catalyst_box(cat, r, kp)
+
+    # 銘柄詳細コンテンツ
+    card_body_html = (
+        f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px;"><div style="min-width:0;flex:1;"><span style="font-size:15px;font-weight:800;color:#f8fafc;">{r["name"]}</span> <span style="font-size:11px;color:#94a3b8;">({r["code"]} / {r["genre"]})</span><div style="font-size:10.5px;color:#94a3b8;margin-top:2px;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div></div>'
         f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;line-height:1.15;">🔥 AI期待度 / 統合勝率</div><div style="white-space:nowrap;line-height:1.2;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:11px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div><div style="font-size:9px;color:#94a3b8;">Payoff {r["payoff"]}x / Edge {r["edge"]:+.2f}%</div></div></div>'
         f'<div class="winrate-bar"><div><div style="font-size:9px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9px;color:#c084fc;">⚛️ WKB透過率</div><div style="font-size:12px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9px;color:#6ee7b7;">🏛️ 機関Kyle吸収</div><div style="font-size:12px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9px;color:#94a3b8;">🌅 翌朝GU / 陽線</div><div style="font-size:11.5px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
         f'<div class="trade-plan-box"><div><div style="font-size:9px;color:#94a3b8;">🌅 夜間理論寄付き</div><div style="font-size:11.5px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9px;color:#10b981;">🎯 利確目標</div><div style="font-size:11.5px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:11.5px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
@@ -1547,7 +1579,7 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
         f'<div class="metrics-row"><span>期待度:{r["expect_pct"]}%</span><span>量子Q:{r["q_score"]}点</span><span>WKB透過:{r["q_tunnel"]}%</span><span>Berry位相:{r.get("berry_phase", 0.15)}</span><span>フォン・ノイマンS:{r["q_entropy"]}</span><span>Kyle吸収:{r["kyle_stealth"]}%</span><span>Hurst:{r["hurst"]}</span><span>OFI:{r["ofi_z"]:+.2f}σ</span><span>95%CVaR:-{r["cvar95"]}%</span></div>'
         f'</details></div>'
     )
-    st.markdown(card_html, unsafe_allow_html=True)
+    st.markdown(card_body_html, unsafe_allow_html=True)
     render_council_sec(r, f"{kp}_{r['code']}")
 
 # ==========================================
