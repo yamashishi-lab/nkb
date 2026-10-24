@@ -373,14 +373,13 @@ def inject_css():
     }
 
     .block-container {
-        padding-top: 5.6rem !important; /* 固定ナビバーが自然に収まる余白 */
+        padding-top: 5.6rem !important;
         padding-bottom: 3rem !important;
         padding-left: 0.6rem !important;
         padding-right: 0.6rem !important;
         max-width: 860px !important;
     }
 
-    /* サイドバー開閉ボタンの少し下（top: 48px）に固定追従する中央配置ナビバー */
     .fixed-floating-navbar-wrapper {
         position: fixed !important;
         top: 48px !important;
@@ -400,7 +399,6 @@ def inject_css():
         padding: 5px 6px !important;
     }
 
-    /* 3ボタンを強制的に完全1行横並び */
     .fixed-floating-navbar-inner div[data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
@@ -418,7 +416,6 @@ def inject_css():
         width: 33.33% !important;
     }
 
-    /* 通常は上品なダーク、タップ（押下）した瞬間のみ青色に発光するスタイル */
     .fixed-floating-navbar-inner button {
         width: 100% !important;
         height: 34px !important;
@@ -443,7 +440,6 @@ def inject_css():
         line-height: 32px !important;
     }
 
-    /* タップ・クリック時のみ鮮烈なネオンブルー発光 */
     .fixed-floating-navbar-inner button:active,
     .fixed-floating-navbar-inner button:focus:active {
         background: #2563eb !important;
@@ -453,7 +449,6 @@ def inject_css():
         transform: scale(0.95) !important;
     }
 
-    /* 🚨 重大情報ポップアップ：視認性抜群の深紅ハイコントラスト背景 */
     .catalyst-inline-card {
         background: linear-gradient(135deg, rgba(220, 38, 38, 0.35) 0%, rgba(153, 27, 27, 0.85) 100%) !important;
         border: 2px solid #ef4444 !important;
@@ -532,7 +527,6 @@ def inject_css():
     .chat-bubble-user { background: linear-gradient(135deg, rgba(30,58,138,0.92), rgba(15,23,42,0.98)) !important; border: 1.5px solid #60a5fa !important; border-left: 5px solid #38bdf8 !important; border-radius: 7px !important; padding: 8px 11px !important; margin: 12px 0 8px 0 !important; font-size: 12.5px !important; color: #ffffff !important; scroll-margin-top: 40px; }
     .consensus-banner { background: linear-gradient(135deg,#0f172a,#1e1b4b); border: 1px solid rgba(168,85,247,0.45); border-radius: 8px; padding: 9px; margin-top: 6px; font-size: 11.5px; }
     
-    /* 初心者向け詳細買い方ガイドボックス */
     .beginner-action-box {
         background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(6, 78, 59, 0.35));
         border: 1.5px solid #10b981;
@@ -550,7 +544,7 @@ def inject_css():
 inject_css()
 
 # ==========================================
-# 8. リアルタイム重大情報検知・カタリスト解析（並行通信最適化）
+# 8. リアルタイム重大情報検知・カタリスト解析
 # ==========================================
 _GLOBAL_THREAD_POOL = ThreadPoolExecutor(max_workers=8)
 
@@ -597,7 +591,7 @@ def check_major_catalyst(code: str, name: str, genre: str) -> dict:
     }
 
 # ==========================================
-# 9. 認証＆セッション管理
+# 9. 認証＆セッション管理（全項目復活・管理者自動判定）
 # ==========================================
 def check_auth():
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
@@ -642,7 +636,32 @@ def check_auth():
             st.query_params["u"], st.query_params["t"] = cu, keep_tok
             with st.sidebar:
                 u_disp_name = u_rec.get("name") or ("システム管理者" if is_admin else "会員")
-                st.markdown(f'<div style="background:#0f172a;padding:8px 11px;border-radius:9px;border:1px solid rgba(168,85,247,0.35);margin-bottom:6px;"><div style="font-size:9.5px;color:#c084fc;font-weight:700;">⚛️ QUANTUM SESSION ACTIVE</div><div style="color:#f8fafc;font-size:11.5px;font-weight:700;">{sanitize(u_disp_name)} ({sanitize(cu)})</div></div>', unsafe_allow_html=True)
+                admin_badge = "👑 管理者モード" if is_admin else "💎 会員セッション"
+                st.markdown(
+                    f'<div style="background:#0f172a;padding:8px 11px;border-radius:9px;border:1px solid rgba(168,85,247,0.35);margin-bottom:6px;">'
+                    f'<div style="font-size:9.5px;color:#c084fc;font-weight:700;">⚛️ {admin_badge}</div>'
+                    f'<div style="color:#f8fafc;font-size:11.5px;font-weight:700;">{sanitize(u_disp_name)} ({sanitize(cu)})</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+                if is_admin:
+                    pending_cnt = conn.execute("SELECT COUNT(*) as c FROM members WHERE status = 'pending'").fetchone()["c"]
+                    st.caption(f"🛡️ 承認待ち申請: **{pending_cnt} 件**")
+                    if st.checkbox("⚙️ 会員管理パネルを展開", value=False):
+                        p_rows = conn.execute("SELECT email, name, applied_at FROM members WHERE status = 'pending'").fetchall()
+                        if p_rows:
+                            st.write("▼ 新規申請中リスト")
+                            for pr in p_rows:
+                                c_a, c_r = st.columns([2, 1])
+                                c_a.write(f"{pr['name']} ({pr['email']})")
+                                if c_r.button("承認", key=f"app_{pr['email']}"):
+                                    conn.execute("UPDATE members SET status = 'approved', approved_at = ? WHERE email = ?", (datetime.now().strftime("%Y-%m-%d %H:%M"), pr["email"]))
+                                    conn.commit()
+                                    st.success(f"{pr['name']} を承認しました")
+                                    st.rerun()
+                        else:
+                            st.caption("現在承認待ちの申請はありません。")
+
                 if st.button("🚪 ログアウト", use_container_width=True):
                     conn.execute("UPDATE members SET last_seen_ts = 0 WHERE email = ?", (cu,))
                     conn.commit()
@@ -651,7 +670,7 @@ def check_auth():
                     st.rerun()
             return True
 
-    # ログイン画面
+    # ログイン・認証画面（全項目UI復活）
     st.markdown(
         '<div class="login-brand-wrapper">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
@@ -659,23 +678,131 @@ def check_auth():
         '</div>',
         unsafe_allow_html=True
     )
-    with st.form("manual_login_form"):
-        in_email = st.text_input("メールアドレス", placeholder="admin または 登録済みアドレス")
-        in_pass = st.text_input("パスコード / 管理者パスワード", type="password")
-        if st.form_submit_button("⚡ QUANTUM CORE へログイン", use_container_width=True):
-            em_c, pw_c = (in_email or "").strip().lower(), (in_pass or "").strip()
-            if is_seed_admin_email(em_c) and is_seed_admin_pass(pw_c):
-                st.session_state["authenticated_user"] = ADMIN_EMAIL
-                st.query_params["u"], st.query_params["t"] = ADMIN_EMAIL, gen_tok(ADMIN_EMAIL, "session_keep")
-                st.rerun()
-            else:
-                st.error("❌ アカウントまたはパスワードが一致しません。")
+    
+    t_login, t_register, t_pin = st.tabs(["⚡ ログイン", "📝 新規会員申請", "🔒 暗証番号(PIN)認証"])
+    
+    with t_login:
+        with st.form("general_login_form"):
+            in_email = st.text_input("メールアドレス", placeholder="メールアドレスを入力")
+            in_pass = st.text_input("パスコード / 管理者パスワード", type="password", placeholder="8桁パスコードまたは管理者PW")
+            rem_device = st.checkbox("この端末を安全なデバイスとして記憶する", value=True)
+            submit_login = st.form_submit_button("⚡ QUANTUM CORE へログイン", use_container_width=True)
+
+            if submit_login:
+                em_c = (in_email or "").strip().lower()
+                pw_c = (in_pass or "").strip()
+
+                if not em_c or not pw_c:
+                    st.error("メールアドレスとパスコードを入力してください。")
+                else:
+                    # 管理者判定
+                    if is_seed_admin_email(em_c) and is_seed_admin_pass(pw_c):
+                        st.session_state["authenticated_user"] = ADMIN_EMAIL
+                        st.query_params["u"], st.query_params["t"] = ADMIN_EMAIL, gen_tok(ADMIN_EMAIL, "session_keep")
+                        if rem_device:
+                            st.query_params["dfp"] = cur_fp
+                        st.success("👑 管理者として認証されました。")
+                        st.rerun()
+                    else:
+                        # 一般会員判定
+                        with get_db() as conn:
+                            is_ban, ban_r = check_and_log_ban_spoof(em_c, "", cur_fp, raw_hfp, action_type="ログイン試行")
+                            if is_ban:
+                                st.error("💀 このアカウントまたは端末はセキュリティ制限により遮断されています。")
+                                st.stop()
+
+                            row = conn.execute("SELECT * FROM members WHERE email = ?", (em_c,)).fetchone()
+                            if not row:
+                                st.error("❌ 登録が見つかりません。「新規会員申請」を行ってください。")
+                            elif row["status"] == "pending":
+                                st.warning("⏳ 現在管理者による承認待ちです。承認完了までお待ちください。")
+                            elif row["status"] == "banned":
+                                st.error("💀 このアカウントは停止されています。")
+                            else:
+                                exp_code = row["passcode"] or gen_code(em_c)
+                                if hmac.compare_digest(pw_c.upper(), exp_code.upper()):
+                                    st.session_state["authenticated_user"] = em_c
+                                    st.query_params["u"], st.query_params["t"] = em_c, gen_tok(em_c, "session_keep")
+                                    if rem_device:
+                                        st.query_params["dfp"] = cur_fp
+                                    st.success(f"ようこそ、{row['name']} 様。")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ パスコードが正しくありません。")
+
+    with t_register:
+        st.caption("新規利用登録を行います。申請後、管理者の承認を経てパスコードが発行されます。")
+        with st.form("register_form"):
+            reg_name = st.text_input("お名前 / 呼称", placeholder="例: 山田 太郎")
+            reg_email = st.text_input("登録メールアドレス", placeholder="例: user@example.com")
+            reg_pin = st.text_input("ご希望の4桁PINコード", type="password", max_chars=4, placeholder="数字4桁")
+            submit_reg = st.form_submit_button("📝 会員登録申請を送信", use_container_width=True)
+
+            if submit_reg:
+                nm = (reg_name or "").strip()
+                em = (reg_email or "").strip().lower()
+                pin = (reg_pin or "").strip()
+
+                if not nm or not em or len(pin) != 4 or not pin.isdigit():
+                    st.error("すべての項目を正しく入力してください（PINは数字4桁）。")
+                elif is_seed_admin_email(em):
+                    st.error("このメールアドレスは管理者予約済みです。ログインタブからログインしてください。")
+                else:
+                    with get_db() as conn:
+                        is_ban, _ = check_and_log_ban_spoof(em, nm, cur_fp, raw_hfp, action_type="登録申請")
+                        if is_ban:
+                            st.error("💀 セキュリティ制限によりこの端末からの新規申請は受付できません。")
+                            st.stop()
+
+                        ex = conn.execute("SELECT status FROM members WHERE email = ?", (em,)).fetchone()
+                        if ex:
+                            if ex["status"] == "approved":
+                                st.info("すでに登録承認済みのアカウントです。ログインタブをご利用ください。")
+                            else:
+                                st.warning("すでに申請済みです。承認完了をお待ちください。")
+                        else:
+                            auto_code = gen_code(em)
+                            pin_h = hash_sec_pwd(pin, SECRET_KEY[:16])[:16]
+                            now_s = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            conn.execute("""
+                                INSERT INTO members (email, name, status, passcode, pin_hash, applied_at, fp, raw_hfp, bio_enabled)
+                                VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, 1)
+                            """, (em, nm, auto_code, pin_h, now_s, cur_fp, raw_hfp))
+                            conn.commit()
+                            st.success("✅ 申請を受け付けました！管理者の承認完了後に発行されたパスコードでログイン可能になります。")
+
+    with t_pin:
+        st.caption("設定済みの4桁PINコードを使用してクイック認証します。")
+        with st.form("pin_login_form"):
+            pin_email = st.text_input("登録メールアドレス", key="pin_em_input")
+            pin_code = st.text_input("数字4桁のPIN", type="password", max_chars=4, key="pin_cd_input")
+            submit_pin = st.form_submit_button("🔒 PINコードで認証", use_container_width=True)
+
+            if submit_pin:
+                em = (pin_email or "").strip().lower()
+                pin = (pin_code or "").strip()
+                if not em or len(pin) != 4 or not pin.isdigit():
+                    st.error("メールアドレスと4桁の数字PINを正しく入力してください。")
+                else:
+                    with get_db() as conn:
+                        row = conn.execute("SELECT * FROM members WHERE email = ?", (em,)).fetchone()
+                        if not row or row["status"] != "approved":
+                            st.error("有効な承認済みアカウントが見つかりません。")
+                        else:
+                            target_pin_h = hash_sec_pwd(pin, SECRET_KEY[:16])[:16]
+                            if hmac.compare_digest(target_pin_h, row["pin_hash"] or ""):
+                                st.session_state["authenticated_user"] = em
+                                st.query_params["u"], st.query_params["t"] = em, gen_tok(em, "session_keep")
+                                st.success("PIN認証に成功しました。")
+                                st.rerun()
+                            else:
+                                st.error("❌ PINコードが一致しません。")
     st.stop()
 
 check_auth()
 
 # ==========================================
-# 10. 上部固定追従ナビゲーションバー（1から完全再構築）
+# 10. 上部固定追従ナビゲーションバー
 # ==========================================
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
@@ -688,7 +815,6 @@ for k, v in [
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 
-# HTML/CSSラッパー内にStreamlitボタンを完全固定配置（サイドバー開閉ボタンの少し下）
 st.markdown('<div class="fixed-floating-navbar-wrapper"><div class="fixed-floating-navbar-inner">', unsafe_allow_html=True)
 nav_c1, nav_c2, nav_c3 = st.columns([1, 1, 1])
 
@@ -723,7 +849,6 @@ with nav_c3:
 
 st.markdown('</div></div>', unsafe_allow_html=True)
 
-# 最上部スクロール＆見切れ防止JS
 scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
     tid = st.session_state.get("scroll_target_id")
@@ -768,10 +893,9 @@ components.html(
 )
 
 # ==========================================
-# 11. 重大情報（深紅背景ハイコントラスト・アラートポップアップ）
+# 11. 重大情報ポップアップレンダラー
 # ==========================================
 def render_inline_catalyst_box(cat_info: dict, r: dict, kp: str):
-    """背景を赤にして圧倒的な視認性を確保した重大情報ポップアップ"""
     st.markdown(
         f'<div class="catalyst-inline-card">'
         f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
@@ -789,7 +913,7 @@ def render_inline_catalyst_box(cat_info: dict, r: dict, kp: str):
     )
 
 # ==========================================
-# 12. 戦略ディスパッチャ（初心者の買い方手順を徹底具体化）
+# 12. 戦略ディスパッチャ & データ解析
 # ==========================================
 def norm_tk(raw: str) -> str:
     s = unicodedata.normalize("NFKC", str(raw or "")).strip().upper()
@@ -964,7 +1088,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
     except Exception: return None
 
 # ==========================================
-# 13. 外部データ取得層（並列マルチスレッド化で大幅高速化）
+# 13. 外部データ取得層
 # ==========================================
 @st.cache_data(ttl=45)
 def fetch_5ch_live() -> dict:
@@ -1045,7 +1169,7 @@ macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
 
 # ==========================================
-# 14. 討論会・本格リアルタイムオンラインAGI知能エンジン
+# 14. 討論会・リアルタイムオンラインAGI知能エンジン
 # ==========================================
 AI_ROSTER = {
     "QUANTUM": "⚛️ QUANTUM (量子開放系・理論物理知能)",
@@ -1247,7 +1371,6 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
     has_cat = cat.get("has_major", False)
     cat_key = f"cat_exp_{kp}_{r['code']}"
 
-    # 銘柄カードヘッダー
     card_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
@@ -1255,7 +1378,6 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
     )
     st.markdown(card_html, unsafe_allow_html=True)
 
-    # 🚨 重大情報がある場合：赤色強調のアラートボタン＆深紅ポップアップ展開
     if has_cat:
         is_cat_opened = st.session_state["expanded_catalysts"].get(cat_key, False)
         btn_cat_txt = "🔽 🚨 重大情報速報を閉じる" if is_cat_opened else "🚨 重大情報速報あり（タップで詳細表示）"
@@ -1266,7 +1388,6 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
         if is_cat_opened:
             render_inline_catalyst_box(cat, r, kp)
 
-    # 銘柄詳細情報
     card_body_html = (
         f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px;"><div style="min-width:0;flex:1;"><span style="font-size:15px;font-weight:800;color:#f8fafc;">{r["name"]}</span> <span style="font-size:11px;color:#94a3b8;">({r["code"]} / {r["genre"]})</span><div style="font-size:10.5px;color:#94a3b8;margin-top:2px;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div></div>'
         f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;line-height:1.15;">🔥 AI期待度 / 統合勝率</div><div style="white-space:nowrap;line-height:1.2;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:11px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div><div style="font-size:9px;color:#94a3b8;">Payoff {r["payoff"]}x / Edge {r["edge"]:+.2f}%</div></div></div>'
