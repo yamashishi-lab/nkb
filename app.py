@@ -200,28 +200,31 @@ def inject_css():
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
     /* ─────────────────────────────────────────────────────────────
-       サイドバー開閉ボタンの絶対可視化＆クリック保証（Streamlit全バージョン完全対応）
+       Streamlit標準ヘッダー及びサイドバー開閉ボタンの完全強制表示
        ───────────────────────────────────────────────────────────── */
     header[data-testid="stHeader"] {
         background: transparent !important;
         pointer-events: none !important;
         height: 3.5rem !important;
         z-index: 999990 !important;
+        display: block !important;
+        visibility: visible !important;
     }
     
-    /* ヘッダー内部の要素をクリック可能に復元 */
     header[data-testid="stHeader"] * {
         pointer-events: auto !important;
     }
 
-    /* 左上の標準サイドバー開閉ボタン（開時・閉時の全セレクタを網羅） */
+    /* 左上サイドバー開閉トグルボタン（折りたたみ時・展開時の全Streamlit内部セレクタ） */
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapsedControl"],
     [data-testid="stSidebarCollapseButton"],
+    button[data-testid="stSidebarCollapseButton"],
+    header button[kind="headerNoPadding"],
+    header button[data-testid="baseButton-headerNoPadding"],
     button[aria-label*="sidebar" i],
     button[aria-label*="Sidebar" i],
-    header button[kind="headerNoPadding"],
-    header button[data-testid="baseButton-headerNoPadding"] {
+    div:has(> button[data-testid="stSidebarCollapseButton"]) {
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
@@ -230,30 +233,34 @@ def inject_css():
         z-index: 2147483647 !important;
         position: fixed !important;
         top: 0.5rem !important;
-        left: 0.6rem !important;
-        width: 36px !important;
-        height: 36px !important;
-        min-width: 36px !important;
-        min-height: 36px !important;
-        background: rgba(15, 23, 42, 0.95) !important;
-        border: 1px solid rgba(56, 189, 248, 0.5) !important;
-        border-radius: 8px !important;
+        left: 0.55rem !important;
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        min-height: 38px !important;
+        max-width: 38px !important;
+        max-height: 38px !important;
+        background: rgba(15, 23, 42, 0.96) !important;
+        border: 1.5px solid rgba(56, 189, 248, 0.6) !important;
+        border-radius: 9px !important;
         align-items: center !important;
         justify-content: center !important;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.7) !important;
-        transition: all 0.2s ease !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.8), 0 0 10px rgba(56,189,248,0.3) !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
 
-    /* 内部アイコン（SVG）の着色・可視化 */
+    /* 内部アイコン（SVG）の着色・可視化を徹底強化 */
     [data-testid="collapsedControl"] svg,
     [data-testid="stSidebarCollapsedControl"] svg,
     [data-testid="stSidebarCollapseButton"] svg,
-    button[aria-label*="sidebar" i] svg {
+    button[aria-label*="sidebar" i] svg,
+    header button svg {
         display: block !important;
         visibility: visible !important;
         opacity: 1 !important;
-        width: 20px !important;
-        height: 20px !important;
+        width: 22px !important;
+        height: 22px !important;
         color: #38bdf8 !important;
         fill: #38bdf8 !important;
         stroke: #38bdf8 !important;
@@ -263,10 +270,10 @@ def inject_css():
     [data-testid="stSidebarCollapseButton"]:hover {
         background: rgba(56, 189, 248, 0.25) !important;
         border-color: #38bdf8 !important;
-        transform: scale(1.05);
+        box-shadow: 0 0 14px rgba(56,189,248,0.7) !important;
     }
 
-    /* 右上の設定メニューのみ非表示 */
+    /* 右上の設定メニュー（デバッグ・不要ツールバー）のみ非表示 */
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] {
         display: none !important;
@@ -324,15 +331,17 @@ def inject_css():
         text-overflow: ellipsis;
     }
     
-    /* 上部固定ナビゲーションバー（左上アイコンと物理的に被らないよう右へオフセット） */
+    /* ─────────────────────────────────────────────────────────────
+       上部固定ナビゲーションバー（右寄りを完全修正し、画面の真ん中水平中央に配置）
+       ───────────────────────────────────────────────────────────── */
     .fixed-top-nav-bar {
         position: fixed !important;
         top: 0.45rem !important;
-        left: calc(50% + 24px) !important;
+        left: 50% !important;
         transform: translateX(-50%) !important;
         z-index: 999980 !important;
-        width: min(480px, calc(100vw - 6.5rem)) !important;
-        background: rgba(5,8,17,0.94) !important;
+        width: min(510px, calc(100vw - 6.5rem)) !important;
+        background: rgba(5,8,17,0.95) !important;
         backdrop-filter: blur(14px) !important;
         border: none !important;
         border-radius: 9px !important;
@@ -357,6 +366,7 @@ def inject_css():
         flex-direction: row !important;
         flex-wrap: nowrap !important;
         align-items: center !important;
+        justify-content: center !important;
         gap: 5px !important;
         width: 100% !important;
         border: none !important;
@@ -831,7 +841,7 @@ for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 
-# 上部固定ナビゲーションバー
+# 上部固定ナビゲーションバー（左右対称・完全中央揃え）
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
     nav_c1, nav_c2, nav_c3 = st.columns([1, 1.45, 1])
@@ -884,23 +894,55 @@ components.html(
     (function(){{
         const doc = window.parent.document;
         
-        function fixTopNav(){{
+        function enforceDisplay(){{
             try {{
-                const marker = doc.querySelector('.top-nav-marker');
-                if(!marker) return;
-                let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
-                if(box && box.querySelector('[data-testid="stHorizontalBlock"]')){{
-                    box.classList.add('fixed-top-nav-bar');
-                    box.querySelectorAll('button').forEach(btn => {{
-                        btn.addEventListener('mouseup', function(){{ this.blur(); }});
-                        btn.addEventListener('mouseleave', function(){{ this.blur(); }});
+                const selectors = [
+                    '[data-testid="collapsedControl"]',
+                    '[data-testid="stSidebarCollapsedControl"]',
+                    '[data-testid="stSidebarCollapseButton"]',
+                    'header button[kind="headerNoPadding"]',
+                    'header button[data-testid="baseButton-headerNoPadding"]',
+                    'button[aria-label*="sidebar" i]'
+                ];
+                selectors.forEach(sel => {{
+                    doc.querySelectorAll(sel).forEach(el => {{
+                        el.style.setProperty('display', 'flex', 'important');
+                        el.style.setProperty('visibility', 'visible', 'important');
+                        el.style.setProperty('opacity', '1', 'important');
+                        el.style.setProperty('pointer-events', 'auto', 'important');
+                        el.style.setProperty('z-index', '2147483647', 'important');
+                        el.style.setProperty('position', 'fixed', 'important');
+                        el.style.setProperty('top', '8px', 'important');
+                        el.style.setProperty('left', '9px', 'important');
+                        const s = el.querySelector('svg');
+                        if(s){{
+                            s.style.setProperty('display', 'block', 'important');
+                            s.style.setProperty('visibility', 'visible', 'important');
+                            s.style.setProperty('color', '#38bdf8', 'important');
+                            s.style.setProperty('fill', '#38bdf8', 'important');
+                            s.style.setProperty('stroke', '#38bdf8', 'important');
+                        }}
                     }});
+                }});
+
+                const marker = doc.querySelector('.top-nav-marker');
+                if(marker){{
+                    let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
+                    if(box && box.querySelector('[data-testid="stHorizontalBlock"]')){{
+                        box.classList.add('fixed-top-nav-bar');
+                        box.querySelectorAll('button').forEach(btn => {{
+                            btn.addEventListener('mouseup', function(){{ this.blur(); }});
+                            btn.addEventListener('mouseleave', function(){{ this.blur(); }});
+                        }});
+                    }}
                 }}
             }} catch(e){{}}
         }}
 
-        fixTopNav();
-        setTimeout(fixTopNav, 100);
+        enforceDisplay();
+        setTimeout(enforceDisplay, 80);
+        setTimeout(enforceDisplay, 250);
+        setTimeout(enforceDisplay, 600);
 
         function scrollToTopAbsolute(){{
             try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
