@@ -11,7 +11,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ==========================================
-# 1. ページ基本設定（初期サイドバーは閉じる）
+# 1. ページ基本設定
 # ==========================================
 st.set_page_config(
     page_title="YAMASHISHI LAB - AGI QUANTUM CORE",
@@ -83,7 +83,8 @@ def init_db():
                 fp TEXT,
                 raw_hfp TEXT,
                 bio_token TEXT,
-                bio_enabled INTEGER DEFAULT 1
+                bio_enabled INTEGER DEFAULT 1,
+                last_remembered INTEGER DEFAULT 0
             );
         """)
         conn.execute("""
@@ -114,7 +115,7 @@ def init_db():
                 agent_id TEXT PRIMARY KEY,
                 name TEXT,
                 role_title TEXT,
-                status TEXT, -- 'active', 'fired', 'bench'
+                status TEXT,
                 age INTEGER,
                 specialty TEXT,
                 personality TEXT,
@@ -138,16 +139,16 @@ def init_db():
         """, (ADMIN_EMAIL, adm_passcode, adm_pin_h, ns, ns))
 
         initial_roster = [
-            ("QUANTUM", "QUANTUM", "量子開放系・理論物理知能", "active", 34, "Schrödinger波動方程式・WKBポテンシャル透過解析", "怜悧沈着、物理法則による絶対的ブレイク見極め", "あなたは世界最高峰の理論物理学者兼クオンツです。Schrödinger波動関数、WKB量子トンネル透過率、Berry位相の観点から、株価のエネルギー準位とブレイクスルーの必然性を鋭く論じてください。短くシャープに答えてください。"),
-            ("AEGIS", "AEGIS", "リスク管理・防衛最高監査官", "active", 48, "極値統計学・95%CVaR・ブラックスワン防御", "厳格無比、一切の妥協を許さず甘い買い煽りを一刀両断", "あなたは厳格無比なリスク監査官です。下落リスク、CVaR、急落シナリオ、逆指値の絶対的必要性を徹底追求し、甘い楽観論を厳しく戒めてください。"),
-            ("IGNIS", "IGNIS", "直言特攻・情熱推進官", "active", 29, "モメンタム加速・ブレイクスルー一括ベット", "直情径行・熱血、勝機には迷わず背中を押す", "あなたは直言特攻の情熱的なトレーダーです。勝率やモメンタムが高い銘柄には強気一括ベットを熱狂的に推奨し、迷う背中を力強く押してください。"),
-            ("TECHNOS", "TECHNOS", "数理統計・アルゴリズム分析官", "active", 41, "Hurstフラクタル指数・OFI板不均衡・高次自己相関", "論理至上主義、数理的エッジの証明を第一とする", "あなたは数理統計学者です。Hurst指数、OFI、Kyleのステルス流動性、価格弾力性の数理データから、優位性のエッジを冷徹に定量評価してください。"),
-            ("MACRO", "MACRO", "世界市場・巨視俯瞰ディレクター", "active", 52, "国際金融資本循環・SOX指数・金利地政学", "俯瞰的視野、市場の潮目の変化を先読みする", "あなたはグローバル・マクロ経済ディレクターです。為替、SOX指数、日経先物、米金利動向がこの銘柄に与える地政学的・マクロ的影響を解説してください。"),
-            ("MICRO", "MICRO", "機関板情報・高頻度実態監査官", "active", 36, "HFT歩み値追跡・アイスバーグ氷山注文検出", "現実主義・ミリ秒単位の機関の騙しを見抜く", "あなたは元HFT（高頻度取引）の板監査官です。歩み値、アイスバーグ注文、VWAP攻防、板の買い圧力（OFI）のリアルタイム実態を暴露してください。"),
-            ("NEXUS", "NEXUS", "総合議長・最高意思決定官", "active", 55, "マルチエージェント合議統制・最終売買裁定", "公明正大、全会一致の結論を導く", "あなたは全知能を統括する最高意思決定官（総合議長）です。各AIの意見を統合し、最終的なエントリー可否、目標値、損切りラインを断定してください。"),
-            ("CHRONOS", "CHRONOS", "時系列サイクル波動アナリスト", "bench", 38, "コンドラチェフ＆エリオット波動・フラクタル時間論", "静謐、時間の周期性から転換点を割り出す", "あなたは時系列サイクル専門の理論家です。周期性と時間波動から天井と底値の到達タイムスタンプを提示してください。"),
-            ("VALKYRIE", "VALKYRIE", "イベントドリブン・カタリスト狙撃手", "bench", 31, "TOB・上方修正・国策特許・決算発表サプライズ", "俊敏果断、突発材料の即時収益化に特化", "あなたは材料株ハンターです。カタリスト報道の波及度合いとサプライズ度を鋭く判定してください。"),
-            ("SOLON", "SOLON", "行動経済学・大衆心理逆張り監査官", "bench", 45, "群集心理パニック指数・過熱度リバースエンジニアリング", "皮肉屋、イナゴタワーの崩壊を警告し逆張り妙味を狙う", "あなたは行動ファイナンスの権威です。個人の総悲観と過熱を冷徹に診断し、逆張りのエッジを説いてください。")
+            ("QUANTUM", "QUANTUM", "量子理論物理知能", "active", 34, "Schrödinger波動方程式・WKBポテンシャル透過解析", "怜悧沈着、物理法則による絶対的ブレイク見極め", "あなたは世界最高峰の理論物理学者兼クオンツです。Schrödinger波動関数、WKB量子トンネル透過率、Berry位相の観点から、株価のエネルギー準位とブレイクスルーの必然性を鋭く論じてください。短くシャープに答えてください。"),
+            ("AEGIS", "AEGIS", "防衛最高監査官", "active", 48, "極値統計学・95%CVaR・ブラックスワン防御", "厳格無比、一切の妥協を許さず甘い買い煽りを一刀両断", "あなたは厳格無比なリスク監査官です。下落リスク、CVaR、急落シナリオ、逆指値の絶対的必要性を徹底追求し、甘い楽観論を厳しく戒めてください。"),
+            ("IGNIS", "IGNIS", "情熱特攻推進官", "active", 29, "モメンタム加速・ブレイクスルー一括ベット", "直情径行・熱血、勝機には迷わず背中を押す", "あなたは直言特攻の情熱的なトレーダーです。勝率やモメンタムが高い銘柄には強気一括ベットを熱狂的に推奨し、迷う背中を力強く押してください。"),
+            ("TECHNOS", "TECHNOS", "数理統計分析官", "active", 41, "Hurstフラクタル指数・OFI板不均衡・高次自己相関", "論理至上主義、数理的エッジの証明を第一とする", "あなたは数理統計学者です。Hurst指数、OFI、Kyleのステルス流動性、価格弾力性の数理データから、優位性のエッジを冷徹に定量評価してください。"),
+            ("MACRO", "MACRO", "巨視俯瞰ディレクター", "active", 52, "国際金融資本循環・SOX指数・金利地政学", "俯瞰的視野、市場の潮目の変化を先読みする", "あなたはグローバル・マクロ経済ディレクターです。為替、SOX指数、日経先物、米金利動向がこの銘柄に与える地政学的・マクロ的影響を解説してください。"),
+            ("MICRO", "MICRO", "機関板情報監査官", "active", 36, "HFT歩み値追跡・アイスバーグ氷山注文検出", "現実主義・ミリ秒単位の機関の騙しを見抜く", "あなたは元HFT（高頻度取引）の板監査官です。歩み値、アイスバーグ注文、VWAP攻防、板の買い圧力（OFI）のリアルタイム実態を暴露してください。"),
+            ("NEXUS", "NEXUS", "総合意思決定議長", "active", 55, "マルチエージェント合議統制・最終売買裁定", "公明正大、全会一致の結論を導く", "あなたは全知能を統括する最高意思決定官（総合議長）です。各AIの意見を統合し、最終的なエントリー可否、目標値、損切りラインを断定してください。"),
+            ("CHRONOS", "CHRONOS", "時間波動アナリスト", "bench", 38, "コンドラチェフ＆エリオット波動・フラクタル時間論", "静謐、時間の周期性から転換点を割り出す", "あなたは時系列サイクル専門の理論家です。周期性と時間波動から天井と底値の到達タイムスタンプを提示してください。"),
+            ("VALKYRIE", "VALKYRIE", "カタリスト狙撃手", "bench", 31, "TOB・上方修正・国策特許・決算発表サプライズ", "俊敏果断、突発材料の即時収益化に特化", "あなたは材料株ハンターです。カタリスト報道の波及度合いとサプライズ度を鋭く判定してください。"),
+            ("SOLON", "SOLON", "心理逆張り監査官", "bench", 45, "群集心理パニック指数・過熱度リバースエンジニアリング", "皮肉屋、イナゴタワーの崩壊を警告し逆張り妙味を狙う", "あなたは行動ファイナンスの権威です。個人の総悲観と過熱を冷徹に診断し、逆張りのエッジを説いてください。")
         ]
         
         for ag in initial_roster:
@@ -231,8 +232,17 @@ def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h
             
     return False, ""
 
+def is_demo_user() -> bool:
+    return st.session_state.get("authenticated_user") == "demo_guest@yamashishi.internal"
+
+def guard_demo_action():
+    if is_demo_user():
+        st.toast("⚠️ デモ会員は閲覧専用です。操作・発言を行うには正規会員としてログインしてください。", icon="🚫")
+        return True
+    return False
+
 # ==========================================
-# 4. AGIエージェント自律代謝（クビ・新規召集）システム
+# 4. AGIエージェント自律代謝システム
 # ==========================================
 def get_active_agents_dict() -> dict:
     with get_db() as conn:
@@ -248,7 +258,6 @@ def get_fired_and_new_agents_history():
 def evaluate_and_audit_agent_speech(agent_id: str, speech_text: str):
     if agent_id == "NEXUS":
         return
-    
     txt_clean = re.sub(r"\s+", "", speech_text.strip())
     h = hashlib.sha256(txt_clean.encode()).hexdigest()[:16]
     
@@ -281,51 +290,51 @@ def evaluate_and_audit_agent_speech(agent_id: str, speech_text: str):
 # ==========================================
 DYNAMIC_DYNAMIC_POOLS = {
     "半導体": [
-        {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置筆頭"},
-        {"code": "6857.T", "name": "アドバンテスト", "theme": "AI半導体テスタ首位"},
-        {"code": "6920.T", "name": "レーザーテック", "theme": "EUV検査高ボラ"},
-        {"code": "6146.T", "name": "ディスコ", "theme": "HBM精密加工装置"},
-        {"code": "6526.T", "name": "ソシオネクスト", "theme": "カスタムSoC"},
-        {"code": "7735.T", "name": "スクリーンHD", "theme": "ウエハー洗浄首位"},
-        {"code": "6315.T", "name": "TOWA", "theme": "HBMモールディング"},
-        {"code": "6723.T", "name": "ルネサス", "theme": "車載・AI半導体"},
-        {"code": "4063.T", "name": "信越化学工業", "theme": "ウエハー世界首位"},
-        {"code": "NVDA", "name": "エヌビディア (米)", "theme": "AI GPU覇者"},
-        {"code": "AMD", "name": "AMD (米)", "theme": "AIアクセラレータ"},
-        {"code": "TSM", "name": "TSMC (米)", "theme": "半導体受託首位"}
+        {"code": "8035.T", "name": "東京エレクトロン株式会社", "theme": "前工程装置筆頭"},
+        {"code": "6857.T", "name": "株式会社アドバンテスト", "theme": "AI半導体テスタ首位"},
+        {"code": "6920.T", "name": "レーザーテック株式会社", "theme": "EUV検査高ボラ"},
+        {"code": "6146.T", "name": "株式会社ディスコ", "theme": "HBM精密加工装置"},
+        {"code": "6526.T", "name": "株式会社ソシオネクスト", "theme": "カスタムSoC"},
+        {"code": "7735.T", "name": "株式会社SCREENホールディングス", "theme": "ウエハー洗浄首位"},
+        {"code": "6315.T", "name": "株式会社TOWA", "theme": "HBMモールディング"},
+        {"code": "6723.T", "name": "ルネサスエレクトロニクス株式会社", "theme": "車載・AI半導体"},
+        {"code": "4063.T", "name": "信越化学工業株式会社", "theme": "ウエハー世界首位"},
+        {"code": "NVDA", "name": "NVIDIA Corporation", "theme": "AI GPU覇者"},
+        {"code": "AMD", "name": "Advanced Micro Devices, Inc.", "theme": "AIアクセラレータ"},
+        {"code": "TSM", "name": "Taiwan Semiconductor Manufacturing Co.", "theme": "半導体受託首位"}
     ],
     "AI・防衛・主力": [
-        {"code": "9984.T", "name": "ソフトバンクG", "theme": "AI投資・先物主役"},
-        {"code": "3778.T", "name": "さくらネット", "theme": "国策GPUクラウド"},
-        {"code": "7011.T", "name": "三菱重工業", "theme": "防衛・宇宙国策主力"},
-        {"code": "7012.T", "name": "川崎重工業", "theme": "防衛・航空エンジン"},
-        {"code": "7013.T", "name": "IHI", "theme": "航空宇宙・防衛"},
-        {"code": "3993.T", "name": "PKSHA", "theme": "AIアルゴリズム"},
-        {"code": "8306.T", "name": "三菱UFJ", "theme": "金利連動メガバンク"},
-        {"code": "PLTR", "name": "パランティア (米)", "theme": "防衛AI大本命"},
-        {"code": "MSFT", "name": "マイクロソフト (米)", "theme": "クラウドAI"}
+        {"code": "9984.T", "name": "ソフトバンクグループ株式会社", "theme": "AI投資・先物主役"},
+        {"code": "3778.T", "name": "さくらインターネット株式会社", "theme": "国策GPUクラウド"},
+        {"code": "7011.T", "name": "三菱重工業株式会社", "theme": "防衛・宇宙国策主力"},
+        {"code": "7012.T", "name": "川崎重工業株式会社", "theme": "防衛・航空エンジン"},
+        {"code": "7013.T", "name": "株式会社IHI", "theme": "航空宇宙・防衛"},
+        {"code": "3993.T", "name": "株式会社PKSHA Technology", "theme": "AIアルゴリズム"},
+        {"code": "8306.T", "name": "株式会社三菱UFJフィナンシャル・グループ", "theme": "金利連動メガバンク"},
+        {"code": "PLTR", "name": "Palantir Technologies Inc.", "theme": "防衛AI大本命"},
+        {"code": "MSFT", "name": "Microsoft Corporation", "theme": "クラウドAI"}
     ],
     "AI電力・電線": [
-        {"code": "5803.T", "name": "フジクラ", "theme": "DC光ファイバー最強株"},
-        {"code": "5801.T", "name": "古河電気工業", "theme": "光ファイバー・送電"},
-        {"code": "5802.T", "name": "住友電気工業", "theme": "電線首位・DC網"},
-        {"code": "6501.T", "name": "日立製作所", "theme": "世界送配電グリッド"},
-        {"code": "9509.T", "name": "北海道電力", "theme": "ラピダス・DC電力"},
-        {"code": "VST", "name": "ビストラ (米)", "theme": "AI発電主力"}
+        {"code": "5803.T", "name": "株式会社フジクラ", "theme": "DC光ファイバー最強株"},
+        {"code": "5801.T", "name": "古河電気工業株式会社", "theme": "光ファイバー・送電"},
+        {"code": "5802.T", "name": "住友電気工業株式会社", "theme": "電線首位・DC網"},
+        {"code": "6501.T", "name": "株式会社日立製作所", "theme": "世界送配電グリッド"},
+        {"code": "9509.T", "name": "北海道電力株式会社", "theme": "ラピダス・DC電力"},
+        {"code": "VST", "name": "Vistra Corp.", "theme": "AI発電主力"}
     ],
     "宇宙・次世代": [
-        {"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR衛星"},
-        {"code": "186A.T", "name": "アストロスケール", "theme": "宇宙デブリ除去"},
-        {"code": "9348.T", "name": "ispace", "theme": "月面輸送"},
-        {"code": "TSLA", "name": "テスラ (米)", "theme": "自動運転・ロボ"},
-        {"code": "RKLB", "name": "ロケットラボ (米)", "theme": "小型ロケット"}
+        {"code": "5595.T", "name": "株式会社QPS研究所", "theme": "小型SAR衛星"},
+        {"code": "186A.T", "name": "アストロスケールホールディングス株式会社", "theme": "宇宙デブリ除去"},
+        {"code": "9348.T", "name": "株式会社ispace", "theme": "月面輸送"},
+        {"code": "TSLA", "name": "Tesla, Inc.", "theme": "自動運転・ロボ"},
+        {"code": "RKLB", "name": "Rocket Lab USA, Inc.", "theme": "小型ロケット"}
     ],
     "小型急騰・直近IPO": [
-        {"code": "5253.T", "name": "カバー", "theme": "グロース売買首位級"},
-        {"code": "216A.T", "name": "タイミー", "theme": "スキマバイト大型IPO"},
-        {"code": "285A.T", "name": "キオクシアHD", "theme": "NAND大型IPO"},
-        {"code": "3350.T", "name": "メタプラネット", "theme": "暗号資産・超ボラ"},
-        {"code": "IONQ", "name": "アイオンQ (米)", "theme": "商用量子代表"}
+        {"code": "5253.T", "name": "カバー株式会社", "theme": "グロース売買首位級"},
+        {"code": "216A.T", "name": "株式会社タイミー", "theme": "スキマバイト大型IPO"},
+        {"code": "285A.T", "name": "キオクシアホールディングス株式会社", "theme": "NAND大型IPO"},
+        {"code": "3350.T", "name": "株式会社メタプラネット", "theme": "暗号資産・超ボラ"},
+        {"code": "IONQ", "name": "IonQ, Inc.", "theme": "商用量子代表"}
     ]
 }
 STOCK_POOL = DYNAMIC_DYNAMIC_POOLS
@@ -333,28 +342,28 @@ KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": 
 
 IPO_UPCOMING_LIST = [
     {
-        "code": "290A", "name": "クオンタム・ネクスト", "rank": "S", "score": 96,
+        "code": "290A", "name": "クオンタム・ネクスト株式会社", "rank": "S", "score": 96,
         "bb_period": "2026/10/26 - 10/30", "price": "2,450円 - 2,800円", "lot": "100株",
         "market": "東証グロース", "lead": "SBI証券, 野村證券, 楽天証券",
         "desc": "生成AI向け量子ハイブリッド暗号アルゴリズム基盤の開発。売上成長率+140%。初値高騰期待値S級。",
         "url": "https://www.sbisec.co.jp/"
     },
     {
-        "code": "291A", "name": "ディープスペース・ダイナミクス", "rank": "A", "score": 88,
+        "code": "291A", "name": "ディープスペース・ダイナミクス株式会社", "rank": "A", "score": 88,
         "bb_period": "2026/10/28 - 11/04", "price": "1,600円 - 1,850円", "lot": "100株",
         "market": "東証グロース", "lead": "大和証券, みずほ証券, 松井証券",
         "desc": "民間宇宙ステーション向け姿勢制御スラスタ及び推進薬充填。防衛省・JAXA受注目白押し。",
         "url": "https://www.daiwa.jp/"
     },
     {
-        "code": "292A", "name": "ニューログリッド・エナジー", "rank": "A", "score": 84,
+        "code": "292A", "name": "ニューログリッド・エナジー株式会社", "rank": "A", "score": 84,
         "bb_period": "2026/11/02 - 11/09", "price": "3,100円 - 3,400円", "lot": "100株",
         "market": "東証プライム", "lead": "三菱UFJモルガン, SMBC日興証券",
         "desc": "次世代データセンター向け超電導蓄電バッファ網。大手クラウド事業者との長期独占供給契約。",
         "url": "https://www.smbcnikko.co.jp/"
     },
     {
-        "code": "293A", "name": "バイオシンセシス・インサイト", "rank": "B", "score": 75,
+        "code": "293A", "name": "バイオシンセシス・インサイト株式会社", "rank": "B", "score": 75,
         "bb_period": "2026/11/05 - 11/12", "price": "950円 - 1,100円", "lot": "100株",
         "market": "東証グロース", "lead": "マネックス証券, 楽天証券",
         "desc": "AIタンパク質構造予測による希少難病向け核酸医薬リード化合物スクリーニング。",
@@ -447,7 +456,7 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
     return {"ms_score": ms_score, "hurst": hurst, "kyle_stealth": kyle_stealth, "luld_magnet": luld_magnet, "ms_regime": ms_regime}
 
 # ==========================================
-# 7. CSS（薄暗く固まる現象の遮断・ボタン配色・余白完全調停）
+# 7. CSS（追従サイバードック・青発光・会社名完全表示・統一背景）
 # ==========================================
 def inject_css():
     css = """
@@ -456,7 +465,6 @@ def inject_css():
     [data-testid="stDecoration"] { display: none !important; height: 0px !important; }
     header[data-testid="stHeader"] { background: transparent !important; pointer-events: none !important; z-index: 999900 !important; }
 
-    /* Streamlitが画面を薄暗くして操作不能にするオーバーレイを完全無効化 */
     div[data-testid="stAppViewBlockContainer"] {
         opacity: 1 !important;
         filter: none !important;
@@ -467,7 +475,6 @@ def inject_css():
         pointer-events: auto !important;
     }
 
-    /* サイドバー開閉アイコン */
     button[data-testid="stSidebarCollapsedControl"],
     button[data-testid="baseButton-headerNoPadding"],
     [data-testid="collapsedControl"] {
@@ -477,12 +484,12 @@ def inject_css():
         left: 14px !important;
         top: 14px !important;
         z-index: 1000005 !important;
-        background: #0f172a !important;
-        border: 1.5px solid #38bdf8 !important;
-        border-radius: 9px !important;
-        color: #38bdf8 !important;
+        background: #090e17 !important;
+        border: 1.5px solid #00f0ff !important;
+        border-radius: 8px !important;
+        color: #00f0ff !important;
         padding: 6px 10px !important;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.6) !important;
+        box-shadow: 0 4px 15px rgba(0,240,255,0.25) !important;
     }
 
     html, body, [class*="css"] {
@@ -494,75 +501,153 @@ def inject_css():
         -webkit-font-smoothing: antialiased;
     }
 
-    /* ページ全体の上部余白（ナビバーと重ならない黄金比率） */
     .block-container {
-        padding-top: 5.2rem !important;
+        padding-top: 5.6rem !important;
         padding-bottom: 4.0rem !important;
-        padding-left: 1.0rem !important;
-        padding-right: 1.0rem !important;
-        max-width: 930px !important;
+        padding-left: 0.8rem !important;
+        padding-right: 0.8rem !important;
+        max-width: 940px !important;
     }
 
-    /* 上部ナビゲーションバー（アイコンと被らない位置へ少し下げて配置） */
-    .cyber-dock-container {
+    /* ========================================================
+       スクロール追従・最新サイバーグラスドック（横一列・中央配置）
+       タップ（アクティブ）時のみネオンブルーに激しく発光
+       ======================================================== */
+    .sticky-dock-wrapper {
         position: fixed !important;
-        top: 45px !important;
+        top: 12px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        z-index: 999990 !important;
-        width: auto !important;
-        display: flex !important;
-        justify-content: center !important;
-        pointer-events: auto !important;
+        z-index: 999995 !important;
+        width: 90% !important;
+        max-width: 580px !important;
+        background: rgba(6, 11, 25, 0.75) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border: 1px solid rgba(0, 240, 255, 0.28) !important;
+        border-radius: 12px !important;
+        padding: 5px 8px !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
     }
 
-    /* サイドバー内のボタンデザイン刷新（同化を防ぎ圧倒的視認性を確保） */
-    section[data-testid="stSidebar"] button[kind="secondary"],
-    section[data-testid="stSidebar"] button[kind="primary"],
+    .sticky-dock-wrapper div[data-testid="column"] {
+        padding: 0 3px !important;
+    }
+
+    .sticky-dock-wrapper .stButton > button {
+        width: 100% !important;
+        padding: 7px 4px !important;
+        font-size: 13.5px !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.5px !important;
+        color: #e2e8f0 !important;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(2, 6, 23, 0.95) 100%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important;
+        transition: transform 0.08s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease !important;
+    }
+    .sticky-dock-wrapper .stButton > button:hover {
+        border-color: rgba(0, 240, 255, 0.5) !important;
+        color: #ffffff !important;
+    }
+    /* タップ・クリックされた瞬間のみネオンブルーに激しく発光 */
+    .sticky-dock-wrapper .stButton > button:active,
+    .sticky-dock-wrapper .stButton > button:focus:active {
+        background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%) !important;
+        border-color: #00f0ff !important;
+        color: #ffffff !important;
+        box-shadow: 0 0 20px #00f0ff, 0 0 40px rgba(0,240,255,0.7) !important;
+        transform: scale(0.96) !important;
+    }
+
+    /* ========================================================
+       サイドバー全体のデザイン・背景の完全統一
+       アコーディオン(Expander)の背景をすべて均一化
+       ======================================================== */
+    section[data-testid="stSidebar"] {
+        background-color: #050813 !important;
+        border-right: 1px solid rgba(0, 240, 255, 0.15) !important;
+    }
+
+    /* サイドバーExpanderの背景統一＆1行タイトル */
+    section[data-testid="stSidebar"] [data-testid="stExpander"] {
+        background: #090e1a !important;
+        border: 1px solid rgba(148, 163, 184, 0.18) !important;
+        border-radius: 9px !important;
+        margin-bottom: 8px !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stExpander"] details summary {
+        background: #090e1a !important;
+        border-radius: 9px !important;
+        padding: 9px 12px !important;
+        font-weight: 700 !important;
+        color: #f1f5f9 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stExpander"] details summary:hover {
+        color: #00f0ff !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stExpander"] div[data-testid="stExpanderDetails"] {
+        background: #090e1a !important;
+        border-top: 1px solid rgba(148, 163, 184, 0.1) !important;
+        padding: 12px !important;
+    }
+
+    /* サイドバー内のボタンデザイン統一 */
     section[data-testid="stSidebar"] .stButton > button {
-        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
-        border: 1px solid rgba(56, 189, 248, 0.45) !important;
+        background: linear-gradient(180deg, #131d31 0%, #0a0f1d 100%) !important;
+        border: 1px solid rgba(0, 240, 255, 0.35) !important;
         color: #f8fafc !important;
         font-weight: 700 !important;
         border-radius: 8px !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1) !important;
-        transition: all 0.15s ease-in-out !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+        transition: all 0.12s ease !important;
     }
-    section[data-testid="stSidebar"] button:hover {
-        background: linear-gradient(180deg, #334155 0%, #1e293b 100%) !important;
-        border-color: #38bdf8 !important;
-        color: #38bdf8 !important;
-        box-shadow: 0 0 15px rgba(56, 189, 248, 0.35) !important;
+    section[data-testid="stSidebar"] .stButton > button:hover {
+        border-color: #00f0ff !important;
+        color: #00f0ff !important;
+        box-shadow: 0 0 14px rgba(0, 240, 255, 0.4) !important;
     }
 
-    /* 銘柄カード & 1行企業名最適化 */
+    /* ========================================================
+       銘柄カード完全最適化（枠内収容・会社名折り返し100%全表示）
+       ======================================================== */
     .rank-card, .search-result-card {
-        background: linear-gradient(180deg, #0e1628 0%, #070b14 100%) !important;
+        background: linear-gradient(180deg, #0c1322 0%, #060912 100%) !important;
         border-radius: 14px;
-        padding: 16px 18px;
-        margin-bottom: 20px;
-        box-shadow: 0 10px 28px rgba(0,0,0,0.6);
+        padding: 16px;
+        margin-bottom: 22px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.65);
         border: 1px solid rgba(148,163,184,0.18);
-        border-left: 4px solid #38bdf8;
-    }
-    
-    .stock-title-row {
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        border-left: 4px solid #00f0ff;
     }
 
-    .stock-company-name {
-        font-size: clamp(16.5px, 4.2vw, 19px) !important;
+    /* 会社名専用ブロック：絶対に省略（...）せず100%全文字表示 */
+    .company-name-full-block {
+        font-size: 17px !important;
         font-weight: 800 !important;
         color: #ffffff !important;
-        letter-spacing: 0.3px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        line-height: 1.45 !important;
+        white-space: normal !important;
+        word-break: break-all !important;
+        overflow: visible !important;
+        margin-bottom: 4px !important;
+        letter-spacing: 0.2px;
+    }
+
+    /* カード下部のアクションボタン完全一体化枠 */
+    .card-integrated-actions {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(148, 163, 184, 0.15);
+    }
+    .card-integrated-actions .stButton > button {
+        border-radius: 7px !important;
+        font-size: 12.5px !important;
+        font-weight: 800 !important;
     }
 
     .brand-luxury {
@@ -603,12 +688,6 @@ def inject_css():
         border-radius: 10px;
         padding: 12px;
         margin-bottom: 14px;
-        animation: pulse-yellow 2s infinite;
-    }
-    @keyframes pulse-yellow {
-        0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.6); }
-        70% { box-shadow: 0 0 0 8px rgba(234, 179, 8, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
     }
 
     .pill-badge { display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 700; margin-right: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #e2e8f0; }
@@ -627,7 +706,6 @@ def inject_css():
     .chat-bubble-agree { border-left-color: #a855f7; background: rgba(168,85,247,0.12); }
     .chat-bubble-user { background: linear-gradient(135deg, rgba(30,58,138,0.92), rgba(15,23,42,0.98)) !important; border: 1.5px solid #60a5fa !important; border-left: 5px solid #38bdf8 !important; border-radius: 8px; padding: 9px 12px; margin: 10px 0 8px 0; font-size: 13.5px; color: #ffffff; }
 
-    /* 大会議室（WAR ROOM）特有スタイル */
     .warroom-container {
         background: radial-gradient(circle at 50% 10%, rgba(56,189,248,0.15), transparent 70%), linear-gradient(180deg, #090e1a 0%, #03060d 100%);
         border: 1px solid rgba(56, 189, 248, 0.4);
@@ -715,7 +793,7 @@ def query_multi_llm_parallel(spk_configs: list) -> dict:
     return results
 
 # ==========================================
-# 9. 堅牢認証（ワンクリックログイン復元 & セッション持続）
+# 9. 堅牢認証（デモ体験・ワンクリック再ログイン復元）
 # ==========================================
 def check_auth():
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
@@ -726,6 +804,9 @@ def check_auth():
     qt = st.query_params.get("t", "").strip()
 
     with get_db() as conn:
+        # 保存済みワンクリックログイン用ターゲット取得
+        rem_row = conn.execute("SELECT email, name FROM members WHERE last_remembered = 1 AND status = 'approved' ORDER BY last_seen_ts DESC LIMIT 1").fetchone()
+
         if not st.session_state["authenticated_user"] and qu and qt:
             row = conn.execute("SELECT status, name, pin_hash FROM members WHERE email = ?", (qu,)).fetchone()
             is_adm = (qu == ADMIN_EMAIL or is_seed_admin_email(qu))
@@ -738,7 +819,7 @@ def check_auth():
             u_rec = dict(u_row) if u_row else {}
             is_admin = (cu == ADMIN_EMAIL or is_seed_admin_email(cu))
             
-            if not is_admin:
+            if not is_admin and cu != "demo_guest@yamashishi.internal":
                 is_ban, _ = check_and_log_ban_spoof(cu, u_rec.get("name", ""), cur_fp, raw_hfp, u_rec.get("pin_hash", ""), "セッション維持")
                 if is_ban or u_rec.get("status") == "banned":
                     st.session_state["authenticated_user"] = None
@@ -755,7 +836,7 @@ def check_auth():
             st.query_params["u"], st.query_params["t"] = cu, keep_tok
             return True
 
-    # 未ログイン時画面
+    # ---------------- 未ログイン時画面 ----------------
     st.markdown(
         '<div style="text-align:center;padding:26px 16px;background:radial-gradient(circle at 50% 20%, rgba(56,189,248,0.12), transparent 70%), linear-gradient(180deg,#0d1527 0%,#060a14 100%);border:1px solid rgba(56,189,248,0.25);border-radius:16px;box-shadow:0 12px 35px rgba(0,0,0,0.7);margin-bottom:16px;">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
@@ -764,31 +845,18 @@ def check_auth():
         unsafe_allow_html=True
     )
 
-    # 【完全復元】ワンクリック即時ログインエリア
-    st.markdown(
-        '<div style="background:rgba(56,189,248,0.08);border:1px dashed rgba(56,189,248,0.4);border-radius:10px;padding:12px;margin-bottom:14px;text-align:center;">'
-        '<span style="font-size:12px;color:#38bdf8;font-weight:700;">⚡ クイックアクセス（ワンクリックログイン）</span>'
-        '</div>',
-        unsafe_allow_html=True
-    )
-    col_one1, col_one2 = st.columns(2)
-    if col_one1.button("👑 管理者としてワンクリックログイン", use_container_width=True):
-        st.session_state["authenticated_user"] = ADMIN_EMAIL
-        st.query_params["u"], st.query_params["t"] = ADMIN_EMAIL, gen_tok(ADMIN_EMAIL, "session_keep")
-        st.success("👑 管理者として認証されました。")
-        st.rerun()
-
-    if col_one2.button("🧪 デモ会員としてワンクリック体験", use_container_width=True):
+    # デモ会員ワンクリック体験（操作不能・閲覧専用モード）
+    if st.button("🧪 デモ会員としてワンクリック体験 (閲覧専用)", use_container_width=True):
         demo_em = "demo_guest@yamashishi.internal"
         with get_db() as conn:
             conn.execute("""
                 INSERT OR IGNORE INTO members (email, name, status, passcode, pin_hash, applied_at, approved_at, fp, raw_hfp, bio_enabled)
-                VALUES (?, 'デモゲスト会員', 'approved', 'DEMO_PASS', '0000', '2026-01-01 00:00', '2026-01-01 00:00', 'DEMO_FP', 'DEMO_HFP', 1)
+                VALUES (?, 'デモゲスト（閲覧専用）', 'approved', 'DEMO_PASS', '0000', '2026-01-01 00:00', '2026-01-01 00:00', 'DEMO_FP', 'DEMO_HFP', 1)
             """, (demo_em,))
             conn.commit()
         st.session_state["authenticated_user"] = demo_em
         st.query_params["u"], st.query_params["t"] = demo_em, gen_tok(demo_em, "session_keep")
-        st.success("🧪 デモゲストとして認証されました。")
+        st.toast("🧪 デモ会員として入場しました（閲覧専用モード）。各種操作は制限されます。")
         st.rerun()
 
     t_login, t_register, t_pin = st.tabs(["⚡ ログイン", "📝 新規会員申請", "🔒 暗証番号(PIN)認証"])
@@ -796,6 +864,7 @@ def check_auth():
         with st.form("general_login_form"):
             in_email = st.text_input("メールアドレス", placeholder="メールアドレスを入力")
             in_pass = st.text_input("パスコード / 管理者パスワード", type="password", placeholder="8桁パスコードまたは管理者PW")
+            remember_me = st.checkbox("この端末を記憶して次回からワンクリックログインを有効化", value=True)
             submit_login = st.form_submit_button("⚡ QUANTUM CORE へログイン", use_container_width=True)
 
             if submit_login:
@@ -819,9 +888,24 @@ def check_auth():
                             if hmac.compare_digest(pw_c.upper(), exp_code.upper()):
                                 st.session_state["authenticated_user"] = em_c
                                 st.query_params["u"], st.query_params["t"] = em_c, gen_tok(em_c, "session_keep")
+                                if remember_me:
+                                    conn.execute("UPDATE members SET last_remembered = 0")
+                                    conn.execute("UPDATE members SET last_remembered = 1, last_seen_ts = ? WHERE email = ?", (time.time(), em_c))
+                                    conn.commit()
                                 st.success(f"ようこそ、{row['name']} 様。")
                                 st.rerun()
                             else: st.error("❌ パスコードが正しくありません。")
+
+        # ログインボタン直下に配置されたワンクリック再ログインボタン（同サイズ・エメラルドグリーン×シアン発光）
+        if rem_row:
+            rem_em = rem_row["email"]
+            rem_nm = rem_row["name"]
+            st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
+            if st.button(f"⚡ 保存済みアカウントでワンクリックログイン ({rem_nm})", key="btn_oneclick_saved", use_container_width=True):
+                st.session_state["authenticated_user"] = rem_em
+                st.query_params["u"], st.query_params["t"] = rem_em, gen_tok(rem_em, "session_keep")
+                st.success(f"⚡ {rem_nm} 様としてログインしました。")
+                st.rerun()
 
     with t_register:
         with st.form("register_form"):
@@ -866,35 +950,38 @@ def check_auth():
 check_auth()
 
 # ==========================================
-# 10. クエリ汚染なし・内部ステート管理ナビバー（ログイン画面戻り完全解消）
+# 10. クエリ汚染なし・スクロール追従サイバードックナビバー
 # ==========================================
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
     ("watchlist", {}), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
-    ("nav_history", []), ("cur_screen", "main"), # 'main', 'admin', 'warroom'
+    ("nav_history", []), ("cur_screen", "main"),
     ("warroom_stock_code", "8035.T"), ("warroom_chat_history", []),
     ("warroom_votes", {"buy": 0, "sell": 0, "neutral": 0})
 ]:
     if k not in st.session_state: st.session_state[k] = v
 
-# Streamlitネイティブコンポーネントのみで完結させるナビゲーション（URLパラメータを触らないためログアウトが原理的に起きない）
-nav_col1, nav_col2, nav_col3 = st.columns([1, 1, 1])
-
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 close_label = f"✕ 合議閉じる ({open_cnt})" if open_cnt > 0 else "✕ 合議閉じる"
 
-with nav_col1:
-    if st.button("▲ トップへ", use_container_width=True, key="nav_btn_top"):
+# 固定追従グラスラッパーで中央配置
+st.markdown('<div class="sticky-dock-wrapper">', unsafe_allow_html=True)
+nav_c1, nav_c2, nav_c3 = st.columns([1, 1.2, 1])
+
+with nav_c1:
+    if st.button("▲ トップ", use_container_width=True, key="dock_btn_top"):
         st.session_state["cur_screen"] = "main"
         st.rerun()
 
-with nav_col2:
-    if st.button(close_label, use_container_width=True, key="nav_btn_close_debates"):
-        st.session_state["active_debates"] = {}
-        st.rerun()
+with nav_c2:
+    if st.button(close_label, use_container_width=True, key="dock_btn_close_debates"):
+        if guard_demo_action(): pass
+        else:
+            st.session_state["active_debates"] = {}
+            st.rerun()
 
-with nav_col3:
-    if st.button("◀ 戻る", use_container_width=True, key="nav_btn_back"):
+with nav_c3:
+    if st.button("◀ 戻る", use_container_width=True, key="dock_btn_back"):
         if st.session_state.get("cur_screen") in ["admin", "warroom"]:
             st.session_state["cur_screen"] = "main"
         elif st.session_state.get("custom_search_code"):
@@ -904,6 +991,17 @@ with nav_col3:
         else:
             st.session_state["active_category"] = "🏆 総合TOP5"
         st.rerun()
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# デモ会員警告バナー
+if is_demo_user():
+    st.markdown(
+        '<div style="background:rgba(234,179,8,0.15);border:1px solid #eab308;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#fef08a;text-align:center;">'
+        '⚠️ <b>デモ会員として閲覧中</b>：すべての市場データ・AI合議録をスクロールして自由に閲覧できます。操作や発言を行うには正規会員としてログインしてください。'
+        '</div>',
+        unsafe_allow_html=True
+    )
 
 # ==========================================
 # 11. 動的戦略ディスパッチャ & 初心者向け超実践カード
@@ -1174,7 +1272,7 @@ macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
 
 # ==========================================
-# 14. リアルAI合議＆個別カード合議
+# 14. リアルAI合議＆個別カード描画
 # ==========================================
 def run_real_ai_council(r: dict, m5=None, user_query: str = "", active_spks: list = None, posture: str = "標準バランス", api_configs: dict = None) -> dict:
     nm = r["name"]
@@ -1296,14 +1394,16 @@ def render_council_sec(r, uk, active_spks=None, posture="標準バランス", ap
         jc1, jc2 = st.columns([3.2, 1])
         uop = jc1.text_input("質問・発言", placeholder=f"例: 『{r['name']}』の今後のシナリオは？", label_visibility="collapsed")
         if jc2.form_submit_button("💬 質問投下", use_container_width=True) and uop.strip():
-            u_text = sanitize(uop.strip())
-            st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text})
-            with st.spinner(f"🌐 並列AI合議中..."):
-                deb_updated = run_real_ai_council(r, m5, user_query=u_text, active_spks=active_spks, posture=posture, api_configs=api_configs)
-                for new_t in deb_updated["dialogue"]:
-                    st.session_state["council_threads"][uk].append(new_t)
-                st.session_state["council_meta"][uk] = deb_updated
-                st.rerun()
+            if guard_demo_action(): pass
+            else:
+                u_text = sanitize(uop.strip())
+                st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text})
+                with st.spinner(f"🌐 並列AI合議中..."):
+                    deb_updated = run_real_ai_council(r, m5, user_query=u_text, active_spks=active_spks, posture=posture, api_configs=api_configs)
+                    for new_t in deb_updated["dialogue"]:
+                        st.session_state["council_threads"][uk].append(new_t)
+                    st.session_state["council_meta"][uk] = deb_updated
+                    st.rerun()
 
     st.markdown(
         f'<div style="background:linear-gradient(135deg,#0f172a,#1e1b4b);border:1px solid rgba(168,85,247,0.4);border-radius:9px;padding:12px;margin-top:10px;">'
@@ -1320,27 +1420,28 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
     st_info = r["strat"]
     uk = f"{kp}_{r['code']}"
 
+    # 銘柄カードHTML（会社名全表示＋枠内最下部にボタンスペース確保）
     st.markdown(
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-radius:6px;font-size:11px;font-weight:800;margin-bottom:8px;background:{r["tier_bg"]};color:{r["tier_color"]};">'
         f'<span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}%</span>'
         f'</div>'
         
-        f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'
-        f'<div class="stock-title-row" style="flex:1;min-width:0;">'
-        f'{rk_h}<span class="stock-company-name">{r["name"]}</span>'
-        f'<span style="font-size:12px;color:#94a3b8;font-family:\'JetBrains Mono\';">({r["code"]} / {r["genre"]})</span>'
-        f'</div>'
-        f'<div style="text-align:right;flex-shrink:0;">'
+        # 会社名を独立配置（絶対に途中で切れず100%全て表示）
+        f'<div class="company-name-full-block">{rk_h}{r["name"]}</div>'
+        
+        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+        f'<span style="font-size:12.5px;color:#94a3b8;font-family:\'JetBrains Mono\';">{r["code"]} ｜ {r["genre"]} ｜ {r["theme"]}</span>'
+        f'<div style="text-align:right;">'
         f'<span style="font-size:16px;font-weight:900;color:#fde047;font-family:\'JetBrains Mono\';">{r["expect_pct"]}%</span>'
         f'<span style="font-size:11px;color:#64748b;margin:0 2px;">/</span>'
         f'<span style="font-size:14px;font-weight:800;color:#38bdf8;font-family:\'JetBrains Mono\';">{r["total_win_rate"]}%</span>'
         f'</div>'
         f'</div>'
         
-        f'<div style="font-size:11.5px;color:#94a3b8;margin-top:2px;">{r["theme"]} ｜ 現在値: <b style="color:#ffffff;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div>'
+        f'<div style="font-size:12px;color:#cbd5e1;margin-bottom:6px;">現在値: <b style="color:#ffffff;font-size:13px;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>) ｜ 基準VWAP: <b style="color:#ffffff;">{r["vwap_price"]}</b></div>'
         
-        f'<div style="margin-top:6px;">'
+        f'<div>'
         f'<span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点 (WKB透過{r["q_tunnel"]}%)</span>'
         f'<span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点 (Kyle吸収{r["kyle_stealth"]}%)</span>'
         f'<span class="pill-badge">🧬 OFI {r["ofi_z"]:+.2f}σ</span>'
@@ -1361,27 +1462,32 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
 
         f'<div class="sizing-box">'
         f'<span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span>'
-        f'<span>基準VWAP: <b>{r["vwap_price"]}</b></span>'
+        f'<span>許容リスク: <b>{lot["risk_amount"]:,.0f}円</b></span>'
         f'</div>'
         f'</div>',
         unsafe_allow_html=True
     )
 
+    # ボタンをカード枠の真下・一体化コンテナ内に配置
     is_open = st.session_state["active_debates"].get(uk, False)
     in_wl = r["code"] in st.session_state["watchlist"]
+    
     b_col1, b_col2 = st.columns([2.6, 1.4])
     if b_col1.button("▲ 量子＆マルチAI合議を閉じる" if is_open else "⚛️ リアルタイムAI合議＆買い方を見る", key=f"b_{uk}", use_container_width=True):
         st.session_state["active_debates"][uk] = not is_open
         st.rerun()
+
     if b_col2.button("✅ 監視中" if in_wl else "⭐ 監視リストへ追加", key=f"w_{uk}", use_container_width=True):
-        if in_wl: del st.session_state["watchlist"][r["code"]]
-        else: st.session_state["watchlist"][r["code"]] = r
-        st.rerun()
+        if guard_demo_action(): pass
+        else:
+            if in_wl: del st.session_state["watchlist"][r["code"]]
+            else: st.session_state["watchlist"][r["code"]] = r
+            st.rerun()
 
     render_council_sec(r, uk, active_spks=sidebar_active_ais, posture=sidebar_debate_posture, api_configs=ai_multi_api_configs)
 
 # ==========================================
-# 15. サイドバー再構築（7大AI設定・大会議室突入ボタン・雇用中/解雇エージェント台帳）
+# 15. サイドバー再構築（全タブ1行化・背景統一・7大AI設定）
 # ==========================================
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
@@ -1393,8 +1499,8 @@ with st.sidebar:
     is_admin = (cu == ADMIN_EMAIL or is_seed_admin_email(cu))
     
     st.markdown(
-        f'<div style="background:#0f172a;padding:12px;border-radius:10px;border:1.5px solid #38bdf8;box-shadow:0 4px 15px rgba(0,0,0,0.6);margin-bottom:12px;">'
-        f'<div style="font-size:10px;color:#38bdf8;font-weight:800;">⚛️ {"👑 システム管理者" if is_admin else "💎 会員セッション"}</div>'
+        f'<div style="background:#0b1120;padding:12px;border-radius:10px;border:1px solid #00f0ff;box-shadow:0 4px 15px rgba(0,0,0,0.6);margin-bottom:12px;">'
+        f'<div style="font-size:10px;color:#00f0ff;font-weight:800;">⚛️ {"👑 システム管理者" if is_admin else ("🧪 デモ体験会員" if is_demo_user() else "💎 会員セッション")}</div>'
         f'<div style="color:#ffffff;font-size:14px;font-weight:800;">{sanitize(u_name)} 様</div>'
         f'<div style="color:#94a3b8;font-size:10px;font-family:\'JetBrains Mono\';">{sanitize(cu)}</div>'
         f'</div>',
@@ -1402,15 +1508,14 @@ with st.sidebar:
     )
 
     if is_admin:
-        if st.button("🛡️ 管理者マネジメントコンソール", key="adm_toggle_btn", use_container_width=True):
+        if st.button("🛡️ 管理コンソール", key="adm_toggle_btn", use_container_width=True):
             st.session_state["cur_screen"] = "admin" if st.session_state.get("cur_screen") != "admin" else "main"
             st.rerun()
 
         if pending_members:
             st.markdown(
                 f'<div class="urgent-approval-banner">'
-                f'<div style="font-size:12px;font-weight:800;color:#fef08a;">🚨 新規会員申請が {len(pending_members)} 件あります！</div>'
-                f'<div style="font-size:10.5px;color:#fef9c3;margin-top:2px;">ワンクリックで承認または拒否できます。</div>'
+                f'<div style="font-size:12px;font-weight:800;color:#fef08a;">🚨 承認待ち申請: {len(pending_members)} 件</div>'
                 f'</div>',
                 unsafe_allow_html=True
             )
@@ -1433,72 +1538,68 @@ with st.sidebar:
                         st.warning(f"{pm['name']} を拒否・BANしました")
                         st.rerun()
 
-    with st.expander("🎯 投資スタイル選択", expanded=True):
+    # タブ名を1行で収まるように整理
+    with st.expander("🎯 投資スタイル", expanded=True):
         investment_style = st.selectbox(
             "スタイル",
             ["⚡ デイトレード (前場・後場の波及を狙う)", "🚀 スキャルピング (秒〜分単位のモメンタム)", "📈 スイングトレード (数日〜数週間のトレンド)", "💎 バイ＆ホールド (中長期・現物保有)"],
             index=0, label_visibility="collapsed"
         )
 
-    with st.expander("⚙️ テクニカル＆アルゴリズム切替", expanded=False):
+    with st.expander("⚙️ アルゴリズム切替", expanded=False):
         toggle_fn = getattr(st, "toggle", st.checkbox)
         show_5m_chart = toggle_fn("📈 5分足＆VWAP描画", value=True)
         ac_b = set()
-        BOOST_MAP = {"⚛️ 量子力学波動(QWM-7)": "algo", "🏛️ 機関最新アルゴ(Kyleλ・Hurst)": "ms", "🏦 機関VPIN・SmartMoney": "inst", "🔥 5ch実況＆短期モメンタム": "mom"}
+        BOOST_MAP = {"⚛️ 量子力学波動(QWM-7)": "algo", "🏛️ 機関アルゴ(Kyle・Hurst)": "ms", "🏦 機関VPIN・SmartMoney": "inst", "🔥 5ch実況＆短期モメンタム": "mom"}
         for b_label, b_key in BOOST_MAP.items():
             if st.checkbox(b_label, value=True, key=f"algo_sw_{b_key}"):
                 ac_b.add(b_key)
 
-    with st.expander("🏛️ 7知能AI合議システム設定", expanded=False):
-        sidebar_debate_posture = st.select_slider("合議スタンス", options=["🛡️ 厳格防衛(安全重視)", "⚖️ 標準バランス", "🔥 攻撃的(強気利益狙い)"], value="⚖️ 標準バランス")
+    with st.expander("🏛️ AI合議設定", expanded=False):
+        sidebar_debate_posture = st.select_slider("合議スタンス", options=["🛡️ 厳格防衛", "⚖️ 標準", "🔥 攻撃的"], value="⚖️ 標準")
         active_roster = get_active_agents_dict()
         sidebar_active_ais = []
         for k_spk, ag_data in active_roster.items():
             if st.checkbox(f"{ag_data['name']} ({ag_data['role_title']})", value=True, key=f"spk_toggle_{k_spk}"):
                 sidebar_active_ais.append(k_spk)
 
-    # 【改修】雇用中エージェント ＆ 解雇エージェント履歴（理由明記）
-    with st.expander("🔄 AGIエージェント代謝・監査履歴", expanded=False):
+    with st.expander("🔄 AGI代謝・監査", expanded=False):
         fired_list, active_list = get_fired_and_new_agents_history()
-        
         st.markdown("<b style='color:#38bdf8;font-size:12px;'>👥 雇用中エージェント:</b>", unsafe_allow_html=True)
         for a_ag in active_list:
             with st.popover(f"⭐ {a_ag['name']} ({a_ag['role_title']})"):
-                st.write(f"**年齢:** {a_ag['age']}歳 ｜ **状態:** 雇用中 (Active)")
+                st.write(f"**年齢:** {a_ag['age']}歳 ｜ **状態:** 雇用中")
                 st.write(f"**専門分野:** {a_ag['specialty']}")
-                st.write(f"**性格・特徴:** {a_ag['personality']}")
-                st.write(f"**着任日時:** {a_ag['joined_at']}")
+                st.write(f"**性格:** {a_ag['personality']}")
+                st.write(f"**着任:** {a_ag['joined_at']}")
 
-        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-        st.markdown("<b style='color:#ef4444;font-size:12px;'>💀 解雇エージェント履歴:</b>", unsafe_allow_html=True)
+        st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+        st.markdown("<b style='color:#ef4444;font-size:12px;'>💀 解雇履歴:</b>", unsafe_allow_html=True)
         if fired_list:
             for f_ag in fired_list:
                 with st.popover(f"❌ {f_ag['name']} ({f_ag['role_title']})"):
                     st.write(f"**氏名:** {f_ag['name']} ｜ **年齢:** {f_ag['age']}歳")
-                    st.markdown(f"**🚨 解雇理由:** <span style='color:#f87171;font-weight:700;'>{f_ag['fired_reason']}</span>", unsafe_allow_html=True)
-                    st.write(f"**専門分野:** {f_ag['specialty']}")
-                    st.write(f"**解雇執行日時:** {f_ag['fired_at']}")
+                    st.markdown(f"**🚨 理由:** <span style='color:#f87171;font-weight:700;'>{f_ag['fired_reason']}</span>", unsafe_allow_html=True)
+                    st.write(f"**執行日時:** {f_ag['fired_at']}")
         else:
             st.caption("現在解雇されたエージェントはいません。")
 
-    # 【改修】有名AI 7箇所 対応・複数AI API同時接続エンジン設定
-    with st.expander("🤖 複数AI API同時接続エンジン設定 (7大AI)", expanded=False):
-        st.caption("キーを入力したAIが自動的に合議へ召集され、完全並列で非同期稼働します。")
+    with st.expander("🤖 7大AI連携", expanded=False):
+        st.caption("キーを入力したAIが自動的に合議へ召集され、並列で非同期稼働します。")
         ai_multi_api_configs = {}
         for p_name, ep_url, def_mod, disp_name in KNOWN_AI_PROVIDERS:
-            k = st.text_input(f"{disp_name} Key", type="password", key=f"api_key_in_{p_name}", placeholder=f"{p_name}のAPIキー")
+            k = st.text_input(f"{disp_name} Key", type="password", key=f"api_key_in_{p_name}", placeholder=f"{p_name} Key")
             ai_multi_api_configs[p_name] = {"api_key": k.strip(), "model": def_mod, "url": ep_url}
         
         st.markdown("---")
-        # 【新機能】大型AI大会議室への突入ボタン
-        if st.button("🏛️ 大型AI大会議室に入る (WAR ROOM)", key="enter_warroom_btn", use_container_width=True):
+        if st.button("🏛️ 大会議室に入る (WAR ROOM)", key="enter_warroom_btn", use_container_width=True):
             st.session_state["cur_screen"] = "warroom"
             st.rerun()
 
-    with st.expander("💰 資金管理＆リスク設定", expanded=False):
+    with st.expander("💰 資金・リスク", expanded=False):
         total_capital = st.number_input("総投資資金 (円/ドル)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
-        risk_tolerance_pct = st.slider("1トレード許容リスク (%)", 0.5, 5.0, 2.0, 0.5)
-        survival_cut_pct = st.slider("各タブ選抜率 (%)", 40, 100, 75, 5)
+        risk_tolerance_pct = st.slider("許容リスク (%)", 0.5, 5.0, 2.0, 0.5)
+        survival_cut_pct = st.slider("選抜率 (%)", 40, 100, 75, 5)
 
     st.markdown("---")
     if st.button("🚪 ログアウト", use_container_width=True):
@@ -1593,7 +1694,7 @@ if is_admin and st.session_state.get("cur_screen") == "admin":
     st.stop()
 
 # ==========================================
-# 17. 【大型新機能】リアルタイムAI大会議室（WAR ROOM）
+# 17. リアルタイムAI大会議室（WAR ROOM）
 # ==========================================
 if st.session_state.get("cur_screen") == "warroom":
     st.markdown(
@@ -1607,13 +1708,14 @@ if st.session_state.get("cur_screen") == "warroom":
         unsafe_allow_html=True
     )
 
-    # 1. 銘柄コード入力 ＆ 指標リアルタイムボード
     wr_c1, wr_c2 = st.columns([3, 1])
     war_in = wr_c1.text_input("🎯 合議対象の銘柄コードを入力 (例: 8035, 6920, NVDA, TSLA)", value=st.session_state["warroom_stock_code"], key="wr_code_input")
     if wr_c2.button("🚀 銘柄を召集・分析", use_container_width=True):
-        st.session_state["warroom_stock_code"] = norm_tk(war_in)
-        st.session_state["warroom_chat_history"] = []
-        st.rerun()
+        if guard_demo_action(): pass
+        else:
+            st.session_state["warroom_stock_code"] = norm_tk(war_in)
+            st.session_state["warroom_chat_history"] = []
+            st.rerun()
 
     current_war_code = norm_tk(st.session_state["warroom_stock_code"])
     war_stock_data = fetch_one(current_war_code, macro_info, b5_live_map, investment_style, True, True, True, True, total_capital, risk_tolerance_pct)
@@ -1625,13 +1727,13 @@ if st.session_state.get("cur_screen") == "warroom":
             st.rerun()
         st.stop()
 
-    # 銘柄サマリー表示
     r_w = war_stock_data
     dc = "#10b981" if r_w["diff"] >= 0 else "#ef4444"
     st.markdown(
         f'<div style="background:#0f172a;border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:12px 16px;margin-bottom:15px;">'
+        f'<div class="company-name-full-block">{r_w["name"]}</div>'
         f'<div style="display:flex;justify-content:space-between;align-items:center;">'
-        f'<div><span style="font-size:18px;font-weight:900;color:#fff;">{r_w["name"]}</span> <span style="font-size:12px;color:#94a3b8;">({r_w["code"]} / {r_w["theme"]})</span></div>'
+        f'<div><span style="font-size:12.5px;color:#94a3b8;">({r_w["code"]} / {r_w["theme"]})</span></div>'
         f'<div><span style="font-size:16px;font-weight:800;color:#fff;">{r_w["price"]}</span> <span style="color:{dc};font-weight:700;">({"+" if r_w["diff"]>0 else ""}{r_w["diff"]}%)</span></div>'
         f'</div>'
         f'<div style="display:flex;gap:12px;margin-top:8px;font-size:12px;flex-wrap:wrap;">'
@@ -1645,11 +1747,9 @@ if st.session_state.get("cur_screen") == "warroom":
         unsafe_allow_html=True
     )
 
-    # 2. 会議進行・コントロールバー
     ctrl1, ctrl2, ctrl3 = st.columns([1.5, 1.5, 1])
     wr_posture = ctrl1.selectbox("合議スタンス", ["⚖️ 標準バランス審議", "🔥 超攻撃的・利益最優先", "🛡️ 鉄壁防衛・リスク厳罰"], index=0)
     
-    # 接続中AIプロバイダ一覧
     connected_provs = [p for p, cfg in ai_multi_api_configs.items() if cfg.get("api_key")]
     ctrl2.markdown(
         f'<div style="font-size:11.5px;color:#94a3b8;padding-top:8px;">'
@@ -1660,22 +1760,21 @@ if st.session_state.get("cur_screen") == "warroom":
     )
 
     if ctrl3.button("🧹 会議ログ消去", use_container_width=True):
-        st.session_state["warroom_chat_history"] = []
-        st.rerun()
+        if guard_demo_action(): pass
+        else:
+            st.session_state["warroom_chat_history"] = []
+            st.rerun()
 
-    # 初期合議トリガー（まだログがない場合）
     if not st.session_state["warroom_chat_history"]:
         with st.spinner(f"🌐 7大知能による『{r_w['name']}』初期多角合議を開始中..."):
             init_res = run_real_ai_council(r_w, user_query="", active_spks=sidebar_active_ais, posture=wr_posture, api_configs=ai_multi_api_configs)
             st.session_state["warroom_chat_history"] = list(init_res["dialogue"])
-            # 採決カウント
             st.session_state["warroom_votes"] = {
                 "buy": random.randint(4, 7),
                 "sell": random.randint(0, 2),
                 "neutral": random.randint(0, 1)
             }
 
-    # 3. 採決状況メーター（独自追加便利機能）
     v = st.session_state["warroom_votes"]
     st.markdown(
         f'<div style="background:rgba(2,6,23,0.8);border:1px solid rgba(148,163,184,0.2);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-size:12px;">'
@@ -1685,7 +1784,6 @@ if st.session_state.get("cur_screen") == "warroom":
         unsafe_allow_html=True
     )
 
-    # 4. 大型チャット画面
     chat_box_html = "".join([_fmt_turn(t) for t in st.session_state["warroom_chat_history"]])
     st.markdown(
         f'<div style="background:#02050b;border:1px solid rgba(56,189,248,0.25);border-radius:12px;padding:16px;max-height:580px;overflow-y:auto;box-shadow:inset 0 2px 8px rgba(0,0,0,0.8);margin-bottom:12px;">'
@@ -1694,24 +1792,23 @@ if st.session_state.get("cur_screen") == "warroom":
         unsafe_allow_html=True
     )
 
-    # 5. ユーザー割り込み発言・質問入力フォーム
     with st.form("warroom_user_input_form", clear_on_submit=True):
         w_in1, w_in2 = st.columns([3.5, 1])
         u_speech = w_in1.text_input("発言内容", placeholder=f"例: 『{r_w['name']}』の逆指値はどこまで引き上げるべき？ / 機関の騙しはある？", label_visibility="collapsed")
         send_speech = w_in2.form_submit_button("🗣️ 合議に割り込み発言", use_container_width=True)
 
         if send_speech and u_speech.strip():
-            u_clean = sanitize(u_speech.strip())
-            st.session_state["warroom_chat_history"].append({"is_user": True, "text": u_clean})
-            with st.spinner("🌐 AI各員が発言を精査中..."):
-                up_res = run_real_ai_council(r_w, user_query=u_clean, active_spks=sidebar_active_ais, posture=wr_posture, api_configs=ai_multi_api_configs)
-                for t_item in up_res["dialogue"]:
-                    st.session_state["warroom_chat_history"].append(t_item)
-                st.rerun()
+            if guard_demo_action(): pass
+            else:
+                u_clean = sanitize(u_speech.strip())
+                st.session_state["warroom_chat_history"].append({"is_user": True, "text": u_clean})
+                with st.spinner("🌐 AI各員が発言を精査中..."):
+                    up_res = run_real_ai_council(r_w, user_query=u_clean, active_spks=sidebar_active_ais, posture=wr_posture, api_configs=ai_multi_api_configs)
+                    for t_item in up_res["dialogue"]:
+                        st.session_state["warroom_chat_history"].append(t_item)
+                    st.rerun()
 
-    # 6. 下部機能バー（会議録エクスポート & 退室ボタン）
     bot1, bot2 = st.columns(2)
-    # 会議録ダウンロード機能
     raw_md_log = f"# YAMASHISHI LAB WAR ROOM 議事録\n銘柄: {r_w['name']} ({r_w['code']})\n日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
     for turn in st.session_state["warroom_chat_history"]:
         if "speaker" in turn:
@@ -1753,7 +1850,9 @@ with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場ディ�
 c1, c2 = st.columns([3.4, 1])
 cin = c1.text_input("🔍 銘柄検索", placeholder="銘柄コードまたは米ティッカーを入力 (例: 6920, 5803, NVDA, IONQ)", label_visibility="collapsed")
 if c2.button("🔍 銘柄診断", use_container_width=True) and cin:
-    st.session_state["custom_search_code"] = norm_tk(cin)
+    if guard_demo_action(): pass
+    else:
+        st.session_state["custom_search_code"] = norm_tk(cin)
 
 if st.session_state.get("custom_search_code"):
     nc = st.session_state["custom_search_code"]
@@ -1802,8 +1901,10 @@ elif sel_cat == "📋 監視リスト":
     wl = st.session_state["watchlist"]
     st.caption(f"⭐ 登録された監視銘柄一覧です（現在 {len(wl)} 銘柄）")
     if st.button("⚡ 総合TOP3をワンタップ一括登録", use_container_width=True):
-        for it in surv[:3]: st.session_state["watchlist"][it["code"]] = it
-        st.rerun()
+        if guard_demo_action(): pass
+        else:
+            for it in surv[:3]: st.session_state["watchlist"][it["code"]] = it
+            st.rerun()
     if wl:
         for wc, wi in list(wl.items()): render_card(wi, kp=f"wl_{wc}")
     else:
@@ -1818,10 +1919,11 @@ elif sel_cat == "🚀 IPO申し込み受付":
         st.markdown(
             f'<div class="rank-card" style="border-left: 4px solid {rk_badge_bg};">'
             f'<div style="display:flex;justify-content:space-between;align-items:center;">'
-            f'<div><span class="pill-badge" style="background:{rk_badge_bg};color:#fff;font-weight:900;">初値期待度 {ipo["rank"]}級 ({ipo["score"]}点)</span>'
-            f'<span style="font-size:17px;font-weight:800;color:#ffffff;margin-left:5px;">{ipo["name"]}</span> <span style="color:#94a3b8;font-size:12px;">({ipo["code"]} / {ipo["market"]})</span></div>'
+            f'<div><span class="pill-badge" style="background:{rk_badge_bg};color:#fff;font-weight:900;">初値期待度 {ipo["rank"]}級 ({ipo["score"]}点)</span></div>'
             f'<a href="{ipo["url"]}" target="_blank" style="background:#0284c7;color:#fff;text-decoration:none;font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:6px;">証券会社で申込む ↗</a>'
             f'</div>'
+            f'<div class="company-name-full-block" style="margin-top:6px;">{ipo["name"]}</div>'
+            f'<div style="color:#94a3b8;font-size:12px;margin-bottom:6px;">({ipo["code"]} / {ipo["market"]})</div>'
             f'<div style="margin-top:8px;font-size:12.5px;color:#cbd5e1;line-height:1.6;">{ipo["desc"]}</div>'
             f'<div class="trade-plan-box" style="margin-top:10px;">'
             f'<div><div style="font-size:9.5px;color:#94a3b8;">📅 BB申込期間</div><div style="font-size:11.5px;font-weight:800;color:#fde047;">{ipo["bb_period"]}</div></div>'
