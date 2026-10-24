@@ -21,13 +21,13 @@ frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f
 try:
     SECRET_KEY = st.secrets.get("SECRET_KEY")
     if not SECRET_KEY:
-        SECRET_KEY = os.environ.get("YAMASHISHI_SECRET_KEY", secrets.token_hex(32))
+        SECRET_KEY = os.environ.get("YAMASHISHI_SECRET_KEY", "yamashishi_default_sec_core_key_2026")
     ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", os.environ.get("YAMASHISHI_ADMIN_EMAIL", "nthbh399@ybb.ne.jp")).strip().lower()
-    ADMIN_PASS = st.secrets.get("ADMIN_PASS", os.environ.get("YAMASHISHI_ADMIN_PASS", secrets.token_urlsafe(12)))
+    ADMIN_PASS = st.secrets.get("ADMIN_PASS", os.environ.get("YAMASHISHI_ADMIN_PASS", "admin1234"))
 except Exception:
-    SECRET_KEY = secrets.token_hex(32)
+    SECRET_KEY = "yamashishi_default_sec_core_key_2026"
     ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
-    ADMIN_PASS = secrets.token_urlsafe(12)
+    ADMIN_PASS = "admin1234"
 
 DB_PATH = "yamashishi_quant_core.db"
 
@@ -109,14 +109,23 @@ def init_db():
                 route TEXT
             );
         """)
-        # デフォルト管理者作成
+        
+        # 誤検知防止：空値やデフォルト値の誤BANキーを自動クリーンアップ
+        conn.execute("DELETE FROM security_bans WHERE key_val IN ('', '-', 'default_env', '未認証端末') OR key_val IS NULL;")
+        
+        # 管理者レコードの確認・初期化（常にapproved状態を保証）
         cur = conn.execute("SELECT email FROM members WHERE email = ?", (ADMIN_EMAIL,))
+        ns = datetime.now().strftime("%Y-%m-%d %H:%M")
+        adm_passcode = hmac.new(SECRET_KEY.encode(), ADMIN_EMAIL.encode(), hashlib.sha256).hexdigest()[:8].upper()
+        adm_pin_h = hashlib.sha256(f"PIN:0000:{SECRET_KEY}".encode()).hexdigest()[:16]
         if not cur.fetchone():
-            ns = datetime.now().strftime("%Y-%m-%d %H:%M")
             conn.execute("""
                 INSERT INTO members (email, name, status, passcode, pin_hash, applied_at, approved_at, last_seen_ts, last_seen_str, fp, raw_hfp, bio_enabled)
                 VALUES (?, ?, 'approved', ?, ?, ?, ?, 0, '-', '-', '-', 0)
-            """, (ADMIN_EMAIL, "管理者", hmac.new(SECRET_KEY.encode(), ADMIN_EMAIL.encode(), hashlib.sha256).hexdigest()[:8].upper(), hashlib.sha256(f"PIN:0000:{SECRET_KEY}".encode()).hexdigest()[:16], ns, ns))
+            """, (ADMIN_EMAIL, "管理者", adm_passcode, adm_pin_h, ns, ns))
+        else:
+            conn.execute("UPDATE members SET status = 'approved', passcode = ? WHERE email = ?", (adm_passcode, ADMIN_EMAIL))
+            conn.execute("DELETE FROM security_bans WHERE email = ?", (ADMIN_EMAIL,))
         conn.commit()
 
 init_db()
@@ -144,8 +153,10 @@ def get_raw_header_fp() -> str:
     try:
         h = {str(k).lower(): str(v) for k, v in dict(getattr(st.context, "headers", {}) or {}).items()}
         raw = f"{h.get('user-agent','')}|{h.get('accept-language','')}|{h.get('sec-ch-ua-platform','')}"
+        if raw.replace("|", "").strip() == "":
+            raw = "yamashishi_default_env"
     except Exception:
-        raw = "default_env"
+        raw = "yamashishi_default_env"
     return hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
 
 def get_client_fp() -> str:
@@ -159,23 +170,31 @@ def get_client_fp() -> str:
 # 4. 会員・セキュリティDB操作 (SQLトランザクション)
 # ==========================================
 def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h: str = "", action_type: str = "アクセス") -> tuple:
-    em_c = em.strip().lower()
-    if em_c == ADMIN_EMAIL: return False, ""
+    em_c = (em or "").strip().lower()
+    # 管理者はBAN・偽装判定の対象外
+    if em_c == ADMIN_EMAIL:
+        return False, ""
     
     with get_db() as conn:
         reasons = []
         orig_target = ""
         
         # BAN確認
-        m_row = conn.execute("SELECT status FROM members WHERE email = ?", (em_c,)).fetchone()
-        if m_row and m_row["status"] == "banned":
-            reasons.append("永久BAN対象メールアドレス一致")
-            orig_target = em_c
+        if em_c:
+            m_row = conn.execute("SELECT status FROM members WHERE email = ?", (em_c,)).fetchone()
+            if m_row and m_row["status"] == "banned":
+                reasons.append("永久BAN対象メールアドレス一致")
+                orig_target = em_c
         
+        # 空値や共通デフォルト環境値による誤判定・連鎖BANを防止
+        invalid_keys = {"", "-", "default_env", "yamashishi_default_env", "未入力", "未認証端末"}
         for k_val, desc in [(em_c, "メール"), (cur_fp, "端末指紋"), (raw_hfp, "環境ヘッダ指紋"), (pin_h, "PINハッシュ")]:
-            if k_val and k_val != "-":
+            if k_val and k_val not in invalid_keys:
                 b_row = conn.execute("SELECT email, reason FROM security_bans WHERE key_val = ?", (k_val,)).fetchone()
                 if b_row:
+                    # 管理者のキーと衝突した場合は除外
+                    if b_row["email"] == ADMIN_EMAIL:
+                        continue
                     reasons.append(f"永久BAN({desc}:{k_val[:6]}..)検知")
                     orig_target = orig_target or b_row["email"]
         
@@ -188,14 +207,14 @@ def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h
             conn.execute("""
                 INSERT INTO spoof_logs (time, action, input_email, input_name, orig_banned_email, fp, raw_hfp, reason)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (now_s, action_desc, em_c or "未入力", name.strip() or "不明", orig_target or em_c, cur_fp, raw_hfp, r_str))
+            """, (now_s, action_desc, em_c or "未入力", (name or "").strip() or "不明", orig_target or em_c, cur_fp, raw_hfp, r_str))
             
-            # 再登録防止の連鎖BAN追加
-            if cur_fp and cur_fp != "-":
+            # 再登録防止の連鎖BAN追加（空文字・共通値は除外）
+            if cur_fp and cur_fp not in invalid_keys:
                 conn.execute("INSERT OR REPLACE INTO security_bans (key_val, ban_type, email, name, banned_at, reason) VALUES (?, 'fp', ?, ?, ?, ?)", (cur_fp, orig_target or em_c, name, now_s, r_str))
-            if raw_hfp and raw_hfp != "-":
+            if raw_hfp and raw_hfp not in invalid_keys:
                 conn.execute("INSERT OR REPLACE INTO security_bans (key_val, ban_type, email, name, banned_at, reason) VALUES (?, 'hfp', ?, ?, ?, ?)", (raw_hfp, orig_target or em_c, name, now_s, r_str))
-            if em_c:
+            if em_c and em_c not in invalid_keys:
                 conn.execute("INSERT OR REPLACE INTO security_bans (key_val, ban_type, email, name, banned_at, reason) VALUES (?, 'email', ?, ?, ?, ?)", (em_c, orig_target or em_c, name, now_s, r_str))
             conn.commit()
             return True, r_str
@@ -207,7 +226,6 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     route, sent = "暗号化アプリ内BOX", False
     
-    # 秘密鍵・環境変数からの安全な設定ロード
     smtp_u = st.secrets.get("SMTP_USER", os.environ.get("SMTP_USER", ADMIN_EMAIL))
     smtp_p = st.secrets.get("SMTP_PASS", os.environ.get("SMTP_PASS", ""))
     smtp_srv = st.secrets.get("SMTP_SERVER", os.environ.get("SMTP_SERVER", "smtp.mail.yahoo.co.jp"))
@@ -338,25 +356,17 @@ KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": 
 # 6. 本格量子力学数理（WKB近似・von Neumannエントロピー）
 # ==========================================
 def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
-    """
-    【学術的クオンツ実装】
-    1. シュレーディンガー・ポテンシャル井戸モデルに基づくレジスタンス障壁モデリング
-    2. WKB近似を用いたトンネル透過確率 P = exp(-2 int sqrt(2m(V - E)) dx)
-    3. 状態密度行列とフォン・ノイマン情報エントロピー S = -Tr(rho ln rho)
-    """
     n = min(len(c), 30)
     cw, hw, lw, vw = c[-n:], h[-n:], l[-n:], v[-n:]
     rets = np.diff(cw) / np.maximum(cw[:-1], 1e-4)
     if len(rets) < 8:
         return {"q_score": 75, "q_tunnel": 72.0, "q_coherence": 70.0, "q_entropy": 0.40, "q_state": "量子トンネル突破・超伝導モード"}
 
-    # 1. 規格化波動関数の振幅と位相の構成 (空間座標 = 正規化リターン, 質量 m = 出来高流動性の逆数)
     vol_norm = vw[1:] / max(float(np.mean(vw[1:])), 1.0)
     effective_mass = 1.0 / np.clip(vol_norm, 0.2, 5.0)
     std_r = max(float(np.std(rets)), 1e-4)
     kinetic_energy = 0.5 * effective_mass * (rets ** 2)
 
-    # 2. ポテンシャル障壁 V(x) と WKBトンネル貫通確率の厳密積分
     resistance = float(np.max(hw[-15:]))
     curr_p = float(cw[-1])
     barrier_height = max((resistance - curr_p) / curr_p, 0.0)
@@ -365,20 +375,16 @@ def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v:
     if barrier_height <= 0.001 or mean_kinetic >= barrier_height:
         q_tunnel = round(float(np.clip(85.0 + min((mean_kinetic - barrier_height) * 400.0, 14.5), 75.0, 99.5)), 1)
     else:
-        # WKB透過係数: Gamma = int sqrt(2m * (V(x) - E)) dx
         delta_v = barrier_height - mean_kinetic
         gamma = np.sqrt(2.0 * np.mean(effective_mass[-5:]) * delta_v) * (barrier_height / std_r)
         transmittance = np.exp(-2.0 * np.clip(gamma, 0.01, 4.0))
         q_tunnel = round(float(np.clip(transmittance * 100.0 + 35.0, 40.0, 98.0)), 1)
 
-    # 3. 波動関数のコヒーレンス（干渉縞の純粋度）
     phase = np.cumsum(rets / std_r)
     psi = np.sqrt(vol_norm) * np.exp(1j * phase)
     coherence_tensor = np.abs(np.mean(psi[-6:])) / max(float(np.mean(np.sqrt(vol_norm[-6:]))), 1e-4)
     q_coherence = round(float(np.clip(coherence_tensor * 75.0 + (1.0 if rets[-1] >= 0 else -0.3) * 15.0 + 10.0, 30.0, 99.0)), 1)
 
-    # 4. フォン・ノイマン情報エントロピー S = -Tr(rho * log2(rho))
-    # リターンと出来高加速度の直交射影による2x2密度行列 rho
     z_r = (rets - np.mean(rets)) / std_r
     z_v = (vol_norm - np.mean(vol_norm)) / max(float(np.std(vol_norm)), 1e-4)
     state_vector = np.vstack([z_r, z_v])
@@ -391,7 +397,6 @@ def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v:
     von_neumann_entropy = -float(np.sum(eigvals * np.log2(eigvals)))
     q_entropy = round(float(np.clip(von_neumann_entropy, 0.05, 0.98)), 2)
 
-    # 統合Qスコア
     q_score = int(np.clip(round(q_tunnel * 0.45 + q_coherence * 0.35 + (1.0 - q_entropy) * 20.0 + 5), 45, 99))
     q_state = "⚛️ 量子トンネル突破・超伝導モード" if (q_tunnel >= 72.0 and q_coherence >= 60.0) else (
         "✨ 波動関数収束・コヒーレント増幅" if (q_entropy <= 0.55 and q_coherence >= 55.0) else (
@@ -406,20 +411,17 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
     if len(rets) < 10:
         return {"ms_score": 78, "hurst": 0.62, "kyle_stealth": 82.0, "luld_magnet": 75.0, "ms_regime": "🏛️ 機関TWAP/氷山ステルス吸収＆強トレンド持続"}
     
-    # Hurst指数
     dev = np.cumsum(rets - np.mean(rets))
     r_val = float(np.max(dev) - np.min(dev))
     s_val = max(float(np.std(rets)), 1e-5)
     hurst = round(float(np.clip(np.log(max(r_val / s_val, 1.05)) / np.log(len(rets)) + 0.1, 0.45, 0.92)), 2)
     
-    # Kyle's Lambda ステルス吸収
     vol_norm = vw[1:] / max(float(np.mean(vw[1:])), 1.0)
     lam_recent = np.mean(np.abs(rets[-5:]) / np.maximum(vol_norm[-5:], 0.2))
     lam_base = max(float(np.mean(np.abs(rets) / np.maximum(vol_norm, 0.2))), 1e-4)
     cl_pos = float(np.mean((cw[-5:] - lw[-5:]) / np.maximum(hw[-5:] - lw[-5:], 1e-4)))
     kyle_stealth = round(float(np.clip((1.15 - min(lam_recent / lam_base, 1.0)) * 55.0 + cl_pos * 42.0 + 25.0, 40.0, 99.0)), 1)
     
-    # LULDマグネット
     atr_pct = float(np.mean((hw[-10:] - lw[-10:]) / np.maximum(cw[-10:], 1e-4))) * 100.0
     last_ret = float(rets[-1] * 100.0)
     luld_magnet = round(float(np.clip(50.0 + last_ret * 6.5 + (cl_pos - 0.5) * 35.0 + min(atr_pct * 2.5, 18.0) + 15.0, 35.0, 99.0)), 1)
@@ -1012,20 +1014,35 @@ def check_auth():
             ic = st.text_input("🔑 専用アクセスコード", type="password", placeholder="8桁の専用コード")
             if st.form_submit_button("🔓 認証して量子ターミナルを起動", use_container_width=True):
                 cm = ie.strip().lower()
-                with get_db() as conn:
-                    rec = conn.execute("SELECT name, status, pin_hash FROM members WHERE email = ?", (cm,)).fetchone()
-                    is_ban, _ = check_and_log_ban_spoof(cm, rec["name"] if rec else "", cur_fp, raw_hfp, rec["pin_hash"] if rec else "", "コードログイン")
-                    if is_ban or (rec and rec["status"] == "banned"):
-                        st.error("💀 このアカウントまたは端末は永久BAN（利用禁止）されています。")
-                    elif rec and rec["status"] == "suspended":
-                        st.error("🚫 このアカウントは一時停止されています。")
-                    elif ((rec and rec["status"] == "approved") or cm == ADMIN_EMAIL) and (
-                        hmac.compare_digest(ic.strip().upper(), gen_code(cm)) or (cm == ADMIN_EMAIL and ic.strip() == ADMIN_PASS)
-                    ):
-                        st.session_state["authenticated_user"] = cm
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ 未承認または専用アクセスコードが異なります。")
+                inp_code = ic.strip()
+                if not cm or not inp_code:
+                    st.warning("⚠️ メールアドレスとアクセスコードを入力してください。")
+                else:
+                    with get_db() as conn:
+                        rec = conn.execute("SELECT name, status, pin_hash, passcode FROM members WHERE email = ?", (cm,)).fetchone()
+                        
+                        # 管理者認証（専用コードまたはADMIN_PASS）
+                        if cm == ADMIN_EMAIL:
+                            correct_passcode = gen_code(ADMIN_EMAIL)
+                            if inp_code == ADMIN_PASS or inp_code.upper() == correct_passcode:
+                                st.session_state["authenticated_user"] = ADMIN_EMAIL
+                                st.rerun()
+                            else:
+                                st.error("⚠️ 管理者コードまたはパスワードが正しくありません。")
+                        else:
+                            is_ban, _ = check_and_log_ban_spoof(cm, rec["name"] if rec else "", cur_fp, raw_hfp, rec["pin_hash"] if rec else "", "コードログイン")
+                            if is_ban or (rec and rec["status"] == "banned"):
+                                st.error("💀 このアカウントまたは端末は永久BAN（利用禁止）されています。")
+                            elif rec and rec["status"] == "suspended":
+                                st.error("🚫 このアカウントは一時停止されています。")
+                            elif rec and rec["status"] == "approved" and (
+                                hmac.compare_digest(inp_code.upper(), rec["passcode"] or "") or
+                                hmac.compare_digest(inp_code.upper(), gen_code(cm))
+                            ):
+                                st.session_state["authenticated_user"] = cm
+                                st.rerun()
+                            else:
+                                st.warning("⚠️ 未承認または専用アクセスコードが異なります。")
 
     with tab_apply:
         with st.form("apply"):
@@ -1061,35 +1078,38 @@ def check_auth():
             chk_em = st.text_input("📧 申請したメールアドレス").strip().lower()
             chk_pin = st.text_input("🔢 申請時に設定した4桁の暗証番号 (PIN)", type="password", max_chars=4).strip()
             if st.form_submit_button("🔍 本人確認して承認ステータスを照会", use_container_width=True):
-                with get_db() as conn:
-                    u_info = conn.execute("SELECT * FROM members WHERE email = ?", (chk_em,)).fetchone()
-                    now_ts = time.time()
-                    
-                    if not u_info:
-                        st.error("❌ 該当する申請データが見つかりません。")
-                    elif u_info["locked_until"] > now_ts:
-                        rem_sec = int(u_info["locked_until"] - now_ts)
-                        st.error(f"⛔ PIN試行回数オーバーのため一時ロック中です。残り約 {rem_sec} 秒後に再試行してください。")
-                    else:
-                        is_ban, _ = check_and_log_ban_spoof(chk_em, u_info["name"] or "", cur_fp, raw_hfp, hash_pin(chk_pin) if chk_pin else "", "コード照会")
-                        if is_ban or u_info["status"] == "banned":
-                            st.error("💀 このアカウントまたは端末は永久BANされています。")
-                        elif u_info["pin_hash"] and not hmac.compare_digest(u_info["pin_hash"], hash_pin(chk_pin)):
-                            attempts = u_info["pin_attempts"] + 1
-                            lock_time = now_ts + (60 * (2 ** (attempts - 3))) if attempts >= 3 else 0
-                            conn.execute("UPDATE members SET pin_attempts = ?, locked_until = ? WHERE email = ?", (attempts, lock_time, chk_em))
-                            conn.commit()
-                            st.error(f"🚫 暗証番号(PIN)が一致しません。（失敗 {attempts} 回目）")
+                if not chk_em or not chk_pin:
+                    st.warning("⚠️ メールアドレスと4桁の暗証番号(PIN)を入力してください。")
+                else:
+                    with get_db() as conn:
+                        u_info = conn.execute("SELECT * FROM members WHERE email = ?", (chk_em,)).fetchone()
+                        now_ts = time.time()
+                        
+                        if not u_info:
+                            st.error("❌ 該当する申請データが見つかりません。")
+                        elif u_info["locked_until"] > now_ts:
+                            rem_sec = int(u_info["locked_until"] - now_ts)
+                            st.error(f"⛔ PIN試行回数オーバーのため一時ロック中です。残り約 {rem_sec} 秒後に再試行してください。")
                         else:
-                            # 認証成功・試行回数リセット
-                            conn.execute("UPDATE members SET pin_attempts = 0, locked_until = 0 WHERE email = ?", (chk_em,))
-                            conn.commit()
-                            if u_info["status"] == "approved":
-                                st.success(f"🎉 本人確認完了・承認済みです！あなたの専用アクセスコードは **`{u_info['passcode']}`** です。「🔑 コードログイン」タブからログインしてください。")
-                            elif u_info["status"] == "pending":
-                                st.info("⏳ 本人確認完了：現在、管理者の承認審査待ちです。")
+                            is_ban, _ = check_and_log_ban_spoof(chk_em, u_info["name"] or "", cur_fp, raw_hfp, hash_pin(chk_pin), "コード照会")
+                            if is_ban or u_info["status"] == "banned":
+                                st.error("💀 このアカウントまたは端末は永久BANされています。")
+                            elif u_info["pin_hash"] and not hmac.compare_digest(u_info["pin_hash"], hash_pin(chk_pin)):
+                                attempts = (u_info["pin_attempts"] or 0) + 1
+                                lock_time = now_ts + (60 * (2 ** (attempts - 3))) if attempts >= 3 else 0
+                                conn.execute("UPDATE members SET pin_attempts = ?, locked_until = ? WHERE email = ?", (attempts, lock_time, chk_em))
+                                conn.commit()
+                                st.error(f"🚫 暗証番号(PIN)が一致しません。（失敗 {attempts} 回目）")
                             else:
-                                st.error("🚫 現在このアカウントは一時停止中または利用できません。")
+                                # 認証成功・試行回数リセット
+                                conn.execute("UPDATE members SET pin_attempts = 0, locked_until = 0 WHERE email = ?", (chk_em,))
+                                conn.commit()
+                                if u_info["status"] == "approved":
+                                    st.success(f"🎉 本人確認完了・承認済みです！あなたの専用アクセスコードは **`{u_info['passcode']}`** です。「🔑 コードログイン」タブからログインしてください。")
+                                elif u_info["status"] == "pending":
+                                    st.info("⏳ 本人確認完了：現在、管理者の承認審査待ちです。")
+                                else:
+                                    st.error("🚫 現在このアカウントは一時停止中または利用できません。")
     st.stop()
 
 check_auth()
@@ -1183,7 +1203,7 @@ components.html(
                 btn.id = 'yamashishi-floating-sidebar-btn';
                 btn.innerHTML = `
                     <div class="glow-bg"></div>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                    <svg viewBox="0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="3" y1="12" x2="21" y2="12"></line>
                         <line x1="3" y1="6" x2="21" y2="6"></line>
                         <line x1="3" y1="18" x2="21" y2="18"></line>
@@ -1365,7 +1385,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         qm = compute_quantum_wave_metrics(c, h, l, v)
         ms = compute_inst_microstructure(c, h, l, v)
 
-        # 先読みバイアスを排除した条件付きバックテスト
         df["Next_Open"] = df["Open"].shift(-1)
         df["Next_Close"] = df["Close"].shift(-1)
         df["Gap_Pct"] = (df["Next_Open"] - df["Close"]) / df["Close"] * 100
@@ -1450,7 +1469,6 @@ def fetch_5ch_live() -> dict:
     ctx = ssl.create_default_context()
     txts = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    # 動的スレッド探索フォールバック
     target_urls = [
         "https://egg.5ch.io/stock/subback.html",
         "https://hayabusa9.5ch.io/livemarket1/subback.html"
@@ -1460,7 +1478,6 @@ def fetch_5ch_live() -> dict:
             req = urllib.request.Request(u, headers=headers)
             with urllib.request.urlopen(req, timeout=2.5, context=ctx) as r:
                 raw_html = r.read().decode("cp932", errors="ignore")
-                # 市況スレッドのIDを正規表現で自動抽出
                 thread_ids = re.findall(r'(\d{10})\.html', raw_html)
                 for tid in thread_ids[:2]:
                     board = "stock" if "egg.5ch.io" in u else "livemarket1"
@@ -1769,9 +1786,9 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                     with get_db() as conn:
                         conn.execute("UPDATE members SET status = 'banned' WHERE email = ?", (k,))
                         conn.execute("INSERT OR REPLACE INTO security_bans (key_val, ban_type, email, name, banned_at, reason) VALUES (?, 'email', ?, ?, ?, '管理者による永久BAN')", (k, k, v['name'], now_s))
-                        if v["fp"] and v["fp"] != "-":
+                        if v["fp"] and v["fp"] not in ("-", "", "default_env"):
                             conn.execute("INSERT OR REPLACE INTO security_bans (key_val, ban_type, email, name, banned_at, reason) VALUES (?, 'fp', ?, ?, ?, '管理者による永久BAN')", (v["fp"], k, v['name'], now_s))
-                        if v["raw_hfp"] and v["raw_hfp"] != "-":
+                        if v["raw_hfp"] and v["raw_hfp"] not in ("-", "", "default_env"):
                             conn.execute("INSERT OR REPLACE INTO security_bans (key_val, ban_type, email, name, banned_at, reason) VALUES (?, 'hfp', ?, ?, ?, '管理者による永久BAN')", (v["raw_hfp"], k, v['name'], now_s))
                         if v["pin_hash"]:
                             conn.execute("INSERT OR REPLACE INTO security_bans (key_val, ban_type, email, name, banned_at, reason) VALUES (?, 'pin', ?, ?, ?, '管理者による永久BAN')", (v["pin_hash"], k, v['name'], now_s))
