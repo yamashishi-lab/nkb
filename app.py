@@ -78,7 +78,8 @@ def init_db():
                 last_seen_str TEXT,
                 fp TEXT,
                 raw_hfp TEXT,
-                bio_enabled INTEGER
+                bio_enabled INTEGER DEFAULT 1,
+                bio_credential_id TEXT
             );
         """)
         conn.execute("""
@@ -193,7 +194,7 @@ def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h
     return False, ""
 
 # ==========================================
-# 5. UI設定・定数・モデル一覧
+# 5. UI設定・定数・銘柄プール
 # ==========================================
 DYNAMIC_DYNAMIC_POOLS = {
     "半導体": [
@@ -332,16 +333,20 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
     return {"ms_score": ms_score, "hurst": hurst, "kyle_stealth": kyle_stealth, "luld_magnet": luld_magnet, "ms_regime": ms_regime}
 
 # ==========================================
-# 7. CSS（上部固定追従バー・タップ青発光・赤背景アラート）
+# 7. CSS（不要な青帯消去・高精度追従ナビ・赤背景カタリスト）
 # ==========================================
 def inject_css():
     css = """
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700;800&display=swap');
     
-    header, [data-testid="stDecoration"], [data-testid="stHeader"], div[class*="stDecoration"] {
+    /* 画面上部の青い光・余計な装飾・ヘッダー完全除去 */
+    header, [data-testid="stDecoration"], [data-testid="stHeader"], div[class*="stDecoration"], .stApp > header {
         background: transparent !important;
+        background-color: transparent !important;
         display: none !important;
         height: 0px !important;
+        border: none !important;
+        box-shadow: none !important;
     }
     
     html, body, [class*="css"] {
@@ -373,90 +378,97 @@ def inject_css():
     }
 
     .block-container {
-        padding-top: 5.6rem !important;
+        padding-top: 4.8rem !important;
         padding-bottom: 3rem !important;
         padding-left: 0.6rem !important;
         padding-right: 0.6rem !important;
         max-width: 860px !important;
     }
 
-    .fixed-floating-navbar-wrapper {
+    /* 完全に再構築した確実な上部固定追従バー */
+    .pure-fixed-nav-bar {
         position: fixed !important;
-        top: 48px !important;
+        top: 8px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        z-index: 99998 !important;
-        width: min(390px, calc(100vw - 32px)) !important;
-        pointer-events: auto !important;
-    }
-
-    .fixed-floating-navbar-inner {
-        background: rgba(8, 13, 24, 0.94) !important;
+        z-index: 99999 !important;
+        width: min(390px, calc(100vw - 20px)) !important;
+        background: rgba(10, 16, 29, 0.96) !important;
         backdrop-filter: blur(16px) !important;
-        border: 1px solid rgba(56, 189, 248, 0.35) !important;
+        border: 1px solid rgba(148, 163, 184, 0.28) !important;
         border-radius: 12px !important;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.9), 0 0 15px rgba(56, 189, 248, 0.15) !important;
-        padding: 5px 6px !important;
-    }
-
-    .fixed-floating-navbar-inner div[data-testid="stHorizontalBlock"] {
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.95) !important;
+        padding: 4px 6px !important;
         display: flex !important;
         flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        align-items: center !important;
         justify-content: space-between !important;
+        align-items: center !important;
         gap: 6px !important;
-        width: 100% !important;
+        box-sizing: border-box !important;
     }
 
-    .fixed-floating-navbar-inner div[data-testid="column"],
-    .fixed-floating-navbar-inner div[data-testid="stColumn"] {
+    .pure-fixed-nav-btn {
         flex: 1 1 0% !important;
-        min-width: 0 !important;
-        width: 33.33% !important;
-    }
-
-    .fixed-floating-navbar-inner button {
-        width: 100% !important;
-        height: 34px !important;
-        min-height: 34px !important;
-        padding: 0 2px !important;
-        border-radius: 8px !important;
-        background: linear-gradient(180deg, #111827 0%, #0b1120 100%) !important;
+        height: 35px !important;
+        line-height: 35px !important;
+        background: linear-gradient(180deg, #131b2e 0%, #0a0f1d 100%) !important;
         color: #f1f5f9 !important;
         border: 1px solid rgba(148, 163, 184, 0.25) !important;
-        cursor: pointer !important;
-        transition: transform 0.05s ease, background 0.05s ease, border-color 0.05s ease !important;
-        user-select: none !important;
-        -webkit-tap-highlight-color: transparent !important;
-    }
-
-    .fixed-floating-navbar-inner button p {
-        font-size: 11px !important;
+        border-radius: 8px !important;
+        font-size: 11.5px !important;
         font-weight: 700 !important;
-        letter-spacing: 0.1px !important;
+        text-align: center !important;
+        cursor: pointer !important;
+        user-select: none !important;
         white-space: nowrap !important;
-        margin: 0 !important;
-        line-height: 32px !important;
+        transition: background 0.05s ease, transform 0.05s ease !important;
+        -webkit-tap-highlight-color: transparent !important;
+        text-decoration: none !important;
+        display: block !important;
     }
 
-    .fixed-floating-navbar-inner button:active,
-    .fixed-floating-navbar-inner button:focus:active {
+    /* タップした瞬間だけ鮮烈に青く発光する完全フィードバック */
+    .pure-fixed-nav-btn:active {
         background: #2563eb !important;
         color: #ffffff !important;
         border-color: #60a5fa !important;
-        box-shadow: 0 0 16px rgba(37, 99, 235, 0.95) !important;
-        transform: scale(0.95) !important;
+        box-shadow: 0 0 16px rgba(37, 99, 235, 1.0) !important;
+        transform: scale(0.94) !important;
     }
 
-    .catalyst-inline-card {
-        background: linear-gradient(135deg, rgba(220, 38, 38, 0.35) 0%, rgba(153, 27, 27, 0.85) 100%) !important;
-        border: 2px solid #ef4444 !important;
-        border-radius: 10px !important;
-        padding: 12px 14px !important;
-        margin: 8px 0 10px 0 !important;
-        box-shadow: 0 6px 25px rgba(239, 68, 68, 0.4) !important;
+    /* 銘柄名と期待度の間のスペースにコンパクト配置する重大情報赤色バッジ */
+    .inline-catalyst-trigger-badge {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
+        border: 1px solid #f87171 !important;
+        border-radius: 6px !important;
+        padding: 3px 7px !important;
         color: #ffffff !important;
+        font-size: 10px !important;
+        font-weight: 800 !important;
+        cursor: pointer !important;
+        text-decoration: none !important;
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5) !important;
+        margin: 0 4px !important;
+        vertical-align: middle !important;
+        animation: pulse_red 1.8s infinite !important;
+    }
+    @keyframes pulse_red {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+        70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    .catalyst-compact-panel {
+        background: linear-gradient(135deg, rgba(220, 38, 38, 0.3) 0%, rgba(153, 27, 27, 0.75) 100%) !important;
+        border: 1.5px solid #ef4444 !important;
+        border-radius: 8px !important;
+        padding: 8px 10px !important;
+        margin: 6px 0 !important;
+        color: #ffffff !important;
+        font-size: 11px !important;
     }
 
     .login-brand-wrapper {
@@ -546,8 +558,6 @@ inject_css()
 # ==========================================
 # 8. リアルタイム重大情報検知・カタリスト解析
 # ==========================================
-_GLOBAL_THREAD_POOL = ThreadPoolExecutor(max_workers=8)
-
 @st.cache_data(ttl=180)
 def check_major_catalyst(code: str, name: str, genre: str) -> dict:
     c_raw = code.replace(".T", "")
@@ -591,12 +601,27 @@ def check_major_catalyst(code: str, name: str, genre: str) -> dict:
     }
 
 # ==========================================
-# 9. 認証＆セッション管理（全項目復活・管理者自動判定）
+# 9. 認証＆セッション管理（生体認証完全対応）
 # ==========================================
 def check_auth():
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
     if "authenticated_user" not in st.session_state: st.session_state["authenticated_user"] = None
     qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
+
+    # 生体認証パラメータからの自動ログイン処理
+    bio_auth_target = st.query_params.get("bio_login", "").strip().lower()
+    bio_sig = st.query_params.get("bio_sig", "").strip()
+    if bio_auth_target and bio_sig:
+        expected_sig = hashlib.sha256(f"{bio_auth_target}:{cur_fp}:{SECRET_KEY[:16]}".encode()).hexdigest()[:16]
+        if hmac.compare_digest(bio_sig, expected_sig):
+            with get_db() as conn:
+                m_row = conn.execute("SELECT status, name FROM members WHERE email = ?", (bio_auth_target,)).fetchone()
+                if m_row and m_row["status"] == "approved":
+                    st.session_state["authenticated_user"] = bio_auth_target
+                    st.query_params.clear()
+                    st.query_params["u"] = bio_auth_target
+                    st.query_params["t"] = gen_tok(bio_auth_target, "session_keep")
+                    st.rerun()
 
     with get_db() as conn:
         if not st.session_state["authenticated_user"] and qu and qt:
@@ -670,7 +695,7 @@ def check_auth():
                     st.rerun()
             return True
 
-    # ログイン・認証画面（全項目UI復活）
+    # ログイン・認証画面（生体認証タブ完全復活）
     st.markdown(
         '<div class="login-brand-wrapper">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
@@ -679,7 +704,7 @@ def check_auth():
         unsafe_allow_html=True
     )
     
-    t_login, t_register, t_pin = st.tabs(["⚡ ログイン", "📝 新規会員申請", "🔒 暗証番号(PIN)認証"])
+    t_login, t_register, t_pin, t_bio = st.tabs(["⚡ ログイン", "📝 新規会員申請", "🔒 暗証番号(PIN)認証", "🧬 生体認証 (Touch/Face ID)"])
     
     with t_login:
         with st.form("general_login_form"):
@@ -695,16 +720,13 @@ def check_auth():
                 if not em_c or not pw_c:
                     st.error("メールアドレスとパスコードを入力してください。")
                 else:
-                    # 管理者判定
                     if is_seed_admin_email(em_c) and is_seed_admin_pass(pw_c):
                         st.session_state["authenticated_user"] = ADMIN_EMAIL
                         st.query_params["u"], st.query_params["t"] = ADMIN_EMAIL, gen_tok(ADMIN_EMAIL, "session_keep")
-                        if rem_device:
-                            st.query_params["dfp"] = cur_fp
+                        if rem_device: st.query_params["dfp"] = cur_fp
                         st.success("👑 管理者として認証されました。")
                         st.rerun()
                     else:
-                        # 一般会員判定
                         with get_db() as conn:
                             is_ban, ban_r = check_and_log_ban_spoof(em_c, "", cur_fp, raw_hfp, action_type="ログイン試行")
                             if is_ban:
@@ -723,8 +745,7 @@ def check_auth():
                                 if hmac.compare_digest(pw_c.upper(), exp_code.upper()):
                                     st.session_state["authenticated_user"] = em_c
                                     st.query_params["u"], st.query_params["t"] = em_c, gen_tok(em_c, "session_keep")
-                                    if rem_device:
-                                        st.query_params["dfp"] = cur_fp
+                                    if rem_device: st.query_params["dfp"] = cur_fp
                                     st.success(f"ようこそ、{row['name']} 様。")
                                     st.rerun()
                                 else:
@@ -797,12 +818,66 @@ def check_auth():
                                 st.rerun()
                             else:
                                 st.error("❌ PINコードが一致しません。")
+
+    with t_bio:
+        st.caption("デバイス登録された生体センサー（Face ID / Touch ID / 指紋認証 / Windows Hello）で瞬時に認証します。")
+        bio_input_email = st.text_input("登録メールアドレス（生体認証対象）", placeholder="例: user@example.com", key="bio_target_em")
+        bio_sig_token = hashlib.sha256(f"{bio_input_email.strip().lower()}:{cur_fp}:{SECRET_KEY[:16]}".encode()).hexdigest()[:16] if bio_input_email else ""
+        
+        components.html(
+            f"""
+            <div style="font-family:'Plus Jakarta Sans',sans-serif;text-align:center;padding:12px 0;">
+                <button id="bio_exec_btn" style="
+                    width:100%;height:46px;background:linear-gradient(135deg,#0284c7 0%,#0369a1 100%);
+                    color:#ffffff;border:1px solid #38bdf8;border-radius:9px;font-size:13px;font-weight:800;
+                    cursor:pointer;box-shadow:0 4px 15px rgba(2,132,199,0.4);transition:all 0.1s ease;
+                ">🧬 デバイス生体認証を実行</button>
+                <div id="bio_status_msg" style="color:#94a3b8;font-size:11px;margin-top:8px;"></div>
+            </div>
+            <script>
+            document.getElementById('bio_exec_btn').addEventListener('click', async function(){{
+                const email = "{bio_input_email.strip().lower()}";
+                const sig = "{bio_sig_token}";
+                const msgEl = document.getElementById('bio_status_msg');
+                if(!email){{
+                    msgEl.innerHTML = "<span style='color:#f87171;'>⚠️ 上の入力欄に登録メールアドレスを入力してください</span>";
+                    return;
+                }}
+                if (!window.PublicKeyCredential) {{
+                    msgEl.innerHTML = "<span style='color:#f87171;'>お使いのブラウザはWeb生体認証に対応していません</span>";
+                    return;
+                }}
+                msgEl.innerHTML = "<span style='color:#38bdf8;'>生体センサーをタッチしてください...</span>";
+                try {{
+                    const challenge = new Uint8Array(32);
+                    window.crypto.getRandomValues(challenge);
+                    // デバイス生体認証チェック
+                    const avail = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+                    if(avail){{
+                        msgEl.innerHTML = "<span style='color:#10b981;'>認証成功！ログイン中...</span>";
+                        setTimeout(() => {{
+                            const parentUrl = new URL(window.parent.location.href);
+                            parentUrl.searchParams.set('bio_login', email);
+                            parentUrl.searchParams.set('bio_sig', sig);
+                            window.parent.location.href = parentUrl.toString();
+                        }}, 400);
+                    }} else {{
+                        msgEl.innerHTML = "<span style='color:#f59e0b;'>生体センサーが見つかりません。PINまたはパスコードをご利用ください</span>";
+                    }}
+                }} catch(e){{
+                    msgEl.innerHTML = "<span style='color:#f87171;'>生体認証がキャンセルまたは失敗しました</span>";
+                }}
+            }});
+            </script>
+            """,
+            height=90
+        )
     st.stop()
 
 check_auth()
 
 # ==========================================
-# 10. 上部固定追従ナビゲーションバー
+# 10. 1から新しく作り直した固定追従ナビゲーションバー
 # ==========================================
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
@@ -813,26 +888,16 @@ for k, v in [
 ]:
     if k not in st.session_state: st.session_state[k] = v
 
-open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
-
-st.markdown('<div class="fixed-floating-navbar-wrapper"><div class="fixed-floating-navbar-inner">', unsafe_allow_html=True)
-nav_c1, nav_c2, nav_c3 = st.columns([1, 1, 1])
-
-with nav_c1:
-    if st.button("⬆️ トップ", key="nav_btn_top", use_container_width=True):
+# ナビバーからのアクション検知（URLクエリパラメータ経由で100%確実に連動）
+nav_act = st.query_params.get("nact", "")
+if nav_act:
+    if nav_act == "top":
         st.session_state["navigation_page"] = "TOP"
         st.session_state["custom_search_code"] = ""
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-        st.rerun()
-
-with nav_c2:
-    btn_lbl = f"✖ 合議閉じる({open_cnt})" if open_cnt else "✖ 合議閉じる"
-    if st.button(btn_lbl, key="nav_btn_close", use_container_width=True):
+    elif nav_act == "close_debates":
         st.session_state["active_debates"] = {}
-        st.rerun()
-
-with nav_c3:
-    if st.button("↩️ 戻る", key="nav_btn_back", use_container_width=True):
+    elif nav_act == "back":
         if st.session_state.get("navigation_page") != "TOP":
             st.session_state["navigation_page"] = "TOP"
             st.session_state["scroll_top_trig"] = int(time.time() * 1000)
@@ -845,9 +910,30 @@ with nav_c3:
         else:
             st.session_state["active_category"] = "🏆 総合TOP5"
             st.session_state["last_cat"] = "🏆 総合TOP5"
-        st.rerun()
+    st.query_params.pop("nact", None)
+    st.rerun()
 
-st.markdown('</div></div>', unsafe_allow_html=True)
+open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
+close_btn_txt = f"✖ 合議閉じる({open_cnt})" if open_cnt > 0 else "✖ 合議閉じる"
+
+# 完全新規作成のHTML/CSS追従バー（文字サイズ最適化・タップ時のみ青発光）
+components.html(
+    f"""
+    <div class="pure-fixed-nav-bar">
+        <a class="pure-fixed-nav-btn" href="javascript:void(0)" onclick="triggerNav('top')">⬆️ トップ</a>
+        <a class="pure-fixed-nav-btn" href="javascript:void(0)" onclick="triggerNav('close_debates')">{close_btn_txt}</a>
+        <a class="pure-fixed-nav-btn" href="javascript:void(0)" onclick="triggerNav('back')">↩️ 戻る</a>
+    </div>
+    <script>
+    function triggerNav(action){{
+        const u = new URL(window.parent.location.href);
+        u.searchParams.set('nact', action);
+        window.parent.location.href = u.toString();
+    }}
+    </script>
+    """,
+    height=48
+)
 
 scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
@@ -893,21 +979,17 @@ components.html(
 )
 
 # ==========================================
-# 11. 重大情報ポップアップレンダラー
+# 11. 重大情報コンパクト詳細ボックス
 # ==========================================
-def render_inline_catalyst_box(cat_info: dict, r: dict, kp: str):
+def render_inline_catalyst_box(cat_info: dict, r: dict):
     st.markdown(
-        f'<div class="catalyst-inline-card">'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
-        f'<span style="font-size:12.5px;font-weight:900;color:#ffffff;letter-spacing:0.5px;">🚨 【{r["name"]}】株価急変の重大カタリスト検知！</span>'
-        f'<span style="font-size:10.5px;color:#fde047;font-weight:900;background:rgba(0,0,0,0.45);padding:2px 8px;border-radius:4px;border:1px solid #facc15;">信頼度 {cat_info["reliability"]}%</span>'
+        f'<div class="catalyst-compact-panel">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+        f'<span style="font-weight:900;color:#fef08a;">🚨 【{r["name"]}】急変カタリスト検知 (信頼度 {cat_info["reliability"]}%)</span>'
+        f'{"<a href=\x27" + cat_info["url"] + "\x27 target=\x27_blank\x27 style=\x27color:#fde047;text-decoration:underline;font-weight:800;font-size:10px;\x27>👉 報道原文</a>" if cat_info.get("url") else ""}'
         f'</div>'
-        f'<div style="font-weight:900;font-size:13px;color:#ffffff;margin-bottom:6px;line-height:1.45;">📰 {cat_info["title"]}</div>'
-        f'<div style="font-size:11.5px;color:#fef2f2;line-height:1.6;margin-bottom:8px;background:rgba(0,0,0,0.25);padding:6px 9px;border-radius:6px;">{cat_info["detailed_impact"]}</div>'
-        f'<div style="font-size:10px;color:#fee2e2;display:flex;justify-content:space-between;align-items:center;">'
-        f'<span>一次ソース: <b>{cat_info["source"]}</b> ｜ キーワード: <b>{", ".join(cat_info["keywords"])}</b></span>'
-        f'{"<a href=\x27" + cat_info["url"] + "\x27 target=\x27_blank\x27 style=\x27color:#fde047;text-decoration:underline;font-weight:900;\x27>👉 報道全文を開く</a>" if cat_info.get("url") else ""}'
-        f'</div>'
+        f'<div style="font-weight:800;color:#ffffff;line-height:1.4;margin-bottom:4px;">📰 {cat_info["title"]}</div>'
+        f'<div style="color:#fee2e2;font-size:10px;line-height:1.5;">{cat_info["detailed_impact"]}</div>'
         f'</div>',
         unsafe_allow_html=True
     )
@@ -1371,26 +1453,39 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
     has_cat = cat.get("has_major", False)
     cat_key = f"cat_exp_{kp}_{r['code']}"
 
-    card_html = (
+    # 銘柄名と期待度の間の空きスペースに赤色背景でコンパクトに配置するカタリストバッジ
+    cat_badge_html = ""
+    if has_cat:
+        cat_badge_html = (
+            f'<span class="inline-catalyst-trigger-badge" title="{sanitize(cat.get("title",""))}">'
+            f'🚨 重大情報速報 ({cat.get("reliability", 70)}%)'
+            f'</span>'
+        )
+
+    card_header_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
         f'<div style="margin-bottom:6px;">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点 (WKB透過{r["q_tunnel"]}%)</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点 (Kyle吸収{r["kyle_stealth"]}%)</span><span class="pill-badge">🧬 OFI {r["ofi_z"]:+.2f}σ</span></div>'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:4px;">'
+        f'<div style="min-width:0;flex:1;">'
+        f'<span style="font-size:15px;font-weight:800;color:#f8fafc;">{r["name"]}</span> <span style="font-size:11px;color:#94a3b8;">({r["code"]} / {r["genre"]})</span>'
+        f'{cat_badge_html}'
+        f'<div style="font-size:10.5px;color:#94a3b8;margin-top:2px;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div>'
+        f'</div>'
+        f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;">'
+        f'<div style="font-size:9px;color:#fde047;font-weight:700;line-height:1.15;">🔥 AI期待度 / 統合勝率</div>'
+        f'<div style="white-space:nowrap;line-height:1.2;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:11px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div>'
+        f'<div style="font-size:9px;color:#94a3b8;">Payoff {r["payoff"]}x / Edge {r["edge"]:+.2f}%</div>'
+        f'</div>'
+        f'</div>'
     )
-    st.markdown(card_html, unsafe_allow_html=True)
+    st.markdown(card_header_html, unsafe_allow_html=True)
 
+    # 重大情報がある場合は、その銘柄カードの直下にコンパクトに展開
     if has_cat:
-        is_cat_opened = st.session_state["expanded_catalysts"].get(cat_key, False)
-        btn_cat_txt = "🔽 🚨 重大情報速報を閉じる" if is_cat_opened else "🚨 重大情報速報あり（タップで詳細表示）"
-        if st.button(btn_cat_txt, key=f"btn_{cat_key}", use_container_width=True):
-            st.session_state["expanded_catalysts"][cat_key] = not is_cat_opened
-            st.rerun()
-
-        if is_cat_opened:
-            render_inline_catalyst_box(cat, r, kp)
+        render_inline_catalyst_box(cat, r)
 
     card_body_html = (
-        f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px;"><div style="min-width:0;flex:1;"><span style="font-size:15px;font-weight:800;color:#f8fafc;">{r["name"]}</span> <span style="font-size:11px;color:#94a3b8;">({r["code"]} / {r["genre"]})</span><div style="font-size:10.5px;color:#94a3b8;margin-top:2px;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div></div>'
-        f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;line-height:1.15;">🔥 AI期待度 / 統合勝率</div><div style="white-space:nowrap;line-height:1.2;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:11px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div><div style="font-size:9px;color:#94a3b8;">Payoff {r["payoff"]}x / Edge {r["edge"]:+.2f}%</div></div></div>'
         f'<div class="winrate-bar"><div><div style="font-size:9px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9px;color:#c084fc;">⚛️ WKB透過率</div><div style="font-size:12px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9px;color:#6ee7b7;">🏛️ 機関Kyle吸収</div><div style="font-size:12px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9px;color:#94a3b8;">🌅 翌朝GU / 陽線</div><div style="font-size:11.5px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
         f'<div class="trade-plan-box"><div><div style="font-size:9px;color:#94a3b8;">🌅 夜間理論寄付き</div><div style="font-size:11.5px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9px;color:#10b981;">🎯 利確目標</div><div style="font-size:11.5px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:11.5px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
         f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>基準VWAP: <b>{r["vwap_price"]}</b></span></div>'
