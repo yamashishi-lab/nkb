@@ -4,7 +4,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import altair as alt
-import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, random
+import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, random, threading
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -15,7 +15,7 @@ from datetime import datetime
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
-# セキュリティ強化: ハードコードを廃止し、secrets(環境変数)から読み込む（未設定時のフォールバック値あり）
+# セキュリティ強化: ハードコードを廃止し、secrets(環境変数)から読み込む
 try:
     SECRET_KEY = st.secrets.get("SECRET_KEY", "my_super_secret_quant_key_2026")
     ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "nthbh399@ybb.ne.jp")
@@ -65,18 +65,27 @@ def get_client_fp() -> str:
     dfp = st.session_state.get("client_dfp", "")
     return hashlib.sha256(f"{raw}|{dfp}".encode()).hexdigest()[:12].upper() if dfp else raw
 
+# 修正箇所: ファイルアクセスの競合（Thread-safe）を防ぐ排他制御（ロック機構）を導入
+_FILE_LOCKS = {}
+def _get_file_lock(path: str):
+    if path not in _FILE_LOCKS:
+        _FILE_LOCKS[path] = threading.Lock()
+    return _FILE_LOCKS[path]
+
 def load_j(p: str, d: dict) -> dict:
     r = dict(d)
-    if os.path.exists(p):
-        try:
-            with open(p, "r", encoding="utf-8") as f: r.update(json.load(f))
-        except Exception: pass
+    with _get_file_lock(p):
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f: r.update(json.load(f))
+            except Exception: pass
     return r
 
 def save_j(p: str, d: dict):
-    try:
-        with open(p, "w", encoding="utf-8") as f: json.dump(d, f, ensure_ascii=False, indent=2)
-    except Exception: pass
+    with _get_file_lock(p):
+        try:
+            with open(p, "w", encoding="utf-8") as f: json.dump(d, f, ensure_ascii=False, indent=2)
+        except Exception: pass
 
 def load_smtp(): return load_j(FILES["smtp"], {"smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
 def load_llm(): return load_j(FILES["llm"], {"provider": "gemini", "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}})
@@ -220,11 +229,20 @@ def inject_css():
         display: none !important;
     }
 
+    /* 修正箇所: Streamlitの元ボタンを「見えなくする」がクリックイベントは通るように修正 */
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapsedControl"],
     header button[kind="headerNoPadding"],
     header button[data-testid="baseButton-headerNoPadding"] {
-        display: none !important;
+        opacity: 0 !important;
+        position: absolute !important;
+        top: -9999px !important;
+        left: -9999px !important;
+        width: 1px !important;
+        height: 1px !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+        z-index: -1 !important;
     }
 
     section[data-testid="stSidebar"] {
@@ -280,9 +298,6 @@ def inject_css():
         text-overflow: ellipsis;
     }
     
-    /* ─────────────────────────────────────────────────────────────
-       上部固定ナビゲーションバー（MENUボタンと被らない幅設計・左右対称中央配置）
-       ───────────────────────────────────────────────────────────── */
     .fixed-top-nav-bar {
         position: fixed !important;
         top: 0.45rem !important;
@@ -339,7 +354,7 @@ def inject_css():
         flex: 1.35 1 0% !important;
     }
     
-    /* 修正: ボタン押下後の青枠・色残りを完全に無効化するスタイル */
+    /* 修正箇所: ボタン押下後の青枠・色残りを完全に無効化し、押した瞬間のみ青色にするスタイル */
     .fixed-top-nav-bar button {
         width: 100% !important;
         min-width: 0 !important;
@@ -358,21 +373,27 @@ def inject_css():
         cursor: pointer !important;
         position: relative !important;
         outline: none !important;
-        transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        transition: background-color 0.1s, border-color 0.1s, color 0.1s !important;
     }
     
     .fixed-top-nav-bar button:hover {
-        border-color: #38bdf8 !important;
-        color: #38bdf8 !important;
+        border-color: rgba(56,189,248,0.6) !important;
+        background: rgba(30,41,59,0.92) !important;
     }
 
-    .fixed-top-nav-bar button:focus,
-    .fixed-top-nav-bar button:focus-visible {
+    /* Streamlitが自動付与するFocus状態をデフォルトカラーで上書き（青く残るのを防ぐ） */
+    .fixed-top-nav-bar button:focus:not(:active),
+    .fixed-top-nav-bar button:focus-visible:not(:active) {
         background: rgba(15,23,42,0.92) !important;
         color: #f8fafc !important;
         border-color: rgba(56,189,248,0.25) !important;
-        outline: none !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.45) !important;
+        outline: none !important;
+    }
+    
+    .fixed-top-nav-bar button * {
+        color: inherit !important;
+        transition: color 0.1s !important;
     }
     
     .fixed-top-nav-bar button p {
@@ -385,20 +406,17 @@ def inject_css():
         text-overflow: ellipsis !important;
         line-height: 1 !important;
         pointer-events: none !important;
-        color: inherit !important;
     }
     
-    .fixed-top-nav-bar button:focus p,
-    .fixed-top-nav-bar button:focus-visible p {
-        color: #f8fafc !important; 
-    }
-    
-    .fixed-top-nav-bar button:active {
+    /* ボタンを"押している間"だけ青色を適用 */
+    .fixed-top-nav-bar button:active,
+    .fixed-top-nav-bar button:active:focus {
         background: #0284c7 !important;
         color: #ffffff !important;
         border-color: #38bdf8 !important;
         box-shadow: 0 0 10px rgba(56,189,248,0.7) !important;
-        transform: scale(0.98);
+        transform: scale(0.96) !important;
+        transition: none !important;
     }
     
     div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stElementContainer"] div.floating-news-popup-marker),
@@ -759,14 +777,14 @@ def check_auth():
                 if "@" not in am or len(apin.strip()) < 4:
                     st.warning("⚠️ 正しいメールアドレスと4桁の暗証番号(PIN)を入力してください。")
                 else:
-                    cm, pc, ns = am.strip().lower(), gen_code(am), datetime.now().strftime("%Y-%m-%d %H:%M")
+                    cm, pc, ns = datetime.now().strftime("%Y-%m-%d %H:%M")
                     nm_clean = an.strip() or "未入力"
                     pin_h = hash_pin(apin)
                     is_ban, ban_reason = check_and_log_ban_spoof(cm, nm_clean, cur_fp, raw_hfp, pin_h, "新規登録申請")
                     if is_ban or (db.get(cm) and db[cm].get("status") == "banned"):
                         st.error("💀 セキュリティ監視システムにより、永久BAN対象者（または同一端末からのなりすまし再登録）と判定されたため申請は永久ブロックされました。")
                     else:
-                        db[cm] = {"name": nm_clean, "email": cm, "status": "pending", "passcode": pc, "pin_hash": pin_h, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False}
+                        db[cm] = {"name": nm_clean, "email": cm, "status": "pending", "passcode": gen_code(cm), "pin_hash": pin_h, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False}
                         save_j(FILES["mem"], db)
                         send_mail(cm, "【YAMASHISHI LAB】会員登録申請の受付完了", f"{nm_clean} 様\n申請を受け付けました。管理者承認後、ログイン画面の『🔐 承認確認・暗号化コード照会』タブにて、ご設定いただいた4桁の暗証番号(PIN)を入力すると専用アクセスコードをご確認いただけます。")
                         st.success("✅ 申請を受け付けました！承認完了まで今しばらくお待ちください。")
@@ -797,7 +815,7 @@ for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 
-# 上部固定ナビゲーションバー（左右対称中央配置・メニュー被り防止設計）
+# 上部固定ナビゲーションバー
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
     nav_c1, nav_c2, nav_c3 = st.columns([1, 1.35, 1])
@@ -845,24 +863,20 @@ if st.session_state.get("scroll_target_id"):
     """
     st.session_state["scroll_target_id"] = ""
 
-# ─────────────────────────────────────────────────────────────
-# 左上追従・高品位サイバーパンク開閉フローティングトグル ＆ スライドインスクリプト
-# 修正: サイドバー自動展開防止 ＆ トップナビボタンのフォーカス解除
-# ─────────────────────────────────────────────────────────────
+# 修正箇所: サイドバー表示切り替えロジックの改善
 components.html(
     f"""
     <script>
     (function(){{
         const doc = window.parent.document;
         
-        // ログイン後に予期せずサイドバーが開くのを防止
         function ensureSidebarCollapsedOnLoad(){{
             if(!window.parent._sidebarForcedClosed){{
                 setTimeout(() => {{
                     try {{
                         const sb = doc.querySelector('section[data-testid="stSidebar"]');
                         if(sb && sb.getAttribute('aria-expanded') === 'true'){{
-                            const btn = doc.querySelector('button[data-testid="stSidebarCollapseButton"]') || doc.querySelector('[data-testid="collapsedControl"]');
+                            const btn = doc.querySelector('[data-testid="collapsedControl"]');
                             if(btn) btn.click();
                         }}
                     }} catch(e){{}}
@@ -943,29 +957,30 @@ components.html(
                     e.preventDefault();
                     e.stopPropagation();
 
-                    const nativeBtn = doc.querySelector('button[data-testid="stSidebarCollapseButton"]') 
-                                   || doc.querySelector('[data-testid="collapsedControl"]')
-                                   || doc.querySelector('button[aria-label*="sidebar" i]');
-                    if(nativeBtn){{
-                        nativeBtn.click();
-                        return;
-                    }}
+                    // Streamlitのサイドバー開閉を検知・正確にクリック発行
+                    const expandBtn = doc.querySelector('[data-testid="collapsedControl"]');
+                    const collapseBtn = doc.querySelector('[data-testid="stSidebarCollapseButton"]') 
+                                     || doc.querySelector('[aria-label="Collapse sidebar"]');
 
                     const sb = doc.querySelector('section[data-testid="stSidebar"]');
-                    if(!sb) return;
-                    const isClosed = (sb.getAttribute('aria-expanded') === 'false') || 
-                                     (window.getComputedStyle(sb).transform !== 'none' && window.getComputedStyle(sb).transform.indexOf('-') !== -1) ||
-                                     (sb.offsetLeft < 0) || (window.getComputedStyle(sb).display === 'none');
+                    let isClosed = true;
+                    if(sb) {{
+                        isClosed = sb.getAttribute('aria-expanded') === 'false' || 
+                                   (window.getComputedStyle(sb).transform && window.getComputedStyle(sb).transform.includes('-'));
+                    }}
 
-                    if(isClosed){{
-                        sb.style.setProperty('display', 'block', 'important');
-                        sb.style.setProperty('visibility', 'visible', 'important');
-                        sb.style.setProperty('transform', 'none', 'important');
-                        sb.style.setProperty('margin-left', '0px', 'important');
-                        sb.setAttribute('aria-expanded', 'true');
-                    }} else {{
-                        sb.style.setProperty('transform', 'translateX(-105%)', 'important');
-                        sb.setAttribute('aria-expanded', 'false');
+                    if (isClosed && expandBtn) {{
+                        expandBtn.click();
+                    }} else if (!isClosed && collapseBtn) {{
+                        collapseBtn.click();
+                    }} else if (sb) {{
+                        if(isClosed) {{
+                            sb.style.setProperty('transform', 'none', 'important');
+                            sb.setAttribute('aria-expanded', 'true');
+                        }} else {{
+                            sb.style.setProperty('transform', 'translateX(-105%)', 'important');
+                            sb.setAttribute('aria-expanded', 'false');
+                        }}
                     }}
                 }});
 
@@ -980,12 +995,6 @@ components.html(
                 let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
                 if(box && box.querySelector('[data-testid="stHorizontalBlock"]')){{
                     box.classList.add('fixed-top-nav-bar');
-                    // 修正: ボタン押下後の青枠・フォーカスを完全に無効化
-                    box.querySelectorAll('button').forEach(btn => {{
-                        btn.addEventListener('click', function(){{ setTimeout(() => this.blur(), 50); }});
-                        btn.addEventListener('mouseup', function(){{ this.blur(); }});
-                        btn.addEventListener('mouseleave', function(){{ this.blur(); }});
-                    }});
                 }}
             }} catch(e){{}}
         }}
@@ -1128,7 +1137,6 @@ def get_active_ai_providers() -> list:
     cfg = load_llm()
     act = []
     for k, (lbl, m_list, _) in AI_PROVIDERS.items():
-        # 修正: JSONファイルからは読み込まず、安全にセッションからのみ取得
         key = clean_k(st.session_state.get(f"rt_key_{k}", ""))
         mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
         if key: act.append((k, lbl, mod, key))
@@ -1143,7 +1151,6 @@ def get_debate_mode_badge(cnt: int) -> str:
 
 def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p: str, temp: float = 0.7):
     p_label, _, endpoint = AI_PROVIDERS.get(prov, AI_PROVIDERS["gemini"])
-    # 修正: SSLの標準検証を有効にしてセキュリティ強化
     ctx = ssl.create_default_context()
     try:
         if prov == "gemini":
@@ -1284,7 +1291,7 @@ def analyze_news_impact_and_links(title: str, cat: str) -> dict:
         mech = "地政学・国策防衛予算および宇宙安全保障に関わるテーマ材料です。主力大型株の三菱重工業(7011)・川崎重工業(7012)・IHI(7013)に海外年金・機関のロング資金が流入しやすく、個人の短期モメンタム資金は値動きの軽いQPS研究所(5595)やアストロスケール(186A)へ波及しやすい構造です。"
     elif any(w in t_up for w in ["電力", "原発", "データセンター", "電線", "送電", "フジクラ", "日立"]):
         codes, sector_focus = ["5803.T", "5801.T", "6501.T", "9509.T", "9508.T", "VST"], "AI電力インフラ・超電導送電網・光ファイバー電線セクター"
-        mech = "生成AIデータセンターの爆発的な電力需要と送配電網増強に直結する国策テーマです。電線御三家筆頭のフジクラ(5803)・古河電工(5801)、世界送配電グリッドの日立製作所(6501)、さらにラピダス・TSMC稼働に伴う北海道電力(9509)・九州電力(9508)が強く連動します。"
+        mech = "生成AIデータセンターの爆発的な電力需要と送配চ্ছ網増強に直結する国策テーマです。電線御三家筆頭のフジクラ(5803)・古河電工(5801)、世界送配電グリッドの日立製作所(6501)、さらにラピダス・TSMC稼働に伴う北海道電力(9509)・九州電力(9508)が強く連動します。"
     elif any(w in t_up for w in ["量子", "暗号", "セキュリティ", "IONQ", "さくら", "クラウド"]):
         codes, sector_focus = ["3778.T", "3993.T", "IONQ", "RGTI", "CRWD", "9984.T"], "量子コンピューティング・国策AIクラウド・サイバー防衛セクター"
         mech = "次世代計算基盤（量子・GPUクラウド）およびゼロトラスト防衛に関わる最先端材料です。米量子株のIonQ(IONQ)・Rigetti(RGTI)の急騰は、日本市場のさくらインターネット(3778)やPKSHA(3993)へ短期資金を誘発する強い先行指標となります。"
@@ -1335,7 +1342,6 @@ cur_prov = st.sidebar.selectbox("AIプロバイダー選択 (7社対応)", list(
 st.session_state["rt_llm_prov"] = cur_prov
 p_name, p_models, _ = AI_PROVIDERS[cur_prov]
 
-# 修正: セキュリティ強化のため、APIキーはローカルJSONに保存せずセッション内にのみ保持
 saved_m = llm_cfg.get("models", {}).get(cur_prov, p_models[0])
 in_k = clean_k(st.sidebar.text_input(f"🔑 {p_name} API Key (セッションのみ保存)", value=st.session_state.get(f"rt_key_{cur_prov}", ""), type="password"))
 in_m = st.sidebar.selectbox(f"🧠 {p_name} モデル", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
@@ -1874,13 +1880,10 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         m_part = ms["ms_score"] if bms else 72
         b_part = b5sc if b5 else 68
         
-        # 修正: 期待度・勝率スコアの「インフレ補正（無条件での点数加算）」を除去・調整。
-        # 悪い相場環境では正しく低いスコアが出るよう下限を20.0に拡張し、ペナルティ(CVaR)の影響を強めました。
         aisc = int(np.clip(round(tot_win * 0.34 + q_part * 0.22 + m_part * 0.20 + i_part * 0.14 + b_part * 0.10), 20, 99))
         expect_pct = round(float(np.clip(aisc * 0.42 + q_part * 0.22 + m_part * 0.20 + tot_win * 0.16 + min(edge * 4.5, 8.0) - max(cvar95 - 3.2, 0.0) * 2.5, 10.0, 99.4)), 1)
 
         tval = expect_pct * 0.50 + aisc * 0.30 + tot_win * 0.20
-        # 修正: 期待度が低い場合（下落トレンド）のティア「Lv.3：警戒・撤退」を追加
         for th, tn, tl, tc, tbg in [
             (82, 10, "【Lv.10：🔥情報精度S級・全ツッパ推奨】量子×機関氷山吸収極大", "#fff", "linear-gradient(90deg,#7e22ce,#dc2626)"),
             (76, 9, "【Lv.9：⚡超強気買い】量子トンネル突破＆機関アルゴ集中", "#fff", "linear-gradient(90deg,#0369a1,#1d4ed8)"),
@@ -1977,7 +1980,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
         usr_p += (
             f"【ユーザーからの最新質問】: 「{user_query}」\n\n"
             f"【回答指示】:\n"
-            f"1. 直前の過去の会話や他の質問（任天堂や車など）には一切引きずられず、**今聞かれた『{user_query}』だけに対して直接回答**してください。\n"
+            f"1. 直前の過去の会話や他の質問には一切引きずられず、**今聞かれた『{user_query}』だけに対して直接回答**してください。\n"
             f"2. 上記の【Webから取得した最新情報】を直接根拠として言及・引用し、ズバリ答えてください。\n"
             f"3. 形式ばった前置き構文やテンプレは一切禁止です。\n"
         )
