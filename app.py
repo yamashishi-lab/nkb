@@ -65,7 +65,6 @@ def get_client_fp() -> str:
     dfp = st.session_state.get("client_dfp", "")
     return hashlib.sha256(f"{raw}|{dfp}".encode()).hexdigest()[:12].upper() if dfp else raw
 
-# データ競合を防ぐ100点満点の堅牢なロック機構
 _FILE_LOCKS = {}
 def _get_file_lock(path: str):
     if path not in _FILE_LOCKS:
@@ -229,22 +228,21 @@ def inject_css():
         display: none !important;
     }
 
+    /* 修正: pointer-events:none を外し、JSから dispatchEvent で確実に押せるように要素を見えなくするだけに留める */
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapsedControl"],
     header button[kind="headerNoPadding"],
     header button[data-testid="baseButton-headerNoPadding"] {
         opacity: 0 !important;
         position: absolute !important;
-        top: -9999px !important;
-        left: -9999px !important;
+        top: 0 !important;
+        left: 0 !important;
         width: 1px !important;
         height: 1px !important;
         overflow: hidden !important;
-        pointer-events: none !important;
         z-index: -1 !important;
     }
 
-    /* 修正: サイドバーが細長く出る不具合の解消 (カスタムtransitionを削除しStreamlitネイティブのアニメーションを尊重) */
     section[data-testid="stSidebar"] {
         background-color: #0b0f19 !important;
         border-right: 1px solid rgba(148,163,184,0.18) !important;
@@ -353,7 +351,6 @@ def inject_css():
         flex: 1.35 1 0% !important;
     }
     
-    /* ボタン基本スタイル */
     .fixed-top-nav-bar button {
         width: 100% !important;
         min-width: 0 !important;
@@ -380,7 +377,6 @@ def inject_css():
         background: rgba(30,41,59,0.92) !important;
     }
 
-    /* 修正: 押した時"だけ"青色になるように、不要なFocusスタイル（青残り）を完全に無効化 */
     .fixed-top-nav-bar button:focus,
     .fixed-top-nav-bar button:focus-visible,
     .fixed-top-nav-bar button:focus:not(:active) {
@@ -408,7 +404,6 @@ def inject_css():
         pointer-events: none !important;
     }
     
-    /* 修正: クリックして指を離すまでの"瞬間"だけ青く光るスタイル */
     .fixed-top-nav-bar button:active,
     .fixed-top-nav-bar button:active:focus {
         background: #0284c7 !important;
@@ -863,7 +858,7 @@ if st.session_state.get("scroll_target_id"):
     """
     st.session_state["scroll_target_id"] = ""
 
-# 修正箇所: JSでのサイドバー開閉・DOMアクセスの最適化（ReactイベントへDispatch）
+# 修正: JSでのサイドバー開閉を確実にするため、セレクタ拡充とMouseEventの発行を最適化
 components.html(
     f"""
     <script>
@@ -875,9 +870,9 @@ components.html(
                 setTimeout(() => {{
                     try {{
                         const sb = doc.querySelector('section[data-testid="stSidebar"]');
-                        if(sb && sb.getAttribute('aria-expanded') === 'true'){{
-                            const btn = doc.querySelector('[data-testid="stSidebarCollapseButton"]');
-                            if(btn) btn.dispatchEvent(new MouseEvent('click', {{ bubbles: true }}));
+                        if(sb && (sb.getAttribute('aria-expanded') === 'true' || sb.style.marginLeft === '0px')){{
+                            const btn = doc.querySelector('[data-testid="stSidebarCollapseButton"]') || doc.querySelector('[aria-label="Collapse sidebar"]');
+                            if(btn) btn.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true, view: window.parent }}));
                         }}
                     }} catch(e){{}}
                 }}, 150);
@@ -953,20 +948,23 @@ components.html(
                 `;
                 doc.head.appendChild(style);
 
-                // 修正: DOM構造に依存せず、MouseEventのdispatchでReactにクリックを拾わせる
                 btn.addEventListener('click', function(e){{
                     e.preventDefault();
                     e.stopPropagation();
 
-                    const expandBtn = doc.querySelector('[data-testid="collapsedControl"]');
+                    const expandBtn = doc.querySelector('[data-testid="collapsedControl"]') 
+                                   || doc.querySelector('[data-testid="stSidebarCollapsedControl"]')
+                                   || doc.querySelector('button[kind="headerNoPadding"]');
                     const collapseBtn = doc.querySelector('[data-testid="stSidebarCollapseButton"]') 
-                                     || doc.querySelector('[aria-label="Collapse sidebar"]');
+                                     || doc.querySelector('[aria-label="Collapse sidebar"]')
+                                     || doc.querySelector('button[aria-label="Close"]');
 
                     let isClosed = true;
                     const sb = doc.querySelector('section[data-testid="stSidebar"]');
                     if(sb) {{
                         isClosed = sb.getAttribute('aria-expanded') === 'false' || 
-                                   (window.getComputedStyle(sb).transform && window.getComputedStyle(sb).transform.includes('-'));
+                                   (window.getComputedStyle(sb).transform && window.getComputedStyle(sb).transform.includes('-')) ||
+                                   (sb.style.marginLeft && sb.style.marginLeft.includes('-'));
                     }}
 
                     if (isClosed && expandBtn) {{
@@ -1328,6 +1326,11 @@ def fetch_5ch_live() -> dict:
     joined = " ".join(txts)
     return {c: {"hits": len(re.findall(re.escape(c.replace(".T", "")), joined)) if joined else 0, "live": bool(txts)} for c in KNOWN_STOCKS}
 
+# 修正: グローバルに依存関係を取得しておくことで、後のNEWS_DETAIL表示時のエラーを防止
+macro_info = fetch_macro()
+b5_live_map = fetch_5ch_live()
+all_impact_news = fetch_global_impact_news()
+
 st.sidebar.header("🧠 7大AI ＆ 量子エンジン設定")
 llm_cfg = load_llm()
 cur_prov = st.sidebar.selectbox("AIプロバイダー選択 (7社対応)", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
@@ -1673,22 +1676,6 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
 def norm_tk(raw: str) -> str:
     s = unicodedata.normalize("NFKC", raw).strip().upper()
     return f"{s}.T" if len(s) == 4 and any(c.isdigit() for c in s) and "." not in s else s
-
-@st.cache_data(ttl=900)
-def fetch_macro():
-    tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
-    res = {}
-    try:
-        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=5)
-        for k, (c, lbl) in tks.items():
-            try:
-                d = raw[c].dropna(subset=["Close"])
-                lc, pc = float(d["Close"].iloc[-1]), float(d["Close"].iloc[-2])
-                res[k] = {"price": lc, "diff": round((lc - pc) / pc * 100, 2), "label": lbl}
-            except Exception: res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
-    except Exception:
-        for k, (_, lbl) in tks.items(): res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
-    return res
 
 def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
     n = min(len(c), 25)
@@ -2152,9 +2139,6 @@ def render_ipo_offering_section():
             f'<div style="margin-top:7px;">{links_html}</div></div>',
             unsafe_allow_html=True
         )
-
-macro_info = fetch_macro()
-b5_live_map = fetch_5ch_live()
 
 BOOST_MAP = {
     "⚛️ 量子力学波動(QWM-7)": "algo",
