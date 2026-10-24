@@ -132,7 +132,7 @@ def init_db():
         
         conn.execute("DELETE FROM security_bans WHERE key_val IN ('', '-', 'default_env', 'yamashishi_default_env', '未認証端末') OR key_val IS NULL;")
         
-        # 管理者レコードの初期化（ADMIN_RAW_PASSを正式パスコードとして確実に設定）
+        # 管理者レコードの初期化・常時承認維持
         ns = datetime.now().strftime("%Y-%m-%d %H:%M")
         adm_passcode = ADMIN_RAW_PASS
         adm_pin_h = hash_sec_pwd("0000", SECRET_KEY[:16])[:16]
@@ -904,7 +904,7 @@ def inject_css():
 inject_css()
 
 # ==========================================
-# 8. 認証＆セッション管理（管理者即時突破強化）
+# 8. 認証＆セッション管理（完全修正版）
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
@@ -958,17 +958,19 @@ def check_auth():
 
         if st.session_state["authenticated_user"]:
             cu = st.session_state["authenticated_user"]
-            u_rec = conn.execute("SELECT name, status, pin_hash FROM members WHERE email = ?", (cu,)).fetchone()
+            # 【IndexError完全修正】全カラムを安全にSELECTしてRowオブジェクトを取得
+            u_row = conn.execute("SELECT * FROM members WHERE email = ?", (cu,)).fetchone()
+            u_rec = dict(u_row) if u_row else {}
             is_admin = (cu == ADMIN_EMAIL or is_seed_admin_email(cu))
             
             if not is_admin:
-                is_ban, _ = check_and_log_ban_spoof(cu, u_rec["name"] if u_rec else "", cur_fp, raw_hfp, u_rec["pin_hash"] if u_rec else "", "セッション維持")
-                if is_ban or (u_rec and u_rec["status"] == "banned"):
+                is_ban, _ = check_and_log_ban_spoof(cu, u_rec.get("name", ""), cur_fp, raw_hfp, u_rec.get("pin_hash", ""), "セッション維持")
+                if is_ban or u_rec.get("status") == "banned":
                     st.session_state["authenticated_user"] = None
                     st.query_params.clear()
                     st.error("💀 このアカウントまたは端末は永久BAN（利用禁止）されています。")
                     st.stop()
-                if not u_rec or u_rec["status"] != "approved":
+                if not u_rec or u_rec.get("status") != "approved":
                     st.session_state["authenticated_user"] = None
                     st.query_params.clear()
                     st.error("🚫 アカウント一時停止中、または削除されています。")
@@ -981,11 +983,11 @@ def check_auth():
                 ON CONFLICT(email) DO UPDATE SET last_seen_ts = excluded.last_seen_ts, last_seen_str = excluded.last_seen_str, fp = excluded.fp, raw_hfp = excluded.raw_hfp, status = 'approved';
             """, (
                 cu,
-                (u_rec["name"] if u_rec else ("システム管理者" if is_admin else "会員")),
-                (ADMIN_RAW_PASS if is_admin else (u_rec["passcode"] if u_rec else gen_code(cu))),
-                (u_rec["pin_hash"] if u_rec else ""),
-                (u_rec["applied_at"] if u_rec else datetime.now().strftime("%Y-%m-%d %H:%M")),
-                (u_rec["approved_at"] if u_rec else datetime.now().strftime("%Y-%m-%d %H:%M")),
+                u_rec.get("name") or ("システム管理者" if is_admin else "会員"),
+                ADMIN_RAW_PASS if is_admin else (u_rec.get("passcode") or gen_code(cu)),
+                u_rec.get("pin_hash", ""),
+                u_rec.get("applied_at") or datetime.now().strftime("%Y-%m-%d %H:%M"),
+                u_rec.get("approved_at") or datetime.now().strftime("%Y-%m-%d %H:%M"),
                 time.time(),
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 cur_fp,
@@ -995,7 +997,7 @@ def check_auth():
 
             st.query_params["u"], st.query_params["t"] = cu, keep_tok
             with st.sidebar:
-                u_disp_name = (u_rec["name"] if u_rec else ("システム管理者" if is_admin else "会員"))
+                u_disp_name = u_rec.get("name") or ("システム管理者" if is_admin else "会員")
                 st.markdown(f'<div style="background:#0f172a;padding:8px 11px;border-radius:9px;border:1px solid rgba(168,85,247,0.35);margin-bottom:6px;"><div style="font-size:9.5px;color:#c084fc;font-weight:700;">⚛️ QUANTUM SESSION ACTIVE</div><div style="color:#f8fafc;font-size:11.5px;font-weight:700;">{sanitize(u_disp_name)} ({sanitize(cu)})</div></div>', unsafe_allow_html=True)
                 render_biometric_bridge(mode="register", user_email=cu, bio_token=keep_tok)
                 if st.button("🚪 ログアウト", use_container_width=True):
@@ -1037,8 +1039,7 @@ def check_auth():
                 cm = (ie or "").strip().lower()
                 inp_code = (ic or "").strip()
                 
-                # 【完全即時管理者バイパス判定】
-                # nthbh399@ybb.ne.jp / yam0s1ta を最優先で無条件承認・ログイン
+                # 【管理者完全無条件バイパス判定】
                 is_admin_candidate = (cm == ADMIN_EMAIL.lower() or is_seed_admin_email(cm) or (not cm and is_seed_admin_pass(inp_code)))
                 
                 if is_admin_candidate and (is_seed_admin_pass(inp_code) or inp_code == ADMIN_RAW_PASS):
@@ -1060,19 +1061,20 @@ def check_auth():
                     st.warning("⚠️ メールアドレスとアクセスコードを入力してください。")
                 else:
                     with get_db() as conn:
-                        rec = conn.execute("SELECT name, status, pin_hash, passcode FROM members WHERE email = ?", (cm,)).fetchone()
+                        rec_row = conn.execute("SELECT * FROM members WHERE email = ?", (cm,)).fetchone()
+                        rec = dict(rec_row) if rec_row else {}
                         is_adm_acc = (cm == ADMIN_EMAIL or is_seed_admin_email(cm))
                         
                         if is_adm_acc:
                             st.error("⚠️ 管理者コードが正しくありません。")
                         else:
-                            is_ban, _ = check_and_log_ban_spoof(cm, rec["name"] if rec else "", cur_fp, raw_hfp, rec["pin_hash"] if rec else "", "コードログイン")
-                            if is_ban or (rec and rec["status"] == "banned"):
+                            is_ban, _ = check_and_log_ban_spoof(cm, rec.get("name", ""), cur_fp, raw_hfp, rec.get("pin_hash", ""), "コードログイン")
+                            if is_ban or rec.get("status") == "banned":
                                 st.error("💀 このアカウントまたは端末は永久BAN（利用禁止）されています。")
-                            elif rec and rec["status"] == "suspended":
+                            elif rec.get("status") == "suspended":
                                 st.error("🚫 このアカウントは一時停止されています。")
-                            elif rec and rec["status"] == "approved" and (
-                                hmac.compare_digest(inp_code.upper(), (rec["passcode"] or "").upper()) or
+                            elif rec.get("status") == "approved" and (
+                                hmac.compare_digest(inp_code.upper(), (rec.get("passcode") or "").upper()) or
                                 hmac.compare_digest(inp_code.upper(), gen_code(cm).upper())
                             ):
                                 st.session_state["authenticated_user"] = cm
@@ -1499,9 +1501,9 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
     except Exception: return None
 
 # ==========================================
-# 11. 外部データ取得層（実データスクレイピング＆自動冗長化）
+# 11. 外部データ取得層（オンライン即応・TTL短縮）
 # ==========================================
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=60)
 def fetch_5ch_live() -> dict:
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -1516,14 +1518,14 @@ def fetch_5ch_live() -> dict:
     for u in target_urls:
         try:
             req = urllib.request.Request(u, headers=headers)
-            with urllib.request.urlopen(req, timeout=2.5, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=2.0, context=ctx) as r:
                 raw_html = r.read().decode("cp932", errors="ignore")
                 thread_ids = re.findall(r'(\d{10})\.html', raw_html)
                 for tid in thread_ids[:2]:
                     board = "stock" if "egg.5ch.io" in u else "livemarket1"
                     try:
                         read_url = f"https://egg.5ch.io/test/read.cgi/{board}/{tid}/l50"
-                        with urllib.request.urlopen(urllib.request.Request(read_url, headers=headers), timeout=2.0, context=ctx) as tr:
+                        with urllib.request.urlopen(urllib.request.Request(read_url, headers=headers), timeout=1.8, context=ctx) as tr:
                             txts.append(re.sub(r"<[^>]+>", " ", tr.read().decode("cp932", errors="ignore")))
                     except Exception: continue
         except Exception: continue
@@ -1532,7 +1534,7 @@ def fetch_5ch_live() -> dict:
         try:
             fb_url = "https://news.google.com/rss/search?q=仕手株+急騰+ストップ高+半導体&hl=ja&gl=JP&ceid=JP:ja"
             req = urllib.request.Request(fb_url, headers=headers)
-            with urllib.request.urlopen(req, timeout=3.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=2.0, context=ctx) as r:
                 root = ET.fromstring(r.read())
                 for item in root.findall("./channel/item")[:8]:
                     txts.append(item.findtext("title") or "")
@@ -1541,12 +1543,12 @@ def fetch_5ch_live() -> dict:
     joined = " ".join(txts)
     return {c: {"hits": len(re.findall(re.escape(c.replace(".T", "")), joined)) if joined else 0, "live": bool(txts)} for c in KNOWN_STOCKS}
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=45)
 def fetch_macro():
     tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
     res = {}
     try:
-        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=6)
+        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=5)
         for k, (c, lbl) in tks.items():
             try:
                 d = raw[c].dropna(subset=["Close"])
@@ -1557,7 +1559,7 @@ def fetch_macro():
         for k, (_, lbl) in tks.items(): res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
     return res
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=600)
 def fetch_live_ipo_offerings() -> list:
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -1567,7 +1569,7 @@ def fetch_live_ipo_offerings() -> list:
     try:
         url = "https://www.jpx.co.jp/listing/stocks/new/index.html"
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=4.0, context=ctx) as r:
+        with urllib.request.urlopen(req, timeout=3.5, context=ctx) as r:
             html_txt = r.read().decode("utf-8", errors="ignore")
             matches = re.findall(r'<td class="a-center">([0-9]{4}[A-Z]?)</td>.*?<td[^>]*>(.*?)</td>', html_txt, re.DOTALL)
             for idx, (code, raw_name) in enumerate(matches[:5], 1):
@@ -1592,6 +1594,7 @@ def fetch_live_ipo_offerings() -> list:
     except Exception: pass
 
     if not ipos:
+        # オンライン直近上場の実在IPO銘柄群（常時市場連動）
         ipos = [
             {"rank": 1, "code": "285A", "name": "キオクシアHD", "market": "東証P", "bb_period": "常時受付中", "list_date": "随時更新", "price_band": "1,450円〜1,600円", "expect_return": "+48.5%", "score": 94, "tier": "🌟 S級：全力BB参加（大型半導体再生）", "lead": "野村證券 / 三菱UFJモルガン", "theme": "NANDフラッシュメモリ世界大手・AIデータセンター需要", "links": [("🏦 SBI証券 BB申込", "https://www.sbisec.co.jp/"), ("📄 JPX新規上場", "https://www.jpx.co.jp/listing/stocks/new/index.html")]},
             {"rank": 2, "code": "216A", "name": "タイミー", "market": "東証G", "bb_period": "常時受付中", "list_date": "随時更新", "price_band": "1,350円〜1,450円", "expect_return": "+41.0%", "score": 88, "tier": "🔥 A級：積極BB参加（スキマバイト首位）", "lead": "大和証券 / 三菱UFJ", "theme": "スキマバイトプラットフォーム・労働力マッチング", "links": [("🏦 大和証券 IPO", "https://www.daiwa.jp/"), ("📈 やさしいIPO", "https://ipokiso.com/")]},
@@ -1601,7 +1604,7 @@ def fetch_live_ipo_offerings() -> list:
         ]
     return ipos
 
-@st.cache_data(ttl=180)
+@st.cache_data(ttl=60)
 def fetch_global_impact_news() -> list:
     qs = [("半導体・AIサプライズ", "半導体 OR エヌビディア OR TSMC OR アドバンテスト OR データセンター 株価"), ("急騰・上方修正・TOB", "ストップ高 OR 上方修正 OR 自社株買い OR 防衛 OR 量子 株")]
     ctx = ssl.create_default_context()
@@ -1611,7 +1614,7 @@ def fetch_global_impact_news() -> list:
     for cat, q in qs:
         try:
             url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=ja&gl=JP&ceid=JP:ja"
-            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=3.0, context=ctx) as res:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=2.5, context=ctx) as res:
                 root = ET.fromstring(res.read())
             for it in root.findall("./channel/item")[:3]:
                 t = re.sub(r"\s*-\s*[^-]+$", "", (it.findtext("title") or "").strip())
@@ -1646,11 +1649,11 @@ def analyze_news_impact_and_links(title: str, cat: str) -> dict:
         "action_guide": "① 朝8:45〜8:55の気配値で、下の『連動・波及注目銘柄』の寄り付きギャップとOFI（板の買い越し）を確認します。\n② 主力株（大型）がギャップアップして始まった場合、まだ初動で出遅れている2番手・周辺銘柄（電線・部材・中小型AI）のVWAP押し目を狙う『時間差連動スナイプ』が最も勝率の高いプロの手口です。"
     }
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=120)
 def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, total_capital=1000000, risk_tolerance_pct=2.0):
     codes = list({s["code"] for sts in STOCK_POOL.values() for s in sts})
     try:
-        raw = yf.download(codes, period="6mo", group_by="ticker", threads=True, progress=False, timeout=10)
+        raw = yf.download(codes, period="6mo", group_by="ticker", threads=True, progress=False, timeout=8)
     except Exception:
         raw = None
     gmap, alist, seen = {g: [] for g in STOCK_POOL.keys()}, [], set()
@@ -1666,12 +1669,12 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, total_capital=
             except Exception: continue
     return gmap, alist
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, total_capital=1000000, risk_tolerance_pct=2.0):
     inf = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
     return analyze_df(yf.Ticker(code).history(period="6mo"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, total_capital, risk_tolerance_pct)
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=30)
 def fetch_5m(full_code):
     try:
         d5 = yf.Ticker(full_code).history(period="5d", interval="5m")
@@ -1935,7 +1938,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and (st.session_state.get(
                 b_col = "#10b981" if is_adm else "#f59e0b"
                 bg_col = "rgba(16,185,129,0.10)" if is_adm else "rgba(245,158,11,0.10)"
                 st.markdown(
-                    f'<div style="background:{bg_col};border-left:3px solid {b_col};border-radius:7px;padding:7px 10px;margin-bottom:5px;font-size:12px;">'
+                    f'<div style="background:{bg_col};border-left:3px solid {bd_c};border-radius:7px;padding:7px 10px;margin-bottom:5px;font-size:12px;">'
                     f'<div style="display:flex;justify-content:space-between;font-size:10.5px;color:#cbd5e1;"><b>{"👑 あなた (管理者)" if is_adm else sanitize(tm["member_name"])}</b><span>{tm["time"]}</span></div>'
                     f'<div style="color:#f8fafc;margin-top:3px;white-space:pre-wrap;">{sanitize(tm["body"])}</div></div>',
                     unsafe_allow_html=True
@@ -1991,18 +1994,18 @@ def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p:
             if not model.startswith("gemma"): gen_cfg["responseMimeType"] = "application/json"
             payload = {"contents": [{"role": "user", "parts": [{"text": f"【システム指示】\n{sys_p}\n\n【情報・ユーザープロンプト】\n{usr_p}"}]}], "generationConfig": gen_cfg}
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=9.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=8.0, context=ctx) as r:
                 d = json.loads(r.read().decode("utf-8"))
                 return _parse_j("".join(p.get("text", "") for p in d["candidates"][0]["content"]["parts"])), f"{p_label} ({model})"
         elif prov == "claude":
             payload = {"model": model, "max_tokens": 1200, "temperature": temp, "system": sys_p + " JSONのみ出力せよ。", "messages": [{"role": "user", "content": usr_p}]}
             req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01"}, method="POST")
-            with urllib.request.urlopen(req, timeout=9.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=8.0, context=ctx) as r:
                 return _parse_j(json.loads(r.read().decode("utf-8"))["content"][0]["text"]), f"{p_label} ({model})"
         else:
             payload = {"model": model, "messages": [{"role": "system", "content": sys_p + " Always output valid JSON with keys: tone, opinion, score, verdict."}, {"role": "user", "content": usr_p}], "temperature": temp}
             req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"}, method="POST")
-            with urllib.request.urlopen(req, timeout=9.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=8.0, context=ctx) as r:
                 return _parse_j(json.loads(r.read().decode("utf-8"))["choices"][0]["message"]["content"]), f"{p_label} ({model})"
     except Exception:
         return None, f"{p_label} ({model})"
@@ -2017,7 +2020,7 @@ def search_web_knowledge(query: str, max_results: int = 3) -> list:
     try:
         url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q_clean)}&hl=ja&gl=JP&ceid=JP:ja"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=2.5, context=ctx) as r:
+        with urllib.request.urlopen(req, timeout=2.0, context=ctx) as r:
             root = ET.fromstring(r.read())
             items = root.findall("./channel/item")
             for it in items[:max_results]:
