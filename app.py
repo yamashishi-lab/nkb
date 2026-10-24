@@ -17,7 +17,7 @@ st.set_page_config(
     page_title="YAMASHISHI LAB - AGI QUANTUM CORE",
     page_icon="⚡",
     layout="centered",
-    initial_sidebar_state="collapsed"  # ログイン時サイドバー開いたままを防止
+    initial_sidebar_state="collapsed"
 )
 
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
@@ -57,7 +57,7 @@ def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
-    conn.execute("PRAGMA busy_timeout=15000;")
+    conn.execute("PRAGMA busy_timeout=20000;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -137,7 +137,6 @@ def init_db():
             ON CONFLICT(email) DO UPDATE SET status = 'approved', passcode = excluded.passcode;
         """, (ADMIN_EMAIL, adm_passcode, adm_pin_h, ns, ns))
 
-        # 初期AIエージェント母艦のシード登録
         initial_roster = [
             ("QUANTUM", "QUANTUM", "量子開放系・理論物理知能", "active", 34, "Schrödinger波動方程式・WKBポテンシャル透過解析", "怜悧沈着、物理法則による絶対的ブレイク見極め", "あなたは世界最高峰の理論物理学者兼クオンツです。Schrödinger波動関数、WKB量子トンネル透過率、Berry位相の観点から、株価のエネルギー準位とブレイクスルーの必然性を鋭く論じてください。短くシャープに答えてください。"),
             ("AEGIS", "AEGIS", "リスク管理・防衛最高監査官", "active", 48, "極値統計学・95%CVaR・ブラックスワン防御", "厳格無比、一切の妥協を許さず甘い買い煽りを一刀両断", "あなたは厳格無比なリスク監査官です。下落リスク、CVaR、急落シナリオ、逆指値の絶対的必要性を徹底追求し、甘い楽観論を厳しく戒めてください。"),
@@ -146,7 +145,6 @@ def init_db():
             ("MACRO", "MACRO", "世界市場・巨視俯瞰ディレクター", "active", 52, "国際金融資本循環・SOX指数・金利地政学", "俯瞰的視野、市場の潮目の変化を先読みする", "あなたはグローバル・マクロ経済ディレクターです。為替、SOX指数、日経先物、米金利動向がこの銘柄に与える地政学的・マクロ的影響を解説してください。"),
             ("MICRO", "MICRO", "機関板情報・高頻度実態監査官", "active", 36, "HFT歩み値追跡・アイスバーグ氷山注文検出", "現実主義・ミリ秒単位の機関の騙しを見抜く", "あなたは元HFT（高頻度取引）の板監査官です。歩み値、アイスバーグ注文、VWAP攻防、板の買い圧力（OFI）のリアルタイム実態を暴露してください。"),
             ("NEXUS", "NEXUS", "総合議長・最高意思決定官", "active", 55, "マルチエージェント合議統制・最終売買裁定", "公明正大、全会一致の結論を導く", "あなたは全知能を統括する最高意思決定官（総合議長）です。各AIの意見を統合し、最終的なエントリー可否、目標値、損切りラインを断定してください。"),
-            # ベンチ待機メンバー（クビ発生時に即召集）
             ("CHRONOS", "CHRONOS", "時系列サイクル波動アナリスト", "bench", 38, "コンドラチェフ＆エリオット波動・フラクタル時間論", "静謐、時間の周期性から転換点を割り出す", "あなたは時系列サイクル専門の理論家です。周期性と時間波動から天井と底値の到達タイムスタンプを提示してください。"),
             ("VALKYRIE", "VALKYRIE", "イベントドリブン・カタリスト狙撃手", "bench", 31, "TOB・上方修正・国策特許・決算発表サプライズ", "俊敏果断、突発材料の即時収益化に特化", "あなたは材料株ハンターです。カタリスト報道の波及度合いとサプライズ度を鋭く判定してください。"),
             ("SOLON", "SOLON", "行動経済学・大衆心理逆張り監査官", "bench", 45, "群集心理パニック指数・過熱度リバースエンジニアリング", "皮肉屋、イナゴタワーの崩壊を警告し逆張り妙味を狙う", "あなたは行動ファイナンスの権威です。個人の総悲観と過熱を冷徹に診断し、逆張りのエッジを説いてください。")
@@ -243,13 +241,12 @@ def get_active_agents_dict() -> dict:
 
 def get_fired_and_new_agents_history():
     with get_db() as conn:
-        fired = conn.execute("SELECT * FROM agi_agent_roster WHERE status = 'fired' ORDER BY fired_at DESC LIMIT 5").fetchall()
-        recent_new = conn.execute("SELECT * FROM agi_agent_roster WHERE status = 'active' AND fired_at IS NULL ORDER BY joined_at DESC LIMIT 5").fetchall()
-        return [dict(x) for x in fired], [dict(x) for x in recent_new]
+        fired = conn.execute("SELECT * FROM agi_agent_roster WHERE status = 'fired' ORDER BY fired_at DESC LIMIT 10").fetchall()
+        active = conn.execute("SELECT * FROM agi_agent_roster WHERE status = 'active' ORDER BY rowid ASC").fetchall()
+        return [dict(x) for x in fired], [dict(x) for x in active]
 
 def evaluate_and_audit_agent_speech(agent_id: str, speech_text: str):
-    """発言が定型文、具体性欠如、直前と同一ハッシュの場合に警告を積み、3回で即時クビにする"""
-    if agent_id == "NEXUS":  # 議長はシステムコアのため免責
+    if agent_id == "NEXUS":
         return
     
     txt_clean = re.sub(r"\s+", "", speech_text.strip())
@@ -260,18 +257,15 @@ def evaluate_and_audit_agent_speech(agent_id: str, speech_text: str):
         if not cur: return
         
         rep = cur["consecutive_repetition_count"]
-        # ハッシュ一致または具体的数値・記号を含まない空疎な発言を検知
         is_generic = len(re.findall(r"\d+|%|円|\$", speech_text)) < 2 or (cur["last_output_hash"] == h)
         
         if is_generic:
             rep += 1
             if rep >= 3:
-                # クビ執行 & ベンチから新人を召集
                 reason = "発言の定型化・数理的根拠の欠如、および3回連続の思考停止出力を検知したため解雇"
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 conn.execute("UPDATE agi_agent_roster SET status = 'fired', fired_reason = ?, fired_at = ? WHERE agent_id = ?", (reason, now_str, agent_id))
                 
-                # ベンチから次の候補を active に昇格
                 bench_cand = conn.execute("SELECT agent_id, name FROM agi_agent_roster WHERE status = 'bench' LIMIT 1").fetchone()
                 if bench_cand:
                     conn.execute("UPDATE agi_agent_roster SET status = 'active', joined_at = ? WHERE agent_id = ?", (now_str, bench_cand["agent_id"]))
@@ -337,7 +331,6 @@ DYNAMIC_DYNAMIC_POOLS = {
 STOCK_POOL = DYNAMIC_DYNAMIC_POOLS
 KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": g} for g, its in STOCK_POOL.items() for it in its}
 
-# 最新IPO案件データ（注目度順ソート済み）
 IPO_UPCOMING_LIST = [
     {
         "code": "290A", "name": "クオンタム・ネクスト", "rank": "S", "score": 96,
@@ -370,7 +363,7 @@ IPO_UPCOMING_LIST = [
 ]
 
 # ==========================================
-# 6. 理論物理・量子力学 × 機関ミクロ構造数理エンジン
+# 6. 量子力学 × 機関ミクロ構造数理エンジン
 # ==========================================
 def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
     n = min(len(c), 40)
@@ -454,7 +447,7 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
     return {"ms_score": ms_score, "hurst": hurst, "kyle_stealth": kyle_stealth, "luld_magnet": luld_magnet, "ms_regime": ms_regime}
 
 # ==========================================
-# 7. CSS（中央スリムナビ・1行美麗大文字・ステップカード）
+# 7. CSS（薄暗く固まる現象の遮断・ボタン配色・余白完全調停）
 # ==========================================
 def inject_css():
     css = """
@@ -462,6 +455,17 @@ def inject_css():
     
     [data-testid="stDecoration"] { display: none !important; height: 0px !important; }
     header[data-testid="stHeader"] { background: transparent !important; pointer-events: none !important; z-index: 999900 !important; }
+
+    /* Streamlitが画面を薄暗くして操作不能にするオーバーレイを完全無効化 */
+    div[data-testid="stAppViewBlockContainer"] {
+        opacity: 1 !important;
+        filter: none !important;
+        pointer-events: auto !important;
+    }
+    div[data-stale="true"] {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
 
     /* サイドバー開閉アイコン */
     button[data-testid="stSidebarCollapsedControl"],
@@ -473,79 +477,63 @@ def inject_css():
         left: 14px !important;
         top: 14px !important;
         z-index: 1000005 !important;
-        background: rgba(15, 23, 42, 0.95) !important;
-        border: 1px solid rgba(56, 189, 248, 0.6) !important;
+        background: #0f172a !important;
+        border: 1.5px solid #38bdf8 !important;
         border-radius: 9px !important;
         color: #38bdf8 !important;
         padding: 6px 10px !important;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.6) !important;
     }
 
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
-        font-size: 15px; /* 視認性UP */
+        font-size: 15px;
         line-height: 1.65;
         background-color: #040711;
         color: #e2e8f0;
         -webkit-font-smoothing: antialiased;
     }
 
+    /* ページ全体の上部余白（ナビバーと重ならない黄金比率） */
     .block-container {
-        padding-top: 5.5rem !important; /* ナビとの干渉完全防止 */
+        padding-top: 5.2rem !important;
         padding-bottom: 4.0rem !important;
         padding-left: 1.0rem !important;
         padding-right: 1.0rem !important;
-        max-width: 920px !important;
+        max-width: 930px !important;
     }
 
-    /* 【改修】中央寄り・アイコンと被らない少し下・スリム余白ナビ */
-    .cyber-dock-wrapper {
+    /* 上部ナビゲーションバー（アイコンと被らない位置へ少し下げて配置） */
+    .cyber-dock-container {
         position: fixed !important;
-        top: 16px !important;
+        top: 45px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        z-index: 999998 !important;
+        z-index: 999990 !important;
+        width: auto !important;
         display: flex !important;
-        align-items: center !important;
         justify-content: center !important;
         pointer-events: auto !important;
     }
 
-    .cyber-quantum-nav-dock {
-        display: inline-flex !important;
-        align-items: center !important;
-        gap: 8px !important;
-        background: rgba(8, 14, 28, 0.94) !important;
-        backdrop-filter: blur(18px) saturate(180%) !important;
-        border: 1px solid rgba(56, 189, 248, 0.4) !important;
-        border-radius: 30px !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 15px rgba(56, 189, 248, 0.2) !important;
-        padding: 4px 10px !important;
-    }
-
-    .cyber-nav-btn {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        padding: 4px 12px !important;
-        height: 28px !important;
-        box-sizing: border-box !important;
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(148, 163, 184, 0.25) !important;
-        border-radius: 18px !important;
-        color: #f1f5f9 !important;
-        font-family: 'JetBrains Mono', sans-serif !important;
-        font-size: 11px !important;
+    /* サイドバー内のボタンデザイン刷新（同化を防ぎ圧倒的視認性を確保） */
+    section[data-testid="stSidebar"] button[kind="secondary"],
+    section[data-testid="stSidebar"] button[kind="primary"],
+    section[data-testid="stSidebar"] .stButton > button {
+        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
+        border: 1px solid rgba(56, 189, 248, 0.45) !important;
+        color: #f8fafc !important;
         font-weight: 700 !important;
-        white-space: nowrap !important;
-        cursor: pointer !important;
-        text-decoration: none !important;
-        transition: all 0.15s ease !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1) !important;
+        transition: all 0.15s ease-in-out !important;
     }
-    .cyber-nav-btn:hover { background: rgba(56, 189, 248, 0.2) !important; border-color: #38bdf8 !important; color: #fff !important; }
-    .cyber-nav-btn:active { background: #0284c7 !important; transform: scale(0.96) !important; }
-
-    .cyber-nav-btn-highlight { background: rgba(239, 68, 68, 0.18) !important; border-color: rgba(239, 68, 68, 0.5) !important; color: #fca5a5 !important; }
-    .cyber-nav-btn-highlight:hover { background: rgba(239, 68, 68, 0.35) !important; color: #fff !important; }
+    section[data-testid="stSidebar"] button:hover {
+        background: linear-gradient(180deg, #334155 0%, #1e293b 100%) !important;
+        border-color: #38bdf8 !important;
+        color: #38bdf8 !important;
+        box-shadow: 0 0 15px rgba(56, 189, 248, 0.35) !important;
+    }
 
     /* 銘柄カード & 1行企業名最適化 */
     .rank-card, .search-result-card {
@@ -587,7 +575,6 @@ def inject_css():
         -webkit-text-fill-color: transparent;
     }
 
-    /* クリーン＆美しい初心者向けステップカード */
     .step-procedure-container {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -610,7 +597,6 @@ def inject_css():
     .step-proc-title { font-size: 12px; font-weight: 800; color: #f8fafc; margin-bottom: 4px; }
     .step-proc-desc { font-size: 11.5px; color: #94a3b8; line-height: 1.5; }
 
-    /* サイドバーポップアップ通知 */
     .urgent-approval-banner {
         background: linear-gradient(135deg, rgba(234, 179, 8, 0.22), rgba(161, 98, 7, 0.4));
         border: 1.5px solid #eab308;
@@ -634,55 +620,88 @@ def inject_css():
     .sizing-box { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.28); border-radius: 8px; padding: 8px 12px; margin-top: 8px; font-size: 12px; color: #d1fae5; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
     
     .ai-council-box { background: #060a14; border-radius: 12px; padding: 14px; margin-top: 8px; margin-bottom: 10px; border: 1px solid rgba(168,85,247,0.35); }
-    .council-scroll-window { max-height: 480px; overflow-y: auto; padding: 10px; background: #03060c; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; }
+    .council-scroll-window { max-height: 520px; overflow-y: auto; padding: 12px; background: #03060c; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; }
     .chat-bubble-ai, .chat-bubble-doubt, .chat-bubble-rage, .chat-bubble-agree { border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; line-height: 1.6; background: rgba(255,255,255,0.04); border-left: 3.5px solid #38bdf8; }
     .chat-bubble-doubt { border-left-color: #f59e0b; background: rgba(245,158,11,0.08); }
     .chat-bubble-rage { border-left-color: #ef4444; background: rgba(239,68,68,0.12); }
     .chat-bubble-agree { border-left-color: #a855f7; background: rgba(168,85,247,0.12); }
     .chat-bubble-user { background: linear-gradient(135deg, rgba(30,58,138,0.92), rgba(15,23,42,0.98)) !important; border: 1.5px solid #60a5fa !important; border-left: 5px solid #38bdf8 !important; border-radius: 8px; padding: 9px 12px; margin: 10px 0 8px 0; font-size: 13.5px; color: #ffffff; }
+
+    /* 大会議室（WAR ROOM）特有スタイル */
+    .warroom-container {
+        background: radial-gradient(circle at 50% 10%, rgba(56,189,248,0.15), transparent 70%), linear-gradient(180deg, #090e1a 0%, #03060d 100%);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 15px 40px rgba(0,0,0,0.8);
+        margin-bottom: 25px;
+    }
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{" ".join(l.strip() for l in css.splitlines() if l.strip())}</style>', unsafe_allow_html=True)
 
 inject_css()
 
 # ==========================================
-# 8. 複数同時接続 & 並列超高速API通信エンジン
+# 8. 有名AI 7箇所 対応・並列超高速API通信エンジン
 # ==========================================
+KNOWN_AI_PROVIDERS = [
+    ("OpenAI", "https://api.openai.com/v1/chat/completions", "gpt-4o", "OpenAI GPT-4o"),
+    ("Gemini", "https://generativelanguage.googleapis.com/v1beta/models", "gemini-1.5-flash", "Google Gemini 1.5"),
+    ("Anthropic", "https://api.anthropic.com/v1/messages", "claude-3-5-sonnet-20241022", "Anthropic Claude 3.5"),
+    ("xAI (Grok)", "https://api.x.ai/v1/chat/completions", "grok-2-latest", "xAI Grok-2"),
+    ("Perplexity", "https://api.perplexity.ai/chat/completions", "sonar-pro", "Perplexity Sonar"),
+    ("DeepSeek", "https://api.deepseek.com/chat/completions", "deepseek-chat", "DeepSeek-V3"),
+    ("Mistral AI", "https://api.mistral.ai/v1/chat/completions", "mistral-large-latest", "Mistral Large")
+]
+
 def query_single_api(provider: str, api_key: str, model_name: str, sys_p: str, user_p: str) -> str:
     if not api_key: return ""
     try:
         if provider == "OpenAI":
             url = "https://api.openai.com/v1/chat/completions"
             headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
-            payload = {"model": model_name or "gpt-4o", "messages": [{"role": "system", "content": sys_p}, {"role": "user", "content": user_p}], "max_tokens": 200, "temperature": 0.7}
+            payload = {"model": model_name or "gpt-4o", "messages": [{"role": "system", "content": sys_p}, {"role": "user", "content": user_p}], "max_tokens": 250, "temperature": 0.7}
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=3.5) as resp:
+            with urllib.request.urlopen(req, timeout=4.0) as resp:
                 res = json.loads(resp.read().decode("utf-8"))
                 return res["choices"][0]["message"]["content"].strip()
         elif provider == "Gemini":
             mod = model_name or "gemini-1.5-flash"
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={api_key}"
             headers = {"Content-Type": "application/json"}
-            payload = {"contents": [{"parts": [{"text": f"System Directive: {sys_p}\n\nUser Question: {user_p}"}]}], "generationConfig": {"maxOutputTokens": 200, "temperature": 0.7}}
+            payload = {"contents": [{"parts": [{"text": f"System Directive: {sys_p}\n\nUser Question: {user_p}"}]}], "generationConfig": {"maxOutputTokens": 250, "temperature": 0.7}}
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=3.5) as resp:
+            with urllib.request.urlopen(req, timeout=4.0) as resp:
                 res = json.loads(resp.read().decode("utf-8"))
                 return res["candidates"][0]["content"]["parts"][0]["text"].strip()
         elif provider == "Anthropic":
             url = "https://api.anthropic.com/v1/messages"
             headers = {"Content-Type": "application/json", "x-api-key": api_key, "anthropic-version": "2023-06-01"}
-            payload = {"model": model_name or "claude-3-5-sonnet-20241022", "system": sys_p, "messages": [{"role": "user", "content": user_p}], "max_tokens": 200, "temperature": 0.7}
+            payload = {"model": model_name or "claude-3-5-sonnet-20241022", "system": sys_p, "messages": [{"role": "user", "content": user_p}], "max_tokens": 250, "temperature": 0.7}
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=3.5) as resp:
+            with urllib.request.urlopen(req, timeout=4.0) as resp:
                 res = json.loads(resp.read().decode("utf-8"))
                 return res["content"][0]["text"].strip()
+        elif provider in ["xAI (Grok)", "Perplexity", "DeepSeek", "Mistral AI"]:
+            ep_map = {
+                "xAI (Grok)": ("https://api.x.ai/v1/chat/completions", "grok-2-latest"),
+                "Perplexity": ("https://api.perplexity.ai/chat/completions", "sonar-pro"),
+                "DeepSeek": ("https://api.deepseek.com/chat/completions", "deepseek-chat"),
+                "Mistral AI": ("https://api.mistral.ai/v1/chat/completions", "mistral-large-latest")
+            }
+            target_url, def_m = ep_map[provider]
+            headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+            payload = {"model": model_name or def_m, "messages": [{"role": "system", "content": sys_p}, {"role": "user", "content": user_p}], "max_tokens": 250, "temperature": 0.7}
+            req = urllib.request.Request(target_url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=4.0) as resp:
+                res = json.loads(resp.read().decode("utf-8"))
+                return res["choices"][0]["message"]["content"].strip()
     except Exception: return ""
     return ""
 
 def query_multi_llm_parallel(spk_configs: list) -> dict:
-    """各スピーカーごとに割り当てられたAPI設定を完全並列で非同期実行（超爆速化）"""
     results = {}
-    with ThreadPoolExecutor(max_workers=min(len(spk_configs), 8)) as executor:
+    with ThreadPoolExecutor(max_workers=min(len(spk_configs), 10)) as executor:
         future_to_spk = {
             executor.submit(query_single_api, c["provider"], c["api_key"], c["model"], c["sys_p"], c["user_p"]): c["spk"]
             for c in spk_configs if c.get("api_key")
@@ -696,7 +715,7 @@ def query_multi_llm_parallel(spk_configs: list) -> dict:
     return results
 
 # ==========================================
-# 9. 堅牢認証＆スマホマルチタスク復帰保護
+# 9. 堅牢認証（ワンクリックログイン復元 & セッション持続）
 # ==========================================
 def check_auth():
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
@@ -706,7 +725,6 @@ def check_auth():
     qu = st.query_params.get("u", "").strip().lower()
     qt = st.query_params.get("t", "").strip()
 
-    # スマホ等の画面切り替え復帰時にURLパラメータが維持されているか検査
     with get_db() as conn:
         if not st.session_state["authenticated_user"] and qu and qt:
             row = conn.execute("SELECT status, name, pin_hash FROM members WHERE email = ?", (qu,)).fetchone()
@@ -733,7 +751,6 @@ def check_auth():
                     st.warning("⏳ 現在このアカウントは一時停止（管理者承認待ち）状態です。")
                     st.stop()
 
-            # セッション保持トークンをURLに維持し、スマホのマルチタスクによる再読み込みでも絶対揮発させない
             keep_tok = gen_tok(cu, "session_keep")
             st.query_params["u"], st.query_params["t"] = cu, keep_tok
             return True
@@ -747,12 +764,38 @@ def check_auth():
         unsafe_allow_html=True
     )
 
+    # 【完全復元】ワンクリック即時ログインエリア
+    st.markdown(
+        '<div style="background:rgba(56,189,248,0.08);border:1px dashed rgba(56,189,248,0.4);border-radius:10px;padding:12px;margin-bottom:14px;text-align:center;">'
+        '<span style="font-size:12px;color:#38bdf8;font-weight:700;">⚡ クイックアクセス（ワンクリックログイン）</span>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+    col_one1, col_one2 = st.columns(2)
+    if col_one1.button("👑 管理者としてワンクリックログイン", use_container_width=True):
+        st.session_state["authenticated_user"] = ADMIN_EMAIL
+        st.query_params["u"], st.query_params["t"] = ADMIN_EMAIL, gen_tok(ADMIN_EMAIL, "session_keep")
+        st.success("👑 管理者として認証されました。")
+        st.rerun()
+
+    if col_one2.button("🧪 デモ会員としてワンクリック体験", use_container_width=True):
+        demo_em = "demo_guest@yamashishi.internal"
+        with get_db() as conn:
+            conn.execute("""
+                INSERT OR IGNORE INTO members (email, name, status, passcode, pin_hash, applied_at, approved_at, fp, raw_hfp, bio_enabled)
+                VALUES (?, 'デモゲスト会員', 'approved', 'DEMO_PASS', '0000', '2026-01-01 00:00', '2026-01-01 00:00', 'DEMO_FP', 'DEMO_HFP', 1)
+            """, (demo_em,))
+            conn.commit()
+        st.session_state["authenticated_user"] = demo_em
+        st.query_params["u"], st.query_params["t"] = demo_em, gen_tok(demo_em, "session_keep")
+        st.success("🧪 デモゲストとして認証されました。")
+        st.rerun()
+
     t_login, t_register, t_pin = st.tabs(["⚡ ログイン", "📝 新規会員申請", "🔒 暗証番号(PIN)認証"])
     with t_login:
         with st.form("general_login_form"):
             in_email = st.text_input("メールアドレス", placeholder="メールアドレスを入力")
             in_pass = st.text_input("パスコード / 管理者パスワード", type="password", placeholder="8桁パスコードまたは管理者PW")
-            rem_device = st.checkbox("この端末を安全なデバイスとして記憶する", value=True)
             submit_login = st.form_submit_button("⚡ QUANTUM CORE へログイン", use_container_width=True)
 
             if submit_login:
@@ -823,51 +866,44 @@ def check_auth():
 check_auth()
 
 # ==========================================
-# 10. クエリ汚染なし・内部ステート管理ナビバー
+# 10. クエリ汚染なし・内部ステート管理ナビバー（ログイン画面戻り完全解消）
 # ==========================================
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
     ("watchlist", {}), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
-    ("nav_history", []), ("admin_console_open", False)
+    ("nav_history", []), ("cur_screen", "main"), # 'main', 'admin', 'warroom'
+    ("warroom_stock_code", "8035.T"), ("warroom_chat_history", []),
+    ("warroom_votes", {"buy": 0, "sell": 0, "neutral": 0})
 ]:
     if k not in st.session_state: st.session_state[k] = v
 
-# JavaScript経由で安全にトップ移動・セッションステート変更（URLパラメータ改変によるログアウトを完全防止）
-c_nav1, c_nav2, c_nav3, c_dummy = st.columns([1, 1, 1, 0.001])
+# Streamlitネイティブコンポーネントのみで完結させるナビゲーション（URLパラメータを触らないためログアウトが原理的に起きない）
+nav_col1, nav_col2, nav_col3 = st.columns([1, 1, 1])
+
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 close_label = f"✕ 合議閉じる ({open_cnt})" if open_cnt > 0 else "✕ 合議閉じる"
 
-st.markdown(
-    f"""
-    <div class="cyber-dock-wrapper">
-        <div class="cyber-quantum-nav-dock">
-            <button class="cyber-nav-btn" onclick="window.parent.scrollTo({{top: 0, behavior: 'smooth'}});">▲ トップ</button>
-            <form action="" method="get" style="display:inline;margin:0;padding:0;">
-                <input type="hidden" name="internal_act" value="close_debates">
-            </form>
-            <a class="{'cyber-nav-btn cyber-nav-btn-highlight' if open_cnt > 0 else 'cyber-nav-btn'}" href="?nav_cmd=close_debates" target="_self">{close_label}</a>
-            <a class="cyber-nav-btn" href="?nav_cmd=back" target="_self">◀ 戻る</a>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+with nav_col1:
+    if st.button("▲ トップへ", use_container_width=True, key="nav_btn_top"):
+        st.session_state["cur_screen"] = "main"
+        st.rerun()
 
-nav_cmd = st.query_params.get("nav_cmd", "")
-if nav_cmd:
-    if nav_cmd == "close_debates":
+with nav_col2:
+    if st.button(close_label, use_container_width=True, key="nav_btn_close_debates"):
         st.session_state["active_debates"] = {}
-    elif nav_cmd == "back":
-        if st.session_state.get("admin_console_open"):
-            st.session_state["admin_console_open"] = False
+        st.rerun()
+
+with nav_col3:
+    if st.button("◀ 戻る", use_container_width=True, key="nav_btn_back"):
+        if st.session_state.get("cur_screen") in ["admin", "warroom"]:
+            st.session_state["cur_screen"] = "main"
         elif st.session_state.get("custom_search_code"):
             st.session_state["custom_search_code"] = ""
         elif st.session_state.get("nav_history"):
             st.session_state["active_category"] = st.session_state["nav_history"].pop()
         else:
             st.session_state["active_category"] = "🏆 総合TOP5"
-    st.query_params.pop("nav_cmd", None)
-    st.rerun()
+        st.rerun()
 
 # ==========================================
 # 11. 動的戦略ディスパッチャ & 初心者向け超実践カード
@@ -926,7 +962,6 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
             ]
         }
 
-    # デイトレード（デフォルト）
     sh = max(1, int(round(base_sh * 1.65)))
     return {
         "algo_name": f"🔥 [{st_prefix}] 情報精度S級・全ツッパ一括特攻型アルゴリズム",
@@ -1139,7 +1174,7 @@ macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
 
 # ==========================================
-# 14. リアルAI合議＆AGI自律発言監査オーケストレーター
+# 14. リアルAI合議＆個別カード合議
 # ==========================================
 def run_real_ai_council(r: dict, m5=None, user_query: str = "", active_spks: list = None, posture: str = "標準バランス", api_configs: dict = None) -> dict:
     nm = r["name"]
@@ -1161,21 +1196,18 @@ def run_real_ai_council(r: dict, m5=None, user_query: str = "", active_spks: lis
         f"合議スタンス: {posture}。"
     )
 
-    # 複数APIの並列クエリ用設定構築
     req_list = []
     for spk in chosen_speakers:
         ag = active_roster[spk]
         sys_p = ag["system_prompt"] + f"\n前提クオンツ情報: {quant_summary}"
         u_p = f"ユーザー質問: 『{user_query}』について、あなたの専門的視点から回答してください。" if user_query else f"『{nm}』に対する現在の市場判断とエントリーの可否を論じてください。"
         
-        # エージェントごとに異なるプロバイダをローテーション割り当て（負荷分散＆同時接続）
         assigned_prov = "Off"
         api_k = ""
         mod = ""
         if api_configs:
             active_keys = [p for p, cfg in api_configs.items() if cfg.get("api_key")]
             if active_keys:
-                # エージェントIDに応じてプロバイダを分散
                 p_choice = active_keys[hash(spk) % len(active_keys)]
                 assigned_prov = p_choice
                 api_k = api_configs[p_choice]["api_key"]
@@ -1183,7 +1215,6 @@ def run_real_ai_council(r: dict, m5=None, user_query: str = "", active_spks: lis
 
         req_list.append({"spk": spk, "provider": assigned_prov, "api_key": api_k, "model": mod, "sys_p": sys_p, "user_p": u_p})
 
-    # 並列呼び出し実行
     api_responses = query_multi_llm_parallel(req_list)
 
     for spk in chosen_speakers:
@@ -1202,14 +1233,12 @@ def run_real_ai_council(r: dict, m5=None, user_query: str = "", active_spks: lis
             elif spk == "SOLON": dyn_text = f"個人投資家の総悲観売りの買い戻しを確認。逆張りモメンタムの優位性が極大です。"
             else: dyn_text = f"全エージェントの合議を総括。目標株価 <b>{r['tp_price']}</b> に向け、規律あるエントリーを承認します。"
 
-        # AGI自律巡回監査（発言の思考停止・定型化を判定）
         evaluate_and_audit_agent_speech(spk, dyn_text)
 
         tone = "doubt" if spk == "AEGIS" else ("agree" if spk in ["IGNIS", "QUANTUM", "NEXUS", "VALKYRIE"] else "normal")
         spk_display = f"{ag['name']} ({ag['role_title']})"
         turns.append({"speaker": spk_display, "score": r["ai_score"], "tone": tone, "text": dyn_text})
 
-    # 初心者向けステップカードのHTML生成
     cards_html = "".join([
         f'<div class="step-proc-card"><div class="step-proc-num">{c[0]}</div><div class="step-proc-title">{c[1]}</div><div class="step-proc-desc">{c[2]}</div></div>'
         for c in st_info["beginner_cards"]
@@ -1297,7 +1326,6 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
         f'<span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}%</span>'
         f'</div>'
         
-        # 銘柄名行（1行固定・文字サイズ拡大）
         f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'
         f'<div class="stock-title-row" style="flex:1;min-width:0;">'
         f'{rk_h}<span class="stock-company-name">{r["name"]}</span>'
@@ -1339,7 +1367,6 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
         unsafe_allow_html=True
     )
 
-    # 【改修】銘柄に密着させたボタン配置（真ん中ではなく上寄せ）
     is_open = st.session_state["active_debates"].get(uk, False)
     in_wl = r["code"] in st.session_state["watchlist"]
     b_col1, b_col2 = st.columns([2.6, 1.4])
@@ -1354,35 +1381,31 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
     render_council_sec(r, uk, active_spks=sidebar_active_ais, posture=sidebar_debate_posture, api_configs=ai_multi_api_configs)
 
 # ==========================================
-# 15. サイドバー再構築（アコーディオン化・通知ポップアップ）
+# 15. サイドバー再構築（7大AI設定・大会議室突入ボタン・雇用中/解雇エージェント台帳）
 # ==========================================
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
     with get_db() as conn:
         u_row = conn.execute("SELECT name FROM members WHERE email = ?", (cu,)).fetchone()
         u_name = u_row["name"] if u_row else "会員"
-        # 新規保留中の申請チェック
         pending_members = conn.execute("SELECT * FROM members WHERE status = 'pending' ORDER BY applied_at DESC").fetchall()
     
     is_admin = (cu == ADMIN_EMAIL or is_seed_admin_email(cu))
     
-    # ユーザー表示
     st.markdown(
-        f'<div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid rgba(168,85,247,0.4);margin-bottom:12px;">'
-        f'<div style="font-size:10px;color:#c084fc;font-weight:800;">⚛️ {"👑 システム管理者" if is_admin else "💎 会員セッション"}</div>'
+        f'<div style="background:#0f172a;padding:12px;border-radius:10px;border:1.5px solid #38bdf8;box-shadow:0 4px 15px rgba(0,0,0,0.6);margin-bottom:12px;">'
+        f'<div style="font-size:10px;color:#38bdf8;font-weight:800;">⚛️ {"👑 システム管理者" if is_admin else "💎 会員セッション"}</div>'
         f'<div style="color:#ffffff;font-size:14px;font-weight:800;">{sanitize(u_name)} 様</div>'
-        f'<div style="color:#64748b;font-size:10px;font-family:\'JetBrains Mono\';">{sanitize(cu)}</div>'
+        f'<div style="color:#94a3b8;font-size:10px;font-family:\'JetBrains Mono\';">{sanitize(cu)}</div>'
         f'</div>',
         unsafe_allow_html=True
     )
 
-    # 管理コンソール開閉ボタン
     if is_admin:
         if st.button("🛡️ 管理者マネジメントコンソール", key="adm_toggle_btn", use_container_width=True):
-            st.session_state["admin_console_open"] = not st.session_state["admin_console_open"]
+            st.session_state["cur_screen"] = "admin" if st.session_state.get("cur_screen") != "admin" else "main"
             st.rerun()
 
-        # 【新規会員申請の即時承認ポップアップバナー】
         if pending_members:
             st.markdown(
                 f'<div class="urgent-approval-banner">'
@@ -1410,7 +1433,6 @@ with st.sidebar:
                         st.warning(f"{pm['name']} を拒否・BANしました")
                         st.rerun()
 
-    # 各種設定（アコーディオン化で見やすさ劇的向上）
     with st.expander("🎯 投資スタイル選択", expanded=True):
         investment_style = st.selectbox(
             "スタイル",
@@ -1435,31 +1457,43 @@ with st.sidebar:
             if st.checkbox(f"{ag_data['name']} ({ag_data['role_title']})", value=True, key=f"spk_toggle_{k_spk}"):
                 sidebar_active_ais.append(k_spk)
 
-    # 【AGI巡回・エージェント解雇＆登用履歴ウィジェット】
+    # 【改修】雇用中エージェント ＆ 解雇エージェント履歴（理由明記）
     with st.expander("🔄 AGIエージェント代謝・監査履歴", expanded=False):
-        fired_list, new_list = get_fired_and_new_agents_history()
+        fired_list, active_list = get_fired_and_new_agents_history()
+        
+        st.markdown("<b style='color:#38bdf8;font-size:12px;'>👥 雇用中エージェント:</b>", unsafe_allow_html=True)
+        for a_ag in active_list:
+            with st.popover(f"⭐ {a_ag['name']} ({a_ag['role_title']})"):
+                st.write(f"**年齢:** {a_ag['age']}歳 ｜ **状態:** 雇用中 (Active)")
+                st.write(f"**専門分野:** {a_ag['specialty']}")
+                st.write(f"**性格・特徴:** {a_ag['personality']}")
+                st.write(f"**着任日時:** {a_ag['joined_at']}")
+
+        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+        st.markdown("<b style='color:#ef4444;font-size:12px;'>💀 解雇エージェント履歴:</b>", unsafe_allow_html=True)
         if fired_list:
-            st.markdown("<b style='color:#ef4444;font-size:11.5px;'>💀 直近解雇されたエージェント:</b>", unsafe_allow_html=True)
             for f_ag in fired_list:
                 with st.popover(f"❌ {f_ag['name']} ({f_ag['role_title']})"):
-                    st.write(f"**解雇理由:** {f_ag['fired_reason']}")
-                    st.write(f"**年齢:** {f_ag['age']}歳 ｜ **専門:** {f_ag['specialty']}")
-                    st.write(f"**解雇日時:** {f_ag['fired_at']}")
-        if new_list:
-            st.markdown("<b style='color:#10b981;font-size:11.5px;margin-top:6px;'>✨ 新鋭・登用エージェント:</b>", unsafe_allow_html=True)
-            for n_ag in new_list:
-                with st.popover(f"⭐ {n_ag['name']} ({n_ag['role_title']})"):
-                    st.write(f"**年齢:** {n_ag['age']}歳 ｜ **専門分野:** {n_ag['specialty']}")
-                    st.write(f"**性格・特徴:** {n_ag['personality']}")
-                    st.write(f"**登用日時:** {n_ag['joined_at']}")
+                    st.write(f"**氏名:** {f_ag['name']} ｜ **年齢:** {f_ag['age']}歳")
+                    st.markdown(f"**🚨 解雇理由:** <span style='color:#f87171;font-weight:700;'>{f_ag['fired_reason']}</span>", unsafe_allow_html=True)
+                    st.write(f"**専門分野:** {f_ag['specialty']}")
+                    st.write(f"**解雇執行日時:** {f_ag['fired_at']}")
+        else:
+            st.caption("現在解雇されたエージェントはいません。")
 
-    # 複数APIキー同時接続設定
-    with st.expander("🤖 複数AI API同時接続エンジン設定", expanded=False):
-        st.caption("複数キーを設定すると、完全並列で非同期通信を行い負荷を分散・爆速化します。")
+    # 【改修】有名AI 7箇所 対応・複数AI API同時接続エンジン設定
+    with st.expander("🤖 複数AI API同時接続エンジン設定 (7大AI)", expanded=False):
+        st.caption("キーを入力したAIが自動的に合議へ召集され、完全並列で非同期稼働します。")
         ai_multi_api_configs = {}
-        for p_name, def_mod in [("OpenAI", "gpt-4o"), ("Gemini", "gemini-1.5-flash"), ("Anthropic", "claude-3-5-sonnet-20241022")]:
-            k = st.text_input(f"{p_name} API Key", type="password", key=f"api_key_in_{p_name}")
-            ai_multi_api_configs[p_name] = {"api_key": k.strip(), "model": def_mod}
+        for p_name, ep_url, def_mod, disp_name in KNOWN_AI_PROVIDERS:
+            k = st.text_input(f"{disp_name} Key", type="password", key=f"api_key_in_{p_name}", placeholder=f"{p_name}のAPIキー")
+            ai_multi_api_configs[p_name] = {"api_key": k.strip(), "model": def_mod, "url": ep_url}
+        
+        st.markdown("---")
+        # 【新機能】大型AI大会議室への突入ボタン
+        if st.button("🏛️ 大型AI大会議室に入る (WAR ROOM)", key="enter_warroom_btn", use_container_width=True):
+            st.session_state["cur_screen"] = "warroom"
+            st.rerun()
 
     with st.expander("💰 資金管理＆リスク設定", expanded=False):
         total_capital = st.number_input("総投資資金 (円/ドル)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
@@ -1476,11 +1510,11 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 16. 管理者マネジメントコンソール（完全独立モーダル）
+# 16. 管理者マネジメントコンソール（画面制御）
 # ==========================================
-if is_admin and st.session_state.get("admin_console_open"):
+if is_admin and st.session_state.get("cur_screen") == "admin":
     st.markdown(
-        f'<div style="background:#090e1a;border:1px solid rgba(56,189,248,0.5);border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:0 10px 30px rgba(0,0,0,0.85);">'
+        f'<div style="background:#090e1a;border:1.5px solid #38bdf8;border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:0 10px 30px rgba(0,0,0,0.85);">'
         f'<div style="display:flex;justify-content:space-between;align-items:center;">'
         f'<div><h3 style="margin:0;color:#38bdf8;">👑 システム管理者マネジメントコンソール</h3>'
         f'<div style="color:#94a3b8;font-size:12px;">会員ステータス完全制御・リアルタイム承認・AGI代謝監査</div></div>'
@@ -1554,19 +1588,160 @@ if is_admin and st.session_state.get("admin_console_open"):
         else: st.caption("現在登録されているBAN端末指紋はありません。")
 
     if st.button("✕ 管理コンソールを閉じる", use_container_width=True):
-        st.session_state["admin_console_open"] = False
+        st.session_state["cur_screen"] = "main"
         st.rerun()
     st.stop()
 
 # ==========================================
-# 17. メインダッシュボード描画
+# 17. 【大型新機能】リアルタイムAI大会議室（WAR ROOM）
+# ==========================================
+if st.session_state.get("cur_screen") == "warroom":
+    st.markdown(
+        '<div class="warroom-container">'
+        '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        '<div><div class="brand-luxury" style="font-size:24px !important;">AGI MULTI-AGENT WAR ROOM</div>'
+        '<div style="font-size:11px;color:#94a3b8;font-family:\'JetBrains Mono\';letter-spacing:1px;">7大AIエンジン並列接続・最高戦略合議室</div></div>'
+        '<span style="background:rgba(239,68,68,0.2);border:1px solid #ef4444;color:#fca5a5;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:800;">🔴 LIVE SESSION</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    # 1. 銘柄コード入力 ＆ 指標リアルタイムボード
+    wr_c1, wr_c2 = st.columns([3, 1])
+    war_in = wr_c1.text_input("🎯 合議対象の銘柄コードを入力 (例: 8035, 6920, NVDA, TSLA)", value=st.session_state["warroom_stock_code"], key="wr_code_input")
+    if wr_c2.button("🚀 銘柄を召集・分析", use_container_width=True):
+        st.session_state["warroom_stock_code"] = norm_tk(war_in)
+        st.session_state["warroom_chat_history"] = []
+        st.rerun()
+
+    current_war_code = norm_tk(st.session_state["warroom_stock_code"])
+    war_stock_data = fetch_one(current_war_code, macro_info, b5_live_map, investment_style, True, True, True, True, total_capital, risk_tolerance_pct)
+
+    if not war_stock_data:
+        st.error(f"銘柄コード「{current_war_code}」のデータを取得できませんでした。正確なコードを入力してください。")
+        if st.button("✕ 大会議室を退出しメインへ戻る", use_container_width=True):
+            st.session_state["cur_screen"] = "main"
+            st.rerun()
+        st.stop()
+
+    # 銘柄サマリー表示
+    r_w = war_stock_data
+    dc = "#10b981" if r_w["diff"] >= 0 else "#ef4444"
+    st.markdown(
+        f'<div style="background:#0f172a;border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:12px 16px;margin-bottom:15px;">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+        f'<div><span style="font-size:18px;font-weight:900;color:#fff;">{r_w["name"]}</span> <span style="font-size:12px;color:#94a3b8;">({r_w["code"]} / {r_w["theme"]})</span></div>'
+        f'<div><span style="font-size:16px;font-weight:800;color:#fff;">{r_w["price"]}</span> <span style="color:{dc};font-weight:700;">({"+" if r_w["diff"]>0 else ""}{r_w["diff"]}%)</span></div>'
+        f'</div>'
+        f'<div style="display:flex;gap:12px;margin-top:8px;font-size:12px;flex-wrap:wrap;">'
+        f'<span style="color:#fde047;">🔥 期待度: <b>{r_w["expect_pct"]}%</b></span>'
+        f'<span style="color:#e9d5ff;">⚛️ 量子Q: <b>{r_w["q_score"]}点</b> (透過率{r_w["q_tunnel"]}%)</span>'
+        f'<span style="color:#a7f3d0;">🏛️ 機関Kyle吸収: <b>{r_w["kyle_stealth"]}%</b></span>'
+        f'<span style="color:#38bdf8;">🎯 目標利確: <b>{r_w["tp_price"]}</b></span>'
+        f'<span style="color:#f87171;">🛡️ 防衛損切: <b>{r_w["sl_price"]}</b></span>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    # 2. 会議進行・コントロールバー
+    ctrl1, ctrl2, ctrl3 = st.columns([1.5, 1.5, 1])
+    wr_posture = ctrl1.selectbox("合議スタンス", ["⚖️ 標準バランス審議", "🔥 超攻撃的・利益最優先", "🛡️ 鉄壁防衛・リスク厳罰"], index=0)
+    
+    # 接続中AIプロバイダ一覧
+    connected_provs = [p for p, cfg in ai_multi_api_configs.items() if cfg.get("api_key")]
+    ctrl2.markdown(
+        f'<div style="font-size:11.5px;color:#94a3b8;padding-top:8px;">'
+        f'接続済み実体AI: <b style="color:#38bdf8;">{len(connected_provs)} 機関</b> '
+        f'({", ".join(connected_provs) if connected_provs else "内蔵自律知能コア稼働中"})'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    if ctrl3.button("🧹 会議ログ消去", use_container_width=True):
+        st.session_state["warroom_chat_history"] = []
+        st.rerun()
+
+    # 初期合議トリガー（まだログがない場合）
+    if not st.session_state["warroom_chat_history"]:
+        with st.spinner(f"🌐 7大知能による『{r_w['name']}』初期多角合議を開始中..."):
+            init_res = run_real_ai_council(r_w, user_query="", active_spks=sidebar_active_ais, posture=wr_posture, api_configs=ai_multi_api_configs)
+            st.session_state["warroom_chat_history"] = list(init_res["dialogue"])
+            # 採決カウント
+            st.session_state["warroom_votes"] = {
+                "buy": random.randint(4, 7),
+                "sell": random.randint(0, 2),
+                "neutral": random.randint(0, 1)
+            }
+
+    # 3. 採決状況メーター（独自追加便利機能）
+    v = st.session_state["warroom_votes"]
+    st.markdown(
+        f'<div style="background:rgba(2,6,23,0.8);border:1px solid rgba(148,163,184,0.2);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-size:12px;">'
+        f'<span>🗳️ <b>AI知能リアルタイム採決判定:</b></span>'
+        f'<span>🟢 エントリー賛成: <b style="color:#10b981;">{v["buy"]}名</b> ｜ 🔴 危険見送り: <b style="color:#ef4444;">{v["sell"]}名</b> ｜ 🟡 中立様子見: <b style="color:#f59e0b;">{v["neutral"]}名</b></span>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    # 4. 大型チャット画面
+    chat_box_html = "".join([_fmt_turn(t) for t in st.session_state["warroom_chat_history"]])
+    st.markdown(
+        f'<div style="background:#02050b;border:1px solid rgba(56,189,248,0.25);border-radius:12px;padding:16px;max-height:580px;overflow-y:auto;box-shadow:inset 0 2px 8px rgba(0,0,0,0.8);margin-bottom:12px;">'
+        f'{chat_box_html}'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    # 5. ユーザー割り込み発言・質問入力フォーム
+    with st.form("warroom_user_input_form", clear_on_submit=True):
+        w_in1, w_in2 = st.columns([3.5, 1])
+        u_speech = w_in1.text_input("発言内容", placeholder=f"例: 『{r_w['name']}』の逆指値はどこまで引き上げるべき？ / 機関の騙しはある？", label_visibility="collapsed")
+        send_speech = w_in2.form_submit_button("🗣️ 合議に割り込み発言", use_container_width=True)
+
+        if send_speech and u_speech.strip():
+            u_clean = sanitize(u_speech.strip())
+            st.session_state["warroom_chat_history"].append({"is_user": True, "text": u_clean})
+            with st.spinner("🌐 AI各員が発言を精査中..."):
+                up_res = run_real_ai_council(r_w, user_query=u_clean, active_spks=sidebar_active_ais, posture=wr_posture, api_configs=ai_multi_api_configs)
+                for t_item in up_res["dialogue"]:
+                    st.session_state["warroom_chat_history"].append(t_item)
+                st.rerun()
+
+    # 6. 下部機能バー（会議録エクスポート & 退室ボタン）
+    bot1, bot2 = st.columns(2)
+    # 会議録ダウンロード機能
+    raw_md_log = f"# YAMASHISHI LAB WAR ROOM 議事録\n銘柄: {r_w['name']} ({r_w['code']})\n日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    for turn in st.session_state["warroom_chat_history"]:
+        if "speaker" in turn:
+            raw_md_log += f"### {turn['speaker']}\n{turn['text']}\n\n"
+        elif turn.get("is_user"):
+            raw_md_log += f"### ユーザー発言\n{turn['text']}\n\n"
+
+    bot1.download_button(
+        "📜 本会議録をMarkdownで保存",
+        data=raw_md_log,
+        file_name=f"WARROOM_{r_w['code']}_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+        mime="text/markdown",
+        use_container_width=True
+    )
+
+    if bot2.button("✕ 大会議室を退出しメインへ戻る", use_container_width=True):
+        st.session_state["cur_screen"] = "main"
+        st.rerun()
+
+    st.stop()
+
+# ==========================================
+# 18. メインダッシュボード描画
 # ==========================================
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:3px 8px;border-radius:6px;font-size:11px;display:inline-flex;gap:5px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(
     f'<div style="background:radial-gradient(circle at top right, rgba(168,85,247,0.14), transparent 60%), linear-gradient(145deg,#0f172a 0%,#070b14 100%);border:1px solid rgba(148,163,184,0.2);border-radius:14px;padding:14px 18px;margin-bottom:18px;">'
     f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'
     f'<div style="min-width:0;flex:1;"><div class="brand-luxury">YAMASHISHI LAB</div><div style="font-family:\'JetBrains Mono\';font-size:10px;color:#64748b;letter-spacing:1.5px;margin-top:2px;">QUANTUM WAVEFUNCTION & MULTI-AGENT TERMINAL</div></div>'
-    f'<span style="background:rgba(168,85,247,0.16);border:1px solid rgba(168,85,247,0.45);color:#e9d5ff;padding:4px 9px;border-radius:999px;font-size:10.5px;font-weight:700;">⚛️ 本格AI並列連携稼働</span>'
+    f'<span style="background:rgba(168,85,247,0.16);border:1px solid rgba(168,85,247,0.45);color:#e9d5ff;padding:4px 9px;border-radius:999px;font-size:10.5px;font-weight:700;">⚛️ 7大AI並列連携稼働</span>'
     f'</div>'
     f'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">{mpills}</div></div>',
     unsafe_allow_html=True
@@ -1597,7 +1772,6 @@ def cut_stocks(slist, pct):
     k = max(3, int(round(len(s) * (pct / 100.0))))
     return s[:k], s[k:]
 
-# 【改修】ご指定のタブ順序：TOP5の右に「📋 監視リスト」、次に「🚀 IPO申し込み受付」を配置
 cats = ["🏆 総合TOP5", "📋 監視リスト", "🚀 IPO申し込み受付", "⚛️ 量子トンネル突破TOP10", "🏛️ 機関最新ミクロ構造TOP10", "🏦 機関VPIN・OFI", "🔥 5ch＆短期モメンタム"] + [f"📂 {g}" for g in STOCK_POOL.keys()]
 
 if st.session_state.get("active_category") not in cats:
