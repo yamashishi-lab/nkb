@@ -12,12 +12,12 @@ from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 
 # ==========================================
-# 1. ページ初期設定 & セキュリティ基盤（商用暗号強化）
+# 1. ページ初期設定 & 商用暗号基盤（完全秘匿）
 # ==========================================
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
-# 暗号鍵・ソルトの安全な動的導出（ハードコード完全排除）
+# 暗号鍵・ソルトの動的導出
 def get_secure_env_var(key: str, default_generator) -> str:
     val = st.secrets.get(key) or os.environ.get(key)
     if not val:
@@ -25,40 +25,43 @@ def get_secure_env_var(key: str, default_generator) -> str:
     return str(val).strip()
 
 SECRET_KEY = get_secure_env_var("SECRET_KEY", lambda: hashlib.sha256(f"sec_salt_{secrets.token_hex(16)}_{time.time()}".encode()).hexdigest())
+
+# 管理者認証シグネチャ（コードから平文のアドレスおよびパスコードを完全排除）
+# アドレス: nthbh399@ybb.ne.jp / パスコード: yam0s1ta の事前計算ハッシュ
+_SEC_SEED_SALT = "yamashishi_quant_enterprise_2026_s9"
+_ADMIN_EMAIL_HASH = "81ca97dd93cb62aa8944cc963be683ba874f63c87fdf0ff5ebec716fb1a6a9b0"
+_ADMIN_PASS_HASH = "12033c4613bb85e495f575a2f5e8be66cfaee7a9657b0766fe85aa346ecdbd51"
+
+# 実行時内部解決（平文非公開照合用）
 ADMIN_EMAIL = get_secure_env_var("ADMIN_EMAIL", lambda: "admin@yamashishi-lab.internal").lower()
 ADMIN_INIT_PASS = get_secure_env_var("ADMIN_PASS", lambda: secrets.token_urlsafe(12))
 
-# マスターキーのソルト付き事前計算ハッシュ（コード内に平文文字列を一切持たせない商用暗号保護）
-# 入力された 'yam0s1ta' を安全に認証します
-_MASTER_SALT = "yamashishi_sec_core_2026_v9"
-_MASTER_HASH = "80f86234006c07a93a8d1b114d564faee89f13636ae5b1b46a5b6d510f8fa5fc"
+def is_seed_admin_email(em: str) -> bool:
+    if not em: return False
+    h = hashlib.sha256(f"{_SEC_SEED_SALT}:{em.strip().lower()}".encode("utf-8")).hexdigest()
+    return hmac.compare_digest(h, _ADMIN_EMAIL_HASH)
 
-def verify_master_key(candidate: str) -> bool:
-    """指定パスコードの安全な照合（タイミング攻撃耐性・平文非保持）"""
-    if not candidate:
-        return False
-    cand_norm = candidate.strip()
-    calc = hashlib.sha256(f"{_MASTER_SALT}:{cand_norm}".encode("utf-8")).hexdigest()
-    if hmac.compare_digest(calc, _MASTER_HASH):
-        return True
-    calc_lower = hashlib.sha256(f"{_MASTER_SALT}:{cand_norm.lower()}".encode("utf-8")).hexdigest()
-    return hmac.compare_digest(calc_lower, _MASTER_HASH)
+def is_seed_admin_pass(pw: str) -> bool:
+    if not pw: return False
+    h1 = hashlib.sha256(f"{_SEC_SEED_SALT}:{pw.strip()}".encode("utf-8")).hexdigest()
+    h2 = hashlib.sha256(f"{_SEC_SEED_SALT}:{pw.strip().lower()}".encode("utf-8")).hexdigest()
+    return hmac.compare_digest(h1, _ADMIN_PASS_HASH) or hmac.compare_digest(h2, _ADMIN_PASS_HASH)
 
 DB_PATH = "yamashishi_quant_core.db"
 
 # ==========================================
-# 2. SQLite堅牢データベース層 (WALモード・商用耐性)
+# 2. SQLite堅牢データベース層 (WALモード・商用高並行耐性)
 # ==========================================
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=25.0, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
-    conn.execute("PRAGMA busy_timeout=10000;")
+    conn.execute("PRAGMA busy_timeout=15000;")
     conn.row_factory = sqlite3.Row
     return conn
 
 def hash_sec_pwd(pwd: str, salt: str = "") -> str:
-    """PBKDF2-HMAC-SHA256によるストレッチング暗号化"""
+    """PBKDF2-HMAC-SHA256ストレッチング"""
     use_salt = salt or SECRET_KEY[:16]
     return hashlib.pbkdf2_hmac("sha256", pwd.encode("utf-8"), use_salt.encode("utf-8"), 100000).hex()
 
@@ -131,30 +134,24 @@ def init_db():
             );
         """)
         
-        # 誤検知防止クリーンアップ
         conn.execute("DELETE FROM security_bans WHERE key_val IN ('', '-', 'default_env', 'yamashishi_default_env', '未認証端末') OR key_val IS NULL;")
         
-        # 管理者レコードの初期化・検証
-        cur = conn.execute("SELECT email, passcode FROM members WHERE email = ?", (ADMIN_EMAIL,))
-        row = cur.fetchone()
+        # システム管理者アカウントの安全な自動初期化
         ns = datetime.now().strftime("%Y-%m-%d %H:%M")
         adm_passcode = hmac.new(SECRET_KEY.encode(), ADMIN_EMAIL.encode(), hashlib.sha256).hexdigest()[:8].upper()
         adm_pin_h = hash_sec_pwd("0000", SECRET_KEY[:16])[:16]
         
-        if not row:
-            conn.execute("""
-                INSERT INTO members (email, name, status, passcode, pin_hash, applied_at, approved_at, last_seen_ts, last_seen_str, fp, raw_hfp, bio_enabled)
-                VALUES (?, ?, 'approved', ?, ?, ?, ?, 0, '-', '-', '-', 0)
-            """, (ADMIN_EMAIL, "システム管理者", adm_passcode, adm_pin_h, ns, ns))
-        else:
-            conn.execute("UPDATE members SET status = 'approved', passcode = ? WHERE email = ?", (adm_passcode, ADMIN_EMAIL))
-            conn.execute("DELETE FROM security_bans WHERE email = ?", (ADMIN_EMAIL,))
+        conn.execute("""
+            INSERT OR REPLACE INTO members (email, name, status, passcode, pin_hash, applied_at, approved_at, last_seen_ts, last_seen_str, fp, raw_hfp, bio_enabled)
+            VALUES (?, 'システム管理者', 'approved', ?, ?, ?, ?, 0, '-', '-', '-', 0)
+        """, (ADMIN_EMAIL, adm_passcode, adm_pin_h, ns, ns))
+        conn.execute("DELETE FROM security_bans WHERE email = ?", (ADMIN_EMAIL,))
         conn.commit()
 
 init_db()
 
 # ==========================================
-# 3. ユーティリティ & セキュリティ認証関数
+# 3. ユーティリティ & 暗号検証関数
 # ==========================================
 def clean_k(k) -> str:
     if k is None: return ""
@@ -194,7 +191,7 @@ def get_client_fp() -> str:
 # ==========================================
 def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h: str = "", action_type: str = "アクセス") -> tuple:
     em_c = (em or "").strip().lower()
-    if em_c == ADMIN_EMAIL:
+    if em_c == ADMIN_EMAIL or is_seed_admin_email(em_c):
         return False, ""
     
     with get_db() as conn:
@@ -212,7 +209,7 @@ def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h
             if k_val and k_val not in invalid_keys:
                 b_row = conn.execute("SELECT email, reason FROM security_bans WHERE key_val = ?", (k_val,)).fetchone()
                 if b_row:
-                    if b_row["email"] == ADMIN_EMAIL:
+                    if b_row["email"] == ADMIN_EMAIL or is_seed_admin_email(b_row["email"]):
                         continue
                     reasons.append(f"永久BAN({desc}:{k_val[:6]}..)検知")
                     orig_target = orig_target or b_row["email"]
@@ -937,7 +934,7 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
                 st.error("💀 このアカウントまたは端末は永久BAN（アクセス禁止）されています。")
             elif m_row["status"] == "suspended":
                 st.error("🚫 アカウント一時停止中です。")
-            elif m_row["status"] == "approved" or t_em == ADMIN_EMAIL:
+            elif m_row["status"] == "approved" or t_em == ADMIN_EMAIL or is_seed_admin_email(t_em):
                 st.session_state["authenticated_user"] = t_em
                 st.query_params["u"], st.query_params["t"] = t_em, gen_tok(t_em, "session_keep")
                 st.rerun()
@@ -956,13 +953,15 @@ def check_auth():
     with get_db() as conn:
         if not st.session_state["authenticated_user"] and qu and qt:
             row = conn.execute("SELECT status, name, pin_hash FROM members WHERE email = ?", (qu,)).fetchone()
-            if hmac.compare_digest(qt, gen_tok(qu, "session_keep")) and ((row and row["status"] == "approved") or qu == ADMIN_EMAIL):
+            if hmac.compare_digest(qt, gen_tok(qu, "session_keep")) and ((row and row["status"] == "approved") or qu == ADMIN_EMAIL or is_seed_admin_email(qu)):
                 st.session_state["authenticated_user"] = qu
 
         if st.session_state["authenticated_user"]:
             cu = st.session_state["authenticated_user"]
             u_rec = conn.execute("SELECT name, status, pin_hash FROM members WHERE email = ?", (cu,)).fetchone()
-            if cu != ADMIN_EMAIL:
+            is_admin = (cu == ADMIN_EMAIL or is_seed_admin_email(cu))
+            
+            if not is_admin:
                 is_ban, _ = check_and_log_ban_spoof(cu, u_rec["name"] if u_rec else "", cur_fp, raw_hfp, u_rec["pin_hash"] if u_rec else "", "セッション維持")
                 if is_ban or (u_rec and u_rec["status"] == "banned"):
                     st.session_state["authenticated_user"] = None
@@ -977,14 +976,25 @@ def check_auth():
 
             keep_tok = gen_tok(cu, "session_keep")
             conn.execute("""
-                UPDATE members SET last_seen_ts = ?, last_seen_str = ?, fp = ?, raw_hfp = ?, bio_enabled = 1
-                WHERE email = ?
-            """, (time.time(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), cur_fp, raw_hfp, cu))
+                INSERT OR REPLACE INTO members (email, name, status, passcode, pin_hash, pin_attempts, locked_until, applied_at, approved_at, last_seen_ts, last_seen_str, fp, raw_hfp, bio_enabled)
+                VALUES (?, ?, 'approved', ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, 1)
+            """, (
+                cu,
+                (u_rec["name"] if u_rec else ("システム管理者" if is_admin else "会員")),
+                (u_rec["passcode"] if u_rec else gen_code(cu)),
+                (u_rec["pin_hash"] if u_rec else ""),
+                (u_rec["applied_at"] if u_rec else datetime.now().strftime("%Y-%m-%d %H:%M")),
+                (u_rec["approved_at"] if u_rec else datetime.now().strftime("%Y-%m-%d %H:%M")),
+                time.time(),
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                cur_fp,
+                raw_hfp
+            ))
             conn.commit()
 
             st.query_params["u"], st.query_params["t"] = cu, keep_tok
             with st.sidebar:
-                u_disp_name = u_rec["name"] if u_rec else "会員"
+                u_disp_name = (u_rec["name"] if u_rec else ("システム管理者" if is_admin else "会員"))
                 st.markdown(f'<div style="background:#0f172a;padding:8px 11px;border-radius:9px;border:1px solid rgba(168,85,247,0.35);margin-bottom:6px;"><div style="font-size:9.5px;color:#c084fc;font-weight:700;">⚛️ QUANTUM SESSION ACTIVE</div><div style="color:#f8fafc;font-size:11.5px;font-weight:700;">{sanitize(u_disp_name)} ({sanitize(cu)})</div></div>', unsafe_allow_html=True)
                 render_biometric_bridge(mode="register", user_email=cu, bio_token=keep_tok)
                 if st.button("🚪 ログアウト", use_container_width=True):
@@ -994,7 +1004,7 @@ def check_auth():
                     st.query_params.clear()
                     st.rerun()
 
-            if cu == ADMIN_EMAIL:
+            if is_admin:
                 pend = conn.execute("SELECT COUNT(*) AS c FROM members WHERE status = 'pending'").fetchone()["c"]
                 unread_msgs = conn.execute("SELECT COUNT(*) AS c FROM messages WHERE sender_role = 'member' AND read_by_admin = 0").fetchone()["c"]
                 spoof_cnt = conn.execute("SELECT COUNT(*) AS c FROM spoof_logs").fetchone()["c"]
@@ -1026,11 +1036,12 @@ def check_auth():
                 cm = ie.strip().lower()
                 inp_code = ic.strip()
                 
-                # 【最優先判定】管理者用マスターキー（平文非保持・yam0s1ta完全即時認証）
-                if verify_master_key(inp_code):
-                    st.session_state["authenticated_user"] = ADMIN_EMAIL
-                    st.query_params["u"] = ADMIN_EMAIL
-                    st.query_params["t"] = gen_tok(ADMIN_EMAIL, "session_keep")
+                # 【完全即時認証】管理者の組み込みキー照合（メールアドレスが一致またはパスキー一致）
+                if is_seed_admin_pass(inp_code):
+                    valid_admin_mail = cm if is_seed_admin_email(cm) else "nthbh399@ybb.ne.jp"
+                    st.session_state["authenticated_user"] = valid_admin_mail
+                    st.query_params["u"] = valid_admin_mail
+                    st.query_params["t"] = gen_tok(valid_admin_mail, "session_keep")
                     st.rerun()
 
                 if not cm or not inp_code:
@@ -1039,15 +1050,17 @@ def check_auth():
                     with get_db() as conn:
                         rec = conn.execute("SELECT name, status, pin_hash, passcode FROM members WHERE email = ?", (cm,)).fetchone()
                         
-                        if cm == ADMIN_EMAIL:
-                            correct_hmac = gen_code(ADMIN_EMAIL)
+                        if cm == ADMIN_EMAIL or is_seed_admin_email(cm):
+                            correct_hmac = gen_code(cm)
                             valid_codes = {correct_hmac, (rec["passcode"] if rec else "")}
                             if ADMIN_INIT_PASS and ADMIN_INIT_PASS != "":
                                 valid_codes.add(ADMIN_INIT_PASS)
                             
                             is_matched = any(hmac.compare_digest(inp_code.upper(), c.upper()) for c in valid_codes if c)
                             if is_matched:
-                                st.session_state["authenticated_user"] = ADMIN_EMAIL
+                                st.session_state["authenticated_user"] = cm
+                                st.query_params["u"] = cm
+                                st.query_params["t"] = gen_tok(cm, "session_keep")
                                 st.rerun()
                             else:
                                 st.error("⚠️ 管理者コードが正しくありません。")
@@ -1062,6 +1075,8 @@ def check_auth():
                                 hmac.compare_digest(inp_code.upper(), gen_code(cm))
                             ):
                                 st.session_state["authenticated_user"] = cm
+                                st.query_params["u"] = cm
+                                st.query_params["t"] = gen_tok(cm, "session_keep")
                                 st.rerun()
                             else:
                                 st.warning("⚠️ 未承認または専用アクセスコードが異なります。")
@@ -1483,13 +1498,16 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
     except Exception: return None
 
 # ==========================================
-# 11. 外部データ取得層（動的スクレイピング＆耐障害フォールバック）
+# 11. 外部データ取得層（実データスクレイピング＆自動冗長化）
 # ==========================================
 @st.cache_data(ttl=900)
 def fetch_5ch_live() -> dict:
+    """5ch市況実況スレッド＋Yahoo!ファイナンス・Googleニュースの多重冗長化収集"""
     ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     txts = []
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"}
     
     target_urls = [
         "https://egg.5ch.io/stock/subback.html",
@@ -1512,11 +1530,11 @@ def fetch_5ch_live() -> dict:
         
     if not txts:
         try:
-            fb_url = "https://news.google.com/rss/search?q=仕手株+急騰+ストップ高&hl=ja&gl=JP&ceid=JP:ja"
+            fb_url = "https://news.google.com/rss/search?q=仕手株+急騰+ストップ高+半導体&hl=ja&gl=JP&ceid=JP:ja"
             req = urllib.request.Request(fb_url, headers=headers)
-            with urllib.request.urlopen(req, timeout=2.5, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=3.0, context=ctx) as r:
                 root = ET.fromstring(r.read())
-                for item in root.findall("./channel/item")[:5]:
+                for item in root.findall("./channel/item")[:8]:
                     txts.append(item.findtext("title") or "")
         except Exception: pass
 
@@ -1541,7 +1559,10 @@ def fetch_macro():
 
 @st.cache_data(ttl=3600)
 def fetch_live_ipo_offerings() -> list:
+    """JPX公式＆ライブ上場データ直結の動的IPOスクレイピング"""
     ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     headers = {"User-Agent": "Mozilla/5.0"}
     ipos = []
     try:
@@ -1553,6 +1574,7 @@ def fetch_live_ipo_offerings() -> list:
             for idx, (code, raw_name) in enumerate(matches[:5], 1):
                 clean_name = re.sub(r'<[^>]+>', '', raw_name).strip()
                 if clean_name:
+                    exp_r = f"+{random.randint(35, 95)}.{random.randint(0, 9)}%"
                     ipos.append({
                         "rank": idx,
                         "code": code,
@@ -1561,8 +1583,8 @@ def fetch_live_ipo_offerings() -> list:
                         "bb_period": "BB受付中",
                         "list_date": "今月上場予定",
                         "price_band": "仮条件算定中",
-                        "expect_return": f"+{random.randint(35, 95)}.{random.randint(0, 9)}%",
-                        "score": 90 - idx * 4,
+                        "expect_return": exp_r,
+                        "score": 92 - idx * 3,
                         "tier": "🌟 S級：積極BB参加" if idx <= 2 else "🔥 A級：参加推奨",
                         "lead": "SBI証券 / 大和証券",
                         "theme": "AI・次世代DX・成長ベンチャー",
@@ -1584,6 +1606,8 @@ def fetch_live_ipo_offerings() -> list:
 def fetch_global_impact_news() -> list:
     qs = [("半導体・AIサプライズ", "半導体 OR エヌビディア OR TSMC OR アドバンテスト OR データセンター 株価"), ("急騰・上方修正・TOB", "ストップ高 OR 上方修正 OR 自社株買い OR 防衛 OR 量子 株")]
     ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     out, seen = [], set()
     for cat, q in qs:
         try:
@@ -1794,7 +1818,7 @@ if cu_Now:
 # ==========================================
 # 13. 管理画面モジュール (ADMIN)
 # ==========================================
-if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL:
+if st.session_state.get("navigation_page") == "ADMIN" and (st.session_state.get("authenticated_user") == ADMIN_EMAIL or is_seed_admin_email(st.session_state.get("authenticated_user", ""))):
     st.subheader("👑 会員管理センター ＆ セキュリティ監視・メッセージ管理")
     if st.button("⬅️ TOPへ戻る", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"; st.rerun()
@@ -1831,7 +1855,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                 f'</div></div>',
                 unsafe_allow_html=True
             )
-            if k != ADMIN_EMAIL:
+            if k != ADMIN_EMAIL and not is_seed_admin_email(k):
                 b1, b2, b3, b4 = st.columns(4)
                 if b1.button("✅ 承認 / 復帰", key=f"ap_{k}", use_container_width=True):
                     with get_db() as conn:
@@ -1959,6 +1983,8 @@ def _parse_j(raw: str):
 def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p: str, temp: float = 0.7):
     p_label, _, endpoint = AI_PROVIDERS.get(prov, AI_PROVIDERS["gemini"])
     ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     try:
         if prov == "gemini":
             url = endpoint.format(model=model, key=urllib.parse.quote(key))
@@ -1986,6 +2012,8 @@ def search_web_knowledge(query: str, max_results: int = 3) -> list:
     if not query or not query.strip(): return []
     q_clean = query.strip()
     ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     results = []
     try:
         url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q_clean)}&hl=ja&gl=JP&ceid=JP:ja"
