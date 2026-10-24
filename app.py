@@ -199,9 +199,6 @@ def inject_css():
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
-    /* ─────────────────────────────────────────────────────────────
-       ヘッダー・デフォルトボタンのクリーンアップ＆サイドバーアニメーション
-       ───────────────────────────────────────────────────────────── */
     header[data-testid="stHeader"] {
         background: transparent !important;
         pointer-events: none !important;
@@ -209,13 +206,11 @@ def inject_css():
         z-index: 999990 !important;
     }
     
-    /* 右上の設定メニューのみ非表示 */
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] {
         display: none !important;
     }
 
-    /* ネイティブ開閉ボタンは隠して独自ハイエンドボタンで統一 */
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapsedControl"],
     header button[kind="headerNoPadding"],
@@ -223,7 +218,6 @@ def inject_css():
         display: none !important;
     }
 
-    /* サイドバー本体のスタイリング ＆ スムーズスライド */
     section[data-testid="stSidebar"] {
         background-color: #0b0f19 !important;
         border-right: 1px solid rgba(148,163,184,0.18) !important;
@@ -278,7 +272,7 @@ def inject_css():
     }
     
     /* ─────────────────────────────────────────────────────────────
-       上部固定ナビゲーションバー（左右対称・完全中央揃え）
+       上部固定ナビゲーションバー（MENUボタンと被らない幅設計・左右対称中央配置）
        ───────────────────────────────────────────────────────────── */
     .fixed-top-nav-bar {
         position: fixed !important;
@@ -286,7 +280,7 @@ def inject_css():
         left: 50% !important;
         transform: translateX(-50%) !important;
         z-index: 999980 !important;
-        width: min(490px, calc(100vw - 7rem)) !important;
+        width: min(450px, calc(100vw - 11rem)) !important;
         background: rgba(5,8,17,0.95) !important;
         backdrop-filter: blur(14px) !important;
         border: none !important;
@@ -333,7 +327,7 @@ def inject_css():
     
     .fixed-top-nav-bar div[data-testid="column"]:nth-child(2),
     .fixed-top-nav-bar div[data-testid="stColumn"]:nth-child(2) {
-        flex: 1.45 1 0% !important;
+        flex: 1.35 1 0% !important;
     }
     
     .fixed-top-nav-bar button {
@@ -380,7 +374,7 @@ def inject_css():
     }
     
     .fixed-top-nav-bar button p {
-        font-size: clamp(10px,2.6vw,11.5px) !important;
+        font-size: clamp(10px,2.5vw,11.5px) !important;
         font-weight: 700 !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -787,15 +781,15 @@ for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 
-# 上部固定ナビゲーションバー（完全左右対称・水平中央配置）
+# 上部固定ナビゲーションバー（左右対称中央配置・メニュー被り防止設計）
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
-    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.45, 1])
+    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.35, 1])
     if nav_c1.button("⬆️ トップ", key="top_nav_top", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
         st.rerun()
-    if nav_c2.button(f"✖ 合議全て閉じる({open_cnt})" if open_cnt else "✖ 合議全て閉じる", key="top_nav_close", use_container_width=True):
+    if nav_c2.button(f"✖ 合議閉じる({open_cnt})" if open_cnt else "✖ 合議閉じる", key="top_nav_close", use_container_width=True):
         st.session_state["active_debates"] = {}
         st.rerun()
     if nav_c3.button("↩️ 戻る", key="top_nav_back", use_container_width=True):
@@ -915,7 +909,6 @@ components.html(
                     e.preventDefault();
                     e.stopPropagation();
 
-                    // Streamlit標準の開閉セレクタが存在する場合はトリガー
                     const nativeBtn = doc.querySelector('button[data-testid="stSidebarCollapseButton"]') 
                                    || doc.querySelector('[data-testid="collapsedControl"]')
                                    || doc.querySelector('button[aria-label*="sidebar" i]');
@@ -924,7 +917,6 @@ components.html(
                         return;
                     }}
 
-                    // 直接サイドバー要素を「シュッ」とアニメーション展開/格納
                     const sb = doc.querySelector('section[data-testid="stSidebar"]');
                     if(!sb) return;
                     const isClosed = (sb.getAttribute('aria-expanded') === 'false') || 
