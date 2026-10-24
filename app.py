@@ -214,7 +214,7 @@ DYNAMIC_DYNAMIC_POOLS = {
     "AI・防衛・主力": [
         {"code": "9984.T", "name": "ソフトバンクG", "theme": "AI投資・先物主役"},
         {"code": "3778.T", "name": "さくらネット", "theme": "国策GPUクラウド"},
-        {"011.T": "三菱重工業", "code": "7011.T", "name": "三菱重工業", "theme": "防衛・宇宙国策主力"},
+        {"code": "7011.T", "name": "三菱重工業", "theme": "防衛・宇宙国策主力"},
         {"code": "7012.T", "name": "川崎重工業", "theme": "防衛・航空エンジン"},
         {"code": "7013.T", "name": "IHI", "theme": "航空宇宙・防衛"},
         {"code": "3993.T", "name": "PKSHA", "theme": "AIアルゴリズム"},
@@ -333,26 +333,23 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
     return {"ms_score": ms_score, "hurst": hurst, "kyle_stealth": kyle_stealth, "luld_magnet": luld_magnet, "ms_regime": ms_regime}
 
 # ==========================================
-# 7. CSS（青帯除去・サイドバー復活・完全中央追従ナビ）
+# 7. CSS（スマートヘッダー・ネオンナビ・重複防止）
 # ==========================================
 def inject_css():
     css = """
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700;800&display=swap');
     
-    /* 画面上部の余計な装飾のみ除去（ヘッダー構造は残して開閉ボタンを維持） */
     [data-testid="stDecoration"] {
         display: none !important;
         height: 0px !important;
     }
     
-    /* ヘッダー背景を透過させてボタンのみ最前面表示 */
     header[data-testid="stHeader"] {
         background: transparent !important;
         pointer-events: none !important;
         z-index: 999990 !important;
     }
 
-    /* サイドバー開閉ボタンの完全復活＆スクロール完全固定追従 */
     button[data-testid="stSidebarCollapsedControl"],
     button[data-testid="baseButton-headerNoPadding"],
     [data-testid="collapsedControl"] {
@@ -361,20 +358,16 @@ def inject_css():
         visibility: visible !important;
         opacity: 1 !important;
         position: fixed !important;
-        left: 8px !important;
+        left: 10px !important;
         top: 8px !important;
         z-index: 1000005 !important;
         background: rgba(15, 23, 42, 0.95) !important;
-        border: 1px solid rgba(56, 189, 248, 0.5) !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8) !important;
+        border: 1px solid rgba(56, 189, 248, 0.6) !important;
+        border-radius: 9px !important;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.85) !important;
         color: #38bdf8 !important;
-        padding: 4px 6px !important;
-        transition: transform 0.1s ease !important;
-    }
-    button[data-testid="stSidebarCollapsedControl"]:active {
-        transform: scale(0.92) !important;
-        background: #0284c7 !important;
+        padding: 5px 8px !important;
+        transition: all 0.15s ease !important;
     }
 
     html, body, [class*="css"] {
@@ -385,130 +378,80 @@ def inject_css():
     }
 
     section[data-testid="stSidebar"] {
-        background-color: #090d16 !important;
-        border-right: 1px solid rgba(148,163,184,0.18) !important;
+        background-color: #080c16 !important;
+        border-right: 1px solid rgba(148,163,184,0.2) !important;
         z-index: 1000000 !important;
     }
 
-    /* サイト全体を少し上に詰める */
     .block-container {
-        padding-top: 3.2rem !important;
+        padding-top: 3.4rem !important;
         padding-bottom: 3rem !important;
         padding-left: 0.6rem !important;
         padding-right: 0.6rem !important;
         max-width: 860px !important;
     }
 
-    /* 完全中央寄せ・スタイリッシュ追従固定ナビバー */
-    .ultra-fixed-nav-bar {
+    /* 最上位固定：ネオンサイバーフローティングナビゲーションバー */
+    .cyber-quantum-nav-dock {
         position: fixed !important;
-        top: 6px !important;
+        top: 8px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        z-index: 999998 !important;
-        width: min(340px, calc(100vw - 70px)) !important;
-        background: rgba(10, 16, 29, 0.94) !important;
-        backdrop-filter: blur(14px) !important;
-        border: 1px solid rgba(148, 163, 184, 0.25) !important;
-        border-radius: 20px !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.85) !important;
-        padding: 3px 5px !important;
+        z-index: 999995 !important;
         display: flex !important;
         flex-direction: row !important;
-        justify-content: center !important;
         align-items: center !important;
+        justify-content: center !important;
         gap: 6px !important;
-        box-sizing: border-box !important;
+        background: rgba(8, 14, 28, 0.92) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        border: 1px solid rgba(56, 189, 248, 0.35) !important;
+        border-radius: 30px !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.85), 0 0 15px rgba(56, 189, 248, 0.25) !important;
+        padding: 4px 8px !important;
+        width: auto !important;
+        min-width: 310px !important;
+        max-width: 90vw !important;
     }
 
-    .ultra-fixed-nav-btn {
-        flex: 1 1 0% !important;
-        height: 29px !important;
-        line-height: 29px !important;
-        background: linear-gradient(180deg, #162035 0%, #0d1526 100%) !important;
-        color: #e2e8f0 !important;
-        border: 1px solid rgba(148, 163, 184, 0.22) !important;
-        border-radius: 14px !important;
-        font-family: 'JetBrains Mono', 'Plus Jakarta Sans', sans-serif !important;
-        font-size: 10.5px !important;
-        font-weight: 700 !important;
-        text-align: center !important;
-        cursor: pointer !important;
-        user-select: none !important;
-        white-space: nowrap !important;
-        text-decoration: none !important;
-        display: block !important;
-        transition: all 0.08s ease !important;
-        -webkit-tap-highlight-color: transparent !important;
-    }
-
-    /* タップした瞬間だけ鮮烈に青くネオン発光 */
-    .ultra-fixed-nav-btn:active {
-        background: #1d4ed8 !important;
-        color: #ffffff !important;
-        border-color: #38bdf8 !important;
-        box-shadow: 0 0 15px rgba(56, 189, 248, 0.9) !important;
-        transform: scale(0.93) !important;
-    }
-
-    /* 2回目ワンタップログイン用ボタン */
-    .quick-bio-login-btn {
-        display: block;
-        width: 100%;
-        height: 44px;
-        line-height: 44px;
-        text-align: center;
-        background: linear-gradient(135deg, #059669 0%, #0284c7 100%);
-        color: #ffffff !important;
-        border: 1px solid #34d399;
-        border-radius: 8px;
-        font-size: 13.5px;
-        font-weight: 800;
-        cursor: pointer;
-        text-decoration: none !important;
-        box-shadow: 0 4px 16px rgba(5, 150, 105, 0.35);
-        margin-top: 10px;
-        transition: all 0.1s ease;
-        -webkit-tap-highlight-color: transparent;
-    }
-    .quick-bio-login-btn:active {
-        transform: scale(0.97);
-        filter: brightness(1.2);
-        box-shadow: 0 0 20px rgba(52, 211, 153, 0.8);
-    }
-
-    .inline-catalyst-trigger-badge {
+    .cyber-nav-btn {
         display: inline-flex !important;
         align-items: center !important;
-        gap: 4px !important;
-        background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
-        border: 1px solid #f87171 !important;
-        border-radius: 6px !important;
-        padding: 3px 7px !important;
-        color: #ffffff !important;
-        font-size: 10px !important;
-        font-weight: 800 !important;
-        cursor: pointer !important;
-        text-decoration: none !important;
-        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5) !important;
-        margin: 0 4px !important;
-        vertical-align: middle !important;
-        animation: pulse_red 1.8s infinite !important;
-    }
-    @keyframes pulse_red {
-        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-        70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-    }
-
-    .catalyst-compact-panel {
-        background: linear-gradient(135deg, rgba(220, 38, 38, 0.3) 0%, rgba(153, 27, 27, 0.75) 100%) !important;
-        border: 1.5px solid #ef4444 !important;
-        border-radius: 8px !important;
-        padding: 8px 10px !important;
-        margin: 6px 0 !important;
-        color: #ffffff !important;
+        justify-content: center !important;
+        padding: 4px 12px !important;
+        height: 28px !important;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%) !important;
+        border: 1px solid rgba(148, 163, 184, 0.2) !important;
+        border-radius: 20px !important;
+        color: #e2e8f0 !important;
+        font-family: 'JetBrains Mono', 'Plus Jakarta Sans', sans-serif !important;
         font-size: 11px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px !important;
+        text-decoration: none !important;
+        white-space: nowrap !important;
+        transition: all 0.12s ease !important;
+        cursor: pointer !important;
+    }
+    .cyber-nav-btn:hover {
+        background: rgba(56, 189, 248, 0.15) !important;
+        border-color: #38bdf8 !important;
+        color: #ffffff !important;
+    }
+    .cyber-nav-btn:active {
+        transform: scale(0.94) !important;
+        background: #0284c7 !important;
+        border-color: #38bdf8 !important;
+        box-shadow: 0 0 14px rgba(56, 189, 248, 0.9) !important;
+    }
+    .cyber-nav-btn-highlight {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.3) 100%) !important;
+        border-color: rgba(239, 68, 68, 0.5) !important;
+        color: #fca5a5 !important;
+    }
+    .cyber-nav-btn-highlight:hover {
+        background: rgba(239, 68, 68, 0.35) !important;
+        color: #ffffff !important;
     }
 
     .login-brand-wrapper {
@@ -641,18 +584,16 @@ def check_major_catalyst(code: str, name: str, genre: str) -> dict:
     }
 
 # ==========================================
-# 9. 認証＆セッション管理（2回目以降ワンタップログイン対応）
+# 9. 認証＆セッション管理
 # ==========================================
 def check_auth():
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
     if "authenticated_user" not in st.session_state: st.session_state["authenticated_user"] = None
     qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
 
-    # ワンタップ生体・端末認証パラメータ判定
     quick_login_act = st.query_params.get("quick_auth", "")
     if quick_login_act == "1":
         with get_db() as conn:
-            # 端末指紋 (fp または raw_hfp) で合致する直近の承認済みユーザーを検索
             cand = conn.execute("""
                 SELECT email, name, status FROM members 
                 WHERE (fp = ? OR raw_hfp = ?) AND status = 'approved'
@@ -705,43 +646,8 @@ def check_auth():
             conn.commit()
 
             st.query_params["u"], st.query_params["t"] = cu, keep_tok
-            with st.sidebar:
-                u_disp_name = u_rec.get("name") or ("システム管理者" if is_admin else "会員")
-                admin_badge = "👑 管理者モード" if is_admin else "💎 会員セッション"
-                st.markdown(
-                    f'<div style="background:#0f172a;padding:8px 11px;border-radius:9px;border:1px solid rgba(168,85,247,0.35);margin-bottom:6px;">'
-                    f'<div style="font-size:9.5px;color:#c084fc;font-weight:700;">⚛️ {admin_badge}</div>'
-                    f'<div style="color:#f8fafc;font-size:11.5px;font-weight:700;">{sanitize(u_disp_name)} ({sanitize(cu)})</div>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-                if is_admin:
-                    pending_cnt = conn.execute("SELECT COUNT(*) as c FROM members WHERE status = 'pending'").fetchone()["c"]
-                    st.caption(f"🛡️ 承認待ち申請: **{pending_cnt} 件**")
-                    if st.checkbox("⚙️ 会員管理パネルを展開", value=False):
-                        p_rows = conn.execute("SELECT email, name, applied_at FROM members WHERE status = 'pending'").fetchall()
-                        if p_rows:
-                            st.write("▼ 新規申請中リスト")
-                            for pr in p_rows:
-                                c_a, c_r = st.columns([2, 1])
-                                c_a.write(f"{pr['name']} ({pr['email']})")
-                                if c_r.button("承認", key=f"app_{pr['email']}"):
-                                    conn.execute("UPDATE members SET status = 'approved', approved_at = ? WHERE email = ?", (datetime.now().strftime("%Y-%m-%d %H:%M"), pr["email"]))
-                                    conn.commit()
-                                    st.success(f"{pr['name']} を承認しました")
-                                    st.rerun()
-                        else:
-                            st.caption("現在承認待ちの申請はありません。")
-
-                if st.button("🚪 ログアウト", use_container_width=True):
-                    conn.execute("UPDATE members SET last_seen_ts = 0 WHERE email = ?", (cu,))
-                    conn.commit()
-                    st.session_state["authenticated_user"] = None
-                    st.query_params.clear()
-                    st.rerun()
             return True
 
-    # ログイン・認証画面（生体認証タブを廃止し、2回目ワンタップボタンをログインボタン下に直結）
     st.markdown(
         '<div class="login-brand-wrapper">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
@@ -801,7 +707,6 @@ def check_auth():
                                 else:
                                     st.error("❌ パスコードが正しくありません。")
 
-        # ログインボタンの真下に同じ大きさ・別色で配置された「2回目以降ワンタップ生体・端末ログイン」ボタン
         if st.button("🧬 端末・生体認証でワンタップログイン（2回目以降）", key="quick_bio_btn", use_container_width=True):
             st.query_params["quick_auth"] = "1"
             st.rerun()
@@ -879,7 +784,7 @@ def check_auth():
 check_auth()
 
 # ==========================================
-# 10. スタイリッシュ追従固定ナビゲーションバー（確実なアクション検知）
+# 10. スタイリッシュ追従固定ナビバー（単一レンダリング保証）
 # ==========================================
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
@@ -890,7 +795,6 @@ for k, v in [
 ]:
     if k not in st.session_state: st.session_state[k] = v
 
-# クエリパラメータによる確実なナビゲーション連動
 nav_act = st.query_params.get("nact", "")
 if nav_act:
     if nav_act == "top":
@@ -900,10 +804,7 @@ if nav_act:
     elif nav_act == "close_debates":
         st.session_state["active_debates"] = {}
     elif nav_act == "back":
-        if st.session_state.get("navigation_page") != "TOP":
-            st.session_state["navigation_page"] = "TOP"
-            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-        elif st.session_state.get("custom_search_code"):
+        if st.session_state.get("custom_search_code"):
             st.session_state["custom_search_code"] = ""
         elif st.session_state.get("nav_history") and len(st.session_state["nav_history"]) > 0:
             popped = st.session_state["nav_history"].pop()
@@ -912,19 +813,21 @@ if nav_act:
         else:
             st.session_state["active_category"] = "🏆 総合TOP5"
             st.session_state["last_cat"] = "🏆 総合TOP5"
+            st.session_state["navigation_page"] = "TOP"
+            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
     st.query_params.pop("nact", None)
     st.rerun()
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
-close_btn_txt = f"✖ 合議閉じる({open_cnt})" if open_cnt > 0 else "✖ 合議閉じる"
+close_label = f"✕ 閉じる ({open_cnt})" if open_cnt > 0 else "✕ 閉じる"
+close_cls = "cyber-nav-btn cyber-nav-btn-highlight" if open_cnt > 0 else "cyber-nav-btn"
 
-# 最新のスタイリッシュ・中央固定・確実動作ナビゲーションバー
 st.markdown(
     f"""
-    <div class="ultra-fixed-nav-bar">
-        <a class="ultra-fixed-nav-btn" href="?nact=top" target="_self">⬆️ トップ</a>
-        <a class="ultra-fixed-nav-btn" href="?nact=close_debates" target="_self">{close_btn_txt}</a>
-        <a class="ultra-fixed-nav-btn" href="?nact=back" target="_self">↩️ 戻る</a>
+    <div class="cyber-quantum-nav-dock">
+        <a class="cyber-nav-btn" href="?nact=top" target="_self">▲ TOP</a>
+        <a class="{close_cls}" href="?nact=close_debates" target="_self">{close_label}</a>
+        <a class="cyber-nav-btn" href="?nact=back" target="_self">◀ 戻る</a>
     </div>
     """,
     unsafe_allow_html=True
@@ -999,7 +902,7 @@ def norm_tk(raw: str) -> str:
 def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: float, ofi_z: float, vpin: float, yz_vol: float, cvar95: float, rsi: float, cpos: float, base_sh: int, pest_str: str, vwap_str: str, tp_str: str, sl_str: str, kelly_pct: float, qm: dict, ms: dict) -> dict:
     st_prefix = style.split(" ")[1] if " " in style else "デイトレード"
 
-    if st_prefix == "スキャルピング":
+    if "スキャルピング" in st_prefix:
         sh = max(1, int(round(base_sh * 1.5)))
         return {
             "algo_name": f"⚡ [{st_prefix}] 瞬足OFI板掃き上げ・1分足モメンタム一気貫通型",
@@ -1015,7 +918,7 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
                 f"<b>【ステップ4：利益確定】</b> 目標株価 <b>{tp_str}</b> に指値を置くか、勢いが止まったところで成行返済して即時利益確定します。"
             )
         }
-    elif st_prefix == "スイングトレード":
+    elif "スイングトレード" in st_prefix:
         sh = max(1, int(round(base_sh * 1.2)))
         l1, l2 = max(1, int(round(sh * 0.6))), max(0, sh - max(1, int(round(sh * 0.6))))
         return {
@@ -1032,7 +935,23 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
                 f"<b>【ステップ4：目標利確】</b> 目標株価 <b>{tp_str}</b> に到達したら、迷わず指値で全株利益確定します。"
             )
         }
+    elif "バイ＆ホールド" in st_prefix:
+        sh = max(1, int(round(base_sh * 0.8)))
+        return {
+            "algo_name": f"💎 [{st_prefix}] 中長期ファンダメンタルズ＆クオンツ定額積立型",
+            "risk_posture": f"🛡️ 長期分散ポートフォリオ（コア保有 <b>{sh:,}株</b>）",
+            "core_logic": f"量子コヒーレンス {qm['q_coherence']}% とフォン・ノイマンエントロピー {qm['q_entropy']} による低ノイズ長期成長享受。",
+            "adj_shares": sh,
+            "step_plan": f"① 現物で <b>{sh:,}株</b> を取得 → ② 逆指値（{sl_str}）をセーフティネットとして保持し中長期成長を追従",
+            "beginner_html": (
+                f"<b>🔰 初心者のためのバイ＆ホールド実践手順（💎 中長期・現物保有）</b><br>"
+                f"<b>【ステップ1：現物買付】</b> 信用取引ではなく「現物買い」で <b>{sh:,}株</b> を購入します。<br>"
+                f"<b>【ステップ2：長期防衛逆指値】</b> 大きな暴落に巻き込まれないよう、深めの <b>「損切り: {sl_str}」</b> を設定。<br>"
+                f"<b>【ステップ3：放置・リバランス】</b> 日々の微細なノイズを無視し、目標 <b>{tp_str}</b> またはセクター転換までじっくり保有します。"
+            )
+        }
 
+    # デフォルト：デイトレード
     sh = max(1, int(round(base_sh * 1.65)))
     return {
         "algo_name": f"🔥 [{st_prefix}] 情報精度S級・全ツッパ一括特攻型アルゴリズム",
@@ -1290,7 +1209,7 @@ def detect_query_intent(user_q: str, stock_name: str) -> str:
         return "ENTRY_STRATEGY"
     return "STOCK_INQUIRY"
 
-def synthesize_dynamic_agi_dialogue(speaker: str, user_q: str, r: dict, vref: str, web_snippets: list, intent: str) -> tuple:
+def synthesize_dynamic_agi_dialogue(speaker: str, user_q: str, r: dict, vref: str, web_snippets: list, intent: str, posture: str = "標準バランス") -> tuple:
     nm = r["name"]
     fact1 = web_snippets[0] if web_snippets else f"{nm}に関する直近の市場関心"
 
@@ -1335,7 +1254,7 @@ def synthesize_dynamic_agi_dialogue(speaker: str, user_q: str, r: dict, vref: st
         elif speaker == "TECHNOS": return "normal", f"日中陽線確率 <b>{r['intraday_win_rate']}%</b>、エッジ <b>+{r['edge']:.2f}%</b>。押し目買いの優位性があります。"
         else: return "agree", f"全エージェントの検証結果を統合。『{nm}』に対する強気判断を承認します。"
 
-def run_7ai_council(r: dict, m5=None, user_query: str = "") -> dict:
+def run_7ai_council(r: dict, m5=None, user_query: str = "", active_spks: list = None, posture: str = "標準バランス") -> dict:
     vref = m5["vwap5_price"] if m5 else r["vwap_price"]
     st_info = r["strat"]
     intent = detect_query_intent(user_query, r["name"])
@@ -1347,9 +1266,12 @@ def run_7ai_council(r: dict, m5=None, user_query: str = "") -> dict:
     round_title = f"💬 投下質問『{user_query}』に関するリアルタイム合議" if user_query else f"🌐 『{r['name']}』リアルタイムWeb知能合議"
     turns.append({"round": round_title})
 
-    speakers = ["QUANTUM", "MICRO", "IGNIS", "AEGIS", "TECHNOS", "NEXUS"]
-    for spk in speakers:
-        tone, dyn_text = synthesize_dynamic_agi_dialogue(spk, user_query, r, vref, web_snippets, intent)
+    default_speakers = ["QUANTUM", "MICRO", "IGNIS", "AEGIS", "TECHNOS", "NEXUS"]
+    chosen_speakers = [s for s in (active_spks or default_speakers) if s in AI_ROSTER]
+    if "NEXUS" not in chosen_speakers: chosen_speakers.append("NEXUS")
+
+    for spk in chosen_speakers:
+        tone, dyn_text = synthesize_dynamic_agi_dialogue(spk, user_query, r, vref, web_snippets, intent, posture)
         turns.append({"speaker": AI_ROSTER[spk], "score": r["ai_score"], "tone": tone, "text": dyn_text})
 
     if intent == "CASUAL_CHAT":
@@ -1375,11 +1297,11 @@ def _fmt_turn(t: dict) -> str:
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{sanitize(t["speaker"])}</div><div>{t["text"]}</div></div>'
 
 @frag_dec
-def render_council_sec(r, uk):
+def render_council_sec(r, uk, active_spks=None, posture="標準バランス"):
     is_open = st.session_state["active_debates"].get(uk, False)
     in_wl = r["code"] in st.session_state["watchlist"]
     c1, c2 = st.columns([2.7, 1.1])
-    if c1.button("🔼 量子＆マルチAI合議と買い方ガイドを閉じる" if is_open else "⚛️ リアルタイムAI合議＆買い方を見る", key=f"b_{uk}", use_container_width=True):
+    if c1.button("▲ 量子＆マルチAI合議を閉じる" if is_open else "⚛️ リアルタイムAI合議＆買い方を見る", key=f"b_{uk}", use_container_width=True):
         st.session_state["active_debates"][uk] = not is_open
         st.rerun()
     if c2.button("✅ 監視済" if in_wl else "⭐ 監視追加", key=f"w_{uk}", use_container_width=True):
@@ -1401,7 +1323,7 @@ def render_council_sec(r, uk):
 
     if uk not in st.session_state["council_threads"]:
         with st.spinner(f"🌐 『{r['name']}』の最新情報をリアルタイム検索中..."):
-            deb = run_7ai_council(r, m5, user_query="")
+            deb = run_7ai_council(r, m5, user_query="", active_spks=active_spks, posture=posture)
             st.session_state["council_threads"][uk] = list(deb["dialogue"])
             st.session_state["council_meta"][uk] = deb
 
@@ -1423,7 +1345,7 @@ def render_council_sec(r, uk):
             new_dom_id = f"user_q_anchor_{uk}_{int(time.time()*1000)}"
             st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text, "dom_id": new_dom_id})
             with st.spinner(f"🌐 ネット検索＆AGI合議中..."):
-                deb_updated = run_7ai_council(r, m5, user_query=u_text)
+                deb_updated = run_7ai_council(r, m5, user_query=u_text, active_spks=active_spks, posture=posture)
                 for new_t in deb_updated["dialogue"]:
                     st.session_state["council_threads"][uk].append(new_t)
                 st.session_state["council_meta"][uk] = deb_updated
@@ -1487,36 +1409,115 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
         f'</details></div>'
     )
     st.markdown(card_body_html, unsafe_allow_html=True)
-    render_council_sec(r, f"{kp}_{r['code']}")
+    render_council_sec(r, f"{kp}_{r['code']}", active_spks=sidebar_active_ais, posture=sidebar_debate_posture)
 
 # ==========================================
-# 15. サイドバー設定
+# 15. 【完全復活】サイドバー設定＆全機能コントロール
 # ==========================================
-st.sidebar.header("🎯 投資スタイル選択")
-investment_style = st.sidebar.selectbox(
-    "トレードスタイル",
-    ["⚡ デイトレード (前場・後場の波及を狙う)", "🚀 スキャルピング (秒〜分単位のモメンタム)", "📈 スイングトレード (数日〜数週間のトレンド)", "💎 バイ＆ホールド (中長期・IPO分散投資)"],
-    index=0
-)
+with st.sidebar:
+    cu = st.session_state.get("authenticated_user", "")
+    with get_db() as conn:
+        u_row = conn.execute("SELECT name FROM members WHERE email = ?", (cu,)).fetchone()
+        u_name = u_row["name"] if u_row else "会員"
+    is_admin = (cu == ADMIN_EMAIL or is_seed_admin_email(cu))
+    
+    st.markdown(
+        f'<div style="background:#0f172a;padding:10px 12px;border-radius:10px;border:1px solid rgba(168,85,247,0.4);margin-bottom:12px;">'
+        f'<div style="font-size:10px;color:#c084fc;font-weight:800;">⚛️ {"👑 システム管理者" if is_admin else "💎 会員セッション"}</div>'
+        f'<div style="color:#ffffff;font-size:13px;font-weight:800;margin-top:2px;">{sanitize(u_name)} 様</div>'
+        f'<div style="color:#64748b;font-size:10px;font-family:\'JetBrains Mono\';">{sanitize(cu)}</div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
 
-st.sidebar.markdown("---")
-st.sidebar.header("💰 資金管理＆フィルタ設定")
-total_capital = st.sidebar.number_input("総投資資金 (円/ドル)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
-risk_tolerance_pct = st.sidebar.slider("1トレード許容リスク (%)", 0.5, 5.0, 2.0, 0.5)
-survival_cut_pct = st.sidebar.slider("各タブ選抜率 (%)", 40, 100, 75, 5)
-toggle_fn = getattr(st.sidebar, "toggle", st.sidebar.checkbox)
-show_5m_chart = toggle_fn("📈 5分足＆VWAP描画", value=True)
+    st.header("🎯 投資スタイル選択")
+    investment_style = st.selectbox(
+        "トレードスタイル",
+        [
+            "⚡ デイトレード (前場・後場の波及を狙う)",
+            "🚀 スキャルピング (秒〜分単位のモメンタム)",
+            "📈 スイングトレード (数日〜数週間のトレンド)",
+            "💎 バイ＆ホールド (中長期・現物保有)"
+        ],
+        index=0
+    )
+
+    st.markdown("---")
+    st.header("💰 資金管理＆リスク設定")
+    total_capital = st.number_input("総投資資金 (円/ドル)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
+    risk_tolerance_pct = st.slider("1トレード許容リスク (%)", 0.5, 5.0, 2.0, 0.5)
+    survival_cut_pct = st.slider("各タブ選抜率 (%)", 40, 100, 75, 5)
+
+    st.markdown("---")
+    st.header("🏛️ 7知能AI合議システム設定")
+    sidebar_debate_posture = st.select_slider(
+        "合議スタンス",
+        options=["🛡️ 厳格防衛(安全重視)", "⚖️ 標準バランス", "🔥 攻撃的(強気利益狙い)"],
+        value="⚖️ 標準バランス"
+    )
+    with st.expander("🤖 参加AIエージェント編成", expanded=False):
+        sidebar_active_ais = []
+        for k_spk, name_spk in AI_ROSTER.items():
+            if st.checkbox(name_spk, value=True, key=f"spk_toggle_{k_spk}"):
+                sidebar_active_ais.append(k_spk)
+
+    st.markdown("---")
+    st.header("⚙️ テクニカル＆描画設定")
+    toggle_fn = getattr(st, "toggle", st.checkbox)
+    show_5m_chart = toggle_fn("📈 5分足＆VWAP描画", value=True)
+    
+    BOOST_MAP = {
+        "⚛️ 量子力学波動(QWM-7)": "algo",
+        "🏛️ 機関最新アルゴ(Kyleλ・Hurst)": "ms",
+        "🏦 機関VPIN・SmartMoney": "inst",
+        "🔥 5ch実況＆短期モメンタム": "mom"
+    }
+    with st.expander("🧪 解析アルゴリズムON/OFF", expanded=False):
+        ac_b = set()
+        for b_label, b_key in BOOST_MAP.items():
+            if st.checkbox(b_label, value=True, key=f"algo_sw_{b_key}"):
+                ac_b.add(b_key)
+
+    st.markdown("---")
+    if is_admin:
+        st.header("👑 管理者専用機能")
+        with get_db() as conn:
+            pending_cnt = conn.execute("SELECT COUNT(*) as c FROM members WHERE status = 'pending'").fetchone()["c"]
+        st.caption(f"🛡️ 承認待ち申請: **{pending_cnt} 件**")
+        if st.checkbox("⚙️ 会員承認パネルを展開", value=False):
+            with get_db() as conn:
+                p_rows = conn.execute("SELECT email, name, applied_at FROM members WHERE status = 'pending'").fetchall()
+            if p_rows:
+                for pr in p_rows:
+                    c_a, c_r = st.columns([2, 1])
+                    c_a.write(f"{pr['name']}\n`{pr['email']}`")
+                    if c_r.button("承認", key=f"app_{pr['email']}"):
+                        with get_db() as conn:
+                            conn.execute("UPDATE members SET status = 'approved', approved_at = ? WHERE email = ?", (datetime.now().strftime("%Y-%m-%d %H:%M"), pr["email"]))
+                            conn.commit()
+                        st.success(f"{pr['name']} を承認しました")
+                        st.rerun()
+            else:
+                st.caption("現在承認待ちの申請はありません。")
+
+    if st.button("🗑️ 展開中の合議スレッドを全消去", use_container_width=True):
+        st.session_state["council_threads"] = {}
+        st.session_state["council_meta"] = {}
+        st.session_state["active_debates"] = {}
+        st.success("合議履歴をクリアしました。")
+        st.rerun()
+
+    if st.button("🚪 ログアウト", use_container_width=True):
+        with get_db() as conn:
+            conn.execute("UPDATE members SET last_seen_ts = 0 WHERE email = ?", (cu,))
+            conn.commit()
+        st.session_state["authenticated_user"] = None
+        st.query_params.clear()
+        st.rerun()
 
 # ==========================================
 # 16. メインダッシュボード描画
 # ==========================================
-BOOST_MAP = {
-    "⚛️ 量子力学波動(QWM-7)": "algo",
-    "🏛️ 機関最新アルゴ(Kyleλ・Hurst)": "ms",
-    "🏦 機関VPIN・SmartMoney": "inst",
-    "🔥 5ch実況＆短期モメンタム": "mom"
-}
-
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 7px;border-radius:5px;font-size:10px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(
     f'<div class="glass-header">'
@@ -1527,9 +1528,6 @@ st.markdown(
     f'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">{mpills}</div></div>',
     unsafe_allow_html=True
 )
-
-sel_b = st.pills("アルゴリズムON/OFF", list(BOOST_MAP.keys()), default=list(BOOST_MAP.keys()), selection_mode="multi", label_visibility="collapsed") if hasattr(st, "pills") else st.multiselect("アルゴリズムON/OFF", list(BOOST_MAP.keys()), default=list(BOOST_MAP.keys()), label_visibility="collapsed")
-ac_b = {BOOST_MAP[k] for k in (sel_b or [])}
 
 with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場ディープスキャン中..."):
     g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, total_capital, risk_tolerance_pct)
