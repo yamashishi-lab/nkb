@@ -15,8 +15,16 @@ from datetime import datetime
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
-ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
-SECRET_KEY = "my_super_secret_quant_key_2026"
+# セキュリティ強化: ハードコードを廃止し、secrets(環境変数)から読み込む（未設定時のフォールバック値あり）
+try:
+    SECRET_KEY = st.secrets.get("SECRET_KEY", "my_super_secret_quant_key_2026")
+    ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "nthbh399@ybb.ne.jp")
+    ADMIN_PASS = st.secrets.get("ADMIN_PASS", "ADMIN777")
+except Exception:
+    SECRET_KEY = "my_super_secret_quant_key_2026"
+    ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
+    ADMIN_PASS = "ADMIN777"
+
 FILES = {"mem": "members_db.json", "smtp": "admin_smtp_config.json", "llm": "admin_llm_config.json", "sec": "security_watch_db.json", "mail": "mail_history_db.json"}
 BOARD_URLS = ["https://egg.5ch.io/test/read.cgi/stock/1791877270/", "https://egg.5ch.io/test/read.cgi/stock/1791897352/"]
 
@@ -71,7 +79,7 @@ def save_j(p: str, d: dict):
     except Exception: pass
 
 def load_smtp(): return load_j(FILES["smtp"], {"smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
-def load_llm(): return load_j(FILES["llm"], {"provider": "gemini", "api_keys": {}, "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}})
+def load_llm(): return load_j(FILES["llm"], {"provider": "gemini", "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}})
 def load_sec(): return load_j(FILES["sec"], {"banned_fps": {}, "banned_emails": {}, "banned_pins": {}, "banned_names": [], "spoof_logs": [], "device_bio_map": {}})
 def load_mail_db(): return load_j(FILES["mail"], {"logs": [], "messages": []})
 def load_mem():
@@ -144,14 +152,15 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
     if u and p:
         try:
             m = MIMEText(body, "plain", "utf-8"); m["Subject"], m["From"], m["To"] = subj, u, to_clean
-            with (smtplib.SMTP_SSL(srv, port, timeout=3.0) if port == 465 else smtplib.SMTP(srv, port, timeout=3.0)) as s:
-                if port != 465: s.starttls()
+            ctx = ssl.create_default_context()
+            with (smtplib.SMTP_SSL(srv, port, context=ctx, timeout=3.0) if port == 465 else smtplib.SMTP(srv, port, timeout=3.0)) as s:
+                if port != 465: s.starttls(context=ctx)
                 s.login(u, p); s.send_message(m)
             sent, route = True, "SMTP配信＋暗号化BOX"
         except Exception: pass
     if not sent:
         try:
-            ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+            ctx = ssl.create_default_context()
             payload = json.dumps({"_subject": subj, "宛先": to_clean, "本文": body, "_captcha": "false"}).encode("utf-8")
             req = urllib.request.Request(f"https://formsubmit.co/ajax/{urllib.parse.quote(to_clean)}", data=payload, headers={"Content-Type": "application/json", "Accept": "application/json"}, method="POST")
             with urllib.request.urlopen(req, timeout=3.0, context=ctx) as r:
@@ -164,7 +173,7 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
 
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
-    raw_hfp, cur_fp = get_raw_header_fp(), get_client_fp()
+    raw_hfp, cur_fp = get_client_fp(), get_raw_header_fp()
     if mode == "register":
         lbl = "✅ 生体・ワンタップ認証 登録済" if db.get(user_email, {}).get("bio_enabled") else "🧬 この端末をワンタップ登録"
         if st.button(lbl, key=f"bio_{user_email}", use_container_width=True):
@@ -330,6 +339,7 @@ def inject_css():
         flex: 1.35 1 0% !important;
     }
     
+    /* 修正: ボタン押下後の青枠・色残りを完全に無効化するスタイル */
     .fixed-top-nav-bar button {
         width: 100% !important;
         min-width: 0 !important;
@@ -365,14 +375,6 @@ def inject_css():
         box-shadow: 0 4px 12px rgba(0,0,0,0.45) !important;
     }
     
-    .fixed-top-nav-bar button:active {
-        background: #0284c7 !important;
-        color: #ffffff !important;
-        border-color: #38bdf8 !important;
-        box-shadow: 0 0 10px rgba(56,189,248,0.7) !important;
-        transform: scale(0.98);
-    }
-    
     .fixed-top-nav-bar button p {
         font-size: clamp(10px,2.5vw,11.5px) !important;
         font-weight: 700 !important;
@@ -383,6 +385,20 @@ def inject_css():
         text-overflow: ellipsis !important;
         line-height: 1 !important;
         pointer-events: none !important;
+        color: inherit !important;
+    }
+    
+    .fixed-top-nav-bar button:focus p,
+    .fixed-top-nav-bar button:focus-visible p {
+        color: #f8fafc !important; 
+    }
+    
+    .fixed-top-nav-bar button:active {
+        background: #0284c7 !important;
+        color: #ffffff !important;
+        border-color: #38bdf8 !important;
+        box-shadow: 0 0 10px rgba(56,189,248,0.7) !important;
+        transform: scale(0.98);
     }
     
     div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stElementContainer"] div.floating-news-popup-marker),
@@ -729,7 +745,7 @@ def check_auth():
                 if is_ban or (rec and rec.get("status") == "banned"):
                     st.error("💀 このアカウントまたは端末は永久BAN（利用禁止）されています。")
                 elif rec and rec.get("status") == "suspended": st.error("🚫 このアカウントは一時停止されています。")
-                elif ((rec and rec.get("status") == "approved") or cm == ADMIN_EMAIL.strip().lower()) and (hmac.compare_digest(ic.strip().upper(), gen_code(cm)) or (cm == ADMIN_EMAIL.strip().lower() and ic.strip() == "ADMIN777")):
+                elif ((rec and rec.get("status") == "approved") or cm == ADMIN_EMAIL.strip().lower()) and (hmac.compare_digest(ic.strip().upper(), gen_code(cm)) or (cm == ADMIN_EMAIL.strip().lower() and ic.strip() == ADMIN_PASS)):
                     st.session_state["authenticated_user"] = cm; st.rerun()
                 else: st.warning("⚠️ 未承認または専用アクセスコードが異なります。")
 
@@ -831,6 +847,7 @@ if st.session_state.get("scroll_target_id"):
 
 # ─────────────────────────────────────────────────────────────
 # 左上追従・高品位サイバーパンク開閉フローティングトグル ＆ スライドインスクリプト
+# 修正: サイドバー自動展開防止 ＆ トップナビボタンのフォーカス解除
 # ─────────────────────────────────────────────────────────────
 components.html(
     f"""
@@ -838,6 +855,23 @@ components.html(
     (function(){{
         const doc = window.parent.document;
         
+        // ログイン後に予期せずサイドバーが開くのを防止
+        function ensureSidebarCollapsedOnLoad(){{
+            if(!window.parent._sidebarForcedClosed){{
+                setTimeout(() => {{
+                    try {{
+                        const sb = doc.querySelector('section[data-testid="stSidebar"]');
+                        if(sb && sb.getAttribute('aria-expanded') === 'true'){{
+                            const btn = doc.querySelector('button[data-testid="stSidebarCollapseButton"]') || doc.querySelector('[data-testid="collapsedControl"]');
+                            if(btn) btn.click();
+                        }}
+                    }} catch(e){{}}
+                }}, 100);
+                window.parent._sidebarForcedClosed = true;
+            }}
+        }}
+        ensureSidebarCollapsedOnLoad();
+
         function installFloatingSidebarToggle(){{
             try {{
                 if(doc.getElementById('yamashishi-floating-sidebar-btn')) return;
@@ -946,7 +980,9 @@ components.html(
                 let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
                 if(box && box.querySelector('[data-testid="stHorizontalBlock"]')){{
                     box.classList.add('fixed-top-nav-bar');
+                    // 修正: ボタン押下後の青枠・フォーカスを完全に無効化
                     box.querySelectorAll('button').forEach(btn => {{
+                        btn.addEventListener('click', function(){{ setTimeout(() => this.blur(), 50); }});
                         btn.addEventListener('mouseup', function(){{ this.blur(); }});
                         btn.addEventListener('mouseleave', function(){{ this.blur(); }});
                     }});
@@ -1092,7 +1128,8 @@ def get_active_ai_providers() -> list:
     cfg = load_llm()
     act = []
     for k, (lbl, m_list, _) in AI_PROVIDERS.items():
-        key = clean_k(st.session_state.get(f"rt_key_{k}") or cfg.get("api_keys", {}).get(k, ""))
+        # 修正: JSONファイルからは読み込まず、安全にセッションからのみ取得
+        key = clean_k(st.session_state.get(f"rt_key_{k}", ""))
         mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
         if key: act.append((k, lbl, mod, key))
     return act
@@ -1106,7 +1143,8 @@ def get_debate_mode_badge(cnt: int) -> str:
 
 def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p: str, temp: float = 0.7):
     p_label, _, endpoint = AI_PROVIDERS.get(prov, AI_PROVIDERS["gemini"])
-    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    # 修正: SSLの標準検証を有効にしてセキュリティ強化
+    ctx = ssl.create_default_context()
     try:
         if prov == "gemini":
             url = endpoint.format(model=model, key=urllib.parse.quote(key))
@@ -1133,7 +1171,7 @@ def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p:
 def search_web_knowledge(query: str, max_results: int = 4) -> list:
     if not query or not query.strip(): return []
     q_clean = query.strip()
-    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    ctx = ssl.create_default_context()
     results = []
     try:
         url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q_clean)}&hl=ja&gl=JP&ceid=JP:ja"
@@ -1261,7 +1299,7 @@ def analyze_news_impact_and_links(title: str, cat: str) -> dict:
 @st.cache_data(ttl=180)
 def fetch_global_impact_news() -> list:
     qs = [("半導体・AIサプライズ", "半導体 OR エヌビディア OR TSMC OR アドバンテスト OR データセンター 株価"), ("急騰・上方修正・TOB", "ストップ高 OR 上方修正 OR 自社株買い OR 防衛 OR 量子 株")]
-    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    ctx = ssl.create_default_context()
     out, seen = [], set()
     for cat, q in qs:
         try:
@@ -1281,7 +1319,7 @@ def fetch_global_impact_news() -> list:
 
 @st.cache_data(ttl=900)
 def fetch_5ch_live() -> dict:
-    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    ctx = ssl.create_default_context()
     txts = []
     for u in BOARD_URLS:
         try:
@@ -1296,15 +1334,19 @@ llm_cfg = load_llm()
 cur_prov = st.sidebar.selectbox("AIプロバイダー選択 (7社対応)", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
 st.session_state["rt_llm_prov"] = cur_prov
 p_name, p_models, _ = AI_PROVIDERS[cur_prov]
-saved_k = llm_cfg.get("api_keys", {}).get(cur_prov, "")
+
+# 修正: セキュリティ強化のため、APIキーはローカルJSONに保存せずセッション内にのみ保持
 saved_m = llm_cfg.get("models", {}).get(cur_prov, p_models[0])
-in_k = clean_k(st.sidebar.text_input(f"🔑 {p_name} API Key", value=saved_k, type="password"))
+in_k = clean_k(st.sidebar.text_input(f"🔑 {p_name} API Key (セッションのみ保存)", value=st.session_state.get(f"rt_key_{cur_prov}", ""), type="password"))
 in_m = st.sidebar.selectbox(f"🧠 {p_name} モデル", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
-st.session_state[f"rt_key_{cur_prov}"], st.session_state[f"rt_mod_{cur_prov}"] = in_k, in_m
-if in_k != saved_k or in_m != saved_m or cur_prov != llm_cfg.get("provider"):
-    llm_cfg["provider"] = cur_prov; llm_cfg.setdefault("api_keys", {})[cur_prov] = in_k; llm_cfg.setdefault("models", {})[cur_prov] = in_m
+
+if in_m != saved_m or cur_prov != llm_cfg.get("provider"):
+    llm_cfg["provider"] = cur_prov; llm_cfg.setdefault("models", {})[cur_prov] = in_m
     save_j(FILES["llm"], llm_cfg)
     st.session_state["council_threads"] = {}
+
+st.session_state[f"rt_key_{cur_prov}"] = in_k
+st.session_state[f"rt_mod_{cur_prov}"] = in_m
 
 active_ais = get_active_ai_providers()
 active_cnt = len(active_ais)
@@ -1831,16 +1873,21 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         i_part = isc if bi else 70
         m_part = ms["ms_score"] if bms else 72
         b_part = b5sc if b5 else 68
-        aisc = int(np.clip(round(tot_win * 0.34 + q_part * 0.22 + m_part * 0.20 + i_part * 0.14 + b_part * 0.10 + 12), 55, 99))
-        expect_pct = round(float(np.clip(aisc * 0.42 + q_part * 0.22 + m_part * 0.20 + tot_win * 0.16 + min(edge * 4.5, 8.0) - max(cvar95 - 3.2, 0.0) * 1.8 + 10.0, 65.0, 99.4)), 1)
+        
+        # 修正: 期待度・勝率スコアの「インフレ補正（無条件での点数加算）」を除去・調整。
+        # 悪い相場環境では正しく低いスコアが出るよう下限を20.0に拡張し、ペナルティ(CVaR)の影響を強めました。
+        aisc = int(np.clip(round(tot_win * 0.34 + q_part * 0.22 + m_part * 0.20 + i_part * 0.14 + b_part * 0.10), 20, 99))
+        expect_pct = round(float(np.clip(aisc * 0.42 + q_part * 0.22 + m_part * 0.20 + tot_win * 0.16 + min(edge * 4.5, 8.0) - max(cvar95 - 3.2, 0.0) * 2.5, 10.0, 99.4)), 1)
 
         tval = expect_pct * 0.50 + aisc * 0.30 + tot_win * 0.20
+        # 修正: 期待度が低い場合（下落トレンド）のティア「Lv.3：警戒・撤退」を追加
         for th, tn, tl, tc, tbg in [
             (82, 10, "【Lv.10：🔥情報精度S級・全ツッパ推奨】量子×機関氷山吸収極大", "#fff", "linear-gradient(90deg,#7e22ce,#dc2626)"),
             (76, 9, "【Lv.9：⚡超強気買い】量子トンネル突破＆機関アルゴ集中", "#fff", "linear-gradient(90deg,#0369a1,#1d4ed8)"),
             (70, 8, "【Lv.8：⭕買い推奨】機関ステルス買い集め・順張り優位", "#fff", "linear-gradient(90deg,#0f766e,#047857)"),
-            (64, 7, "【Lv.7：⭕押し目買い】VWAP反発・波動干渉狙い", "#e2e8f0", "linear-gradient(90deg,#334155,#1e293b)"),
-            (-99, 5, "【Lv.5：👀様子見・選別】方向感確認・少額打診", "#cbd5e1", "linear-gradient(90deg,#1e293b,#0f172a)")
+            (60, 7, "【Lv.7：⭕押し目買い】VWAP反発・波動干渉狙い", "#e2e8f0", "linear-gradient(90deg,#334155,#1e293b)"),
+            (40, 5, "【Lv.5：👀様子見・選別】方向感確認・少額打診", "#cbd5e1", "linear-gradient(90deg,#1e293b,#0f172a)"),
+            (-99, 3, "【Lv.3：⚠️警戒・撤退推奨】モメンタム崩壊・下落トレンド", "#fca5a5", "linear-gradient(90deg,#7f1d1d,#450a0a)")
         ]:
             if tval >= th: t_num, t_lbl, t_col, t_bg = tn, tl, tc, tbg; break
 
