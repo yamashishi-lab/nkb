@@ -228,7 +228,6 @@ def inject_css():
         display: none !important;
     }
 
-    /* 修正: pointer-events:none を外し、JSから dispatchEvent で確実に押せるように要素を見えなくするだけに留める */
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapsedControl"],
     header button[kind="headerNoPadding"],
@@ -858,7 +857,6 @@ if st.session_state.get("scroll_target_id"):
     """
     st.session_state["scroll_target_id"] = ""
 
-# 修正: JSでのサイドバー開閉を確実にするため、セレクタ拡充とMouseEventの発行を最適化
 components.html(
     f"""
     <script>
@@ -1326,7 +1324,23 @@ def fetch_5ch_live() -> dict:
     joined = " ".join(txts)
     return {c: {"hits": len(re.findall(re.escape(c.replace(".T", "")), joined)) if joined else 0, "live": bool(txts)} for c in KNOWN_STOCKS}
 
-# 修正: グローバルに依存関係を取得しておくことで、後のNEWS_DETAIL表示時のエラーを防止
+@st.cache_data(ttl=900)
+def fetch_macro():
+    tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
+    res = {}
+    try:
+        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=5)
+        for k, (c, lbl) in tks.items():
+            try:
+                d = raw[c].dropna(subset=["Close"])
+                lc, pc = float(d["Close"].iloc[-1]), float(d["Close"].iloc[-2])
+                res[k] = {"price": lc, "diff": round((lc - pc) / pc * 100, 2), "label": lbl}
+            except Exception: res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
+    except Exception:
+        for k, (_, lbl) in tks.items(): res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
+    return res
+
+# 修正: 全ての関数定義が完了したこの位置で初期データを取得し、NameErrorを完全防止
 macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
 all_impact_news = fetch_global_impact_news()
