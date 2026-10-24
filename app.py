@@ -200,90 +200,36 @@ def inject_css():
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
     /* ─────────────────────────────────────────────────────────────
-       Streamlit標準ヘッダー及びサイドバー開閉ボタンの完全強制表示
+       ヘッダー・デフォルトボタンのクリーンアップ＆サイドバーアニメーション
        ───────────────────────────────────────────────────────────── */
     header[data-testid="stHeader"] {
         background: transparent !important;
         pointer-events: none !important;
         height: 3.5rem !important;
         z-index: 999990 !important;
-        display: block !important;
-        visibility: visible !important;
     }
     
-    header[data-testid="stHeader"] * {
-        pointer-events: auto !important;
-    }
-
-    /* 左上サイドバー開閉トグルボタン（折りたたみ時・展開時の全Streamlit内部セレクタ） */
-    [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapsedControl"],
-    [data-testid="stSidebarCollapseButton"],
-    button[data-testid="stSidebarCollapseButton"],
-    header button[kind="headerNoPadding"],
-    header button[data-testid="baseButton-headerNoPadding"],
-    button[aria-label*="sidebar" i],
-    button[aria-label*="Sidebar" i],
-    div:has(> button[data-testid="stSidebarCollapseButton"]) {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-        cursor: pointer !important;
-        z-index: 2147483647 !important;
-        position: fixed !important;
-        top: 0.5rem !important;
-        left: 0.55rem !important;
-        width: 38px !important;
-        height: 38px !important;
-        min-width: 38px !important;
-        min-height: 38px !important;
-        max-width: 38px !important;
-        max-height: 38px !important;
-        background: rgba(15, 23, 42, 0.96) !important;
-        border: 1.5px solid rgba(56, 189, 248, 0.6) !important;
-        border-radius: 9px !important;
-        align-items: center !important;
-        justify-content: center !important;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.8), 0 0 10px rgba(56,189,248,0.3) !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    /* 内部アイコン（SVG）の着色・可視化を徹底強化 */
-    [data-testid="collapsedControl"] svg,
-    [data-testid="stSidebarCollapsedControl"] svg,
-    [data-testid="stSidebarCollapseButton"] svg,
-    button[aria-label*="sidebar" i] svg,
-    header button svg {
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        width: 22px !important;
-        height: 22px !important;
-        color: #38bdf8 !important;
-        fill: #38bdf8 !important;
-        stroke: #38bdf8 !important;
-    }
-
-    [data-testid="collapsedControl"]:hover,
-    [data-testid="stSidebarCollapseButton"]:hover {
-        background: rgba(56, 189, 248, 0.25) !important;
-        border-color: #38bdf8 !important;
-        box-shadow: 0 0 14px rgba(56,189,248,0.7) !important;
-    }
-
-    /* 右上の設定メニュー（デバッグ・不要ツールバー）のみ非表示 */
+    /* 右上の設定メニューのみ非表示 */
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] {
         display: none !important;
     }
 
-    /* サイドバー本体 */
+    /* ネイティブ開閉ボタンは隠して独自ハイエンドボタンで統一 */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapsedControl"],
+    header button[kind="headerNoPadding"],
+    header button[data-testid="baseButton-headerNoPadding"] {
+        display: none !important;
+    }
+
+    /* サイドバー本体のスタイリング ＆ スムーズスライド */
     section[data-testid="stSidebar"] {
         background-color: #0b0f19 !important;
-        border-right: 1px solid rgba(148,163,184,0.15) !important;
+        border-right: 1px solid rgba(148,163,184,0.18) !important;
         z-index: 1000005 !important;
+        box-shadow: 10px 0 35px rgba(0,0,0,0.85) !important;
+        transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease !important;
     }
 
     div[data-baseweb="popover"],
@@ -332,7 +278,7 @@ def inject_css():
     }
     
     /* ─────────────────────────────────────────────────────────────
-       上部固定ナビゲーションバー（右寄りを完全修正し、画面の真ん中水平中央に配置）
+       上部固定ナビゲーションバー（左右対称・完全中央揃え）
        ───────────────────────────────────────────────────────────── */
     .fixed-top-nav-bar {
         position: fixed !important;
@@ -340,7 +286,7 @@ def inject_css():
         left: 50% !important;
         transform: translateX(-50%) !important;
         z-index: 999980 !important;
-        width: min(510px, calc(100vw - 6.5rem)) !important;
+        width: min(490px, calc(100vw - 7rem)) !important;
         background: rgba(5,8,17,0.95) !important;
         backdrop-filter: blur(14px) !important;
         border: none !important;
@@ -841,7 +787,7 @@ for k, v in [("active_debates", {}), ("stock_chats", {}), ("council_threads", {}
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 
-# 上部固定ナビゲーションバー（左右対称・完全中央揃え）
+# 上部固定ナビゲーションバー（完全左右対称・水平中央配置）
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
     nav_c1, nav_c2, nav_c3 = st.columns([1, 1.45, 1])
@@ -889,60 +835,138 @@ if st.session_state.get("scroll_target_id"):
     """
     st.session_state["scroll_target_id"] = ""
 
+# ─────────────────────────────────────────────────────────────
+# 左上追従・高品位サイバーパンク開閉フローティングトグル ＆ スライドインスクリプト
+# ─────────────────────────────────────────────────────────────
 components.html(
-    f"""<script>
+    f"""
+    <script>
     (function(){{
         const doc = window.parent.document;
         
-        function enforceDisplay(){{
+        function installFloatingSidebarToggle(){{
             try {{
-                const selectors = [
-                    '[data-testid="collapsedControl"]',
-                    '[data-testid="stSidebarCollapsedControl"]',
-                    '[data-testid="stSidebarCollapseButton"]',
-                    'header button[kind="headerNoPadding"]',
-                    'header button[data-testid="baseButton-headerNoPadding"]',
-                    'button[aria-label*="sidebar" i]'
-                ];
-                selectors.forEach(sel => {{
-                    doc.querySelectorAll(sel).forEach(el => {{
-                        el.style.setProperty('display', 'flex', 'important');
-                        el.style.setProperty('visibility', 'visible', 'important');
-                        el.style.setProperty('opacity', '1', 'important');
-                        el.style.setProperty('pointer-events', 'auto', 'important');
-                        el.style.setProperty('z-index', '2147483647', 'important');
-                        el.style.setProperty('position', 'fixed', 'important');
-                        el.style.setProperty('top', '8px', 'important');
-                        el.style.setProperty('left', '9px', 'important');
-                        const s = el.querySelector('svg');
-                        if(s){{
-                            s.style.setProperty('display', 'block', 'important');
-                            s.style.setProperty('visibility', 'visible', 'important');
-                            s.style.setProperty('color', '#38bdf8', 'important');
-                            s.style.setProperty('fill', '#38bdf8', 'important');
-                            s.style.setProperty('stroke', '#38bdf8', 'important');
-                        }}
-                    }});
+                if(doc.getElementById('yamashishi-floating-sidebar-btn')) return;
+
+                const btn = doc.createElement('div');
+                btn.id = 'yamashishi-floating-sidebar-btn';
+                btn.innerHTML = `
+                    <div class="glow-bg"></div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                    <span>MENU</span>
+                `;
+
+                const style = doc.createElement('style');
+                style.textContent = `
+                    #yamashishi-floating-sidebar-btn {{
+                        position: fixed !important;
+                        top: 8px !important;
+                        left: 9px !important;
+                        z-index: 2147483647 !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        gap: 5px !important;
+                        height: 30px !important;
+                        padding: 0 9px 0 7px !important;
+                        background: rgba(11, 15, 25, 0.94) !important;
+                        backdrop-filter: blur(16px) !important;
+                        border: 1.5px solid rgba(56, 189, 248, 0.5) !important;
+                        border-radius: 8px !important;
+                        cursor: pointer !important;
+                        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.25) !important;
+                        user-select: none !important;
+                        transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+                    }}
+                    #yamashishi-floating-sidebar-btn:hover {{
+                        border-color: #38bdf8 !important;
+                        box-shadow: 0 6px 22px rgba(0, 0, 0, 0.9), 0 0 18px rgba(56, 189, 248, 0.6) !important;
+                        transform: translateY(-1px) scale(1.02) !important;
+                    }}
+                    #yamashishi-floating-sidebar-btn:active {{
+                        transform: scale(0.96) !important;
+                    }}
+                    #yamashishi-floating-sidebar-btn svg {{
+                        width: 15px !important;
+                        height: 15px !important;
+                        stroke: #38bdf8 !important;
+                        filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.8)) !important;
+                        transition: transform 0.25s ease !important;
+                    }}
+                    #yamashishi-floating-sidebar-btn span {{
+                        font-family: 'JetBrains Mono', monospace !important;
+                        font-size: 10px !important;
+                        font-weight: 800 !important;
+                        color: #f8fafc !important;
+                        letter-spacing: 0.8px !important;
+                        text-shadow: 0 0 8px rgba(56, 189, 248, 0.4) !important;
+                    }}
+                    #yamashishi-floating-sidebar-btn:hover svg {{
+                        transform: rotate(90deg) !important;
+                    }}
+                `;
+                doc.head.appendChild(style);
+
+                btn.addEventListener('click', function(e){{
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // Streamlit標準の開閉セレクタが存在する場合はトリガー
+                    const nativeBtn = doc.querySelector('button[data-testid="stSidebarCollapseButton"]') 
+                                   || doc.querySelector('[data-testid="collapsedControl"]')
+                                   || doc.querySelector('button[aria-label*="sidebar" i]');
+                    if(nativeBtn){{
+                        nativeBtn.click();
+                        return;
+                    }}
+
+                    // 直接サイドバー要素を「シュッ」とアニメーション展開/格納
+                    const sb = doc.querySelector('section[data-testid="stSidebar"]');
+                    if(!sb) return;
+                    const isClosed = (sb.getAttribute('aria-expanded') === 'false') || 
+                                     (window.getComputedStyle(sb).transform !== 'none' && window.getComputedStyle(sb).transform.indexOf('-') !== -1) ||
+                                     (sb.offsetLeft < 0) || (window.getComputedStyle(sb).display === 'none');
+
+                    if(isClosed){{
+                        sb.style.setProperty('display', 'block', 'important');
+                        sb.style.setProperty('visibility', 'visible', 'important');
+                        sb.style.setProperty('transform', 'none', 'important');
+                        sb.style.setProperty('margin-left', '0px', 'important');
+                        sb.setAttribute('aria-expanded', 'true');
+                    }} else {{
+                        sb.style.setProperty('transform', 'translateX(-105%)', 'important');
+                        sb.setAttribute('aria-expanded', 'false');
+                    }}
                 }});
 
+                doc.body.appendChild(btn);
+            }} catch(e){{}}
+        }}
+
+        function fixTopNav(){{
+            try {{
                 const marker = doc.querySelector('.top-nav-marker');
-                if(marker){{
-                    let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
-                    if(box && box.querySelector('[data-testid="stHorizontalBlock"]')){{
-                        box.classList.add('fixed-top-nav-bar');
-                        box.querySelectorAll('button').forEach(btn => {{
-                            btn.addEventListener('mouseup', function(){{ this.blur(); }});
-                            btn.addEventListener('mouseleave', function(){{ this.blur(); }});
-                        }});
-                    }}
+                if(!marker) return;
+                let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
+                if(box && box.querySelector('[data-testid="stHorizontalBlock"]')){{
+                    box.classList.add('fixed-top-nav-bar');
+                    box.querySelectorAll('button').forEach(btn => {{
+                        btn.addEventListener('mouseup', function(){{ this.blur(); }});
+                        btn.addEventListener('mouseleave', function(){{ this.blur(); }});
+                    }});
                 }}
             }} catch(e){{}}
         }}
 
-        enforceDisplay();
-        setTimeout(enforceDisplay, 80);
-        setTimeout(enforceDisplay, 250);
-        setTimeout(enforceDisplay, 600);
+        installFloatingSidebarToggle();
+        fixTopNav();
+        setTimeout(installFloatingSidebarToggle, 100);
+        setTimeout(installFloatingSidebarToggle, 400);
+        setTimeout(fixTopNav, 100);
 
         function scrollToTopAbsolute(){{
             try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
