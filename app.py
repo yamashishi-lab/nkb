@@ -23,11 +23,11 @@ try:
     if not SECRET_KEY:
         SECRET_KEY = os.environ.get("YAMASHISHI_SECRET_KEY", "yamashishi_default_sec_core_key_2026")
     ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", os.environ.get("YAMASHISHI_ADMIN_EMAIL", "nthbh399@ybb.ne.jp")).strip().lower()
-    ADMIN_PASS = st.secrets.get("ADMIN_PASS", os.environ.get("YAMASHISHI_ADMIN_PASS", "admin1234"))
+    ADMIN_PASS = st.secrets.get("ADMIN_PASS", os.environ.get("YAMASHISHI_ADMIN_PASS", "ADMIN777")).strip()
 except Exception:
     SECRET_KEY = "yamashishi_default_sec_core_key_2026"
     ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
-    ADMIN_PASS = "admin1234"
+    ADMIN_PASS = "ADMIN777"
 
 DB_PATH = "yamashishi_quant_core.db"
 
@@ -111,7 +111,7 @@ def init_db():
         """)
         
         # 誤検知防止：空値やデフォルト値の誤BANキーを自動クリーンアップ
-        conn.execute("DELETE FROM security_bans WHERE key_val IN ('', '-', 'default_env', '未認証端末') OR key_val IS NULL;")
+        conn.execute("DELETE FROM security_bans WHERE key_val IN ('', '-', 'default_env', 'yamashishi_default_env', '未認証端末') OR key_val IS NULL;")
         
         # 管理者レコードの確認・初期化（常にapproved状態を保証）
         cur = conn.execute("SELECT email FROM members WHERE email = ?", (ADMIN_EMAIL,))
@@ -171,7 +171,6 @@ def get_client_fp() -> str:
 # ==========================================
 def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h: str = "", action_type: str = "アクセス") -> tuple:
     em_c = (em or "").strip().lower()
-    # 管理者はBAN・偽装判定の対象外
     if em_c == ADMIN_EMAIL:
         return False, ""
     
@@ -179,20 +178,17 @@ def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h
         reasons = []
         orig_target = ""
         
-        # BAN確認
         if em_c:
             m_row = conn.execute("SELECT status FROM members WHERE email = ?", (em_c,)).fetchone()
             if m_row and m_row["status"] == "banned":
                 reasons.append("永久BAN対象メールアドレス一致")
                 orig_target = em_c
         
-        # 空値や共通デフォルト環境値による誤判定・連鎖BANを防止
         invalid_keys = {"", "-", "default_env", "yamashishi_default_env", "未入力", "未認証端末"}
         for k_val, desc in [(em_c, "メール"), (cur_fp, "端末指紋"), (raw_hfp, "環境ヘッダ指紋"), (pin_h, "PINハッシュ")]:
             if k_val and k_val not in invalid_keys:
                 b_row = conn.execute("SELECT email, reason FROM security_bans WHERE key_val = ?", (k_val,)).fetchone()
                 if b_row:
-                    # 管理者のキーと衝突した場合は除外
                     if b_row["email"] == ADMIN_EMAIL:
                         continue
                     reasons.append(f"永久BAN({desc}:{k_val[:6]}..)検知")
@@ -209,7 +205,6 @@ def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (now_s, action_desc, em_c or "未入力", (name or "").strip() or "不明", orig_target or em_c, cur_fp, raw_hfp, r_str))
             
-            # 再登録防止の連鎖BAN追加（空文字・共通値は除外）
             if cur_fp and cur_fp not in invalid_keys:
                 conn.execute("INSERT OR REPLACE INTO security_bans (key_val, ban_type, email, name, banned_at, reason) VALUES (?, 'fp', ?, ?, ?, ?)", (cur_fp, orig_target or em_c, name, now_s, r_str))
             if raw_hfp and raw_hfp not in invalid_keys:
@@ -1021,10 +1016,16 @@ def check_auth():
                     with get_db() as conn:
                         rec = conn.execute("SELECT name, status, pin_hash, passcode FROM members WHERE email = ?", (cm,)).fetchone()
                         
-                        # 管理者認証（専用コードまたはADMIN_PASS）
+                        # 管理者認証（ADMIN777、ADMIN_PASS、またはHMAC専用コードのいずれでも完全一致で通す）
                         if cm == ADMIN_EMAIL:
-                            correct_passcode = gen_code(ADMIN_EMAIL)
-                            if inp_code == ADMIN_PASS or inp_code.upper() == correct_passcode:
+                            correct_hmac = gen_code(ADMIN_EMAIL)
+                            valid_admin_codes = {
+                                "ADMIN777",
+                                (ADMIN_PASS or "").strip().upper(),
+                                (ADMIN_PASS or "").strip(),
+                                correct_hmac
+                            }
+                            if inp_code in valid_admin_codes or inp_code.upper() in valid_admin_codes:
                                 st.session_state["authenticated_user"] = ADMIN_EMAIL
                                 st.rerun()
                             else:
@@ -1036,7 +1037,7 @@ def check_auth():
                             elif rec and rec["status"] == "suspended":
                                 st.error("🚫 このアカウントは一時停止されています。")
                             elif rec and rec["status"] == "approved" and (
-                                hmac.compare_digest(inp_code.upper(), rec["passcode"] or "") or
+                                hmac.compare_digest(inp_code.upper(), (rec["passcode"] or "").upper()) or
                                 hmac.compare_digest(inp_code.upper(), gen_code(cm))
                             ):
                                 st.session_state["authenticated_user"] = cm
@@ -1101,7 +1102,6 @@ def check_auth():
                                 conn.commit()
                                 st.error(f"🚫 暗証番号(PIN)が一致しません。（失敗 {attempts} 回目）")
                             else:
-                                # 認証成功・試行回数リセット
                                 conn.execute("UPDATE members SET pin_attempts = 0, locked_until = 0 WHERE email = ?", (chk_em,))
                                 conn.commit()
                                 if u_info["status"] == "approved":
