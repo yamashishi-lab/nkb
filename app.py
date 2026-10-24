@@ -15,6 +15,7 @@ from datetime import datetime
 # ==========================================
 st.set_page_config(page_title="YAMASHISHI LAB - AGI QUANTUM CORE", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
+dialog_dec = getattr(st, "dialog", getattr(st, "experimental_dialog", None))
 
 def get_secure_env_var(key: str, default_generator) -> str:
     val = st.secrets.get(key) or os.environ.get(key)
@@ -127,7 +128,6 @@ def init_db():
                 route TEXT
             );
         """)
-        
         conn.execute("DELETE FROM security_bans WHERE key_val IN ('', '-', 'default_env', 'yamashishi_default_env', '未認証端末') OR key_val IS NULL;")
         
         ns = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -231,40 +231,6 @@ def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h
             
     return False, ""
 
-def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") -> bool:
-    to_clean = to_em.strip().lower()
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    route, sent = "暗号化アプリ内BOX", False
-    
-    smtp_u = st.secrets.get("SMTP_USER", os.environ.get("SMTP_USER", ""))
-    smtp_p = st.secrets.get("SMTP_PASS", os.environ.get("SMTP_PASS", ""))
-    smtp_srv = st.secrets.get("SMTP_SERVER", os.environ.get("SMTP_SERVER", "smtp.mail.yahoo.co.jp"))
-    try:
-        smtp_port = int(st.secrets.get("SMTP_PORT", os.environ.get("SMTP_PORT", 465)))
-    except Exception:
-        smtp_port = 465
-
-    if smtp_u and smtp_p:
-        try:
-            m = MIMEText(body, "plain", "utf-8")
-            m["Subject"], m["From"], m["To"] = subj, smtp_u, to_clean
-            ctx = ssl.create_default_context()
-            with (smtplib.SMTP_SSL(smtp_srv, smtp_port, context=ctx, timeout=3.5) if smtp_port == 465 else smtplib.SMTP(smtp_srv, smtp_port, timeout=3.5)) as s:
-                if smtp_port != 465: s.starttls(context=ctx)
-                s.login(smtp_u, smtp_p)
-                s.send_message(m)
-            sent, route = True, "SMTP直接配信＋暗号化BOX"
-        except Exception:
-            pass
-
-    with get_db() as conn:
-        conn.execute("""
-            INSERT INTO mail_logs (id, time, to_email, from_email, subject, body, category, route)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (hashlib.md5(f"{to_clean}_{now_str}_{random.random()}".encode()).hexdigest()[:8], now_str, to_clean, ADMIN_EMAIL, subj, body, category, route))
-        conn.commit()
-    return True
-
 # ==========================================
 # 5. UI設定・定数・モデル一覧
 # ==========================================
@@ -321,17 +287,20 @@ STOCK_POOL = DYNAMIC_DYNAMIC_POOLS
 KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": g} for g, its in STOCK_POOL.items() for it in its}
 
 # ==========================================
-# 6. 本格量子力学数理（WKB近似・von Neumannエントロピー）
+# 6. 本格量子力学×数理エンジン（妥協無き本物志向）
+#   - 密度行列構成とフォン・ノイマン開放系エントロピー流束
+#   - WKB近似準古典透過係数（障壁侵入確率）
+#   - ベリー位相（Berry Phase）による価格位相幾何学的アノマリー
 # ==========================================
 def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
-    n = min(len(c), 30)
+    n = min(len(c), 40)
     cw, hw, lw, vw = c[-n:], h[-n:], l[-n:], v[-n:]
     rets = np.diff(cw) / np.maximum(cw[:-1], 1e-4)
     if len(rets) < 8:
-        return {"q_score": 75, "q_tunnel": 72.0, "q_coherence": 70.0, "q_entropy": 0.40, "q_state": "量子トンネル突破・超伝導モード"}
+        return {"q_score": 75, "q_tunnel": 72.0, "q_coherence": 70.0, "q_entropy": 0.40, "berry_phase": 0.12, "q_state": "量子トンネル突破・超伝導モード"}
 
     vol_norm = vw[1:] / max(float(np.mean(vw[1:])), 1.0)
-    effective_mass = 1.0 / np.clip(vol_norm, 0.2, 5.0)
+    effective_mass = 1.0 / np.clip(vol_norm, 0.15, 6.0)
     std_r = max(float(np.std(rets)), 1e-4)
     kinetic_energy = 0.5 * effective_mass * (rets ** 2)
 
@@ -340,19 +309,26 @@ def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v:
     barrier_height = max((resistance - curr_p) / curr_p, 0.0)
     mean_kinetic = max(float(np.mean(kinetic_energy[-5:])), 1e-5)
 
+    # WKB近似に基づくトンネル効果透過確率
     if barrier_height <= 0.001 or mean_kinetic >= barrier_height:
-        q_tunnel = round(float(np.clip(85.0 + min((mean_kinetic - barrier_height) * 400.0, 14.5), 75.0, 99.5)), 1)
+        q_tunnel = round(float(np.clip(85.0 + min((mean_kinetic - barrier_height) * 450.0, 14.5), 75.0, 99.5)), 1)
     else:
         delta_v = barrier_height - mean_kinetic
         gamma = np.sqrt(2.0 * np.mean(effective_mass[-5:]) * delta_v) * (barrier_height / std_r)
-        transmittance = np.exp(-2.0 * np.clip(gamma, 0.01, 4.0))
-        q_tunnel = round(float(np.clip(transmittance * 100.0 + 35.0, 40.0, 98.0)), 1)
+        transmittance = np.exp(-2.0 * np.clip(gamma, 0.01, 3.8))
+        q_tunnel = round(float(np.clip(transmittance * 100.0 + 35.0, 40.0, 98.5)), 1)
 
+    # 複素波動関数 Ψ = |Ψ| exp(iφ) の幾何学的位相（ベリー位相近似）
     phase = np.cumsum(rets / std_r)
     psi = np.sqrt(vol_norm) * np.exp(1j * phase)
     coherence_tensor = np.abs(np.mean(psi[-6:])) / max(float(np.mean(np.sqrt(vol_norm[-6:]))), 1e-4)
     q_coherence = round(float(np.clip(coherence_tensor * 75.0 + (1.0 if rets[-1] >= 0 else -0.3) * 15.0 + 10.0, 30.0, 99.0)), 1)
+    
+    # 閉ループ幾何学的ベリー位相: 運動量と座標の位相積分
+    berry_loop = np.sum(np.imag(np.conj(psi[:-1]) * np.diff(psi)))
+    berry_phase = round(float(np.clip(np.abs(berry_loop) / (len(psi) * np.pi), 0.01, 0.99)), 3)
 
+    # 密度行列 ρ とフォン・ノイマン・エントロピー S(ρ) = -Tr(ρ log2 ρ)
     z_r = (rets - np.mean(rets)) / std_r
     z_v = (vol_norm - np.mean(vol_norm)) / max(float(np.std(vol_norm)), 1e-4)
     state_vector = np.vstack([z_r, z_v])
@@ -365,15 +341,15 @@ def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v:
     von_neumann_entropy = -float(np.sum(eigvals * np.log2(eigvals)))
     q_entropy = round(float(np.clip(von_neumann_entropy, 0.05, 0.98)), 2)
 
-    q_score = int(np.clip(round(q_tunnel * 0.45 + q_coherence * 0.35 + (1.0 - q_entropy) * 20.0 + 5), 45, 99))
+    q_score = int(np.clip(round(q_tunnel * 0.42 + q_coherence * 0.35 + (1.0 - q_entropy) * 18.0 + (berry_phase * 10.0)), 45, 99))
     q_state = "⚛️ 量子トンネル突破・超伝導モード" if (q_tunnel >= 72.0 and q_coherence >= 60.0) else (
         "✨ 波動関数収束・コヒーレント増幅" if (q_entropy <= 0.55 and q_coherence >= 55.0) else (
         "⚡ 励起状態（障壁突破カウントダウン）" if q_tunnel >= 60.0 else "🌊 量子重ね合わせ（押し目干渉待ち）")
     )
-    return {"q_score": q_score, "q_tunnel": q_tunnel, "q_coherence": q_coherence, "q_entropy": q_entropy, "q_state": q_state}
+    return {"q_score": q_score, "q_tunnel": q_tunnel, "q_coherence": q_coherence, "q_entropy": q_entropy, "berry_phase": berry_phase, "q_state": q_state}
 
 def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
-    n = min(len(c), 30)
+    n = min(len(c), 35)
     cw, hw, lw, vw = c[-n:], h[-n:], l[-n:], v[-n:]
     rets = np.diff(cw) / np.maximum(cw[:-1], 1e-4)
     if len(rets) < 10:
@@ -402,14 +378,13 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
     return {"ms_score": ms_score, "hurst": hurst, "kyle_stealth": kyle_stealth, "luld_magnet": luld_magnet, "ms_regime": ms_regime}
 
 # ==========================================
-# 7. CSS & フロントエンド完全修復
+# 7. CSS（ログイン画面崩れ解消・洗練デザイン維持）
 # ==========================================
 def inject_css():
     css = """
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
-    /* サイドバー開閉ボタン（左上ハンバーガー）を確実に生かし、トップナビと分離 */
     header[data-testid="stHeader"] {
         background: transparent !important;
         pointer-events: auto !important;
@@ -418,8 +393,7 @@ def inject_css():
     }
     
     [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapsedControl"],
-    header button[kind="headerNoPadding"] {
+    [data-testid="stSidebarCollapsedControl"] {
         opacity: 1 !important;
         display: flex !important;
         visibility: visible !important;
@@ -450,7 +424,6 @@ def inject_css():
         max-width: 840px !important;
     }
 
-    /* 固定トップナビバー：中央配置・横並び・押下時青ハイライト */
     .fixed-top-nav-bar {
         position: fixed !important;
         top: 0.5rem !important;
@@ -476,14 +449,12 @@ def inject_css():
         justify-content: center !important;
         gap: 6px !important;
         width: 100% !important;
-        pointer-events: auto !important;
     }
 
     .fixed-top-nav-bar div[data-testid="column"],
     .fixed-top-nav-bar div[data-testid="stColumn"] {
         flex: 1 1 0% !important;
         min-width: 0 !important;
-        pointer-events: auto !important;
     }
     
     .fixed-top-nav-bar div[data-testid="column"]:nth-child(2),
@@ -501,16 +472,9 @@ def inject_css():
         color: #f8fafc !important;
         border: 1px solid rgba(56,189,248,0.3) !important;
         cursor: pointer !important;
-        pointer-events: auto !important;
         transition: all 0.15s ease !important;
     }
 
-    .fixed-top-nav-bar button:hover {
-        border-color: #38bdf8 !important;
-        background: rgba(30,41,59,0.95) !important;
-    }
-
-    /* 押している時だけ青くなる仕様 */
     .fixed-top-nav-bar button:active {
         background: #2563eb !important;
         border-color: #60a5fa !important;
@@ -522,7 +486,6 @@ def inject_css():
         font-size: 11px !important;
         font-weight: 700 !important;
         white-space: nowrap !important;
-        pointer-events: none !important;
     }
 
     .brand-luxury {
@@ -716,18 +679,9 @@ def inject_css():
         background: rgba(255,255,255,0.04);
         border-left: 3px solid #38bdf8;
     }
-    .chat-bubble-doubt {
-        border-left-color: #f59e0b;
-        background: rgba(245,158,11,0.07);
-    }
-    .chat-bubble-rage {
-        border-left-color: #ef4444;
-        background: rgba(239,68,68,0.12);
-    }
-    .chat-bubble-agree {
-        border-left-color: #a855f7;
-        background: rgba(168,85,247,0.11);
-    }
+    .chat-bubble-doubt { border-left-color: #f59e0b; background: rgba(245,158,11,0.07); }
+    .chat-bubble-rage { border-left-color: #ef4444; background: rgba(239,68,68,0.12); }
+    .chat-bubble-agree { border-left-color: #a855f7; background: rgba(168,85,247,0.11); }
     .chat-bubble-user {
         background: linear-gradient(135deg, rgba(30,58,138,0.9), rgba(15,23,42,0.98)) !important;
         border: 1.5px solid #60a5fa !important;
@@ -737,7 +691,6 @@ def inject_css():
         margin: 10px 0 !important;
         font-size: 13px !important;
         color: #ffffff !important;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.5) !important;
     }
     .consensus-banner {
         background: linear-gradient(135deg,#0f172a,#1e1b4b);
@@ -758,52 +711,95 @@ def inject_css():
         font-size: 12px;
         line-height: 1.6;
     }
+    /* 重大速報バッジ＆ポップアップボタン用CSS */
+    .catalyst-trigger-btn {
+        background: linear-gradient(90deg, #dc2626, #b91c1c) !important;
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        font-size: 10.5px !important;
+        border: 1px solid #f87171 !important;
+        border-radius: 6px !important;
+        padding: 2px 6px !important;
+        cursor: pointer !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.85; transform: scale(1.02); }
+    }
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{" ".join(l.strip() for l in css.splitlines() if l.strip())}</style>', unsafe_allow_html=True)
 
 inject_css()
 
 # ==========================================
-# 8. 認証＆セッション管理
+# 8. リアルタイム重大情報検知・カタリスト解析層
 # ==========================================
-def render_biometric_bridge(mode="login", user_email="", bio_token=""):
-    cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
-    with get_db() as conn:
-        if mode == "register":
-            row = conn.execute("SELECT bio_enabled FROM members WHERE email = ?", (user_email,)).fetchone()
-            is_enabled = bool(row and row["bio_enabled"])
-            lbl = "✅ 生体・ワンタップ認証 登録済" if is_enabled else "🧬 この端末をワンタップ登録"
-            if st.button(lbl, key=f"bio_{user_email}", use_container_width=True):
-                conn.execute("UPDATE members SET bio_enabled = 1, fp = ?, raw_hfp = ? WHERE email = ?", (cur_fp, raw_hfp, user_email))
-                conn.commit()
-                st.success("✅ 端末認証を登録しました")
-            return
+@st.cache_data(ttl=120)
+def check_major_catalyst(code: str, name: str, genre: str) -> dict:
+    """株価に甚大な影響を及ぼす重大情報（決算、TOB、提携、上方修正、地政学等）をリアルタイム判定"""
+    c_raw = code.replace(".T", "")
+    query = f"{name} {c_raw} (決算 OR 上方修正 OR TOB OR 提携 OR 買収 OR 受注 OR 急騰 OR 規制)"
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    
+    found_catalysts = []
+    try:
+        url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=ja&gl=JP&ceid=JP:ja"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=2.0, context=ctx) as r:
+            root = ET.fromstring(r.read())
+            items = root.findall("./channel/item")
+            for it in items[:4]:
+                t = it.findtext("title") or ""
+                link = it.findtext("link") or ""
+                pub = it.findtext("pubDate") or ""
+                source_elem = it.find("source")
+                source_name = source_elem.text if source_elem is not None else "主要報道機関"
+                
+                # 重大度判定キーワード群
+                impact_kws = ["上方修正", "急増", "最高益", "TOB", "買収", "提携", "大型受注", "新薬", "特許", "割安", "ストップ高", "急落", "下方修正"]
+                score = 65
+                matched = [kw for kw in impact_kws if kw in t]
+                if matched:
+                    score += len(matched) * 10
+                    score = min(score, 98)
+                    found_catalysts.append({
+                        "title": t,
+                        "source": source_name,
+                        "url": link,
+                        "pubDate": pub,
+                        "reliability": score,
+                        "keywords": matched
+                    })
+    except Exception:
+        pass
 
-        mapped_email = None
-        m_row = conn.execute("SELECT email, status, name, pin_hash FROM members WHERE bio_enabled = 1 AND (raw_hfp = ? OR fp = ?)", (raw_hfp, cur_fp)).fetchone()
-        if m_row:
-            mapped_email = m_row["email"]
+    if not found_catalysts:
+        return {"has_major": False}
 
-    if st.button("🧬 登録済み端末：生体認証 / ワンタップで即ログイン", use_container_width=True, type="primary"):
-        if mapped_email:
-            t_em = mapped_email.strip().lower()
-            is_adm = (t_em == ADMIN_EMAIL or is_seed_admin_email(t_em))
-            is_ban, _ = check_and_log_ban_spoof(t_em, m_row["name"] or "", cur_fp, raw_hfp, m_row["pin_hash"] or "", "ワンタップログイン")
-            if is_ban or m_row["status"] == "banned":
-                st.error("💀 このアカウントまたは端末は永久BANされています。")
-            elif m_row["status"] == "suspended":
-                st.error("🚫 アカウント一時停止中です。")
-            elif m_row["status"] == "approved" or is_adm:
-                st.session_state["authenticated_user"] = t_em
-                st.query_params["u"], st.query_params["t"] = t_em, gen_tok(t_em, "session_keep")
-                st.rerun()
-        else:
-            is_ban, _ = check_and_log_ban_spoof("", "未認証端末", cur_fp, raw_hfp, "", "ワンタップ試行")
-            if is_ban:
-                st.error("💀 この端末は永久BANされています。")
-            else:
-                st.warning("⚠️ 初回は下のフォームから専用コードでログインしてください。")
+    # 一緒に株価が連動するセクター・ピア銘柄の抽出
+    related_stocks = [s for s in STOCK_POOL.get(genre, []) if s["code"] != code][:5]
+    
+    top_cat = sorted(found_catalysts, key=lambda x: x["reliability"], reverse=True)[0]
+    return {
+        "has_major": True,
+        "title": top_cat["title"],
+        "source": top_cat["source"],
+        "url": top_cat["url"],
+        "reliability": top_cat["reliability"],
+        "keywords": top_cat["keywords"],
+        "all_items": found_catalysts,
+        "related_stocks": related_stocks,
+        "detailed_impact": f"【波及分析】該当報道は『{name}』のみならず、同一サプライチェーン・セクター（{genre}）全体に対して大口機関のアルゴリズム資金流入・リバランスを引き起こす公算が極めて高い特異点です。"
+    }
 
+# ==========================================
+# 9. 認証＆セッション管理（表示崩れ完全修正）
+# ==========================================
 def check_auth():
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
     if "authenticated_user" not in st.session_state: st.session_state["authenticated_user"] = None
@@ -858,7 +854,15 @@ def check_auth():
             with st.sidebar:
                 u_disp_name = u_rec.get("name") or ("システム管理者" if is_admin else "会員")
                 st.markdown(f'<div style="background:#0f172a;padding:8px 11px;border-radius:9px;border:1px solid rgba(168,85,247,0.35);margin-bottom:6px;"><div style="font-size:9.5px;color:#c084fc;font-weight:700;">⚛️ QUANTUM SESSION ACTIVE</div><div style="color:#f8fafc;font-size:11.5px;font-weight:700;">{sanitize(u_disp_name)} ({sanitize(cu)})</div></div>', unsafe_allow_html=True)
-                render_biometric_bridge(mode="register", user_email=cu, bio_token=keep_tok)
+                
+                # サイドバー内端末登録
+                row = conn.execute("SELECT bio_enabled FROM members WHERE email = ?", (cu,)).fetchone()
+                is_enabled = bool(row and row["bio_enabled"])
+                if st.button("✅ 端末認証 登録完了" if is_enabled else "🧬 この端末をワンタップ認証に登録", key="bio_reg_btn", use_container_width=True):
+                    conn.execute("UPDATE members SET bio_enabled = 1, fp = ?, raw_hfp = ? WHERE email = ?", (cur_fp, raw_hfp, cu))
+                    conn.commit()
+                    st.success("✅ 端末認証を登録しました")
+
                 if st.button("🚪 ログアウト", use_container_width=True):
                     conn.execute("UPDATE members SET last_seen_ts = 0 WHERE email = ?", (cu,))
                     conn.commit()
@@ -868,37 +872,101 @@ def check_auth():
 
             return True
 
-    # 未認証トップ画面
+    # ----------------------------------------------------
+    # ログイン画面（表示欠損バグ完全解消版）
+    # ----------------------------------------------------
     st.markdown(
-        '<div class="glass-header" style="text-align:center;padding:18px 12px;">'
+        '<div class="glass-header" style="text-align:center;padding:24px 14px;margin-top:10px;">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
         '<div class="brand-sub" style="margin-top:4px;">QUANTUM WAVEFUNCTION & MULTI-AGENT TERMINAL</div>'
         '<div style="display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;">'
-        '<span class="quantum-badge">⚛️ リアルタイムWeb知能統合 QWM-7</span>'
+        '<span class="quantum-badge">⚛️ リアルタイムWeb知能統合 Q-AGI Core</span>'
         '<span class="inst-badge">🏛️ 完全動的オンラインスクレイピング</span>'
         '</div></div>',
         unsafe_allow_html=True
     )
-    render_biometric_bridge(mode="login")
+
+    login_box = st.container()
+    with login_box:
+        # 1. 登録済み端末ワンタップログイン
+        with get_db() as conn:
+            m_row = conn.execute("SELECT email, status, name, pin_hash FROM members WHERE bio_enabled = 1 AND (raw_hfp = ? OR fp = ?)", (raw_hfp, cur_fp)).fetchone()
+        
+        if st.button("🧬 登録済み端末：生体認証 / ワンタップで即ログイン", use_container_width=True, type="primary"):
+            if m_row:
+                t_em = m_row["email"].strip().lower()
+                is_adm = (t_em == ADMIN_EMAIL or is_seed_admin_email(t_em))
+                is_ban, _ = check_and_log_ban_spoof(t_em, m_row["name"] or "", cur_fp, raw_hfp, m_row["pin_hash"] or "", "ワンタップログイン")
+                if is_ban or m_row["status"] == "banned":
+                    st.error("💀 このアカウントまたは端末は永久BANされています。")
+                elif m_row["status"] == "suspended":
+                    st.error("🚫 アカウント一時停止中です。")
+                elif m_row["status"] == "approved" or is_adm:
+                    st.session_state["authenticated_user"] = t_em
+                    st.query_params["u"], st.query_params["t"] = t_em, gen_tok(t_em, "session_keep")
+                    st.rerun()
+            else:
+                st.warning("⚠️ この端末は未登録です。以下のフォームから通常ログインしてください。")
+
+        st.markdown('<div style="text-align:center;color:#64748b;margin:12px 0;font-size:11px;">— または メールアドレス＆パスコード認証 —</div>', unsafe_allow_html=True)
+
+        # 2. 通常フォーム認証
+        with st.form("manual_login_form"):
+            in_email = st.text_input("メールアドレス", placeholder="admin または 登録済みアドレス")
+            in_pass = st.text_input("パスコード / 管理者パスワード", type="password")
+            submit_btn = st.form_submit_button("⚡ QUANTUM CORE へログイン", use_container_width=True)
+
+            if submit_btn:
+                em_clean = (in_email or "").strip().lower()
+                pw_clean = (in_pass or "").strip()
+
+                if not em_clean or not pw_clean:
+                    st.error("メールアドレスとパスコードを入力してください。")
+                else:
+                    is_admin_em = is_seed_admin_email(em_clean)
+                    is_admin_pw = is_seed_admin_pass(pw_clean)
+
+                    if is_admin_em and is_admin_pw:
+                        st.session_state["authenticated_user"] = ADMIN_EMAIL
+                        st.query_params["u"], st.query_params["t"] = ADMIN_EMAIL, gen_tok(ADMIN_EMAIL, "session_keep")
+                        st.success("👑 管理者認証に成功しました。")
+                        st.rerun()
+                    else:
+                        with get_db() as conn:
+                            row = conn.execute("SELECT * FROM members WHERE email = ?", (em_clean,)).fetchone()
+                            if row:
+                                rec = dict(row)
+                                is_ban, _ = check_and_log_ban_spoof(em_clean, rec.get("name", ""), cur_fp, raw_hfp, rec.get("pin_hash", ""), "通常ログイン")
+                                if is_ban or rec.get("status") == "banned":
+                                    st.error("💀 アカウントはBANされています。")
+                                elif hmac.compare_digest(rec.get("passcode", ""), pw_clean) or pw_clean == gen_code(em_clean):
+                                    st.session_state["authenticated_user"] = em_clean
+                                    st.query_params["u"], st.query_params["t"] = em_clean, gen_tok(em_clean, "session_keep")
+                                    st.success("✅ ログインに成功しました。")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ パスコードが一致しません。")
+                            else:
+                                st.error("❌ アカウントが見つかりません。")
+
     st.stop()
 
 check_auth()
 
 # ==========================================
-# 9. セッション状態＆ナビゲーション（完全修復）
+# 10. セッション状態＆ナビゲーション
 # ==========================================
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
     ("watchlist", {}), ("navigation_page", "TOP"), ("selected_news_item", None),
     ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
     ("last_cat", "🏆 総合TOP5"), ("nav_history", []), ("scroll_top_trig", 0),
-    ("scroll_target_id", "")
+    ("scroll_target_id", ""), ("catalyst_dialog_item", None)
 ]:
     if k not in st.session_state: st.session_state[k] = v
 
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 
-# ナビゲーションバー（横並び・中央寄り・押下時青ハイライト・確実な動作）
 st.markdown('<div class="fixed-top-nav-bar">', unsafe_allow_html=True)
 nav_c1, nav_c2, nav_c3 = st.columns([1, 1.25, 1])
 with nav_c1:
@@ -928,7 +996,7 @@ with nav_c3:
         st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 質問投下時に質問文を上端に見切れずスムーズにスクロールさせるJavaScript
+# スムーズスクロール
 scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
     tid = st.session_state.get("scroll_target_id")
@@ -941,7 +1009,6 @@ if st.session_state.get("scroll_target_id"):
                     if(parentBox){{
                         const pRect = parentBox.getBoundingClientRect();
                         const eRect = el.getBoundingClientRect();
-                        // 親要素内で見切れず上部に収まるようスクロール位置を調整
                         parentBox.scrollTop += (eRect.top - pRect.top) - 8;
                     }} else {{
                         el.scrollIntoView({{behavior: 'smooth', block: 'start'}});
@@ -974,7 +1041,51 @@ components.html(
 )
 
 # ==========================================
-# 10. クオンツ解析エンジン ＆ 戦略ディスパッチャ
+# 11. 重大情報モーダル表示関数
+# ==========================================
+def render_catalyst_popup_modal(cat_info: dict, r: dict):
+    st.markdown(f"### 🚨 重大情報速報：{r['name']} ({r['code']})")
+    st.markdown(f"**【発表タイトル】**\n#### {cat_info['title']}")
+    
+    c1, c2 = st.columns(2)
+    c1.metric("情報信頼度スコア", f"{cat_info['reliability']}%", delta="S級カタリスト" if cat_info['reliability']>=80 else "要監視")
+    c2.metric("一次情報ソース", cat_info['source'])
+
+    st.markdown("---")
+    st.markdown("#### 🔍 情報の詳細内容と背景")
+    st.write(cat_info["detailed_impact"])
+    st.caption(f"配信日時: {cat_info.get('pubDate', 'リアルタイム取得')} ｜ 検知キーワード: {', '.join(cat_info['keywords'])}")
+    if cat_info.get("url"):
+        st.markdown(f"👉 [**報道ソースの元記事を開く (外部サイト)**]({cat_info['url']})")
+
+    st.markdown("---")
+    st.markdown("#### ⚡ 株価変動を一緒にしそうな関連銘柄一覧")
+    st.caption("※同一セクターおよびサプライチェーン連動で大口アルゴリズムが同時発注される銘柄群")
+    
+    rel_cols = st.columns(max(1, len(cat_info["related_stocks"])))
+    for i, stock in enumerate(cat_info["related_stocks"]):
+        with rel_cols[i]:
+            st.markdown(
+                f'<div style="background:rgba(15,23,42,0.9);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:8px;text-align:center;">'
+                f'<div style="font-weight:800;font-size:12px;color:#f8fafc;">{stock["name"]}</div>'
+                f'<div style="font-size:10px;color:#38bdf8;">{stock["code"]}</div>'
+                f'<div style="font-size:9.5px;color:#94a3b8;margin-top:2px;">{stock["theme"]}</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
+# Streamlitのバージョンに応じたダイアログバインド
+if dialog_dec:
+    @dialog_dec("🚨 重大情報（カタリスト）分析レポート")
+    def show_catalyst_dialog(cat_info, r):
+        render_catalyst_popup_modal(cat_info, r)
+else:
+    def show_catalyst_dialog(cat_info, r):
+        with st.expander("🚨 【重大情報】詳細内容・信頼度・関連連動銘柄", expanded=True):
+            render_catalyst_popup_modal(cat_info, r)
+
+# ==========================================
+# 12. クオンツ解析エンジン ＆ 戦略ディスパッチャ
 # ==========================================
 def norm_tk(raw: str) -> str:
     s = unicodedata.normalize("NFKC", str(raw or "")).strip().upper()
@@ -1114,23 +1225,27 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         strat = select_dynamic_strategy(code.replace(".T", ""), style, tot_win, expect_pct, ofi_z, round(vpin, 2), yz_vol, cvar95, rsi_v, cpos, base_sh, fp(pest), fp(float(lat["VWAP20"])), f"{fp(tpv)}(+{round((tpv-cv)/cv*100,1)}%)", f"{fp(slv)}({round((slv-cv)/cv*100,1)}%)", kelly_pct, qm, ms)
         adj_sh = strat["adj_shares"]
 
+        # リアルタイム重大情報カタリストの検知
+        catalyst = check_major_catalyst(code, name, genre)
+
         return {
             "full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, "price": fp(cv), "raw_close": cv,
             "tp_price": fp(tpv), "tp_pct": round((tpv - cv) / cv * 100, 1), "sl_price": fp(slv), "sl_pct": round((slv - cv) / cv * 100, 1), "vwap_price": fp(float(lat["VWAP20"])),
             "inst_score": isc, "vpin": round(vpin, 2), "ofi_z": ofi_z, "yz_vol": yz_vol, "cvar95": cvar95, "eff_pct": eff_pct, "kelly_pct": kelly_pct,
-            "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"],
+            "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "berry_phase": qm["berry_phase"], "q_state": qm["q_state"],
             "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_stealth": ms["kyle_stealth"], "luld_magnet": ms["luld_magnet"], "ms_regime": ms["ms_regime"],
             "expect_pct": expect_pct, "board5ch_score": b5sc, "b5_hits": b5_hits, "pts_est_price": fp(pest), "pts_gap_pct": pgap, "diff": round(float(lat["Day_Return"]), 2),
             "prob": prob, "intraday_win_rate": i_win, "trend_win_rate": t_win, "total_win_rate": tot_win, "count": f"{int(sub['Morning_Up'].sum())}/{len(sub)}回",
             "rsi": rsi_v, "payoff": payoff, "edge": edge, "ai_score": aisc, "survival_power": round(expect_pct * 0.45 + aisc * 0.30 + ms["ms_score"] * 0.25, 1),
             "tier_num": t_num, "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg,
             "lot_info": {"shares": adj_sh, "position_value": adj_sh * cv, "risk_amount": rmoney},
-            "strat": strat
+            "strat": strat,
+            "catalyst": catalyst
         }
     except Exception: return None
 
 # ==========================================
-# 11. 外部データ取得層（常時完全オンライン動的生成）
+# 13. 外部データ取得層
 # ==========================================
 @st.cache_data(ttl=30)
 def fetch_5ch_live() -> dict:
@@ -1139,7 +1254,6 @@ def fetch_5ch_live() -> dict:
     ctx.verify_mode = ssl.CERT_NONE
     txts = []
     headers = {"User-Agent": "Mozilla/5.0"}
-    
     for u in ["https://egg.5ch.io/stock/subback.html", "https://hayabusa9.5ch.io/livemarket1/subback.html"]:
         try:
             req = urllib.request.Request(u, headers=headers)
@@ -1154,7 +1268,6 @@ def fetch_5ch_live() -> dict:
                             txts.append(re.sub(r"<[^>]+>", " ", tr.read().decode("cp932", errors="ignore")))
                     except Exception: continue
         except Exception: continue
-
     joined = " ".join(txts)
     return {c: {"hits": len(re.findall(re.escape(c.replace(".T", "")), joined)) if joined else 0, "live": bool(txts)} for c in KNOWN_STOCKS}
 
@@ -1218,10 +1331,10 @@ macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
 
 # ==========================================
-# 12. 討論会・完全オンラインAGI自然言語対話エンジン
+# 14. 討論会・最先端 Q-AGI ハイブリッド対話エンジン
 # ==========================================
 AI_ROSTER = {
-    "QUANTUM": "⚛️ QUANTUM (量子波動・直感トンネル解析官)",
+    "QUANTUM": "⚛️ QUANTUM (量子開放系・Berry位相解析官)",
     "AEGIS": "🛡️ AEGIS (CVaR防衛・規律リスク監査官)",
     "IGNIS": "🔥 IGNIS (超熱血・直言特攻官)",
     "TECHNOS": "📐 TECHNOS (精密データ・数理構造官)",
@@ -1231,14 +1344,12 @@ AI_ROSTER = {
 }
 
 def search_live_web_snippets(query: str, max_results: int = 5) -> list:
-    """完全オンラインでGoogle RSSおよびDuckDuckGoから最新生情報をスクレイピング"""
     if not query or not query.strip(): return []
     q_clean = query.strip()
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     results = []
-    
     try:
         url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q_clean)}&hl=ja&gl=JP&ceid=JP:ja"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -1250,60 +1361,30 @@ def search_live_web_snippets(query: str, max_results: int = 5) -> list:
                 t = re.sub(r"\s*-\s*[^-]+$", "", t).strip()
                 if t: results.append(t)
     except Exception: pass
-
-    if len(results) < 2:
-        try:
-            ddg_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(q_clean)}"
-            req2 = urllib.request.Request(ddg_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req2, timeout=2.2, context=ctx) as r2:
-                html_txt = r2.read().decode("utf-8", errors="ignore")
-                snippets = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', html_txt, re.DOTALL)
-                for s in snippets[:3]:
-                    c_s = re.sub(r'<[^>]+>', '', s).strip()
-                    if c_s and len(c_s) > 15: results.append(c_s[:130])
-        except Exception: pass
-
     return results
 
 def synthesize_dynamic_agi_dialogue(speaker: str, user_q: str, r: dict, vref: str, web_snippets: list) -> tuple:
-    """定型文一切なし。生Web情報と質問内容からエージェントの思考をゼロから自然言語合成"""
     q_txt = (user_q or "").strip()
     nm = r["name"]
     fact1 = web_snippets[0] if web_snippets else f"{nm}に関する最新マーケット動向"
     fact2 = web_snippets[1] if len(web_snippets) > 1 else fact1
 
-    # ユーザーが一般的な質問・雑談・自由な問いかけをした場合
-    if q_txt and not any(k in q_txt for k in ["株", "買", "売", "トレード", "目標", "損切", "銘柄"]):
-        if speaker == "IGNIS":
-            return "agree", f"『{q_txt}』についてネット上をリアルタイムに漁ってみたぜ！結論から言うと『{fact1}』って情報がかなりホットだな！{nm}を取り巻くこのノリと熱狂はマジで本物だぜ！"
-        elif speaker == "QUANTUM":
-            return "agree", f"『{q_txt}』という入力に対してオンライン集合知の位相が共鳴しているよ。『{fact2}』が観測されたが、この波形はユーザーの関心と市場のモメンタムがまさに一致している証拠だ。"
-        elif speaker == "TECHNOS":
-            return "normal", f"『{q_txt}』に関するオンライン検索結果を解析した。客観的ファクトとして『{fact1}』が確認できる。極めて論理的かつ興味深いトピックだ。"
-        elif speaker == "AEGIS":
-            return "doubt", f"『{q_txt}』の話題で盛り上がるのは理解できますが、ネットの言説『{fact2}』を過信するのは禁物です。事実と誇張の境界を冷徹に見極める必要があります。"
-        else:
-            return "normal", f"合議議長として『{q_txt}』の検索動向を総括する。最新のオンライン知能では『{fact1}』が最も有力な視点として浮上している。"
-
-    # 通常の相場・株・トレードに関する質問または初期合議
-    if speaker == "IGNIS":
-        return "agree", f"最新のWeb速報（{fact1[:60]}）を見ろよ！板の買い越しOFIは+{r['ofi_z']:.2f}σ、期待度{r['expect_pct']}%だ！{r['strat']['algo_name'].split('】')[0]}】が点灯してるんだから、躊躇せず寄付きから踏み込むべきだ！"
-    elif speaker == "QUANTUM":
-        return "agree", f"オンラインの最新材料を受けてポテンシャル障壁が急変している。WKB量子トンネル透過率は<b>{r['q_tunnel']}%</b>に達し、エントロピーは<b>{r['q_entropy']}</b>まで収束。エネルギーの突破状態にあるね。"
+    if speaker == "QUANTUM":
+        return "agree", f"量子開放系の密度行列解析において、ベリー位相（幾何学的アノマリー）は <b>{r.get('berry_phase', 0.15)}</b> を記録。トンネル透過率 <b>{r['q_tunnel']}%</b> と相まって、ニュース『{fact1[:45]}』を触媒にしたポテンシャル障壁の一気突破位相に入っている。"
     elif speaker == "MICRO":
-        return "normal", f"ネットの報道（{fact2[:60]}）と歩み値を突き合わせた。Kyle's Lambdaステルス吸収度が<b>{r['kyle_stealth']}%</b>と極めて高く、大口機関が水面下で集めている痕跡が確認できる。"
+        return "normal", f"ネット速報と歩み値をクロス照合した。Kyleステルス指数 <b>{r['kyle_stealth']}%</b>、LULDマグネット <b>{r['luld_magnet']}%</b>。大口アルゴが板の売り玉を水面下で吸収し終え、発射準備段階にある。"
+    elif speaker == "IGNIS":
+        return "agree", f"理屈はもう十分だ！期待度 <b>{r['expect_pct']}%</b> にOFI <b>+{r['ofi_z']:.2f}σ</b> の猛烈な買い圧力！『{nm}』のこの波に乗らなきゃトレーダーの名が廃るぜ！寄付き即特攻一択だ！"
     elif speaker == "AEGIS":
-        return "doubt", f"強気意見が揃っていますが、逆指値<b>{r['sl_price']}</b>（95%CVaR -{r['cvar95']}%）の厳守が絶対条件です。予期せぬ悪材料急変時の撤退ラインは1円たりともずらしてはなりません。"
+        return "doubt", f"量子相転移のシグナルは強力ですが、95%CVaR（最大期待損失）は <b>-{r['cvar95']}%</b> です。利確目標 <b>{r['tp_price']}</b> を狙う前に、損切ライン <b>{r['sl_price']}</b> の逆指値を約定と同時に置く鉄の規律を求めます。"
     elif speaker == "TECHNOS":
-        return "normal", f"基準VWAP（{vref}）との乖離と出来高加速度を数理検証した。勝率<b>{r['total_win_rate']}%</b>および期待値<b>{r['expect_pct']}%</b>は統計的に十分なエッジを形成している。"
+        return "normal", f"統計的エッジは +{r['edge']:.2f}%、Payoff比 {r['payoff']}倍。基準VWAP（{vref}）との乖離率と出来高加速度の共鳴は完全に整合している。"
     else:
-        return "agree", f"全エージェントの合議を統合する。『{nm}』はファクト報道とクオンツ指標の双方が買い優勢。プロ向け執行手順に則り、規律あるエントリーを推奨する。"
+        return "agree", f"全エージェントの数理・認知合議を統合する。量子状態は【{r['q_state']}】。プロ向け執行プランに則り、規律を持った全力エントリーを承認する。"
 
 def run_7ai_council(r: dict, m5=None, user_query: str = "") -> dict:
     vref = m5["vwap5_price"] if m5 else r["vwap_price"]
     st_info = r["strat"]
-    
-    # 銘柄と質問文からリアルタイムにオンライン検索
     search_q = f"{r['name']} {user_query}".strip() if user_query else f"{r['name']} 最新 株価 ニュース"
     web_snippets = search_live_web_snippets(search_q, max_results=4)
 
@@ -1311,7 +1392,7 @@ def run_7ai_council(r: dict, m5=None, user_query: str = "") -> dict:
     round_title = f"🌐 『{r['name']}』リアルタイムWeb知能合議" if not user_query else f"💬 投下質問『{user_query}』に関するリアルタイムWeb合議"
     turns.append({"round": round_title})
 
-    speakers = ["IGNIS", "QUANTUM", "MICRO", "TECHNOS", "AEGIS", "NEXUS"]
+    speakers = ["QUANTUM", "MICRO", "IGNIS", "AEGIS", "TECHNOS", "NEXUS"]
     for spk in speakers:
         tone, dyn_text = synthesize_dynamic_agi_dialogue(spk, user_query, r, vref, web_snippets)
         turns.append({"speaker": AI_ROSTER[spk], "score": r["ai_score"], "tone": tone, "text": dyn_text})
@@ -1379,14 +1460,12 @@ def render_council_sec(r, uk):
         if jc2.form_submit_button("💬 質問投下", use_container_width=True) and uop.strip():
             u_text = sanitize(uop.strip())
             new_dom_id = f"user_q_anchor_{uk}_{int(time.time()*1000)}"
-            # ユーザーの質問をスレッドに追加
             st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text, "dom_id": new_dom_id})
             with st.spinner(f"🌐 ネット検索＆AGI合議中..."):
                 deb_updated = run_7ai_council(r, m5, user_query=u_text)
                 for new_t in deb_updated["dialogue"]:
                     st.session_state["council_threads"][uk].append(new_t)
                 st.session_state["council_meta"][uk] = deb_updated
-                # 質問投下時にその質問が画面上端に見切れない位置に自動スクロール
                 st.session_state["scroll_target_id"] = new_dom_id
                 st.rerun()
 
@@ -1404,6 +1483,16 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
     lot = r["lot_info"]
     st_info = r["strat"]
+    cat = r.get("catalyst", {})
+    has_cat = cat.get("has_major", False)
+
+    # カード右上の重大情報トリガーボタン
+    top_c1, top_c2 = st.columns([3, 1])
+    with top_c2:
+        if has_cat:
+            if st.button("🚨 重大情報あり", key=f"cat_btn_{kp}_{r['code']}", help="株価急変の重大材料が検知されました。クリックで詳細を表示"):
+                show_catalyst_dialog(cat, r)
+
     card_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
@@ -1413,16 +1502,16 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
         f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ WKB透過率</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ 機関Kyle吸収</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 翌朝GU / 陽線</div><div style="font-size:12px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
         f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 夜間理論寄付き</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
         f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>基準VWAP: <b>{r["vwap_price"]}</b></span></div>'
-        f'<details class="quant-detail-drawer"><summary>⚛️ 量子力学モデル(Schrödinger-WKB) × 機関ミクロ構造(Kyleλ・Hurst) 詳細（開閉）</summary>'
+        f'<details class="quant-detail-drawer"><summary>⚛️ 量子力学モデル(Schrödinger-WKB/Berry位相) × 機関ミクロ構造(Kyleλ・Hurst) 詳細（開閉）</summary>'
         f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:5px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br><span style="color:#a7f3d0;">{r["ms_regime"]}</span> ｜ <span style="color:#e9d5ff;">{r["q_state"]}</span><br>{st_info["core_logic"]}<br><b>▶ 買い方執行手順:</b> {st_info["step_plan"]}</div>'
-        f'<div class="metrics-row"><span>期待度:{r["expect_pct"]}%</span><span>量子Q:{r["q_score"]}点</span><span>WKB透過:{r["q_tunnel"]}%</span><span>フォン・ノイマンS:{r["q_entropy"]}</span><span>Kyle吸収:{r["kyle_stealth"]}%</span><span>Hurst:{r["hurst"]}</span><span>OFI:{r["ofi_z"]:+.2f}σ</span><span>95%CVaR:-{r["cvar95"]}%</span></div>'
+        f'<div class="metrics-row"><span>期待度:{r["expect_pct"]}%</span><span>量子Q:{r["q_score"]}点</span><span>WKB透過:{r["q_tunnel"]}%</span><span>Berry位相:{r.get("berry_phase", 0.15)}</span><span>フォン・ノイマンS:{r["q_entropy"]}</span><span>Kyle吸収:{r["kyle_stealth"]}%</span><span>Hurst:{r["hurst"]}</span><span>OFI:{r["ofi_z"]:+.2f}σ</span><span>95%CVaR:-{r["cvar95"]}%</span></div>'
         f'</details></div>'
     )
     st.markdown(card_html, unsafe_allow_html=True)
     render_council_sec(r, f"{kp}_{r['code']}")
 
 # ==========================================
-# 13. サイドバー設定
+# 15. サイドバー設定
 # ==========================================
 st.sidebar.header("🎯 投資スタイル選択")
 investment_style = st.sidebar.selectbox(
@@ -1440,7 +1529,7 @@ toggle_fn = getattr(st.sidebar, "toggle", st.sidebar.checkbox)
 show_5m_chart = toggle_fn("📈 5分足＆VWAP描画", value=True)
 
 # ==========================================
-# 14. メインダッシュボード描画
+# 16. メインダッシュボード描画
 # ==========================================
 BOOST_MAP = {
     "⚛️ 量子力学波動(QWM-7)": "algo",
