@@ -7,6 +7,7 @@ import altair as alt
 import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, random, secrets, html, sqlite3
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
+from email.mime.text import MIMEText
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
@@ -15,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 # ==========================================
 st.set_page_config(page_title="YAMASHISHI LAB - AGI QUANTUM CORE", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
+dialog_dec = getattr(st, "dialog", getattr(st, "experimental_dialog", None))
 
 def get_secure_env_var(key: str, default_generator) -> str:
     val = st.secrets.get(key) or os.environ.get(key)
@@ -76,7 +78,8 @@ def init_db():
                 last_seen_str TEXT,
                 fp TEXT,
                 raw_hfp TEXT,
-                device_token TEXT
+                bio_token TEXT,
+                bio_enabled INTEGER DEFAULT 1
             );
         """)
         conn.execute("""
@@ -102,14 +105,15 @@ def init_db():
                 reason TEXT
             );
         """)
+        conn.execute("DELETE FROM security_bans WHERE key_val IN ('', '-', 'default_env', 'yamashishi_default_env', '未認証端末') OR key_val IS NULL;")
         
         ns = datetime.now().strftime("%Y-%m-%d %H:%M")
         adm_passcode = ADMIN_RAW_PASS
         adm_pin_h = hash_sec_pwd("0000", SECRET_KEY[:16])[:16]
         
         conn.execute("""
-            INSERT INTO members (email, name, status, passcode, pin_hash, applied_at, approved_at, last_seen_ts, last_seen_str, fp, raw_hfp)
-            VALUES (?, 'システム管理者', 'approved', ?, ?, ?, ?, 0, '-', '-', '-')
+            INSERT INTO members (email, name, status, passcode, pin_hash, applied_at, approved_at, last_seen_ts, last_seen_str, fp, raw_hfp, bio_enabled)
+            VALUES (?, 'システム管理者', 'approved', ?, ?, ?, ?, 0, '-', '-', '-', 1)
             ON CONFLICT(email) DO UPDATE SET status = 'approved', passcode = excluded.passcode;
         """, (ADMIN_EMAIL, adm_passcode, adm_pin_h, ns, ns))
         conn.commit()
@@ -210,7 +214,7 @@ DYNAMIC_DYNAMIC_POOLS = {
     "AI・防衛・主力": [
         {"code": "9984.T", "name": "ソフトバンクG", "theme": "AI投資・先物主役"},
         {"code": "3778.T", "name": "さくらネット", "theme": "国策GPUクラウド"},
-        {"code": "7011.T", "name": "三菱重工業", "theme": "防衛・宇宙国策主力"},
+        {"011.T": "三菱重工業", "code": "7011.T", "name": "三菱重工業", "theme": "防衛・宇宙国策主力"},
         {"code": "7012.T", "name": "川崎重工業", "theme": "防衛・航空エンジン"},
         {"code": "7013.T", "name": "IHI", "theme": "航空宇宙・防衛"},
         {"code": "3993.T", "name": "PKSHA", "theme": "AIアルゴリズム"},
@@ -329,52 +333,48 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
     return {"ms_score": ms_score, "hurst": hurst, "kyle_stealth": kyle_stealth, "luld_magnet": luld_magnet, "ms_regime": ms_regime}
 
 # ==========================================
-# 7. CSS（上部青帯カット・中央追従ナビ・サイドバー復元）
+# 7. CSS（青帯除去・サイドバー復活・完全中央追従ナビ）
 # ==========================================
 def inject_css():
     css = """
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700;800&display=swap');
     
-    /* 上部の余計な装飾バーのみを完全削除し、サイドバーボタンは維持 */
+    /* 画面上部の余計な装飾のみ除去（ヘッダー構造は残して開閉ボタンを維持） */
     [data-testid="stDecoration"] {
         display: none !important;
         height: 0px !important;
     }
     
+    /* ヘッダー背景を透過させてボタンのみ最前面表示 */
     header[data-testid="stHeader"] {
         background: transparent !important;
-        height: 0px !important;
         pointer-events: none !important;
+        z-index: 999990 !important;
     }
 
-    /* サイドバー開閉ボタンの完全復活＆スクロール常時追従 */
-    [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapsedControl"],
+    /* サイドバー開閉ボタンの完全復活＆スクロール完全固定追従 */
+    button[data-testid="stSidebarCollapsedControl"],
     button[data-testid="baseButton-headerNoPadding"],
-    div[data-testid="stSidebarCollapsedControl"] button {
+    [data-testid="collapsedControl"] {
+        pointer-events: auto !important;
         display: flex !important;
         visibility: visible !important;
-        pointer-events: auto !important;
+        opacity: 1 !important;
         position: fixed !important;
+        left: 8px !important;
         top: 8px !important;
-        left: 10px !important;
-        z-index: 1000001 !important;
+        z-index: 1000005 !important;
         background: rgba(15, 23, 42, 0.95) !important;
         border: 1px solid rgba(56, 189, 248, 0.5) !important;
         border-radius: 8px !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8) !important;
         color: #38bdf8 !important;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.8) !important;
-        cursor: pointer !important;
-        width: 38px !important;
-        height: 38px !important;
-        align-items: center !important;
-        justify-content: center !important;
+        padding: 4px 6px !important;
+        transition: transform 0.1s ease !important;
     }
-
-    section[data-testid="stSidebar"] {
-        background-color: #090d16 !important;
-        border-right: 1px solid rgba(148,163,184,0.18) !important;
-        z-index: 1000005 !important;
+    button[data-testid="stSidebarCollapsedControl"]:active {
+        transform: scale(0.92) !important;
+        background: #0284c7 !important;
     }
 
     html, body, [class*="css"] {
@@ -384,96 +384,99 @@ def inject_css():
         color: #e2e8f0;
     }
 
-    /* サイト全体を少し上に持ち上げる最適化 */
+    section[data-testid="stSidebar"] {
+        background-color: #090d16 !important;
+        border-right: 1px solid rgba(148,163,184,0.18) !important;
+        z-index: 1000000 !important;
+    }
+
+    /* サイト全体を少し上に詰める */
     .block-container {
-        padding-top: 3.6rem !important;
-        padding-bottom: 2.5rem !important;
+        padding-top: 3.2rem !important;
+        padding-bottom: 3rem !important;
         padding-left: 0.6rem !important;
         padding-right: 0.6rem !important;
         max-width: 860px !important;
     }
 
-    /* 完全に中央に寄せたスタイリッシュ追従ナビゲーションバー */
-    .pure-fixed-nav-bar {
+    /* 完全中央寄せ・スタイリッシュ追従固定ナビバー */
+    .ultra-fixed-nav-bar {
         position: fixed !important;
         top: 6px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        z-index: 99999 !important;
-        width: min(340px, calc(100vw - 80px)) !important;
-        background: rgba(10, 15, 29, 0.94) !important;
-        backdrop-filter: blur(18px) !important;
-        -webkit-backdrop-filter: blur(18px) !important;
+        z-index: 999998 !important;
+        width: min(340px, calc(100vw - 70px)) !important;
+        background: rgba(10, 16, 29, 0.94) !important;
+        backdrop-filter: blur(14px) !important;
         border: 1px solid rgba(148, 163, 184, 0.25) !important;
-        border-radius: 30px !important;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85) !important;
-        padding: 4px 6px !important;
+        border-radius: 20px !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.85) !important;
+        padding: 3px 5px !important;
         display: flex !important;
         flex-direction: row !important;
-        justify-content: space-between !important;
+        justify-content: center !important;
         align-items: center !important;
         gap: 6px !important;
         box-sizing: border-box !important;
     }
 
-    .pure-fixed-nav-btn {
+    .ultra-fixed-nav-btn {
         flex: 1 1 0% !important;
-        height: 32px !important;
-        line-height: 32px !important;
-        background: linear-gradient(180deg, #162035 0%, #0d1424 100%) !important;
+        height: 29px !important;
+        line-height: 29px !important;
+        background: linear-gradient(180deg, #162035 0%, #0d1526 100%) !important;
         color: #e2e8f0 !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 20px !important;
+        border: 1px solid rgba(148, 163, 184, 0.22) !important;
+        border-radius: 14px !important;
+        font-family: 'JetBrains Mono', 'Plus Jakarta Sans', sans-serif !important;
         font-size: 10.5px !important;
         font-weight: 700 !important;
         text-align: center !important;
         cursor: pointer !important;
         user-select: none !important;
         white-space: nowrap !important;
-        transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.08s ease !important;
-        -webkit-tap-highlight-color: transparent !important;
         text-decoration: none !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 3px !important;
+        display: block !important;
+        transition: all 0.08s ease !important;
+        -webkit-tap-highlight-color: transparent !important;
     }
 
-    /* タップした瞬間のみ鮮烈に青く発光 */
-    .pure-fixed-nav-btn:active {
-        background: #0284c7 !important;
+    /* タップした瞬間だけ鮮烈に青くネオン発光 */
+    .ultra-fixed-nav-btn:active {
+        background: #1d4ed8 !important;
         color: #ffffff !important;
         border-color: #38bdf8 !important;
-        box-shadow: 0 0 16px rgba(56, 189, 248, 0.95), inset 0 0 8px rgba(255, 255, 255, 0.5) !important;
+        box-shadow: 0 0 15px rgba(56, 189, 248, 0.9) !important;
         transform: scale(0.93) !important;
     }
 
-    /* 2回目ワンタップログイン専用ボタン */
-    .one-tap-login-box {
-        margin-top: 10px !important;
-        width: 100% !important;
-    }
-    .stButton > button.onetap-btn {
-        background: linear-gradient(135deg, #059669 0%, #0d9488 100%) !important;
+    /* 2回目ワンタップログイン用ボタン */
+    .quick-bio-login-btn {
+        display: block;
+        width: 100%;
+        height: 44px;
+        line-height: 44px;
+        text-align: center;
+        background: linear-gradient(135deg, #059669 0%, #0284c7 100%);
         color: #ffffff !important;
-        font-weight: 800 !important;
-        font-size: 13.5px !important;
-        border: 1.5px solid #34d399 !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35) !important;
-        transition: all 0.1s ease !important;
+        border: 1px solid #34d399;
+        border-radius: 8px;
+        font-size: 13.5px;
+        font-weight: 800;
+        cursor: pointer;
+        text-decoration: none !important;
+        box-shadow: 0 4px 16px rgba(5, 150, 105, 0.35);
+        margin-top: 10px;
+        transition: all 0.1s ease;
+        -webkit-tap-highlight-color: transparent;
     }
-    .stButton > button.onetap-btn:hover {
-        background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%) !important;
-        border-color: #6ee7b7 !important;
-        box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5) !important;
-    }
-    .stButton > button.onetap-btn:active {
-        transform: scale(0.97) !important;
-        box-shadow: 0 0 20px #38bdf8 !important;
+    .quick-bio-login-btn:active {
+        transform: scale(0.97);
+        filter: brightness(1.2);
+        box-shadow: 0 0 20px rgba(52, 211, 153, 0.8);
     }
 
-    /* 銘柄名と期待度の間のスペースにコンパクト配置する重大情報赤色バッジ */
     .inline-catalyst-trigger-badge {
         display: inline-flex !important;
         align-items: center !important;
@@ -510,19 +513,19 @@ def inject_css():
 
     .login-brand-wrapper {
         text-align: center;
-        padding: 24px 14px 18px 14px;
+        padding: 24px 16px 18px 16px;
         background: radial-gradient(circle at 50% 20%, rgba(56, 189, 248, 0.12), transparent 70%), linear-gradient(180deg, #0d1527 0%, #060a14 100%);
         border: 1px solid rgba(56, 189, 248, 0.25);
         border-radius: 16px;
         box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7);
-        margin-top: 6px;
+        margin-top: 5px;
         margin-bottom: 16px;
     }
     .brand-luxury {
         font-family: 'Cinzel', serif !important;
-        font-size: clamp(19px, 5.2vw, 26px) !important;
+        font-size: clamp(19px, 5.2vw, 27px) !important;
         font-weight: 900 !important;
-        letter-spacing: 2px !important;
+        letter-spacing: 3px !important;
         background: linear-gradient(90deg, #ffffff 0%, #38bdf8 55%, #c084fc 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -530,17 +533,17 @@ def inject_css():
     }
     .brand-sub {
         font-family: 'JetBrains Mono', monospace;
-        font-size: clamp(8px, 2vw, 9.5px);
+        font-size: clamp(8px, 2vw, 10px);
         color: #64748b;
-        letter-spacing: 1.5px;
+        letter-spacing: 1.6px;
         text-transform: uppercase;
-        margin-top: 4px;
+        margin-top: 5px;
     }
     .glass-header {
         background: radial-gradient(circle at top right, rgba(168,85,247,0.12), transparent 60%), linear-gradient(145deg,#0f172a 0%,#070b14 100%);
         border: 1px solid rgba(148,163,184,0.18);
         border-radius: 12px;
-        padding: 10px 12px;
+        padding: 10px 14px;
         margin-bottom: 8px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.45);
     }
@@ -548,18 +551,18 @@ def inject_css():
         background: linear-gradient(180deg,#0f172a 0%,#090d16 100%) !important;
         color: #f8fafc !important;
         border-radius: 12px;
-        padding: 12px 13px;
-        margin-bottom: 11px;
+        padding: 13px 14px;
+        margin-bottom: 12px;
         box-shadow: 0 8px 22px rgba(0,0,0,0.45);
         border: 1px solid rgba(148,163,184,0.16);
         border-left: 4px solid #38bdf8;
     }
-    .prob-badge { font-family: 'JetBrains Mono', monospace; font-size: clamp(13px, 3.6vw, 15px); font-weight: 800; color: #38bdf8 !important; }
-    .expect-badge { font-family: 'JetBrains Mono', monospace; font-size: clamp(13px, 3.6vw, 15px); font-weight: 900; color: #fde047 !important; }
+    .prob-badge { font-family: 'JetBrains Mono', monospace; font-size: clamp(13px, 3.6vw, 16px); font-weight: 800; color: #38bdf8 !important; }
+    .expect-badge { font-family: 'JetBrains Mono', monospace; font-size: clamp(13px, 3.6vw, 16px); font-weight: 900; color: #fde047 !important; }
     .pill-badge { display: inline-block; padding: 2px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 700; margin-right: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #e2e8f0; }
     .quantum-badge { display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 9.5px; font-weight: 800; margin-right: 4px; background: linear-gradient(90deg, rgba(168,85,247,0.22), rgba(56,189,248,0.22)); border: 1px solid rgba(168,85,247,0.55); color: #e9d5ff; }
     .inst-badge { display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 9.5px; font-weight: 800; margin-right: 4px; background: linear-gradient(90deg, rgba(16,185,129,0.2), rgba(56,189,248,0.2)); border: 1px solid rgba(16,185,129,0.55); color: #a7f3d0; }
-    .winrate-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; background: rgba(15,23,42,0.85) !important; border: 1px solid rgba(148,163,184,0.15); border-radius: 7px; padding: 5px 4px; margin-top: 6px; text-align: center; }
+    .winrate-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; background: rgba(15,23,42,0.85) !important; border: 1px solid rgba(148,163,184,0.15); border-radius: 7px; padding: 6px 4px; margin-top: 6px; text-align: center; }
     .signal-10tier-badge { display: flex; justify-content: space-between; align-items: center; padding: 5px 9px; border-radius: 6px; font-size: 11px; font-weight: 800; margin-bottom: 6px; gap: 5px; }
     .trade-plan-box { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 5px; background: rgba(2,6,23,0.7) !important; padding: 5px 4px; border-radius: 7px; border: 1px solid rgba(148,163,184,0.15); text-align: center; }
     .sizing-box { background: rgba(16,185,129,0.08) !important; border: 1px solid rgba(16,185,129,0.28); border-radius: 7px; padding: 5px 9px; margin-top: 5px; font-size: 10.5px; color: #d1fae5; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
@@ -573,7 +576,7 @@ def inject_css():
     .chat-bubble-doubt { border-left-color: #f59e0b; background: rgba(245,158,11,0.07); }
     .chat-bubble-rage { border-left-color: #ef4444; background: rgba(239,68,68,0.12); }
     .chat-bubble-agree { border-left-color: #a855f7; background: rgba(168,85,247,0.11); }
-    .chat-bubble-user { background: linear-gradient(135deg, rgba(30,58,138,0.92), rgba(15,23,42,0.98)) !important; border: 1.5px solid #60a5fa !important; border-left: 5px solid #38bdf8 !important; border-radius: 7px !important; padding: 8px 11px !important; margin: 12px 0 8px 0 !important; font-size: 12.5px !important; color: #ffffff !important; }
+    .chat-bubble-user { background: linear-gradient(135deg, rgba(30,58,138,0.92), rgba(15,23,42,0.98)) !important; border: 1.5px solid #60a5fa !important; border-left: 5px solid #38bdf8 !important; border-radius: 7px !important; padding: 8px 11px !important; margin: 12px 0 8px 0 !important; font-size: 12.5px !important; color: #ffffff !important; scroll-margin-top: 40px; }
     .consensus-banner { background: linear-gradient(135deg,#0f172a,#1e1b4b); border: 1px solid rgba(168,85,247,0.45); border-radius: 8px; padding: 9px; margin-top: 6px; font-size: 11.5px; }
     
     .beginner-action-box {
@@ -638,35 +641,35 @@ def check_major_catalyst(code: str, name: str, genre: str) -> dict:
     }
 
 # ==========================================
-# 9. 認証＆セッション管理（2回目ワンタップボタン完全対応）
+# 9. 認証＆セッション管理（2回目以降ワンタップログイン対応）
 # ==========================================
 def check_auth():
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
     if "authenticated_user" not in st.session_state: st.session_state["authenticated_user"] = None
     qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
 
-    # 端末記憶トークンによるワンタップ実行検知
-    q_onetap = st.query_params.get("onetap_login", "").strip().lower()
-    q_onetap_sig = st.query_params.get("onetap_sig", "").strip()
-    if q_onetap and q_onetap_sig:
-        expected_sig = hashlib.sha256(f"{q_onetap}:{cur_fp}:{SECRET_KEY[:16]}".encode()).hexdigest()[:16]
-        if hmac.compare_digest(q_onetap_sig, expected_sig):
-            with get_db() as conn:
-                m_row = conn.execute("SELECT status, name FROM members WHERE email = ?", (q_onetap,)).fetchone()
-                if m_row and m_row["status"] == "approved":
-                    st.session_state["authenticated_user"] = q_onetap
-                    st.query_params.clear()
-                    st.query_params["u"] = q_onetap
-                    st.query_params["t"] = gen_tok(q_onetap, "session_keep")
-                    st.rerun()
+    # ワンタップ生体・端末認証パラメータ判定
+    quick_login_act = st.query_params.get("quick_auth", "")
+    if quick_login_act == "1":
+        with get_db() as conn:
+            # 端末指紋 (fp または raw_hfp) で合致する直近の承認済みユーザーを検索
+            cand = conn.execute("""
+                SELECT email, name, status FROM members 
+                WHERE (fp = ? OR raw_hfp = ?) AND status = 'approved'
+                ORDER BY last_seen_ts DESC LIMIT 1
+            """, (cur_fp, raw_hfp)).fetchone()
+            
+            if cand:
+                st.session_state["authenticated_user"] = cand["email"]
+                st.query_params.clear()
+                st.query_params["u"] = cand["email"]
+                st.query_params["t"] = gen_tok(cand["email"], "session_keep")
+                st.rerun()
+            else:
+                st.query_params.pop("quick_auth", None)
+                st.session_state["quick_login_fail"] = True
 
     with get_db() as conn:
-        # この端末（cur_fp）に紐付く以前の認証済みアカウントを検出
-        remembered_row = conn.execute(
-            "SELECT email, name FROM members WHERE fp = ? AND status = 'approved' ORDER BY last_seen_ts DESC LIMIT 1",
-            (cur_fp,)
-        ).fetchone()
-
         if not st.session_state["authenticated_user"] and qu and qt:
             row = conn.execute("SELECT status, name, pin_hash FROM members WHERE email = ?", (qu,)).fetchone()
             is_adm = (qu == ADMIN_EMAIL or is_seed_admin_email(qu))
@@ -689,8 +692,8 @@ def check_auth():
 
             keep_tok = gen_tok(cu, "session_keep")
             conn.execute("""
-                INSERT INTO members (email, name, status, passcode, pin_hash, pin_attempts, locked_until, applied_at, approved_at, last_seen_ts, last_seen_str, fp, raw_hfp)
-                VALUES (?, ?, 'approved', ?, ?, 0, 0, ?, ?, ?, ?, ?, ?)
+                INSERT INTO members (email, name, status, passcode, pin_hash, pin_attempts, locked_until, applied_at, approved_at, last_seen_ts, last_seen_str, fp, raw_hfp, bio_enabled)
+                VALUES (?, ?, 'approved', ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, 1)
                 ON CONFLICT(email) DO UPDATE SET last_seen_ts = excluded.last_seen_ts, last_seen_str = excluded.last_seen_str, fp = excluded.fp, raw_hfp = excluded.raw_hfp, status = 'approved';
             """, (
                 cu, u_rec.get("name") or ("システム管理者" if is_admin else "会員"),
@@ -738,7 +741,7 @@ def check_auth():
                     st.rerun()
             return True
 
-    # ログイン・認証画面
+    # ログイン・認証画面（生体認証タブを廃止し、2回目ワンタップボタンをログインボタン下に直結）
     st.markdown(
         '<div class="login-brand-wrapper">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
@@ -746,14 +749,18 @@ def check_auth():
         '</div>',
         unsafe_allow_html=True
     )
-    
+
+    if st.session_state.get("quick_login_fail"):
+        st.warning("⚠️ この端末での認証履歴が見つかりませんでした。初回はメールアドレスとパスコードでログインしてください。")
+        st.session_state["quick_login_fail"] = False
+
     t_login, t_register, t_pin = st.tabs(["⚡ ログイン", "📝 新規会員申請", "🔒 暗証番号(PIN)認証"])
     
     with t_login:
         with st.form("general_login_form"):
             in_email = st.text_input("メールアドレス", placeholder="メールアドレスを入力")
             in_pass = st.text_input("パスコード / 管理者パスワード", type="password", placeholder="8桁パスコードまたは管理者PW")
-            rem_device = st.checkbox("この端末を安全なデバイスとして記憶する", value=True)
+            rem_device = st.checkbox("この端末を安全なデバイスとして記憶する（2回目からワンタップログイン有効化）", value=True)
             submit_login = st.form_submit_button("⚡ QUANTUM CORE へログイン", use_container_width=True)
 
             if submit_login:
@@ -794,19 +801,11 @@ def check_auth():
                                 else:
                                     st.error("❌ パスコードが正しくありません。")
 
-        # 2回目以降の来訪者向け：ログインボタンと同じ横幅で下に配置するワンタップ認証ボタン
-        if remembered_row:
-            rem_email = remembered_row["email"]
-            rem_name = remembered_row["name"] or "登録会員"
-            onetap_sig = hashlib.sha256(f"{rem_email}:{cur_fp}:{SECRET_KEY[:16]}".encode()).hexdigest()[:16]
-            
-            st.markdown('<div class="one-tap-login-box">', unsafe_allow_html=True)
-            if st.button(f"⚡ 記憶済み端末でワンタップ高速ログイン ({rem_name} 様)", key="onetap_login_btn", use_container_width=True, type="primary"):
-                st.session_state["authenticated_user"] = rem_email
-                st.query_params["u"] = rem_email
-                st.query_params["t"] = gen_tok(rem_email, "session_keep")
-                st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+        # ログインボタンの真下に同じ大きさ・別色で配置された「2回目以降ワンタップ生体・端末ログイン」ボタン
+        if st.button("🧬 端末・生体認証でワンタップログイン（2回目以降）", key="quick_bio_btn", use_container_width=True):
+            st.query_params["quick_auth"] = "1"
+            st.rerun()
+        st.caption("※ 一度本端末でログインすると端末指紋が記憶され、次回以降はこのボタンを押すだけで即時ログインできます。")
 
     with t_register:
         st.caption("新規利用登録を行います。申請後、管理者の承認を経てパスコードが発行されます。")
@@ -843,8 +842,8 @@ def check_auth():
                             pin_h = hash_sec_pwd(pin, SECRET_KEY[:16])[:16]
                             now_s = datetime.now().strftime("%Y-%m-%d %H:%M")
                             conn.execute("""
-                                INSERT INTO members (email, name, status, passcode, pin_hash, applied_at, fp, raw_hfp)
-                                VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)
+                                INSERT INTO members (email, name, status, passcode, pin_hash, applied_at, fp, raw_hfp, bio_enabled)
+                                VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, 1)
                             """, (em, nm, auto_code, pin_h, now_s, cur_fp, raw_hfp))
                             conn.commit()
                             st.success("✅ 申請を受け付けました！管理者の承認完了後に発行されたパスコードでログイン可能になります。")
@@ -880,16 +879,18 @@ def check_auth():
 check_auth()
 
 # ==========================================
-# 10. スタイリッシュ中央固定追従ナビバー
+# 10. スタイリッシュ追従固定ナビゲーションバー（確実なアクション検知）
 # ==========================================
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
     ("watchlist", {}), ("navigation_page", "TOP"), ("custom_search_code", ""),
     ("active_category", "🏆 総合TOP5"), ("last_cat", "🏆 総合TOP5"),
-    ("nav_history", []), ("scroll_top_trig", 0), ("scroll_target_id", "")
+    ("nav_history", []), ("scroll_top_trig", 0), ("scroll_target_id", ""),
+    ("expanded_catalysts", {})
 ]:
     if k not in st.session_state: st.session_state[k] = v
 
+# クエリパラメータによる確実なナビゲーション連動
 nav_act = st.query_params.get("nact", "")
 if nav_act:
     if nav_act == "top":
@@ -917,28 +918,16 @@ if nav_act:
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 close_btn_txt = f"✖ 合議閉じる({open_cnt})" if open_cnt > 0 else "✖ 合議閉じる"
 
-# 中央配置・文字小さめ・タップ時のみ青発光・クリック反応を完全保証したナビコンポーネント
-components.html(
+# 最新のスタイリッシュ・中央固定・確実動作ナビゲーションバー
+st.markdown(
     f"""
-    <div class="pure-fixed-nav-bar">
-        <div class="pure-fixed-nav-btn" onclick="sendAction('top')">⬆ トップ</div>
-        <div class="pure-fixed-nav-btn" onclick="sendAction('close_debates')">{close_btn_txt}</div>
-        <div class="pure-fixed-nav-btn" onclick="sendAction('back')">↩ 戻る</div>
+    <div class="ultra-fixed-nav-bar">
+        <a class="ultra-fixed-nav-btn" href="?nact=top" target="_self">⬆️ トップ</a>
+        <a class="ultra-fixed-nav-btn" href="?nact=close_debates" target="_self">{close_btn_txt}</a>
+        <a class="ultra-fixed-nav-btn" href="?nact=back" target="_self">↩️ 戻る</a>
     </div>
-    <script>
-    function sendAction(action){{
-        try {{
-            const p = window.parent;
-            const u = new URL(p.location.href);
-            u.searchParams.set('nact', action);
-            p.location.href = u.toString();
-        }} catch(e){{
-            window.location.search = '?nact=' + action;
-        }}
-    }}
-    </script>
     """,
-    height=44
+    unsafe_allow_html=True
 )
 
 scroll_target_js = ""
@@ -947,7 +936,7 @@ if st.session_state.get("scroll_target_id"):
     scroll_target_js = f"""
         setTimeout(function(){{
             try {{
-                const el = window.parent.document.getElementById('{tid}');
+                const el = document.getElementById('{tid}');
                 if(el){{
                     const parentBox = el.closest('.council-scroll-window');
                     if(parentBox){{
