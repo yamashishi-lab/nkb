@@ -15,7 +15,7 @@ from datetime import datetime
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
-# セキュリティ強化: 安全なフォールバックと定数時間比較用の鍵管理
+# セキュリティ設定
 try:
     SECRET_KEY = str(st.secrets.get("SECRET_KEY", "my_super_secret_quant_key_2026_secured"))
     ADMIN_EMAIL = str(st.secrets.get("ADMIN_EMAIL", "nthbh399@ybb.ne.jp")).strip().lower()
@@ -46,7 +46,7 @@ IPO_OFFERINGS = [
     {"rank": 5, "code": "422A", "name": "グローバルリテールDX", "market": "東証S", "bb_period": "11/08〜11/14", "list_date": "11/25", "price_band": "1,400円〜1,500円", "expect_return": "+11.0%", "score": 68, "tier": "👀 C級：公募割れ警戒・セカンダリー狙い", "lead": "野村證券 / みずほ証券", "theme": "無人レジ・流通サプライチェーン最適化SaaS", "links": [("🏦 野村證券 IPO", "https://www.nomura.co.jp/retail/stock/ipo/"), ("🏦 みずほ証券 IPO", "https://www.mizuho-sc.com/product/stock/ipo/index.html"), ("📊 みんかぶIPO", "https://minkabu.jp/ipo")]}
 ]
 
-# セキュリティ関数
+# セキュリティ関連
 def sanitize_input(s: str, max_len: int = 500) -> str:
     if not s: return ""
     return re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "", str(s))[:max_len].strip()
@@ -166,7 +166,7 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
         try:
             m = MIMEText(body, "plain", "utf-8"); m["Subject"], m["From"], m["To"] = subj, u, to_clean
             ctx = ssl.create_default_context()
-            with (smtplib.SMTP_SSL(srv, port, context=ctx, timeout=3.0) if port == 465 else smtplib.SMTP(srv, port, timeout=3.0)) as s:
+            with (smtplib.SMTP_SSL(srv, port, context=ctx, timeout=2.5) if port == 465 else smtplib.SMTP(srv, port, timeout=2.5)) as s:
                 if port != 465: s.starttls(context=ctx)
                 s.login(u, p); s.send_message(m)
             sent, route = True, "SMTP配信＋暗号化BOX"
@@ -176,7 +176,7 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
             ctx = ssl.create_default_context()
             payload = json.dumps({"_subject": subj, "宛先": to_clean, "本文": body, "_captcha": "false"}).encode("utf-8")
             req = urllib.request.Request(f"https://formsubmit.co/ajax/{urllib.parse.quote(to_clean)}", data=payload, headers={"Content-Type": "application/json", "Accept": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=3.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=2.5, context=ctx) as r:
                 if r.status == 200: route = "Webリレー配信＋暗号化BOX"
         except Exception: pass
     mdb = load_mail_db()
@@ -223,9 +223,8 @@ def inject_css():
     
     header[data-testid="stHeader"] {
         background: transparent !important;
-        pointer-events: none !important;
-        height: 3.5rem !important;
-        z-index: 999990 !important;
+        height: 3.2rem !important;
+        z-index: 99990 !important;
     }
     
     header[data-testid="stHeader"] [data-testid="stToolbar"],
@@ -233,18 +232,17 @@ def inject_css():
         display: none !important;
     }
 
+    /* サイドバー開閉用コンテナの非表示制御を解除（DOM操作可能にする） */
     [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapsedControl"],
-    header button[kind="headerNoPadding"],
-    header button[data-testid="baseButton-headerNoPadding"] {
-        opacity: 0 !important;
-        position: absolute !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 1px !important;
-        height: 1px !important;
-        overflow: hidden !important;
-        z-index: -1 !important;
+    [data-testid="stSidebarCollapsedControl"] {
+        opacity: 0.01 !important;
+        position: fixed !important;
+        top: 6px !important;
+        left: 6px !important;
+        width: 30px !important;
+        height: 30px !important;
+        z-index: 1000000 !important;
+        cursor: pointer !important;
     }
 
     section[data-testid="stSidebar"] {
@@ -264,7 +262,7 @@ def inject_css():
     }
     
     .block-container {
-        padding-top: 3.8rem !important;
+        padding-top: 3.4rem !important;
         padding-bottom: 3rem !important;
         padding-left: 0.75rem !important;
         padding-right: 0.75rem !important;
@@ -278,7 +276,7 @@ def inject_css():
         background: linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        line-height: 1.25;
+        line-height: 1.2;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
@@ -298,18 +296,18 @@ def inject_css():
     
     .fixed-top-nav-bar {
         position: fixed !important;
-        top: 0.45rem !important;
+        top: 0.4rem !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
         z-index: 999980 !important;
-        width: min(450px, calc(100vw - 11rem)) !important;
-        background: rgba(5,8,17,0.95) !important;
+        width: min(450px, calc(100vw - 6rem)) !important;
+        background: rgba(5,8,17,0.96) !important;
         backdrop-filter: blur(14px) !important;
         border: none !important;
         border-radius: 9px !important;
         outline: none !important;
         box-shadow: 0 6px 20px rgba(0,0,0,0.75) !important;
-        padding: 4px 6px !important;
+        padding: 3px 5px !important;
         margin: 0 !important;
         pointer-events: auto !important;
     }
@@ -352,6 +350,7 @@ def inject_css():
         flex: 1.35 1 0% !important;
     }
     
+    /* 上部固定ボタン：タップ時のみ青く強く光るスタイル */
     .fixed-top-nav-bar button {
         width: 100% !important;
         min-width: 0 !important;
@@ -368,14 +367,22 @@ def inject_css():
         box-shadow: 0 4px 12px rgba(0,0,0,0.45) !important;
         pointer-events: auto !important;
         cursor: pointer !important;
-        position: relative !important;
         outline: none !important;
-        transition: background-color 0.1s, border-color 0.1s, color 0.1s !important;
+        transition: transform 0.08s ease, background 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease !important;
     }
     
     .fixed-top-nav-bar button:hover {
         border-color: rgba(56,189,248,0.6) !important;
         background: rgba(30,41,59,0.92) !important;
+    }
+
+    .fixed-top-nav-bar button:active,
+    .fixed-top-nav-bar button:focus:active {
+        background: #0284c7 !important;
+        border-color: #38bdf8 !important;
+        color: #ffffff !important;
+        box-shadow: 0 0 16px rgba(56, 189, 248, 0.95), 0 0 3px #ffffff !important;
+        transform: scale(0.96) !important;
     }
     
     .fixed-top-nav-bar button p {
@@ -393,10 +400,10 @@ def inject_css():
     .glass-header {
         background: radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);
         border: 1px solid rgba(148,163,184,0.18);
-        border-radius: 14px;
-        padding: 14px 14px;
-        margin-bottom: 10px;
-        box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-bottom: 8px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.45);
         box-sizing: border-box;
         width: 100%;
         overflow: hidden;
@@ -404,23 +411,25 @@ def inject_css():
     .compact-bar-label {
         display: flex;
         justify-content: space-between;
-        font-size: 10.5px;
+        font-size: 10px;
         font-weight: 700;
-        letter-spacing: 0.8px;
+        letter-spacing: 0.6px;
         color: #94a3b8;
         background: #0f172a;
-        padding: 5px 11px;
-        border-radius: 7px;
+        padding: 4px 10px;
+        border-radius: 6px;
         border-left: 3px solid #a855f7;
         margin-bottom: 5px;
     }
-    .rank-card,.search-result-card {
+    
+    /* 銘柄カード：無駄な余白・変な改行を排除して引き締める */
+    .rank-card, .search-result-card {
         background: linear-gradient(180deg,#0f172a 0%,#090d16 100%) !important;
         color: #f8fafc !important;
-        border-radius: 14px;
-        padding: 13px 14px;
-        margin-bottom: 11px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+        border-radius: 12px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.45);
         border: 1px solid rgba(148,163,184,0.16);
         border-left: 4px solid #38bdf8;
     }
@@ -428,121 +437,130 @@ def inject_css():
         border-left-color: #f59e0b;
     }
     .company-title-header {
-        margin-bottom: 8px;
+        margin-bottom: 5px;
         border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-        padding-bottom: 6px;
+        padding-bottom: 4px;
     }
     .company-name-hero {
-        font-size: 17.5px;
+        font-size: 16px;
         font-weight: 800;
         color: #f8fafc;
         display: inline-block;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.4px;
     }
     .prob-badge {
         font-family: 'JetBrains Mono',monospace;
-        font-size: clamp(14px,3.8vw,16.5px);
+        font-size: clamp(13px,3.5vw,15.5px);
         font-weight: 800;
         color: #38bdf8 !important;
         white-space: nowrap;
     }
     .expect-badge {
         font-family: 'JetBrains Mono',monospace;
-        font-size: clamp(14px,3.8vw,16.5px);
+        font-size: clamp(13px,3.5vw,15.5px);
         font-weight: 900;
         color: #fde047 !important;
         white-space: nowrap;
     }
     .pill-badge {
         display: inline-block;
-        padding: 2px 7px;
-        border-radius: 6px;
-        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 5px;
+        font-size: 9.5px;
         font-weight: 700;
         margin-right: 4px;
         background: rgba(255,255,255,0.06);
         border: 1px solid rgba(255,255,255,0.12);
         color: #e2e8f0;
+        white-space: nowrap;
     }
     .quantum-badge {
         display: inline-block;
-        padding: 2px 8px;
-        border-radius: 6px;
-        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 5px;
+        font-size: 9.5px;
         font-weight: 800;
         margin-right: 4px;
         background: linear-gradient(90deg,rgba(168,85,247,0.22),rgba(56,189,248,0.22));
         border: 1px solid rgba(168,85,247,0.55);
         color: #e9d5ff;
+        white-space: nowrap;
     }
     .inst-badge {
         display: inline-block;
-        padding: 2px 8px;
-        border-radius: 6px;
-        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 5px;
+        font-size: 9.5px;
         font-weight: 800;
         margin-right: 4px;
         background: linear-gradient(90deg,rgba(16,185,129,0.2),rgba(56,189,248,0.2));
         border: 1px solid rgba(16,185,129,0.55);
         color: #a7f3d0;
+        white-space: nowrap;
     }
     .winrate-bar {
         display: grid;
         grid-template-columns: repeat(4,1fr);
-        gap: 5px;
+        gap: 4px;
         background: rgba(15,23,42,0.85) !important;
         border: 1px solid rgba(148,163,184,0.15);
-        border-radius: 8px;
-        padding: 6px 4px;
-        margin-top: 7px;
+        border-radius: 7px;
+        padding: 5px 3px;
+        margin-top: 5px;
         text-align: center;
     }
     .signal-10tier-badge {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 5px 10px;
-        border-radius: 7px;
-        font-size: 11.5px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
         font-weight: 800;
-        margin-bottom: 7px;
-        gap: 6px;
-        flex-wrap: wrap;
+        margin-bottom: 5px;
+        gap: 4px;
+        flex-wrap: nowrap;
+        overflow: hidden;
+    }
+    .signal-10tier-badge span {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .trade-plan-box {
         display: grid;
         grid-template-columns: repeat(3,1fr);
-        gap: 5px;
-        margin-top: 6px;
+        gap: 4px;
+        margin-top: 5px;
         background: rgba(2,6,23,0.7) !important;
-        padding: 6px 4px;
-        border-radius: 8px;
+        padding: 5px 3px;
+        border-radius: 7px;
         border: 1px solid rgba(148,163,184,0.15);
         text-align: center;
     }
     .sizing-box {
         background: rgba(16,185,129,0.08) !important;
         border: 1px solid rgba(16,185,129,0.28);
-        border-radius: 8px;
-        padding: 5px 10px;
-        margin-top: 6px;
-        font-size: 11px;
+        border-radius: 7px;
+        padding: 4px 8px;
+        margin-top: 5px;
+        font-size: 10.5px;
         color: #d1fae5;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 4px;
     }
     details.quant-detail-drawer {
-        margin-top: 6px;
+        margin-top: 5px;
         background: rgba(2,6,23,0.55);
         border: 1px solid rgba(168,85,247,0.25);
-        border-radius: 8px;
-        padding: 5px 10px;
+        border-radius: 7px;
+        padding: 4px 8px;
     }
     details.quant-detail-drawer summary {
-        font-size: 11px;
+        font-size: 10.5px;
         font-weight: 700;
         color: #c084fc !important;
         cursor: pointer;
@@ -551,51 +569,51 @@ def inject_css():
     .metrics-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 4px 8px;
-        margin-top: 5px;
-        font-size: 10.5px;
+        gap: 3px 6px;
+        margin-top: 4px;
+        font-size: 10px;
         font-family: 'JetBrains Mono',monospace;
         background: rgba(15,23,42,0.9) !important;
-        padding: 5px 8px;
-        border-radius: 6px;
+        padding: 4px 6px;
+        border-radius: 5px;
         color: #cbd5e1;
     }
     .ai-council-box {
         background: #070b14;
         color: #f8fafc !important;
-        border-radius: 11px;
-        padding: 11px;
-        margin-top: 6px;
-        margin-bottom: 9px;
+        border-radius: 10px;
+        padding: 9px;
+        margin-top: 5px;
+        margin-bottom: 7px;
         border: 1px solid rgba(168,85,247,0.35);
     }
     .council-scroll-window {
-        max-height: 480px;
+        max-height: 440px;
         overflow-y: auto;
-        padding: 9px;
+        padding: 7px;
         background: #04070e;
         border: 1px solid rgba(255,255,255,0.07);
-        border-radius: 8px;
-        margin-bottom: 8px;
+        border-radius: 7px;
+        margin-bottom: 6px;
         scroll-behavior: smooth;
     }
     .round-divider {
         text-align: center;
-        margin: 8px 0;
-        padding: 5px 10px;
+        margin: 6px 0;
+        padding: 4px 8px;
         background: rgba(168,85,247,0.18);
-        border-left: 4px solid #a855f7;
+        border-left: 3px solid #a855f7;
         color: #e9d5ff !important;
-        font-size: 11.5px;
+        font-size: 11px;
         font-weight: 800;
         border-radius: 4px;
     }
     .chat-bubble-ai,.chat-bubble-doubt,.chat-bubble-rage,.chat-bubble-agree {
-        border-radius: 8px;
-        padding: 7px 10px;
-        margin-bottom: 6px;
-        font-size: 12px;
-        line-height: 1.55;
+        border-radius: 7px;
+        padding: 6px 9px;
+        margin-bottom: 5px;
+        font-size: 11.5px;
+        line-height: 1.5;
         background: rgba(255,255,255,0.04);
         border-left: 3px solid #38bdf8;
     }
@@ -613,45 +631,44 @@ def inject_css():
     }
     .chat-bubble-user {
         background: rgba(37,99,235,0.30);
-        border-left: 4px solid #60a5fa;
-        border-radius: 8px;
-        padding: 8px 11px;
-        margin: 8px 0 6px 0;
-        font-size: 12.5px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        scroll-margin-top: 6px;
+        border-left: 3px solid #60a5fa;
+        border-radius: 7px;
+        padding: 7px 10px;
+        margin: 6px 0 5px 0;
+        font-size: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
     .consensus-banner {
         background: linear-gradient(135deg,#0f172a,#1e1b4b);
         border: 1px solid rgba(168,85,247,0.45);
-        border-radius: 9px;
-        padding: 10px;
-        margin-top: 7px;
-        font-size: 12px;
+        border-radius: 8px;
+        padding: 8px;
+        margin-top: 6px;
+        font-size: 11.5px;
     }
     .beginner-action-box {
         background: linear-gradient(135deg,rgba(16,185,129,0.14),rgba(6,78,59,0.25));
         border: 1px solid #10b981;
-        border-left: 4px solid #10b981;
-        border-radius: 8px;
-        padding: 9px 11px;
-        margin-top: 7px;
+        border-left: 3px solid #10b981;
+        border-radius: 7px;
+        padding: 7px 9px;
+        margin-top: 6px;
         color: #ecfdf5;
-        font-size: 12px;
-        line-height: 1.6;
+        font-size: 11.5px;
+        line-height: 1.5;
     }
     .ipo-link-btn {
         display: inline-block;
         background: #1e293b;
         color: #38bdf8 !important;
         border: 1px solid #334155;
-        padding: 4px 9px;
-        border-radius: 6px;
-        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 5px;
+        font-size: 10.5px;
         font-weight: 700;
         text-decoration: none !important;
-        margin-right: 5px;
-        margin-top: 4px;
+        margin-right: 4px;
+        margin-top: 3px;
     }
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{" ".join(l.strip() for l in css.splitlines() if l.strip())}</style>', unsafe_allow_html=True)
@@ -819,7 +836,7 @@ if st.session_state.get("scroll_target_id"):
                     }}
                 }}
             }} catch(e){{}}
-        }}, 220);
+        }}, 180);
     """
     st.session_state["scroll_target_id"] = ""
 
@@ -829,22 +846,6 @@ components.html(
     (function(){{
         const doc = window.parent.document;
         
-        function ensureSidebarCollapsedOnLoad(){{
-            if(!window.parent._sidebarForcedClosed){{
-                setTimeout(() => {{
-                    try {{
-                        const sb = doc.querySelector('section[data-testid="stSidebar"]');
-                        if(sb && (sb.getAttribute('aria-expanded') === 'true' || sb.style.marginLeft === '0px')){{
-                            const btn = doc.querySelector('[data-testid="stSidebarCollapseButton"]') || doc.querySelector('[aria-label="Collapse sidebar"]');
-                            if(btn) btn.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true, view: window.parent }}));
-                        }}
-                    }} catch(e){{}}
-                }}, 150);
-                window.parent._sidebarForcedClosed = true;
-            }}
-        }}
-        ensureSidebarCollapsedOnLoad();
-
         function installFloatingSidebarToggle(){{
             try {{
                 if(doc.getElementById('yamashishi-floating-sidebar-btn')) return;
@@ -864,32 +865,32 @@ components.html(
                 style.textContent = `
                     #yamashishi-floating-sidebar-btn {{
                         position: fixed !important;
-                        top: 8px !important;
-                        left: 8px !important;
+                        top: 7px !important;
+                        left: 7px !important;
                         z-index: 2147483647 !important;
                         display: flex !important;
                         align-items: center !important;
                         justify-content: center !important;
                         gap: 3px !important;
-                        height: 24px !important;
-                        padding: 0 6px !important;
-                        background: rgba(11, 15, 25, 0.92) !important;
+                        height: 25px !important;
+                        padding: 0 7px !important;
+                        background: rgba(11, 15, 25, 0.95) !important;
                         backdrop-filter: blur(12px) !important;
-                        border: 1px solid rgba(56, 189, 248, 0.4) !important;
+                        border: 1px solid rgba(56, 189, 248, 0.45) !important;
                         border-radius: 6px !important;
                         cursor: pointer !important;
                         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6) !important;
                         user-select: none !important;
-                        transition: all 0.18s ease !important;
+                        transition: all 0.15s ease !important;
                     }}
                     #yamashishi-floating-sidebar-btn:hover {{
                         border-color: #38bdf8 !important;
                         background: rgba(15, 23, 42, 0.98) !important;
-                        box-shadow: 0 0 8px rgba(56, 189, 248, 0.5) !important;
-                        transform: scale(1.02) !important;
+                        box-shadow: 0 0 10px rgba(56, 189, 248, 0.6) !important;
                     }}
                     #yamashishi-floating-sidebar-btn:active {{
-                        transform: scale(0.95) !important;
+                        transform: scale(0.94) !important;
+                        box-shadow: 0 0 14px rgba(56, 189, 248, 0.9) !important;
                     }}
                     #yamashishi-floating-sidebar-btn svg {{
                         width: 12px !important;
@@ -898,7 +899,7 @@ components.html(
                     }}
                     #yamashishi-floating-sidebar-btn span {{
                         font-family: 'JetBrains Mono', monospace !important;
-                        font-size: 9px !important;
+                        font-size: 9.5px !important;
                         font-weight: 700 !important;
                         color: #f8fafc !important;
                         letter-spacing: 0.5px !important;
@@ -910,25 +911,34 @@ components.html(
                     e.preventDefault();
                     e.stopPropagation();
 
-                    const expandBtn = doc.querySelector('[data-testid="collapsedControl"]') 
-                                   || doc.querySelector('[data-testid="stSidebarCollapsedControl"]')
-                                   || doc.querySelector('button[kind="headerNoPadding"]');
-                    const collapseBtn = doc.querySelector('[data-testid="stSidebarCollapseButton"]') 
-                                     || doc.querySelector('[aria-label="Collapse sidebar"]')
-                                     || doc.querySelector('button[aria-label="Close"]');
-
-                    let isClosed = true;
-                    const sb = doc.querySelector('section[data-testid="stSidebar"]');
-                    if(sb) {{
-                        isClosed = sb.getAttribute('aria-expanded') === 'false' || 
-                                   (window.getComputedStyle(sb).transform && window.getComputedStyle(sb).transform.includes('-')) ||
-                                   (sb.style.marginLeft && sb.style.marginLeft.includes('-'));
+                    // Streamlit標準のサイドバー開閉ターゲットを確実に検出
+                    const candidates = [
+                        '[data-testid="collapsedControl"] button',
+                        '[data-testid="stSidebarCollapsedControl"] button',
+                        '[data-testid="collapsedControl"]',
+                        '[data-testid="stSidebarCollapsedControl"]',
+                        '[data-testid="stSidebarCollapseButton"]',
+                        '[aria-label="Collapse sidebar"]',
+                        '[aria-label="Expand sidebar"]',
+                        'button[kind="headerNoPadding"]'
+                    ];
+                    
+                    let clicked = false;
+                    for(let sel of candidates){{
+                        const el = doc.querySelector(sel);
+                        if(el){{
+                            el.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true, view: window.parent }}));
+                            clicked = true;
+                            break;
+                        }}
                     }}
-
-                    if (isClosed && expandBtn) {{
-                        expandBtn.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true, view: window.parent }}));
-                    }} else if (!isClosed && collapseBtn) {{
-                        collapseBtn.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true, view: window.parent }}));
+                    
+                    if(!clicked) {{
+                        const sb = doc.querySelector('section[data-testid="stSidebar"]');
+                        if(sb){{
+                            const cur = sb.getAttribute('aria-expanded');
+                            sb.setAttribute('aria-expanded', cur === 'true' ? 'false' : 'true');
+                        }}
                     }}
                 }});
 
@@ -949,9 +959,9 @@ components.html(
 
         installFloatingSidebarToggle();
         fixTopNav();
-        setTimeout(installFloatingSidebarToggle, 100);
-        setTimeout(installFloatingSidebarToggle, 400);
-        setTimeout(fixTopNav, 100);
+        setTimeout(installFloatingSidebarToggle, 80);
+        setTimeout(installFloatingSidebarToggle, 250);
+        setTimeout(fixTopNav, 80);
 
         function scrollToTopAbsolute(){{
             try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
@@ -980,7 +990,6 @@ components.html(
             window.parent._lastScrollTrig = {st.session_state['scroll_top_trig']};
             scrollToTopAbsolute();
             requestAnimationFrame(scrollToTopAbsolute);
-            setTimeout(scrollToTopAbsolute, 50);
         }}
         {scroll_target_js}
     }})();
@@ -1107,24 +1116,24 @@ def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p:
             if not model.startswith("gemma"): gen_cfg["responseMimeType"] = "application/json"
             payload = {"contents": [{"role": "user", "parts": [{"text": f"【システム指示】\n{sys_p}\n\n【情報・ユーザープロンプト】\n{usr_p}"}]}], "generationConfig": gen_cfg}
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=9.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=7.5, context=ctx) as r:
                 d = json.loads(r.read().decode("utf-8"))
                 return _parse_j("".join(p.get("text", "") for p in d["candidates"][0]["content"]["parts"])), f"{p_label} ({model})"
         elif prov == "claude":
             payload = {"model": model, "max_tokens": 1200, "temperature": temp, "system": sys_p + " JSONのみ出力せよ。", "messages": [{"role": "user", "content": usr_p}]}
             req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01"}, method="POST")
-            with urllib.request.urlopen(req, timeout=9.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=7.5, context=ctx) as r:
                 return _parse_j(json.loads(r.read().decode("utf-8"))["content"][0]["text"]), f"{p_label} ({model})"
         else:
             payload = {"model": model, "messages": [{"role": "system", "content": sys_p + " Always output valid JSON."}, {"role": "user", "content": usr_p}], "temperature": temp}
             req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"}, method="POST")
-            with urllib.request.urlopen(req, timeout=9.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=7.5, context=ctx) as r:
                 return _parse_j(json.loads(r.read().decode("utf-8"))["choices"][0]["message"]["content"]), f"{p_label} ({model})"
     except Exception:
         return None, f"{p_label} ({model})"
 
 # 通信高速化: Web知識検索をキャッシュ化 & 並列スレッドで短縮化
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=900, show_spinner=False)
 def search_web_knowledge(query: str, max_results: int = 4) -> list:
     if not query or not query.strip(): return []
     q_clean = query.strip()
@@ -1136,7 +1145,7 @@ def search_web_knowledge(query: str, max_results: int = 4) -> list:
         try:
             url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q_clean)}&hl=ja&gl=JP&ceid=JP:ja"
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=2.2, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=1.8, context=ctx) as r:
                 root = ET.fromstring(r.read())
                 items = root.findall("./channel/item")
                 for it in items[:max_results]:
@@ -1154,7 +1163,7 @@ def search_web_knowledge(query: str, max_results: int = 4) -> list:
             if target_term:
                 url = f"https://ja.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&titles={urllib.parse.quote(target_term)}&format=json"
                 req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=2.0, context=ctx) as r:
+                with urllib.request.urlopen(req, timeout=1.6, context=ctx) as r:
                     wdata = json.loads(r.read().decode("utf-8"))
                     pages = wdata.get("query", {}).get("pages", {})
                     for _, pval in pages.items():
@@ -1172,18 +1181,6 @@ def search_web_knowledge(query: str, max_results: int = 4) -> list:
         results.extend(f_rss.result())
         if len(results) < 2:
             results.extend(f_wiki.result())
-
-    if any(w in q_clean for w in ["天気", "気温", "雨", "晴れ"]):
-        try:
-            req = urllib.request.Request("https://weather.tsukumijima.net/api/forecast/city/130010", headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=1.8, context=ctx) as r:
-                wd = json.loads(r.read().decode("utf-8"))
-                fc = wd.get("forecasts", [])
-                today = fc[0] if fc else {}
-                tel = today.get("telop", "晴れ")
-                t_max = (today.get("temperature", {}).get("max", {}) or {}).get("celsius", "20")
-                results.append(f"【気象ライブ】概況『{tel}』、最高気温約{t_max}℃。")
-        except Exception: pass
 
     return results
 
@@ -1244,7 +1241,7 @@ def build_dynamic_turn_from_web(speaker_key: str, user_q: str, r: dict, vref: st
     else:
         return "agree", f"Web情報（{first_fact[:80]}）とクオンツ指標が合致した。『{nm}』は期待度<b>{r['expect_pct']}%</b>のもとで利益を狙う。"
 
-@st.cache_data(ttl=180)
+@st.cache_data(ttl=240)
 def fetch_global_impact_news() -> list:
     qs = [("半導体・AIサプライズ", "半導体 OR エヌビディア OR TSMC OR アドバンテスト OR データセンター 株価"), ("急騰・上方修正・TOB", "ストップ高 OR 上方修正 OR 自社株買い OR 防衛 OR 量子 株")]
     ctx = ssl.create_default_context()
@@ -1252,7 +1249,7 @@ def fetch_global_impact_news() -> list:
     for cat, q in qs:
         try:
             url = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=ja&gl=JP&ceid=JP:ja"
-            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=2.8, context=ctx) as res:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=2.2, context=ctx) as res:
                 root = ET.fromstring(res.read())
             for it in root.findall("./channel/item")[:3]:
                 t = re.sub(r"\s*-\s*[^-]+$", "", (it.findtext("title") or "").strip())
@@ -1293,7 +1290,7 @@ def fetch_5ch_live() -> dict:
     txts = []
     for u in BOARD_URLS:
         try:
-            with urllib.request.urlopen(urllib.request.Request(u + "l50", headers={"User-Agent": "Mozilla/5.0"}), timeout=2.5, context=ctx) as r:
+            with urllib.request.urlopen(urllib.request.Request(u + "l50", headers={"User-Agent": "Mozilla/5.0"}), timeout=2.0, context=ctx) as r:
                 txts.append(re.sub(r"<[^>]+>", " ", r.read().decode("cp932", errors="ignore")))
         except Exception: continue
     joined = " ".join(txts)
@@ -1304,7 +1301,7 @@ def fetch_macro():
     tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
     res = {}
     try:
-        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=5)
+        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=4)
         for k, (c, lbl) in tks.items():
             try:
                 d = raw[c].dropna(subset=["Close"])
@@ -1319,7 +1316,6 @@ macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
 all_impact_news = fetch_global_impact_news()
 
-# サイドバー整理: Expanderでグループ化してすっきりまとめる
 BOOST_MAP = {
     "⚛️ 量子力学波動(QWM-7)": "algo",
     "🏛️ 機関最新アルゴ(Kyleλ・Hurst)": "ms",
@@ -1373,7 +1369,6 @@ with st.sidebar.expander("🎯 投資スタイル ＆ 資金管理", expanded=Fa
     toggle_fn = getattr(st, "toggle", st.checkbox)
     show_5m_chart = toggle_fn("📈 5分足＆VWAP描画", value=True)
 
-# アルゴリズム選択をトップページからサイドバーへ移動
 with st.sidebar.expander("⚛️ ブースト・アルゴリズム選択", expanded=False):
     sel_b = st.multiselect("有効化アルゴリズム", list(BOOST_MAP.keys()), default=list(BOOST_MAP.keys()), label_visibility="collapsed")
     ac_b = {BOOST_MAP[k] for k in (sel_b or [])}
@@ -1722,7 +1717,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
 @st.cache_data(ttl=1800)
 def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms):
     codes = list({s["code"] for sts in STOCK_POOL.values() for s in sts})
-    raw = yf.download(codes, period="6mo", group_by="ticker", threads=True, progress=False, timeout=9)
+    raw = yf.download(codes, period="6mo", group_by="ticker", threads=True, progress=False, timeout=8)
     gmap, alist, seen = {g: [] for g in STOCK_POOL.keys()}, [], set()
     for g, sts in STOCK_POOL.items():
         for s in sts:
@@ -1863,11 +1858,11 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
 
     web_lead = f"<b>🌐 リアルタイムWebファクト探査：</b> {web_snippets[0]}" if web_snippets else ""
     v_html = (
-        f'<div style="margin-bottom:5px;"><b>🔥 『{r["name"]}』総合期待度：</b><span style="color:#fde047;font-size:14px;font-weight:900;">{r["expect_pct"]}%</span> ｜ '
+        f'<div style="margin-bottom:4px;"><b>🔥 『{r["name"]}』総合期待度：</b><span style="color:#fde047;font-size:13.5px;font-weight:900;">{r["expect_pct"]}%</span> ｜ '
         f'<b>🏛️ 機関ミクロ構造：</b><span style="color:#a7f3d0;font-weight:800;">{r["ms_regime"]}（Kyle吸収 {r["kyle_stealth"]}% ／ Hurst {r["hurst"]}）</span></div>'
-        f'<div style="margin-bottom:5px;font-size:11px;color:#94a3b8;">{web_lead}</div>'
-        f'<div style="margin-bottom:5px;"><b>⚛️ 量子波動ステータス：</b><span style="color:#e9d5ff;font-weight:800;">{r["q_state"]}（Qスコア {r["q_score"]}点 ／ トンネル {r["q_tunnel"]}%）</span></div>'
-        f'<div style="margin-bottom:5px;"><b>⚡ プロ向け執行プラン：</b>{st_info["step_plan"]} ｜ 🎯利確 <b>{r["tp_price"]}(+{r["tp_pct"]}%)</b> ／ 🛡️損切 <b>{r["sl_price"]}({r["sl_pct"]}%)</b></div>'
+        f'<div style="margin-bottom:4px;font-size:10.5px;color:#94a3b8;">{web_lead}</div>'
+        f'<div style="margin-bottom:4px;"><b>⚛️ 量子波動ステータス：</b><span style="color:#e9d5ff;font-weight:800;">{r["q_state"]}（Qスコア {r["q_score"]}点 ／ トンネル {r["q_tunnel"]}%）</span></div>'
+        f'<div style="margin-bottom:4px;"><b>⚡ プロ向け執行プラン：</b>{st_info["step_plan"]} ｜ 🎯利確 <b>{r["tp_price"]}(+{r["tp_pct"]}%)</b> ／ 🛡️損切 <b>{r["sl_price"]}({r["sl_pct"]}%)</b></div>'
         f'<div class="beginner-action-box">{st_info["beginner_html"]}</div>'
     )
     return {"final_score": fs, "dialogue": turns, "verdict_html": v_html}
@@ -1878,19 +1873,24 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
         dom_id_attr = f' id="{t["dom_id"]}"' if t.get("dom_id") else ""
         return f'<div class="chat-bubble-user"{dom_id_attr}><b>🗣️ あなたの質問・投下:</b><br>{t["text"]}</div>'
     b_cls = {"doubt": "chat-bubble-doubt", "rage": "chat-bubble-rage", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
-    return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
+    return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:10.5px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
 
-@frag_dec
+# 合議モードのクリック反応を確実に処理
 def render_council_sec(r, uk):
     is_open = st.session_state["active_debates"].get(uk, False)
     in_wl = r["code"] in st.session_state["watchlist"]
     c1, c2 = st.columns([2.7, 1.1])
-    if c1.button("🔼 量子＆マルチAI合議と買い方ガイドを閉じる" if is_open else f"⚛️ {get_debate_mode_badge(len(get_active_ai_providers())).split(' ')[1]}＆買い方を見る", key=f"b_{uk}", use_container_width=True):
-        st.session_state["active_debates"][uk] = not is_open; st.rerun()
+    
+    toggle_label = "🔼 量子＆マルチAI合議と買い方ガイドを閉じる" if is_open else f"⚛️ {get_debate_mode_badge(len(get_active_ai_providers())).split(' ')[1]}＆買い方を見る"
+    if c1.button(toggle_label, key=f"btn_toggle_c_{uk}", use_container_width=True):
+        st.session_state["active_debates"][uk] = not is_open
+        st.rerun()
+
     if c2.button("✅ 監視済" if in_wl else "⭐ 監視追加", key=f"w_{uk}", use_container_width=True):
         if in_wl: del st.session_state["watchlist"][r["code"]]
         else: st.session_state["watchlist"][r["code"]] = r
         st.rerun()
+
     if not is_open: return
 
     m5 = fetch_5m(r["full_code"])
@@ -1902,7 +1902,7 @@ def render_council_sec(r, uk):
         w = base.mark_rule(size=1.5).encode(y=alt.Y("Low:Q", scale=alt.Scale(zero=False), title=None), y2="High:Q", color=alt.Color("BarColor:N", scale=cs, legend=None))
         b = base.mark_bar(size=6).encode(y=alt.Y("Open:Q", scale=alt.Scale(zero=False)), y2="Close:Q", color=alt.Color("BarColor:N", scale=cs, legend=None))
         vw = base.mark_line(color="#f59e0b", strokeWidth=2, strokeDash=[4, 2]).encode(y="VWAP:Q")
-        st.altair_chart((w + b + vw).properties(height=140), use_container_width=True)
+        st.altair_chart((w + b + vw).properties(height=130), use_container_width=True)
 
     if uk not in st.session_state["council_threads"]:
         with st.spinner(f"🌐 『{r['name']}』の最新情報をWeb検索中..."):
@@ -1922,7 +1922,7 @@ def render_council_sec(r, uk):
 
     with st.form(f"jf_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
-        uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』や他銘柄・市況の質問投下（例: 日産の株は今買い？・任天堂の最新動向は？等）", label_visibility="collapsed")
+        uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』や他銘柄・市況の質問投下（例: 日産の株は今買い？等）", label_visibility="collapsed")
         if jc2.form_submit_button("💬 質問投下", use_container_width=True) and uop.strip():
             u_text = uop.strip()
             new_dom_id = f"user_q_anchor_{uk}_{int(time.time()*1000)}"
@@ -1938,13 +1938,13 @@ def render_council_sec(r, uk):
 
     st.markdown(
         f'<div class="consensus-banner">'
-        f'<div style="font-weight:800;color:#fde047;font-size:12.5px;margin-bottom:5px;">🏛️ 量子×機関ミクロ構造 最終結論 ＆ 買い方アクションプラン</div>'
+        f'<div style="font-weight:800;color:#fde047;font-size:12px;margin-bottom:4px;">🏛️ 量子×機関ミクロ構造 最終結論 ＆ 買い方アクションプラン</div>'
         f'{meta["verdict_html"]}'
         f'</div>',
         unsafe_allow_html=True
     )
 
-# 企業名が一番上に来るようにカードレイアウトを更新
+# 企業名が一番上に来るようにし、間延びした改行や空白をカットして整理
 def render_card(r, is_custom=False, rank=None, kp="card"):
     dc = "#10b981" if r["diff"] >= 0 else "#ef4444"
     ds, ps = ("+" if r["diff"] > 0 else ""), ("+" if r["pts_gap_pct"] > 0 else "")
@@ -1954,22 +1954,31 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
     card_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="company-title-header">'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;">'
-        f'<div>{rk_h}<span class="company-name-hero">{r["name"]}</span> <span style="font-size:12px;color:#94a3b8;">({r["code"]} / {r["genre"]})</span></div>'
-        f'<div style="font-size:13px;font-weight:700;"><b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};">{ds}{r["diff"]}%</span>)</div>'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;line-height:1.2;">'
+        f'<div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{rk_h}<span class="company-name-hero">{r["name"]}</span> <span style="font-size:11.5px;color:#94a3b8;">({r["code"]} / {r["genre"]})</span></div>'
+        f'<div style="font-size:12.5px;font-weight:700;white-space:nowrap;margin-left:8px;"><b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};">{ds}{r["diff"]}%</span>)</div>'
         f'</div>'
-        f'<div style="font-size:11px;color:#94a3b8;margin-top:2px;">{r["theme"]}</div>'
+        f'<div style="font-size:10.5px;color:#94a3b8;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{r["theme"]}</div>'
         f'</div>'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
-        f'<div style="margin-bottom:7px;"><span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点 (突破{r["q_tunnel"]}%)</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点 (Kyle吸収{r["kyle_stealth"]}%)</span><span class="pill-badge">🧬 OFI {r["ofi_z"]:+.2f}σ</span></div>'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'
-        f'<div style="font-size:11px;color:#94a3b8;">基準VWAP: <b>{r["vwap_price"]}</b></div>'
-        f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;line-height:1.15;">🔥 AI期待度 / 統合勝率</div><div style="white-space:nowrap;line-height:1.2;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div><div style="font-size:9.5px;color:#94a3b8;">Payoff {r["payoff"]}x / Edge {r["edge"]:+.2f}%</div></div></div>'
-        f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ 量子トンネル</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ 機関Kyle吸収</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 翌朝GU / 陽線</div><div style="font-size:12px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
-        f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 夜間理論寄付き</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
+        f'<div style="margin-bottom:5px;line-height:1.3;display:flex;flex-wrap:wrap;align-items:center;gap:2px 0;">'
+        f'<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span>'
+        f'<span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点 (突破{r["q_tunnel"]}%)</span>'
+        f'<span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点 (Kyle吸収{r["kyle_stealth"]}%)</span>'
+        f'<span class="pill-badge">🧬 OFI {r["ofi_z"]:+.2f}σ</span>'
+        f'</div>'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:2px;">'
+        f'<div style="font-size:10.5px;color:#94a3b8;">基準VWAP: <b>{r["vwap_price"]}</b></div>'
+        f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;">'
+        f'<div style="font-size:9px;color:#fde047;font-weight:700;line-height:1.1;">🔥 AI期待度 / 統合勝率</div>'
+        f'<div style="white-space:nowrap;line-height:1.15;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:11px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div>'
+        f'<div style="font-size:9px;color:#94a3b8;">Payoff {r["payoff"]}x / Edge {r["edge"]:+.2f}%</div>'
+        f'</div></div>'
+        f'<div class="winrate-bar"><div><div style="font-size:9px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9px;color:#c084fc;">⚛️ 量子トンネル</div><div style="font-size:12px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9px;color:#6ee7b7;">🏛️ 機関Kyle吸収</div><div style="font-size:12px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9px;color:#94a3b8;">🌅 翌朝GU/陽線</div><div style="font-size:11.5px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
+        f'<div class="trade-plan-box"><div><div style="font-size:9px;color:#94a3b8;">🌅 夜間理論寄付き</div><div style="font-size:11.5px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9px;color:#10b981;">🎯 利確目標</div><div style="font-size:11.5px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:11.5px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
         f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>基準VWAP: <b>{r["vwap_price"]}</b></span></div>'
         f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 🏛️ 機関ミクロ構造(Kyleλ・Hurst) ＆ 買い方戦略詳細（タップで開閉）</summary>'
-        f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:5px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br><span style="color:#a7f3d0;">{r["ms_regime"]}</span> ｜ <span style="color:#e9d5ff;">{r["q_state"]}</span><br>{st_info["core_logic"]}<br><b>▶ 買い方執行手順:</b> {st_info["step_plan"]}</div>'
+        f'<div style="font-size:11px;color:#cbd5e1;margin-top:4px;line-height:1.45;"><b>{st_info["algo_name"]}</b><br><span style="color:#a7f3d0;">{r["ms_regime"]}</span> ｜ <span style="color:#e9d5ff;">{r["q_state"]}</span><br>{st_info["core_logic"]}<br><b>▶ 買い方執行手順:</b> {st_info["step_plan"]}</div>'
         f'<div class="metrics-row"><span>期待度:{r["expect_pct"]}%</span><span>量子Q:{r["q_score"]}点</span><span>機関ミクロ:{r["ms_score"]}点</span><span>Kyle吸収:{r["kyle_stealth"]}%</span><span>Hurst指数:{r["hurst"]}</span><span>LULD引力:{r["luld_magnet"]}%</span><span>OFI:{r["ofi_z"]:+.2f}σ</span><span>95%CVaR:-{r["cvar95"]}%</span></div>'
         f'</details></div>'
     )
@@ -1977,35 +1986,35 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
     render_council_sec(r, f"{kp}_{r['code']}")
 
 def render_ipo_offering_section():
-    st.markdown('<div class="glass-header"><div style="font-size:15px;font-weight:800;color:#f8fafc;">🎟️ 新規上場 (IPO) ブックビルディング募集 ＆ 初値期待度ランキング</div><div style="font-size:11.5px;color:#94a3b8;margin-top:3px;">現在BB募集受付中・新規上場予定の注目IPO銘柄をAIクオンツがランク付け。各証券会社の抽選申込ページへ直通アクセスできます。</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="glass-header"><div style="font-size:14px;font-weight:800;color:#f8fafc;">🎟️ 新規上場 (IPO) ブックビルディング募集 ＆ 初値期待度ランキング</div><div style="font-size:11px;color:#94a3b8;margin-top:2px;">現在BB募集受付中・新規上場予定の注目IPO銘柄をAIクオンツがランク付け。各証券会社の抽選申込ページへ直通アクセスできます。</div></div>', unsafe_allow_html=True)
     for ipo in IPO_OFFERINGS:
         links_html = "".join([f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">🔗 {lbl}</a>' for lbl, url in ipo["links"]])
         st.markdown(
             f'<div class="rank-card" style="border-left-color:#f59e0b;">'
             f'<div class="company-title-header">'
             f'<div style="display:flex;justify-content:space-between;align-items:center;">'
-            f'<div><span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 #{ipo["rank"]}</span><span class="company-name-hero">{ipo["name"]}</span> <span style="font-size:12px;color:#94a3b8;">({ipo["code"]} / {ipo["market"]})</span></div>'
-            f'<div style="text-align:right;"><span style="font-size:9.5px;color:#94a3b8;">AI初値予測</span> <span class="prob-badge" style="color:#10b981!important;">{ipo["expect_return"]}</span></div>'
+            f'<div><span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 #{ipo["rank"]}</span><span class="company-name-hero">{ipo["name"]}</span> <span style="font-size:11.5px;color:#94a3b8;">({ipo["code"]} / {ipo["market"]})</span></div>'
+            f'<div style="text-align:right;"><span style="font-size:9px;color:#94a3b8;">AI初値予測</span> <span class="prob-badge" style="color:#10b981!important;">{ipo["expect_return"]}</span></div>'
             f'</div>'
-            f'<div style="font-size:11px;color:#cbd5e1;margin-top:2px;">🎯 {ipo["theme"]} ｜ 主幹事: <b>{ipo["lead"]}</b></div>'
+            f'<div style="font-size:10.5px;color:#cbd5e1;margin-top:2px;">🎯 {ipo["theme"]} ｜ 主幹事: <b>{ipo["lead"]}</b></div>'
             f'</div>'
-            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;flex-wrap:wrap;gap:4px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:4px;">'
             f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">IPO期待度 {ipo["score"]}%</span>'
-            f'<span style="font-size:11px;color:#38bdf8;font-weight:700;">{ipo["tier"]}</span></div>'
-            f'<div class="trade-plan-box" style="margin-top:7px;"><div><div style="font-size:9.5px;color:#94a3b8;">📅 BB抽選期間</div><div style="font-size:11.5px;font-weight:700;color:#fde047;">{ipo["bb_period"]}</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🔔 上場日</div><div style="font-size:11.5px;font-weight:700;">{ipo["list_date"]}</div></div><div><div style="font-size:9.5px;color:#94a3b8;">💴 仮条件・公募価格</div><div style="font-size:11.5px;font-weight:700;">{ipo["price_band"]}</div></div></div>'
-            f'<div style="margin-top:7px;">{links_html}</div></div>',
+            f'<span style="font-size:10.5px;color:#38bdf8;font-weight:700;">{ipo["tier"]}</span></div>'
+            f'<div class="trade-plan-box" style="margin-top:5px;"><div><div style="font-size:9px;color:#94a3b8;">📅 BB抽選期間</div><div style="font-size:11px;font-weight:700;color:#fde047;">{ipo["bb_period"]}</div></div><div><div style="font-size:9px;color:#94a3b8;">🔔 上場日</div><div style="font-size:11px;font-weight:700;">{ipo["list_date"]}</div></div><div><div style="font-size:9px;color:#94a3b8;">💴 仮条件・公募価格</div><div style="font-size:11px;font-weight:700;">{ipo["price_band"]}</div></div></div>'
+            f'<div style="margin-top:5px;">{links_html}</div></div>',
             unsafe_allow_html=True
         )
 
 # メインヘッダー
-mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
+mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 7px;border-radius:5px;font-size:10px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(
     f'<div class="glass-header">'
-    f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'
+    f'<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">'
     f'<div style="min-width:0;flex:1;"><div class="brand-luxury">YAMASHISHI LAB</div><div class="brand-sub">QUANTUM WAVEFUNCTION & MULTI-AGENT TERMINAL</div></div>'
-    f'<span style="background:rgba(168,85,247,0.16);border:1px solid rgba(168,85,247,0.45);color:#e9d5ff;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:700;white-space:nowrap;flex-shrink:0;">{get_debate_mode_badge(active_cnt)}</span>'
+    f'<span style="background:rgba(168,85,247,0.16);border:1px solid rgba(168,85,247,0.45);color:#e9d5ff;padding:2px 8px;border-radius:999px;font-size:9.5px;font-weight:700;white-space:nowrap;flex-shrink:0;">{get_debate_mode_badge(active_cnt)}</span>'
     f'</div>'
-    f'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">{mpills}</div></div>',
+    f'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">{mpills}</div></div>',
     unsafe_allow_html=True
 )
 
@@ -2020,18 +2029,18 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
         f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
         f'<span class="pill-badge" style="background:#ef4444;color:#fff;border:none;">🚨 重大ニュース徹底深掘りレポート</span>'
         f'<span class="quantum-badge">⚛️ 量子波及スコア {tn["impact_score"]}点 ｜ {tn["source"]}</span></div>'
-        f'<div style="font-size:18px;font-weight:800;color:#f8fafc;margin-top:8px;line-height:1.45;">{tn["title"]}</div>'
-        f'<div style="font-size:11.5px;color:#94a3b8;margin-top:6px;">🎯 <b>最優先波及セクター：</b> <span style="color:#38bdf8;font-weight:700;">{det["sector_focus"]}</span></div>'
+        f'<div style="font-size:17px;font-weight:800;color:#f8fafc;margin-top:6px;line-height:1.4;">{tn["title"]}</div>'
+        f'<div style="font-size:11px;color:#94a3b8;margin-top:5px;">🎯 <b>最優先波及セクター：</b> <span style="color:#38bdf8;font-weight:700;">{det["sector_focus"]}</span></div>'
         f'</div>',
         unsafe_allow_html=True
     )
     if tn.get("link"):
         st.markdown(f'<a href="{tn["link"]}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📰 ニュース原文（外部メディア）を別タブで開く</a>', unsafe_allow_html=True)
     st.markdown(
-        f'<div class="rank-card" style="border-left-color:#a855f7;margin-top:10px;">'
-        f'<div style="font-size:14px;font-weight:800;color:#e9d5ff;margin-bottom:6px;">🧠 なぜこのニュースで株価が動くのか？（機関アルゴ＆量子もつれ波及メカニズム）</div>'
-        f'<div style="font-size:12.5px;color:#e2e8f0;line-height:1.7;">{det["mechanism"]}</div>'
-        f'<div class="beginner-action-box" style="margin-top:10px;">'
+        f'<div class="rank-card" style="border-left-color:#a855f7;margin-top:8px;">'
+        f'<div style="font-size:13px;font-weight:800;color:#e9d5ff;margin-bottom:5px;">🧠 なぜこのニュースで株価が動くのか？（機関アルゴ＆量子もつれ波及メカニズム）</div>'
+        f'<div style="font-size:12px;color:#e2e8f0;line-height:1.65;">{det["mechanism"]}</div>'
+        f'<div class="beginner-action-box" style="margin-top:8px;">'
         f'<b>⚡ {investment_style.split(" ")[1]} 実践トレード立ち回り手順</b><br>{det["action_guide"].replace(chr(10), "<br>")}'
         f'</div></div>',
         unsafe_allow_html=True
@@ -2104,7 +2113,7 @@ elif sel_cat == "🏛️ 機関最新ミクロ構造TOP10":
 elif sel_cat == "🚨 重大ニュース＆連動株":
     st.caption("📰 最新マーケット重大ニュースと、そのニュースによって株価が連動・波及しやすい銘柄の一覧です。")
     for n_item in all_impact_news:
-        st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="font-size:11px;color:#f87171;font-weight:800;">🚨 {n_item["cat"]} ｜ {n_item["source"]}</div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-bottom:4px;">{n_item["title"]}</div><div style="font-size:11.5px;color:#cbd5e1;">{n_item["detail"]["mechanism"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="font-size:10.5px;color:#f87171;font-weight:800;">🚨 {n_item["cat"]} ｜ {n_item["source"]}</div><div style="font-size:14px;font-weight:800;color:#f8fafc;margin-bottom:3px;">{n_item["title"]}</div><div style="font-size:11px;color:#cbd5e1;">{n_item["detail"]["mechanism"]}</div></div>', unsafe_allow_html=True)
         if st.button("🔥 このニュースの詳細レポート＆連動株を見る", key=f"tab_n_{n_item['id']}", use_container_width=True):
             st.session_state["selected_news_item"] = n_item; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
 elif sel_cat == "🎟️ IPO募集・新規上場":
