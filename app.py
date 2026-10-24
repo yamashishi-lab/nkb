@@ -25,32 +25,29 @@ def get_secure_env_var(key: str, default_generator) -> str:
 
 SECRET_KEY = get_secure_env_var("SECRET_KEY", lambda: hashlib.sha256(f"sec_salt_{secrets.token_hex(16)}_{time.time()}".encode()).hexdigest())
 
-# 管理者認証シグネチャ（コードから平文のアドレスおよびパスコードを完全排除）
-# ソルト付きSHA-256による定数時間事前ダイジェスト
+# 管理者情報（定数・暗号照合）
+ADMIN_EMAIL = "nthbh399@ybb.ne.jp"
+ADMIN_RAW_PASS = "yam0s1ta"
+
 _SEC_SEED_SALT = "yamashishi_quant_enterprise_2026_s9"
-_ADMIN_EMAIL_HASH = "81ca97dd93cb62aa8944cc963be683ba874f63c87fdf0ff5ebec716fb1a6a9b0"
-_ADMIN_PASS_HASH = "12033c4613bb85e495f575a2f5e8be66cfaee7a9657b0766fe85aa346ecdbd51"
+_ADMIN_EMAIL_HASH = hashlib.sha256(f"{_SEC_SEED_SALT}:{ADMIN_EMAIL.strip().lower()}".encode("utf-8")).hexdigest()
+_ADMIN_PASS_HASH = hashlib.sha256(f"{_SEC_SEED_SALT}:{ADMIN_RAW_PASS.strip()}".encode("utf-8")).hexdigest()
 
 def is_seed_admin_email(em: str) -> bool:
     if not em: return False
     h = hashlib.sha256(f"{_SEC_SEED_SALT}:{em.strip().lower()}".encode("utf-8")).hexdigest()
-    return hmac.compare_digest(h, _ADMIN_EMAIL_HASH)
+    return hmac.compare_digest(h, _ADMIN_EMAIL_HASH) or hmac.compare_digest(em.strip().lower(), ADMIN_EMAIL.lower())
 
 def is_seed_admin_pass(pw: str) -> bool:
     if not pw: return False
-    p_clean = pw.strip()
-    h1 = hashlib.sha256(f"{_SEC_SEED_SALT}:{p_clean}".encode("utf-8")).hexdigest()
-    h2 = hashlib.sha256(f"{_SEC_SEED_SALT}:{p_clean.lower()}".encode("utf-8")).hexdigest()
-    return hmac.compare_digest(h1, _ADMIN_PASS_HASH) or hmac.compare_digest(h2, _ADMIN_PASS_HASH)
-
-# システム内部管理識別子
-ADMIN_EMAIL = get_secure_env_var("ADMIN_EMAIL", lambda: "nthbh399@ybb.ne.jp").lower()
-ADMIN_INIT_PASS = get_secure_env_var("ADMIN_PASS", lambda: "")
+    pw_clean = pw.strip()
+    h = hashlib.sha256(f"{_SEC_SEED_SALT}:{pw_clean}".encode("utf-8")).hexdigest()
+    return hmac.compare_digest(h, _ADMIN_PASS_HASH) or hmac.compare_digest(pw_clean, ADMIN_RAW_PASS)
 
 DB_PATH = "yamashishi_quant_core.db"
 
 # ==========================================
-# 2. SQLite堅牢データベース層 (WALモード・商用耐障害性)
+# 2. SQLite堅牢データベース層 (WALモード・商用高並行耐性)
 # ==========================================
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False)
@@ -61,7 +58,6 @@ def get_db():
     return conn
 
 def hash_sec_pwd(pwd: str, salt: str = "") -> str:
-    """PBKDF2-HMAC-SHA256ストレッチング暗号化"""
     use_salt = salt or SECRET_KEY[:16]
     return hashlib.pbkdf2_hmac("sha256", pwd.encode("utf-8"), use_salt.encode("utf-8"), 100000).hex()
 
@@ -136,9 +132,9 @@ def init_db():
         
         conn.execute("DELETE FROM security_bans WHERE key_val IN ('', '-', 'default_env', 'yamashishi_default_env', '未認証端末') OR key_val IS NULL;")
         
-        # 管理者レコードの健全化と初期登録
+        # 管理者レコードの初期化（ADMIN_RAW_PASSを正式パスコードとして確実に設定）
         ns = datetime.now().strftime("%Y-%m-%d %H:%M")
-        adm_passcode = hmac.new(SECRET_KEY.encode(), ADMIN_EMAIL.encode(), hashlib.sha256).hexdigest()[:8].upper()
+        adm_passcode = ADMIN_RAW_PASS
         adm_pin_h = hash_sec_pwd("0000", SECRET_KEY[:16])[:16]
         
         conn.execute("""
@@ -162,6 +158,7 @@ def sanitize(txt: str) -> str:
     return html.escape(str(txt or "")).strip()
 
 def gen_code(em: str) -> str:
+    if is_seed_admin_email(em): return ADMIN_RAW_PASS
     return hmac.new(SECRET_KEY.encode(), em.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
 
 def gen_tok(em: str, act: str) -> str:
@@ -907,7 +904,7 @@ def inject_css():
 inject_css()
 
 # ==========================================
-# 8. 認証＆セッション管理（強化商用版）
+# 8. 認証＆セッション管理（管理者即時突破強化）
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
@@ -985,7 +982,7 @@ def check_auth():
             """, (
                 cu,
                 (u_rec["name"] if u_rec else ("システム管理者" if is_admin else "会員")),
-                (u_rec["passcode"] if u_rec else gen_code(cu)),
+                (ADMIN_RAW_PASS if is_admin else (u_rec["passcode"] if u_rec else gen_code(cu))),
                 (u_rec["pin_hash"] if u_rec else ""),
                 (u_rec["applied_at"] if u_rec else datetime.now().strftime("%Y-%m-%d %H:%M")),
                 (u_rec["approved_at"] if u_rec else datetime.now().strftime("%Y-%m-%d %H:%M")),
@@ -1037,24 +1034,26 @@ def check_auth():
             ie = st.text_input("📧 登録メールアドレス", placeholder="your@email.com")
             ic = st.text_input("🔑 専用アクセスコード", type="password", placeholder="専用コード")
             if st.form_submit_button("🔓 認証して量子ターミナルを起動", use_container_width=True):
-                cm = ie.strip().lower()
-                inp_code = ic.strip()
+                cm = (ie or "").strip().lower()
+                inp_code = (ic or "").strip()
                 
-                # 【最重要】管理者マスター認証（平文非公開・ソルト付きハッシュ判定）
-                # 指定アドレスまたは指定パスコードの合致により、未承認判定を回避して即時認証
-                if is_seed_admin_pass(inp_code) and (is_seed_admin_email(cm) or cm == ADMIN_EMAIL or cm == ""):
-                    login_target = cm if (is_seed_admin_email(cm) or cm == ADMIN_EMAIL) else ADMIN_EMAIL
+                # 【完全即時管理者バイパス判定】
+                # nthbh399@ybb.ne.jp / yam0s1ta を最優先で無条件承認・ログイン
+                is_admin_candidate = (cm == ADMIN_EMAIL.lower() or is_seed_admin_email(cm) or (not cm and is_seed_admin_pass(inp_code)))
+                
+                if is_admin_candidate and (is_seed_admin_pass(inp_code) or inp_code == ADMIN_RAW_PASS):
+                    target_em = ADMIN_EMAIL
                     with get_db() as conn:
                         conn.execute("""
                             INSERT INTO members (email, name, status, passcode, pin_hash, applied_at, approved_at, last_seen_ts, last_seen_str, fp, raw_hfp, bio_enabled)
                             VALUES (?, 'システム管理者', 'approved', ?, '', ?, ?, 0, '-', '-', '-', 1)
-                            ON CONFLICT(email) DO UPDATE SET status = 'approved';
-                        """, (login_target, inp_code, datetime.now().strftime("%Y-%m-%d %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M")))
-                        conn.execute("DELETE FROM security_bans WHERE email = ?", (login_target,))
+                            ON CONFLICT(email) DO UPDATE SET status = 'approved', passcode = excluded.passcode;
+                        """, (target_em, ADMIN_RAW_PASS, datetime.now().strftime("%Y-%m-%d %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M")))
+                        conn.execute("DELETE FROM security_bans WHERE email = ?", (target_em,))
                         conn.commit()
-                    st.session_state["authenticated_user"] = login_target
-                    st.query_params["u"] = login_target
-                    st.query_params["t"] = gen_tok(login_target, "session_keep")
+                    st.session_state["authenticated_user"] = target_em
+                    st.query_params["u"] = target_em
+                    st.query_params["t"] = gen_tok(target_em, "session_keep")
                     st.rerun()
 
                 if not cm or not inp_code:
@@ -1065,21 +1064,7 @@ def check_auth():
                         is_adm_acc = (cm == ADMIN_EMAIL or is_seed_admin_email(cm))
                         
                         if is_adm_acc:
-                            correct_hmac = gen_code(cm)
-                            valid_codes = {correct_hmac, (rec["passcode"] if rec else "")}
-                            if ADMIN_INIT_PASS and ADMIN_INIT_PASS != "":
-                                valid_codes.add(ADMIN_INIT_PASS)
-                            
-                            is_matched = any(hmac.compare_digest(inp_code.upper(), c.upper()) for c in valid_codes if c) or is_seed_admin_pass(inp_code)
-                            if is_matched:
-                                conn.execute("UPDATE members SET status = 'approved' WHERE email = ?", (cm,))
-                                conn.commit()
-                                st.session_state["authenticated_user"] = cm
-                                st.query_params["u"] = cm
-                                st.query_params["t"] = gen_tok(cm, "session_keep")
-                                st.rerun()
-                            else:
-                                st.error("⚠️ 管理者コードが正しくありません。")
+                            st.error("⚠️ 管理者コードが正しくありません。")
                         else:
                             is_ban, _ = check_and_log_ban_spoof(cm, rec["name"] if rec else "", cur_fp, raw_hfp, rec["pin_hash"] if rec else "", "コードログイン")
                             if is_ban or (rec and rec["status"] == "banned"):
@@ -1088,7 +1073,7 @@ def check_auth():
                                 st.error("🚫 このアカウントは一時停止されています。")
                             elif rec and rec["status"] == "approved" and (
                                 hmac.compare_digest(inp_code.upper(), (rec["passcode"] or "").upper()) or
-                                hmac.compare_digest(inp_code.upper(), gen_code(cm))
+                                hmac.compare_digest(inp_code.upper(), gen_code(cm).upper())
                             ):
                                 st.session_state["authenticated_user"] = cm
                                 st.query_params["u"] = cm
@@ -1518,12 +1503,11 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
 # ==========================================
 @st.cache_data(ttl=900)
 def fetch_5ch_live() -> dict:
-    """5ch市況実況スレッド＋Yahoo!ファイナンス・Googleニュースの多重冗長化収集"""
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     txts = []
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"}
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     
     target_urls = [
         "https://egg.5ch.io/stock/subback.html",
@@ -1575,7 +1559,6 @@ def fetch_macro():
 
 @st.cache_data(ttl=3600)
 def fetch_live_ipo_offerings() -> list:
-    """JPX公式＆ライブ上場データ直結の動的IPOスクレイピング"""
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -1611,7 +1594,7 @@ def fetch_live_ipo_offerings() -> list:
     if not ipos:
         ipos = [
             {"rank": 1, "code": "285A", "name": "キオクシアHD", "market": "東証P", "bb_period": "常時受付中", "list_date": "随時更新", "price_band": "1,450円〜1,600円", "expect_return": "+48.5%", "score": 94, "tier": "🌟 S級：全力BB参加（大型半導体再生）", "lead": "野村證券 / 三菱UFJモルガン", "theme": "NANDフラッシュメモリ世界大手・AIデータセンター需要", "links": [("🏦 SBI証券 BB申込", "https://www.sbisec.co.jp/"), ("📄 JPX新規上場", "https://www.jpx.co.jp/listing/stocks/new/index.html")]},
-            {"rank": 2, "code": "216A", "name": "タイミー", "market": "東証G", "bb_period": "常時受付中", "list_date": "随時更新", "price_band": "1,350円〜1,450円", "expect_return": "+41.0%", "score": 88, "tier": "🔥 A級：積極BB参加（スキマバイト首位）", "lead": "大和証券 / 三菱UFJ", "theme": "スキマバイトプラットフォーム・労働力マッチング", "links": [("🏦 大和証券 IPO", "https://www.daiwa.jp/"), ("📈 やさしいIPO", "https://www.ipokiso.com/")]},
+            {"rank": 2, "code": "216A", "name": "タイミー", "market": "東証G", "bb_period": "常時受付中", "list_date": "随時更新", "price_band": "1,350円〜1,450円", "expect_return": "+41.0%", "score": 88, "tier": "🔥 A級：積極BB参加（スキマバイト首位）", "lead": "大和証券 / 三菱UFJ", "theme": "スキマバイトプラットフォーム・労働力マッチング", "links": [("🏦 大和証券 IPO", "https://www.daiwa.jp/"), ("📈 やさしいIPO", "https://ipokiso.com/")]},
             {"rank": 3, "code": "186A", "name": "アストロスケール", "market": "東証G", "bb_period": "次期受付", "list_date": "随時更新", "price_band": "810円〜850円", "expect_return": "+62.0%", "score": 86, "tier": "🔥 A級：積極BB参加（宇宙国策デブリ除去）", "lead": "三菱UFJ / みずほ証券", "theme": "スペースデブリ除去・JAXA連携宇宙安全保障", "links": [("🏦 楽天証券 IPO", "https://www.rakuten-sec.co.jp/"), ("📊 庶民のIPO", "https://ipokabu.net/")]},
             {"rank": 4, "code": "141A", "name": "トライアルHD", "market": "東証G", "bb_period": "次期受付", "list_date": "随時更新", "price_band": "2,000円〜2,200円", "expect_return": "+25.0%", "score": 79, "tier": "⭕ B級：堅実BB参加（スマートストア）", "lead": "野村證券 / 大和証券", "theme": "AIカメラ・リテールDXスマートスーパー", "links": [("🏦 松井証券", "https://www.matsui.co.jp/"), ("📄 東京IPO", "https://www.tokyoipo.com/")]},
             {"rank": 5, "code": "247A", "name": "Aiロボティクス", "market": "東証G", "bb_period": "次期受付", "list_date": "随時更新", "price_band": "1,600円〜1,760円", "expect_return": "+55.0%", "score": 82, "tier": "🔥 A級：小型吸収・需給良好", "lead": "SBI証券", "theme": "AIスキンケア・DtoCマーケティング自動化", "links": [("🏦 SBI証券 BB申込", "https://www.sbisec.co.jp/"), ("📊 みんかぶIPO", "https://minkabu.jp/ipo")]}
