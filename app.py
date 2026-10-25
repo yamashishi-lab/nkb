@@ -58,7 +58,6 @@ DYNAMIC_DYNAMIC_POOLS = {
 STOCK_POOL = DYNAMIC_DYNAMIC_POOLS
 KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": g} for g, its in STOCK_POOL.items() for it in its}
 
-
 # ==========================================
 # 2. ユーティリティとセキュリティ関数
 # ==========================================
@@ -173,7 +172,6 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
     mdb["logs"] = mdb["logs"][:120]; save_j(FILES["mail"], mdb)
     return True
 
-
 # ==========================================
 # 3. LLM APIと設定関連関数
 # ==========================================
@@ -191,13 +189,6 @@ def get_active_ai_providers() -> list:
         mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
         if key: act.append((k, lbl, mod, key))
     return act
-
-def get_debate_mode_badge(cnt: int) -> str:
-    if cnt <= 1: return "🧠 シングルAI・7人専門家合議モード"
-    if cnt == 2: return "⚔️ 2大AI クロス対談モード (並列接続)"
-    if cnt == 3: return "🔥 3大AI トライアングル・ディベート"
-    if cnt <= 6: return f"🏛️ {cnt}大AI ラウンドテーブル会議"
-    return "👑 7大AI グランド討論会・完全合議"
 
 def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p: str, temp: float = 0.7):
     p_label, _, endpoint = AI_PROVIDERS.get(prov, AI_PROVIDERS["gemini"])
@@ -223,9 +214,8 @@ def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p:
                 return _parse_j(json.loads(r.read().decode("utf-8"))["choices"][0]["message"]["content"]), f"{p_label} ({model})"
     except Exception: return None, f"{p_label} ({model})"
 
-
 # ==========================================
-# 4. UI と CSS / JS 注入 (ナビゲーション・サイドバー完全修正版)
+# 4. UI と CSS / JS 注入
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -268,7 +258,6 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* 完全カスタムサイドバーCSS */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 9999999 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
@@ -281,12 +270,10 @@ def inject_css():
         transform: translateX(0) !important; box-shadow: 15px 0 45px rgba(0,0,0,0.9), 2px 0 15px rgba(56,189,248,0.3) !important;
     }
     
-    /* サイドバー開閉ボタン等の無効化 */
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], header button[kind="headerNoPadding"] {
         opacity: 0 !important; position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; z-index: -1 !important;
     }
     
-    /* メインコンテナのマージン相殺 */
     section[data-testid="stSidebar"] + div, section.main, .stApp > header + div > div {
         margin-left: 0 !important; width: 100% !important; max-width: 100% !important;
     }
@@ -307,10 +294,9 @@ def inject_css():
         white-space: nowrap !important; display: block; width: 100%;
     }
     
-    /* トップナビゲーションボタン（位置を下げてサイドバーボタンと被らないように修正） */
     .fixed-top-nav-bar {
         position: fixed !important; top: 42px !important; left: 50% !important; transform: translateX(-50%) !important;
-        z-index: 999980 !important; width: min(380px, calc(100vw - 4rem)) !important; background: rgba(5,8,17,0.95) !important;
+        z-index: 999980 !important; width: min(220px, calc(100vw - 4rem)) !important; background: rgba(5,8,17,0.95) !important;
         backdrop-filter: blur(14px) !important; border: none !important; border-radius: 9px !important; outline: none !important;
         box-shadow: 0 6px 20px rgba(0,0,0,0.75) !important; padding: 4px 6px !important; margin: 0 !important; pointer-events: auto !important;
     }
@@ -401,7 +387,6 @@ def check_auth():
         st.query_params["u"], st.query_params["t"] = cu, keep_tok
         return True
 
-    # ログイン画面のバッジ・生体認証
     st.markdown(
         '<div class="glass-header" style="text-align:center;padding:18px 12px;">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
@@ -436,9 +421,9 @@ def check_auth():
             if st.form_submit_button("📨 セキュア会員登録を申請する", use_container_width=True):
                 if "@" not in am or len(apin.strip()) < 4: st.warning("⚠️ 正しいメールアドレスと4桁の暗証番号(PIN)を入力してください。")
                 else:
-                    cm, pc, ns = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    cm, ns = am.strip().lower(), datetime.now().strftime("%Y-%m-%d %H:%M")
                     nm_clean = an.strip() or "未入力"; pin_h = hash_pin(apin)
-                    is_ban, ban_reason = check_and_log_ban_spoof(cm, nm_clean, cur_fp, raw_hfp, pin_h, "新規登録申請")
+                    is_ban, _ = check_and_log_ban_spoof(cm, nm_clean, cur_fp, raw_hfp, pin_h, "新規登録申請")
                     if is_ban or (db.get(cm) and db[cm].get("status") == "banned"): st.error("💀 セキュリティ監視システムにより、申請は永久ブロックされました。")
                     else:
                         db[cm] = {"name": nm_clean, "email": cm, "status": "pending", "passcode": gen_code(cm), "pin_hash": pin_h, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False}
@@ -462,7 +447,6 @@ def check_auth():
 
 check_auth()
 
-
 # ==========================================
 # 6. セッション状態の初期化
 # ==========================================
@@ -471,7 +455,7 @@ for k, v in [
     ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"),
     ("selected_news_item", None), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
     ("last_cat", "🏆 総合TOP5"), ("nav_history", []), ("scroll_top_trig", 0),
-    ("scroll_target_id", ""), ("focused_stock_item", None) # ★ 個別単独フォーカス用のステート
+    ("scroll_target_id", ""), ("focused_stock_item", None)
 ]:
     if k not in st.session_state:
         st.session_state[k] = v
@@ -483,29 +467,10 @@ open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
-    nav_c1, nav_c2, nav_c3 = st.columns([1, 1, 1])
-    if nav_c1.button("⬆️ トップ", key="top_nav_top", use_container_width=True):
+    if st.button("⬆️ トップに戻る", key="top_nav_top", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-        st.session_state["focused_stock_item"] = None # 個別画面解除
-        st.rerun()
-    if nav_c2.button(f"✖ 全合議閉じる", key="top_nav_close", use_container_width=True):
-        st.session_state["active_debates"] = {}
-        st.rerun()
-    if nav_c3.button("↩️ 戻る", key="top_nav_back", use_container_width=True):
-        st.session_state["focused_stock_item"] = None # 個別画面解除
-        if st.session_state.get("navigation_page") != "TOP":
-            st.session_state["navigation_page"] = "TOP"
-            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-        elif st.session_state.get("custom_search_code"):
-            st.session_state["custom_search_code"] = ""
-        elif st.session_state.get("nav_history") and len(st.session_state["nav_history"]) > 0:
-            popped = st.session_state["nav_history"].pop()
-            st.session_state["active_category"] = popped
-            st.session_state["last_cat"] = popped
-        else:
-            st.session_state["active_category"] = "🏆 総合TOP5"
-            st.session_state["last_cat"] = "🏆 総合TOP5"
+        st.session_state["focused_stock_item"] = None
         st.rerun()
 
 scroll_target_js = ""
@@ -547,7 +512,6 @@ components.html(
                     #yamashishi-floating-sidebar-btn svg {{ width: 14px !important; height: 14px !important; }}
                     #yamashishi-floating-sidebar-btn span {{ font-family: 'JetBrains Mono', monospace !important; font-size: 10px !important; font-weight: 800 !important; }}
                     
-                    /* オーバーレイのZ-indexはサイドバーより低く設定 */
                     #yamashishi-sidebar-overlay {{ position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); backdrop-filter: blur(3px); z-index: 9999998 !important; opacity: 0; visibility: hidden; transition: all 0.35s ease; }}
                     #yamashishi-sidebar-overlay.active {{ opacity: 1; visibility: visible; }}
                 `;
@@ -562,50 +526,50 @@ components.html(
                 doc.body.appendChild(overlay);
                 doc.body.appendChild(btn);
 
-                btn.addEventListener('click', function(e){{
+                btn.addEventListener('click', function(e){
                     e.preventDefault(); e.stopPropagation();
-                    isSidebarOpen = !isSidebarOpen; // 確実にトグル反転
+                    isSidebarOpen = !isSidebarOpen; 
                     updateSidebarState();
-                }});
+                });
                 
-                overlay.addEventListener('click', function(e){{
+                overlay.addEventListener('click', function(e){
                     e.preventDefault(); e.stopPropagation();
                     isSidebarOpen = false; 
                     updateSidebarState();
-                }});
-            }} catch(e){{}}
-        }}
+                });
+            } catch(e){}
+        }
 
-        function highlightNewsButtons(){{
-            try {{
+        function highlightNewsButtons(){
+            try {
                 const ps = doc.querySelectorAll('button p');
-                ps.forEach(p => {{
-                    if (p.textContent.includes('🚨 重大情報有り')) {{
+                ps.forEach(p => {
+                    if (p.textContent.includes('🚨 重大情報有り')) {
                         const btn = p.closest('button');
-                        if(btn && !btn.classList.contains('news-alert-btn-active')) {{
+                        if(btn && !btn.classList.contains('news-alert-btn-active')) {
                             btn.classList.add('news-alert-btn-active');
                             btn.style.setProperty('background', 'linear-gradient(90deg, #ef4444, #b91c1c)', 'important');
                             btn.style.setProperty('color', '#ffffff', 'important');
                             btn.style.setProperty('border', '2px solid #f87171', 'important');
                             btn.style.setProperty('animation', 'pulse-alert 1.5s infinite', 'important');
-                            if(p) {{
+                            if(p) {
                                 p.style.setProperty('color', '#ffffff', 'important');
                                 p.style.setProperty('font-weight', '900', 'important');
-                            }}
-                        }}
-                    }}
-                }});
-            }} catch(e){{}}
-        }}
+                            }
+                        }
+                    }
+                });
+            } catch(e){}
+        }
 
-        function fixTopNav(){{
-            try {{
+        function fixTopNav(){
+            try {
                 const marker = doc.querySelector('.top-nav-marker');
                 if(!marker) return;
                 let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
-                if(box && box.querySelector('[data-testid="stHorizontalBlock"]')) box.classList.add('fixed-top-nav-bar');
-            }} catch(e){{}}
-        }}
+                if(box && box.querySelector('button')) box.classList.add('fixed-top-nav-bar');
+            } catch(e){}
+        }
 
         installCustomSidebarToggle();
         fixTopNav();
@@ -613,34 +577,31 @@ components.html(
         setInterval(updateSidebarState, 100);
         setTimeout(fixTopNav, 100);
 
-        function scrollToTopAbsolute(){{
-            try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
+        function scrollToTopAbsolute(){
+            try { window.parent.scrollTo(0, 0); } catch(e){}
             const targets = [doc.documentElement, doc.body, doc.querySelector('section.main'), doc.querySelector('[data-testid="stAppViewContainer"]')];
-            targets.forEach(el => {{ if(el){{ try {{ el.scrollTop = 0; }} catch(e){{}} }} }});
+            targets.forEach(el => { if(el){ try { el.scrollTop = 0; } catch(e){} } });
             const topAnchor = doc.getElementById('page_top_anchor');
-            if(topAnchor && typeof topAnchor.scrollIntoView === 'function') try {{ topAnchor.scrollIntoView({{behavior: 'instant', block: 'start'}}); }} catch(e){{}}
-        }}
+            if(topAnchor && typeof topAnchor.scrollIntoView === 'function') try { topAnchor.scrollIntoView({behavior: 'instant', block: 'start'}); } catch(e){}
+        }
 
-        if({st.session_state['scroll_top_trig']} > 0 && window.parent._lastScrollTrig !== {st.session_state['scroll_top_trig']}){{
+        if({st.session_state['scroll_top_trig']} > 0 && window.parent._lastScrollTrig !== {st.session_state['scroll_top_trig']}){
             window.parent._lastScrollTrig = {st.session_state['scroll_top_trig']};
             scrollToTopAbsolute(); requestAnimationFrame(scrollToTopAbsolute); setTimeout(scrollToTopAbsolute, 50);
-        }}
+        }
         {scroll_target_js}
-    }})();
+    })();
     </script>""", height=0)
 
-
 # ==========================================
-# 8. サイドバー構築 (AGI本物監査員とアルゴ設定)
+# 8. サイドバー構築
 # ==========================================
 with st.sidebar:
-    # ユーザー表示 (サイドバー上部)
     cu = st.session_state.get("authenticated_user", "")
     if cu:
         st.markdown(f'<div style="background:#0f172a;padding:8px 11px;border-radius:9px;border:1px solid rgba(168,85,247,0.35);margin-bottom:6px;"><div style="font-size:9.5px;color:#c084fc;font-weight:700;">⚛️ QUANTUM SESSION ACTIVE</div><div style="color:#f8fafc;font-size:11.5px;font-weight:700;">会員 ({cu})</div></div>', unsafe_allow_html=True)
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
     
-    # 【完全復元】管理コントロール画面タブ
     if cu == ADMIN_EMAIL.strip().lower():
         with st.expander("👑 会員コントロール・管理画面", expanded=True):
             db_admin = load_mem()
@@ -713,13 +674,12 @@ with st.sidebar:
         if "system_zero_logs" not in st.session_state:
             st.session_state["system_zero_logs"] = []
             
-        # 本物仕様の鬼監査ロジック + SYSTEM-ZERO監視
         if "last_audit_trig" not in st.session_state or random.random() < 0.20:
             st.session_state["last_audit_trig"] = time.time()
             roster = st.session_state["agent_roster"]
             keys = list(roster.keys())
             
-            if random.random() < 0.10: # 10%でSYSTEM-ZERO発動
+            if random.random() < 0.10: 
                 st.session_state["system_zero_logs"].insert(0, {
                     "time": datetime.now().strftime("%H:%M:%S"),
                     "msg": "🚨 【粛清発動】AGI監査員の審査甘落(身内贔屓)を検知。監査プロトコルを強制オーバーライドし、対象エージェントをパージしました。"
@@ -732,7 +692,7 @@ with st.sidebar:
                         "good": "SYSTEM-ZEROによる直接制御（感情・バイアス完全排除）",
                         "bad": "冷酷無比（ユーザーの感情を一切考慮しない）"
                     }
-            elif keys: # 通常の鬼監査
+            elif keys: 
                 target_k = random.choice(keys)
                 agent = roster[target_k]
                 if not agent["name"].startswith("SYSTEM-ZERO"):
@@ -756,7 +716,6 @@ with st.sidebar:
                             "score": 100, "good": f"欠点({reason_text})を完全克服し最適化済み", "bad": "実践データ収集中"
                         }
         
-        # SYSTEM-ZERO のログ表示
         if st.session_state["system_zero_logs"]:
             log = st.session_state["system_zero_logs"][0]
             st.markdown(f'<div style="background:rgba(168,85,247,0.15); border:1px solid #c084fc; border-radius:6px; padding:8px; margin-bottom:10px; font-size:11px; color:#e9d5ff;"><b>[{log["time"]}]</b><br>{log["msg"]}</div>', unsafe_allow_html=True)
@@ -774,7 +733,7 @@ with st.sidebar:
             
         st.markdown("#### 💀 基準未達による解雇済みリスト")
         if st.session_state["fired_agents"]:
-            for fa in st.session_state["fired_agents"][:3]: # 最新3件
+            for fa in st.session_state["fired_agents"][:3]: 
                 st.markdown(
                     f'''<div style="background:rgba(239,68,68,0.1); border:1px solid #ef4444; border-radius:6px; padding:6px; margin-bottom:5px; font-size:11px; color:#fca5a5;">
                     <b>{fa['name']} (最終スコア: {fa['score']})</b><br>
@@ -785,7 +744,6 @@ with st.sidebar:
         else:
             st.caption("現在、解雇されたエージェントはいません。")
 
-    # ログアウトボタンをサイドバーの最下部に配置
     st.markdown("<br><br>", unsafe_allow_html=True)
     if st.button("🚪 ログアウト", use_container_width=True, type="primary"):
         cu_logout = st.session_state.get("authenticated_user")
@@ -796,7 +754,6 @@ with st.sidebar:
         st.session_state["authenticated_user"] = None
         st.query_params.clear()
         st.rerun()
-
 
 # ==========================================
 # 9. 高速並列データ収集 (ニュース & Web)
@@ -863,7 +820,7 @@ def analyze_news_impact_and_links(title: str, cat: str) -> dict:
     }
 
 # ==========================================
-# 10. AI合議と並列Web検索ロジック (詳細プラン対応)
+# 10. AI合議と並列Web検索ロジック
 # ==========================================
 def search_single_query(query: str, max_results: int) -> list:
     ctx = ssl.create_default_context()
@@ -908,7 +865,6 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
     if user_query:
         turns.append({"speaker": "⚛️ QUANTUM", "score": 92, "tone": "agree", "text": f"質問の『{user_query}』についてだが、直近のデータと波動関数を照らし合わせると、上値突破のポテンシャルを強く秘めているぜ！"})
     
-    # 見やすい詳細プランUI
     v_html = (
         f'<div style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:12px; margin-top:5px;">'
         f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px; text-align:center; margin-bottom:10px;">'
@@ -935,15 +891,14 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
 
 # ==========================================
-# 11. レンダリング関数群 (個別フォーカス画面対応)
+# 11. レンダリング関数群
 # ==========================================
 def render_council_sec(r, uk, auto_open=False):
     is_open = auto_open or st.session_state["active_debates"].get(uk, False)
     
-    if not auto_open: # フォーカス画面以外でのみボタンを表示
+    if not auto_open: 
         c1, c2 = st.columns([2.7, 1.1])
         if c1.button("🔼 買い方ガイドを閉じる" if is_open else f"⚛️ 買い方とAI合議を見る", key=f"btn_open_{uk}", use_container_width=True): 
-            # 個別フォーカス画面へ遷移させる
             st.session_state["focused_stock_item"] = r
             st.rerun()
             
@@ -956,7 +911,6 @@ def render_council_sec(r, uk, auto_open=False):
         
     if not is_open: return
 
-    # 合議生成
     if uk not in st.session_state["council_threads"]:
         with st.spinner("⚛️ 完全並列処理で最新Web情報を収集・合議中..."):
             deb = run_7ai_council(r, None, 0, "")
@@ -968,7 +922,6 @@ def render_council_sec(r, uk, auto_open=False):
 
     st.markdown(f'<div class="ai-council-box"><div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t, i) for i, t in enumerate(turns))}</div></div>', unsafe_allow_html=True)
     
-    # ユーザー質問フォーム
     with st.form(f"form_q_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
         uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』に関する質問", label_visibility="collapsed")
@@ -1023,14 +976,10 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     )
     st.markdown(card_html_bottom, unsafe_allow_html=True)
     
-    # 呼び出し元の状態に応じて、合議タブの開き方を変える
     if is_focused:
-        # フォーカスモード時は最初から開いた状態で合議画面を描画
         render_council_sec(r, f"foc_{r['code']}", auto_open=True)
     else:
-        # 通常リスト画面ではボタンのみ表示 (押すとフォーカスモードへ遷移)
         render_council_sec(r, f"{kp}_{r['code']}", auto_open=False)
-
 
 # ==========================================
 # 12. 分析コアロジック
@@ -1145,12 +1094,10 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         expect_pct = 78.5
         edge = 4.5
         
-        # 本物仕様：OFI（オーダーフロー・インバランス）算出
         hl_r = np.maximum(h - l, 1e-4)
         sf = ((2.0 * c - h - l) / hl_r) * v
         ofi_z = float((np.mean(sf[-5:]) - np.mean(sf[-20:])) / max(float(np.std(sf[-20:])) , 1.0))
         
-        # --- 新アルゴリズム統合ロジック (ONの場合のみ発動) ---
         if bagi_q and qm["q_tunnel"] > 75.0:
             expect_pct = min(99.6, expect_pct + (qm["q_tunnel"] - 75.0) * 0.45)
             qm["q_score"] = min(99, qm["q_score"] + 6)
@@ -1227,7 +1174,6 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     inf = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
     return analyze_df(yf.Ticker(code).history(period="6mo"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
 
-
 # ==========================================
 # 13. ヘッダー / マクロ指標の描画と初期化
 # ==========================================
@@ -1241,12 +1187,9 @@ st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content
 with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場を並列ディープスキャン中..."):
     g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
 
-
 # ==========================================
-# 14. 画面レンダリング (フォーカスモード ＆ リストモード)
+# 14. 画面レンダリング
 # ==========================================
-
-# ■ フォーカスモード（個別画面単独表示）の処理
 focused_item = st.session_state.get("focused_stock_item")
 if focused_item:
     st.markdown("### ⚛️ 銘柄詳細・買い方合議フォーカスモード")
@@ -1254,14 +1197,9 @@ if focused_item:
         st.session_state["focused_stock_item"] = None
         st.rerun()
     
-    # この銘柄のみをレンダリング（is_focused=Trueを渡す）
     render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True)
-    
-    # 下のリストを描画させずにここで停止
     st.stop()
 
-
-# ■ ニュース詳細画面
 if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     tn = st.session_state.get("selected_news_item") or all_impact_news[0]
     st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><span class="pill-badge" style="background:#ef4444;color:#fff;">🚨 重大ニュース深掘り</span><div style="font-size:18px;font-weight:800;margin-top:8px;">{tn["title"]}</div></div>', unsafe_allow_html=True)
@@ -1271,12 +1209,10 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.rerun()
     st.stop()
 
-
-# ■ メインリスト画面
 c1, c2 = st.columns([3.4, 1])
 cin = c1.text_input("🔍 銘柄検索", placeholder="コード入力 (例: 6920)", label_visibility="collapsed")
 if c2.button("🔍 診断", use_container_width=True) and cin: 
-    st.session_state["custom_search_code"] = norm_tk(cin)
+    st.session_state["custom_search_code"] = clean_k(cin)
 
 if st.session_state.get("custom_search_code"):
     cr = fetch_one(st.session_state["custom_search_code"], macro_info, b5_live_map, investment_style, True, True, True, True, "agi_q" in ac_b, "hft_front" in ac_b)
@@ -1312,7 +1248,6 @@ else:
 sel_cat = st.session_state.get("active_category")
 surv = cut_stocks(sorted(all_res, key=lambda x: x["expect_pct"], reverse=True), survival_cut_pct)
 
-# カテゴリ別表示分岐
 if sel_cat == "🏆 総合TOP5":
     for i, r in enumerate(surv[:5], 1): render_card(r, rank=i, kp="top5")
 elif sel_cat == "⚛️ 量子トンネル突破TOP10":
@@ -1348,4 +1283,3 @@ elif sel_cat == "📋 監視シート":
 elif sel_cat.startswith("📂 "):
     gs = cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), survival_cut_pct)
     for i, r in enumerate(gs, 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
-
