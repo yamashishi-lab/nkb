@@ -526,50 +526,50 @@ components.html(
                 doc.body.appendChild(overlay);
                 doc.body.appendChild(btn);
 
-                btn.addEventListener('click', function(e){
+                btn.addEventListener('click', function(e){{
                     e.preventDefault(); e.stopPropagation();
                     isSidebarOpen = !isSidebarOpen; 
                     updateSidebarState();
-                });
+                }});
                 
-                overlay.addEventListener('click', function(e){
+                overlay.addEventListener('click', function(e){{
                     e.preventDefault(); e.stopPropagation();
                     isSidebarOpen = false; 
                     updateSidebarState();
-                });
-            } catch(e){}
-        }
+                }});
+            }} catch(e){{}}
+        }}
 
-        function highlightNewsButtons(){
-            try {
+        function highlightNewsButtons(){{
+            try {{
                 const ps = doc.querySelectorAll('button p');
-                ps.forEach(p => {
-                    if (p.textContent.includes('🚨 重大情報有り')) {
+                ps.forEach(p => {{
+                    if (p.textContent.includes('🚨 重大情報有り')) {{
                         const btn = p.closest('button');
-                        if(btn && !btn.classList.contains('news-alert-btn-active')) {
+                        if(btn && !btn.classList.contains('news-alert-btn-active')) {{
                             btn.classList.add('news-alert-btn-active');
                             btn.style.setProperty('background', 'linear-gradient(90deg, #ef4444, #b91c1c)', 'important');
                             btn.style.setProperty('color', '#ffffff', 'important');
                             btn.style.setProperty('border', '2px solid #f87171', 'important');
                             btn.style.setProperty('animation', 'pulse-alert 1.5s infinite', 'important');
-                            if(p) {
+                            if(p) {{
                                 p.style.setProperty('color', '#ffffff', 'important');
                                 p.style.setProperty('font-weight', '900', 'important');
-                            }
-                        }
-                    }
-                });
-            } catch(e){}
-        }
+                            }}
+                        }}
+                    }}
+                }});
+            }} catch(e){{}}
+        }}
 
-        function fixTopNav(){
-            try {
+        function fixTopNav(){{
+            try {{
                 const marker = doc.querySelector('.top-nav-marker');
                 if(!marker) return;
                 let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
                 if(box && box.querySelector('button')) box.classList.add('fixed-top-nav-bar');
-            } catch(e){}
-        }
+            }} catch(e){{}}
+        }}
 
         installCustomSidebarToggle();
         fixTopNav();
@@ -577,20 +577,20 @@ components.html(
         setInterval(updateSidebarState, 100);
         setTimeout(fixTopNav, 100);
 
-        function scrollToTopAbsolute(){
-            try { window.parent.scrollTo(0, 0); } catch(e){}
+        function scrollToTopAbsolute(){{
+            try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
             const targets = [doc.documentElement, doc.body, doc.querySelector('section.main'), doc.querySelector('[data-testid="stAppViewContainer"]')];
-            targets.forEach(el => { if(el){ try { el.scrollTop = 0; } catch(e){} } });
+            targets.forEach(el => {{ if(el){{ try {{ el.scrollTop = 0; }} catch(e){{}} }} }});
             const topAnchor = doc.getElementById('page_top_anchor');
-            if(topAnchor && typeof topAnchor.scrollIntoView === 'function') try { topAnchor.scrollIntoView({behavior: 'instant', block: 'start'}); } catch(e){}
-        }
+            if(topAnchor && typeof topAnchor.scrollIntoView === 'function') try {{ topAnchor.scrollIntoView({{behavior: 'instant', block: 'start'}}); }} catch(e){{}}
+        }}
 
-        if({st.session_state['scroll_top_trig']} > 0 && window.parent._lastScrollTrig !== {st.session_state['scroll_top_trig']}){
+        if({st.session_state['scroll_top_trig']} > 0 && window.parent._lastScrollTrig !== {st.session_state['scroll_top_trig']}){{
             window.parent._lastScrollTrig = {st.session_state['scroll_top_trig']};
             scrollToTopAbsolute(); requestAnimationFrame(scrollToTopAbsolute); setTimeout(scrollToTopAbsolute, 50);
-        }
+        }}
         {scroll_target_js}
-    })();
+    }})();
     </script>""", height=0)
 
 # ==========================================
