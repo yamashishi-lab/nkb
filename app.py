@@ -192,7 +192,7 @@ def get_active_ai_providers() -> list:
 
 
 # ==========================================
-# 4. UI と CSS / JS 注入 (完全刷新版)
+# 4. UI と CSS / JS 注入 (安全設計版)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -228,106 +228,27 @@ def inject_css():
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
-    header[data-testid="stHeader"] {
-        background: transparent !important; pointer-events: none !important;
-        height: 3.5rem !important; z-index: 999990 !important;
-    }
-    /* ヘッダー右上の余計な要素のみ消す。左上の展開ボタンは残す */
-    header[data-testid="stHeader"] [data-testid="stToolbar"],
-    header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
-
-    /* =========================================================
-       確実動作！サイドバー展開ボタンの純正上書きカスタム
-       ========================================================= */
-    /* Streamlit純正の展開ボタンを、ガラス風の美しいMENUボタンに作り変える */
-    [data-testid="collapsedControl"] {
-        display: flex !important;
-        opacity: 1 !important;
-        position: fixed !important;
-        top: 8px !important;
-        left: 9px !important;
-        z-index: 2147483647 !important;
-        background: rgba(11, 15, 25, 0.95) !important;
-        backdrop-filter: blur(16px) !important;
-        border: 1.5px solid rgba(56, 189, 248, 0.6) !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.3) !important;
-        color: #38bdf8 !important;
-        width: auto !important;
-        height: 26px !important;
-        padding: 0 8px !important;
-        transition: all 0.2s ease !important;
-        pointer-events: auto !important;
-        cursor: pointer !important;
-    }
-    [data-testid="collapsedControl"]:hover {
-        border-color: #fde047 !important;
-        color: #fde047 !important;
-        box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important;
-    }
-    /* 純正アイコン(SVG)の調整 */
-    [data-testid="collapsedControl"] svg {
-        width: 18px !important;
-        height: 18px !important;
-        stroke: currentColor !important;
-    }
-    /* 「MENU」の文字をCSSだけで追加 */
-    [data-testid="collapsedControl"]::after {
-        content: "MENU";
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 10px;
-        font-weight: 800;
-        margin-left: 4px;
-        color: inherit;
-    }
-
-    /* =========================================================
-       確実動作！トップナビの絶対に縦割れしない横並び固定
-       ========================================================= */
-    /* JSが付与する専用クラスで、スマホでも横並びを強制維持する */
-    .force-horizontal-row {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        width: 100% !important;
-        gap: 8px !important;
-    }
-    .force-horizontal-row > div[data-testid="column"] {
-        width: 33.33% !important;
-        min-width: 0 !important;
-        flex: 1 1 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
+    /* 
+     * 修正ポイント：ヘッダーそのものは透過にするが、ポインターイベント（クリック判定）は消さない。
+     * 右上の不要なメニュー(Deploy等)だけを隠し、左上のサイドバー開閉ボタンはそのまま残す。
+     */
+    header[data-testid="stHeader"] { background: rgba(5, 8, 17, 0.9) !important; }
+    header[data-testid="stHeader"] [data-testid="stToolbar"] { visibility: hidden !important; }
     
-    /* ボタン自体のスタイリング */
-    .force-horizontal-row button {
-        width: 100% !important;
-        height: 38px !important;
-        min-height: 38px !important;
-        background: linear-gradient(180deg, rgba(30,41,59,0.9), rgba(15,23,42,0.9)) !important;
-        color: #f8fafc !important;
-        border: 1px solid rgba(148,163,184,0.3) !important;
+    /* 標準ボタンのデザインを少しコンパクトにし、はみ出しを防ぐ */
+    button[kind="secondary"], button[kind="primary"] {
         border-radius: 8px !important;
         font-weight: 800 !important;
-        font-size: 13px !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important;
         transition: all 0.2s ease !important;
-        white-space: nowrap !important;
-        padding: 0 2px !important;
     }
-    .force-horizontal-row button:hover {
-        border-color: #38bdf8 !important;
-        background: rgba(56,189,248,0.15) !important;
-        box-shadow: 0 0 10px rgba(56,189,248,0.3) !important;
-        transform: translateY(-1px) !important;
+    button[kind="secondary"]:hover {
+        border-color: #38bdf8 !important; background: rgba(56,189,248,0.15) !important;
     }
 
     /* サイドバーのカスタマイズ */
     section[data-testid="stSidebar"] {
         background: rgba(11, 15, 25, 0.98) !important; backdrop-filter: blur(20px) !important;
         border-right: 1px solid rgba(56, 189, 248, 0.5) !important; box-shadow: 2px 0 15px rgba(56,189,248,0.3) !important;
-        width: 320px !important; max-width: 88vw !important; min-width: 300px !important;
     }
 
     div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"], div[role="listbox"] {
@@ -335,7 +256,7 @@ def inject_css():
     }
     
     .block-container {
-        padding-top: 2rem !important; padding-bottom: 3rem !important;
+        padding-top: 2.5rem !important; padding-bottom: 3rem !important;
         padding-left: 0.75rem !important; padding-right: 0.75rem !important; max-width: 840px !important;
     }
     
@@ -509,21 +430,20 @@ if "system_zero_status" not in st.session_state: st.session_state["system_zero_s
 
 
 # ==========================================
-# 7. トップナビゲーション（JSとCSSの連携で絶対横割れ防止）
+# 7. トップナビゲーション（標準機能で安全に配置）
 # ==========================================
-# 識別用の目印を置く
-st.markdown('<div id="top-nav-marker"></div>', unsafe_allow_html=True)
-nav_c1, nav_c2, nav_c3 = st.columns([1, 1, 1])
+# 強引なCSSをすべて排除し、標準のst.columnsのみで構成。画面サイズに応じて安全にリサイズ・縦並び(スマホ時)になります。
+nav_c1, nav_c2, nav_c3 = st.columns(3)
 
-if nav_c1.button("🔝 トップ", key="top_nav_top", use_container_width=True):
+if nav_c1.button("🔝 トップへ戻る", key="top_nav_top", use_container_width=True):
     st.session_state["navigation_page"] = "TOP"
     st.session_state["scroll_top_trig"] = int(time.time() * 1000)
     st.session_state["focused_stock_item"] = None
     st.rerun()
-if nav_c2.button(f"✖ 閉じる", key="top_nav_close", use_container_width=True):
+if nav_c2.button("✖ 合議を閉じる", key="top_nav_close", use_container_width=True):
     st.session_state["active_debates"] = {}
     st.rerun()
-if nav_c3.button("↩ 戻る", key="top_nav_back", use_container_width=True):
+if nav_c3.button("↩ 前の画面に戻る", key="top_nav_back", use_container_width=True):
     st.session_state["focused_stock_item"] = None
     if st.session_state.get("navigation_page") != "TOP":
         st.session_state["navigation_page"] = "TOP"
@@ -545,31 +465,12 @@ if st.session_state.get("scroll_target_id"):
     scroll_target_js = f"setTimeout(function(){{ try {{ const el = window.parent.document.getElementById('{tid}'); if(el){{ el.scrollIntoView({{behavior: 'smooth', block: 'start'}}); }} }} catch(e){{}} }}, 220);"
     st.session_state["scroll_target_id"] = ""
 
-# ここで「目印」の次の要素(st.columnsの親)に強制横並びクラスを付与する。自作ボタンなどは作らない。
+# 不要なハックJSを全削除し、スクロール機能のみ維持
 components.html(
     f"""
     <script>
     (function(){{
         const doc = window.parent.document;
-        
-        /* 確実！トップナビゲーションを横並びに固定するスクリプト */
-        function forceHorizontalNav(){{
-            try {{
-                const marker = doc.getElementById('top-nav-marker');
-                if(marker){{
-                    // マーカーの親から見て、ボタンを含んでいる行のブロックを探す
-                    const container = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
-                    if(container){{
-                        const hBlock = container.querySelector('[data-testid="stHorizontalBlock"]');
-                        if(hBlock && !hBlock.classList.contains('force-horizontal-row')){{
-                            hBlock.classList.add('force-horizontal-row');
-                        }}
-                    }}
-                }}
-            }} catch(e){{}}
-        }}
-
-        /* スクロールトップ処理 */
         function scrollToTopAbsolute(){{
             try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
             const targets = [doc.documentElement, doc.body, doc.querySelector('section.main'), doc.querySelector('[data-testid="stAppViewContainer"]')];
@@ -577,11 +478,6 @@ components.html(
             const topAnchor = doc.getElementById('page_top_anchor');
             if(topAnchor && typeof topAnchor.scrollIntoView === 'function') try {{ topAnchor.scrollIntoView({{behavior: 'instant', block: 'start'}}); }} catch(e){{}}
         }}
-
-        // 実行
-        forceHorizontalNav();
-        setTimeout(forceHorizontalNav, 100);
-        setTimeout(forceHorizontalNav, 500);
 
         if({st.session_state['scroll_top_trig']} > 0 && window.parent._lastScrollTrig !== {st.session_state['scroll_top_trig']}){{
             window.parent._lastScrollTrig = {st.session_state['scroll_top_trig']};
@@ -593,7 +489,7 @@ components.html(
 
 
 # ==========================================
-# 8. サイドバー構築 (複数API同時接続仕様に復旧)
+# 8. サイドバー構築 (複数API同時接続仕様)
 # ==========================================
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
