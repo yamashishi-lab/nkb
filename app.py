@@ -29,7 +29,7 @@ AI_PROVIDERS = {
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
     "deepseek": ("🟣 DeepSeek", ["deepseek-chat", "deepseek-reasoner"], "https://api.deepseek.com/chat/completions"),
     "perplexity": ("🌐 Perplexity Sonar", ["sonar-pro", "sonar"], "https://api.perplexity.ai/chat/completions"),
-    "groq": ("⚡ Groq LPU", ["llama-3.3-70b-versatile", "qwen-2.5-32b"], "https://api.groq.com/openai/v1/chat/completions")
+    "groq": ("⚡ Groq LPU", ["llama-3.3-70b-versatile", "qwen-2.5-32b"], "https://api.openai.com/v1/chat/completions")
 }
 
 IPO_OFFERINGS = [
@@ -175,7 +175,6 @@ def hash_pin(pin: str) -> str:
 def get_raw_header_fp() -> str:
     try:
         h = {str(k).lower(): str(v) for k, v in dict(getattr(st.context, "headers", {}) or {}).items()}
-        # 修正：毎回変わるUUIDを外し、ブラウザ固有の情報のみでハッシュを生成するように変更
         raw = f"{h.get('user-agent','')}|{h.get('accept-language','')}|{h.get('sec-ch-ua-platform','')}"
     except Exception:
         raw = "default_env"
@@ -292,7 +291,6 @@ def get_active_ai_providers() -> list:
         if key: act.append((k, lbl, mod, key))
     return act
 
-# 改善ポイント：実際のLLM API呼び出し関数を追加
 def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
     providers = get_active_ai_providers()
     if not providers:
@@ -310,7 +308,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
             with urllib.request.urlopen(req, context=ctx, timeout=8) as r:
                 res = json.loads(r.read())
                 return res["candidates"][0]["content"]["parts"][0]["text"]
-        else: # OpenAI互換（OpenAI, Groq, DeepSeek, xAI等）
+        else:
             url = AI_PROVIDERS[prov][2]
             headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
             data = json.dumps({
@@ -365,6 +363,11 @@ def inject_css():
     css = """
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
+    
+    /* Selectboxなどのポップオーバーがサイドバーの後ろに隠れないようにする */
+    div[data-baseweb="popover"], div[data-baseweb="menu"], div[data-baseweb="tooltip"], div[role="listbox"], .stSelectbox [data-baseweb="popover"] {
+        z-index: 2147483647 !important;
+    }
     
     header[data-testid="stHeader"] {
         background: transparent !important; pointer-events: none !important;
@@ -1112,7 +1115,6 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str) -> list:
     
     top_news_context = web_hits[0] if web_hits else "特段の突発バッドニュースなし、大口の買い板継続中"
 
-    # 改善ポイント：実際のLLM API呼び出しを試行し、取得できれば動的に出力する
     sys_prompt = f"""
 あなたは日本の2ch（5ch）の市況実況スレにいる4人の凄腕個人投資家（AIエージェント）です。
 対象銘柄は【{r['code']} {r['name']}】です。現在値: {r['price']}、期待度: {r['expect_pct']}%。
@@ -1138,7 +1140,6 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str) -> list:
         llm_response_text = call_real_llm_api(sys_prompt, uq)
         if llm_response_text:
             try:
-                # Markdownのコードブロックを削除してJSONパース
                 clean_json = re.sub(r'```json|```', '', llm_response_text).strip()
                 llm_result = json.loads(clean_json)
                 if not isinstance(llm_result, list) or len(llm_result) == 0:
@@ -1150,10 +1151,8 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str) -> list:
     turns.append({"round": f"🔥 市況実況スレッド 【{r['code']}】{r['name']} 本スレ Part.892"})
 
     if llm_result:
-        # LLMから正常に返ってきた場合
         turns.extend(llm_result)
     else:
-        # フォールバック（API未設定・エラー時のダミーデータ）
         if is_greeting:
             turns.extend([
                 {"speaker": "🔥 IGNIS", "score": 91, "tone": "agree", "text": "うっす！挨拶乙！お前ら寄り前の気配値見たか？この地合いで呑気に挨拶してる場合じゃねえぞ、板がガンガン動いてる！"},
@@ -1477,7 +1476,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         v = df["Volume"].values.astype(float)
         
         df["Prev_Close"] = df["Close"].shift(1)
-        # 改善ポイント：5分足などの日中データでも安定して計算できるように修正
         df["Day_Return"] = (df["Close"] - df["Open"].iloc[0]) / df["Open"].iloc[0] * 100 if len(df) > 0 else 0
         tr = pd.concat([df["High"] - df["Low"], (df["High"] - df["Prev_Close"]).abs(), (df["Low"] - df["Prev_Close"]).abs()], axis=1).max(axis=1)
         df["ATR"] = tr.rolling(14).mean().fillna(df["Close"] * 0.02)
@@ -1564,7 +1562,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
 @st.cache_data(ttl=1800)
 def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     codes = list({s["code"] for sts in STOCK_POOL.values() for s in sts})
-    # 改善ポイント：日足に加えて、5分足（直近5日）のデータを取得して精度を高める
     raw = yf.download(codes, period="5d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=9)
     gmap, alist, seen = {g: [] for g in STOCK_POOL.keys()}, [], set()
     
