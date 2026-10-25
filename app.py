@@ -175,10 +175,10 @@ def hash_pin(pin: str) -> str:
 def get_raw_header_fp() -> str:
     try:
         h = {str(k).lower(): str(v) for k, v in dict(getattr(st.context, "headers", {}) or {}).items()}
-        # 改善ポイント：セッション固有のUUIDを混ぜることで端末情報衝突を防止
-        raw = f"{h.get('user-agent','')}|{h.get('accept-language','')}|{h.get('sec-ch-ua-platform','')}|{st.session_state['client_uuid']}"
+        # 修正：毎回変わるUUIDを外し、ブラウザ固有の情報のみでハッシュを生成するように変更
+        raw = f"{h.get('user-agent','')}|{h.get('accept-language','')}|{h.get('sec-ch-ua-platform','')}"
     except Exception:
-        raw = f"default_env|{st.session_state['client_uuid']}"
+        raw = "default_env"
     return hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
 
 def get_client_fp() -> str:
