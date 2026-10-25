@@ -426,30 +426,6 @@ if "system_zero_status" not in st.session_state: st.session_state["system_zero_s
 # ==========================================
 # 7. トップナビゲーションとサイドバー開閉JS (確実なDOMアクセスとクリーンアップ)
 # ==========================================
-st.markdown('<div id="hidden_trigger_btns" style="position:absolute; opacity:0; pointer-events:none; z-index:-9999;">', unsafe_allow_html=True)
-if st.button("HID_TOP", key="hidden_top"):
-    st.session_state["navigation_page"] = "TOP"
-    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-    st.session_state["focused_stock_item"] = None
-    st.rerun()
-if st.button("HID_CLS", key="hidden_close"):
-    st.session_state["active_debates"] = {}
-    st.session_state["focused_stock_item"] = None
-    if st.session_state.get("navigation_page") != "TOP":
-        st.session_state["navigation_page"] = "TOP"
-        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-    elif st.session_state.get("custom_search_code"):
-        st.session_state["custom_search_code"] = ""
-    elif st.session_state.get("nav_history") and len(st.session_state["nav_history"]) > 0:
-        popped = st.session_state["nav_history"].pop()
-        st.session_state["active_category"] = popped
-        st.session_state["last_cat"] = popped
-    else:
-        st.session_state["active_category"] = "🏆 総合TOP5"
-        st.session_state["last_cat"] = "🏆 総合TOP5"
-    st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
 scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
     tid = st.session_state.get("scroll_target_id")
@@ -461,6 +437,27 @@ components.html(
     <script>
     (function(){{
         const doc = window.parent.document;
+        
+        // 不要なボタン（HID_TOP, HID_CLS）をDOMから徹底的に隠蔽
+        const hideStrayBtns = () => {{
+            const btns = doc.querySelectorAll('button');
+            btns.forEach(b => {{
+                if(b.textContent.includes('HID_TOP') || b.textContent.includes('HID_CLS')) {{
+                    let parentContainer = b.closest('div[data-testid="stButton"]') || b.closest('.stElementContainer') || b.parentElement;
+                    if(parentContainer) {{
+                        parentContainer.style.display = 'none';
+                        parentContainer.style.position = 'absolute';
+                        parentContainer.style.opacity = '0';
+                        parentContainer.style.zIndex = '-9999';
+                        parentContainer.style.pointerEvents = 'none';
+                    }}
+                }}
+            }});
+        }};
+        hideStrayBtns();
+        // Streamlitの動的レンダリングにも対応するためMutationObserverで監視
+        const observer = new MutationObserver(() => {{ hideStrayBtns(); }});
+        observer.observe(doc.body, {{ childList: true, subtree: true }});
         
         // iframe再生成時のDOM要素の蓄積を防止（古いUI部品を綺麗に削除）
         const cleanupStrayElements = () => {{
@@ -492,21 +489,21 @@ components.html(
                     btn.addEventListener('click', function(e){{ 
                         e.preventDefault(); e.stopPropagation(); 
                         
-                        // Streamlit本来の開くボタンをより確実な方法で特定
-                        let expandBtn = doc.querySelector('[data-testid="collapsedControl"]');
-                        if(expandBtn) {{ 
-                            // Streamlit内部のイベントリスナーに届けるためdispatchEventを使用
-                            expandBtn.dispatchEvent(new MouseEvent('click', {{view: window.parent, bubbles: true, cancelable: true}}));
-                            return; 
-                        }}
-                        
-                        // 閉じるボタン
+                        // Streamlitのサイドバーの状態を正しく判定する
                         const sidebar = doc.querySelector('[data-testid="stSidebar"]');
-                        if(sidebar) {{
-                            const closeBtn = sidebar.querySelector('button');
-                            if(closeBtn) {{
-                                closeBtn.dispatchEvent(new MouseEvent('click', {{view: window.parent, bubbles: true, cancelable: true}}));
-                            }}
+                        const isSidebarVisible = sidebar && window.getComputedStyle(sidebar).display !== 'none' && sidebar.getAttribute('aria-expanded') !== 'false';
+                        
+                        let expandBtn = doc.querySelector('[data-testid="collapsedControl"]') || 
+                                        doc.querySelector('[data-testid="stSidebarCollapsedControl"]') || 
+                                        doc.querySelector('header button[kind="headerNoPadding"]');
+                                        
+                        let closeBtn = doc.querySelector('[data-testid="stSidebar"] button') ||
+                                       doc.querySelector('[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"]');
+
+                        if (isSidebarVisible) {{
+                            if (closeBtn) closeBtn.click();
+                        }} else {{
+                            if (expandBtn) expandBtn.click();
                         }}
                     }});
                 }}
@@ -538,15 +535,15 @@ components.html(
                     btnClose.className = 'yama-nav-btn';
                     btnClose.innerHTML = '✖ 合議閉じて戻る';
 
-                    // 確実にPython側の見えないボタンをクリックさせる
+                    // Python側の隠しボタンのクリックを確実にエミュレート
                     btnTop.onclick = () => {{
                         const btns = doc.querySelectorAll('button');
-                        btns.forEach(b => {{ if(b.textContent.includes('HID_TOP')) b.dispatchEvent(new MouseEvent('click', {{bubbles: true}})); }});
+                        btns.forEach(b => {{ if(b.textContent.includes('HID_TOP')) b.click(); }});
                     }};
                     
                     btnClose.onclick = () => {{
                         const btns = doc.querySelectorAll('button');
-                        btns.forEach(b => {{ if(b.textContent.includes('HID_CLS')) b.dispatchEvent(new MouseEvent('click', {{bubbles: true}})); }});
+                        btns.forEach(b => {{ if(b.textContent.includes('HID_CLS')) b.click(); }});
                     }};
 
                     nav.appendChild(btnTop);
@@ -1108,70 +1105,92 @@ if focused_item:
     if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", use_container_width=True, type="primary"):
         st.session_state["focused_stock_item"] = None; st.rerun()
     render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True)
-    st.stop()
+else:
+    if st.session_state.get("navigation_page") == "NEWS_DETAIL":
+        tn = st.session_state.get("selected_news_item") or all_impact_news[0]
+        st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><span class="pill-badge" style="background:#ef4444;color:#fff;">🚨 重大ニュース深掘り</span><div style="font-size:18px;font-weight:800;margin-top:8px;">{tn["title"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;color:#e9d5ff;">🧠 波及メカニズム</div><div style="font-size:12.5px;">{tn["detail"]["mechanism"]}</div><div class="beginner-action-box" style="margin-top:10px;"><b>⚡ {investment_style.split(" ")[1]} 実践トレード立ち回り</b><br>{tn["detail"]["action_guide"].replace(chr(10), "<br>")}</div></div>', unsafe_allow_html=True)
+        st.markdown("### 🔗 連動注目銘柄")
+        for idx, r_item in enumerate(sorted(all_res, key=lambda x: x["expect_pct"], reverse=True)[:3], 1): render_card(r_item, rank=idx, kp=f"nr_{tn['id']}")
+        if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.rerun()
+    else:
+        c1, c2 = st.columns([3.4, 1])
+        cin = c1.text_input("🔍 銘柄検索", placeholder="コード入力 (例: 6920)", label_visibility="collapsed")
+        if c2.button("🔍 診断", use_container_width=True) and cin: st.session_state["custom_search_code"] = cin
 
+        if st.session_state.get("custom_search_code"):
+            cr = fetch_one(st.session_state["custom_search_code"], macro_info, b5_live_map, investment_style, True, True, True, True, "agi_q" in ac_b, "hft_front" in ac_b)
+            if cr:
+                render_card(cr, is_custom=True, kp="custom")
+                if st.button("✖️ 閉じる", use_container_width=True): st.session_state["custom_search_code"] = ""; st.rerun()
 
-if st.session_state.get("navigation_page") == "NEWS_DETAIL":
-    tn = st.session_state.get("selected_news_item") or all_impact_news[0]
-    st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><span class="pill-badge" style="background:#ef4444;color:#fff;">🚨 重大ニュース深掘り</span><div style="font-size:18px;font-weight:800;margin-top:8px;">{tn["title"]}</div></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;color:#e9d5ff;">🧠 波及メカニズム</div><div style="font-size:12.5px;">{tn["detail"]["mechanism"]}</div><div class="beginner-action-box" style="margin-top:10px;"><b>⚡ {investment_style.split(" ")[1]} 実践トレード立ち回り</b><br>{tn["detail"]["action_guide"].replace(chr(10), "<br>")}</div></div>', unsafe_allow_html=True)
-    st.markdown("### 🔗 連動注目銘柄")
-    for idx, r_item in enumerate(sorted(all_res, key=lambda x: x["expect_pct"], reverse=True)[:3], 1): render_card(r_item, rank=idx, kp=f"nr_{tn['id']}")
-    if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.rerun()
-    st.stop()
+        def cut_stocks(slist, pct): return slist[:max(3, int(round(len(slist) * (pct / 100.0))))] if slist else []
+        cats = ["🏆 総合TOP5", "⚛️ 量子トンネル突破TOP10", "🏛️ 機関最新ミクロ構造TOP10", "🚨 重大ニュース＆連動株", "🎟️ IPO募集・新規上場", "🏦 機関VPIN・OFI", "🔥 5ch＆短期モメンタム", "📋 監視シート"] + [f"📂 {g}" for g in STOCK_POOL.keys()]
+        st.markdown(f'<div class="compact-bar-label"><span>📂 QUANTUM STRATEGY ({investment_style.split(" ")[1]})</span></div>', unsafe_allow_html=True)
 
-c1, c2 = st.columns([3.4, 1])
-cin = c1.text_input("🔍 銘柄検索", placeholder="コード入力 (例: 6920)", label_visibility="collapsed")
-if c2.button("🔍 診断", use_container_width=True) and cin: st.session_state["custom_search_code"] = cin
+        if st.session_state.get("active_category") not in cats: st.session_state["active_category"] = "🏆 総合TOP5"
 
-if st.session_state.get("custom_search_code"):
-    cr = fetch_one(st.session_state["custom_search_code"], macro_info, b5_live_map, investment_style, True, True, True, True, "agi_q" in ac_b, "hft_front" in ac_b)
-    if cr:
-        render_card(cr, is_custom=True, kp="custom")
-        if st.button("✖️ 閉じる", use_container_width=True): st.session_state["custom_search_code"] = ""; st.rerun()
+        def _on_cat_change():
+            nw = st.session_state.get("active_category_selector")
+            if nw and nw != st.session_state.get("last_cat"): 
+                st.session_state["nav_history"].append(st.session_state["last_cat"])
+                st.session_state["last_cat"], st.session_state["active_category"] = nw, nw
 
-def cut_stocks(slist, pct): return slist[:max(3, int(round(len(slist) * (pct / 100.0))))] if slist else []
-cats = ["🏆 総合TOP5", "⚛️ 量子トンネル突破TOP10", "🏛️ 機関最新ミクロ構造TOP10", "🚨 重大ニュース＆連動株", "🎟️ IPO募集・新規上場", "🏦 機関VPIN・OFI", "🔥 5ch＆短期モメンタム", "📋 監視シート"] + [f"📂 {g}" for g in STOCK_POOL.keys()]
-st.markdown(f'<div class="compact-bar-label"><span>📂 QUANTUM STRATEGY ({investment_style.split(" ")[1]})</span></div>', unsafe_allow_html=True)
+        if hasattr(st, "pills"): st.pills("カテゴリ", cats, default=cats[cats.index(st.session_state["active_category"])], selection_mode="single", label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
+        else: st.radio("カテゴリ", cats, index=cats.index(st.session_state["active_category"]), horizontal=True, label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
 
-if st.session_state.get("active_category") not in cats: st.session_state["active_category"] = "🏆 総合TOP5"
+        sel_cat = st.session_state.get("active_category")
+        surv = cut_stocks(sorted(all_res, key=lambda x: x["expect_pct"], reverse=True), 75)
 
-def _on_cat_change():
-    nw = st.session_state.get("active_category_selector")
-    if nw and nw != st.session_state.get("last_cat"): 
-        st.session_state["nav_history"].append(st.session_state["last_cat"])
-        st.session_state["last_cat"], st.session_state["active_category"] = nw, nw
+        if sel_cat == "🏆 総合TOP5":
+            for i, r in enumerate(surv[:5], 1): render_card(r, rank=i, kp="top5")
+        elif sel_cat == "⚛️ 量子トンネル突破TOP10":
+            for i, r in enumerate(sorted(all_res, key=lambda x: x["q_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="qtop")
+        elif sel_cat == "🏛️ 機関最新ミクロ構造TOP10":
+            for i, r in enumerate(sorted(all_res, key=lambda x: x["ms_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mstop")
+        elif sel_cat == "🚨 重大ニュース＆連動株":
+            for n in all_impact_news:
+                st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="font-size:11px;color:#f87171;font-weight:800;">🚨 {n["cat"]}</div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-bottom:4px;">{n["title"]}</div></div>', unsafe_allow_html=True)
+                if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True): 
+                    st.session_state["selected_news_item"] = n; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.rerun()
+        elif sel_cat == "🎟️ IPO募集・新規上場":
+            st.markdown('<div class="glass-header"><div style="font-size:15px;font-weight:800;color:#f8fafc;">🎟️ 新規上場 (IPO) ブックビルディング募集</div></div>', unsafe_allow_html=True)
+            for ipo in IPO_OFFERINGS:
+                links_html = "".join([f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">🔗 {lbl}</a>' for lbl, url in ipo["links"]])
+                st.markdown(f'<div class="rank-card" style="border-left-color:#f59e0b;"><div><span style="font-size:16px;font-weight:800;">{ipo["name"]}</span></div><div style="margin-top:7px;">{links_html}</div></div>', unsafe_allow_html=True)
+        elif sel_cat == "🏦 機関VPIN・OFI":
+            for i, r in enumerate(sorted(all_res, key=lambda x: x["inst_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
+        elif sel_cat == "🔥 5ch＆短期モメンタム":
+            for i, r in enumerate(sorted(all_res, key=lambda x: x["board5ch_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
+        elif sel_cat == "📋 監視シート":
+            if st.button("⚡ 総合TOP3を一括登録", use_container_width=True):
+                for it in surv[:3]: st.session_state["watchlist"][it["code"]] = it
+                st.rerun()
+            for wc, wi in list(st.session_state["watchlist"].items()): render_card(wi, kp=f"wl_{wc}")
+        elif sel_cat.startswith("📂 "):
+            for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), 75), 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
 
-if hasattr(st, "pills"): st.pills("カテゴリ", cats, default=cats[cats.index(st.session_state["active_category"])], selection_mode="single", label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
-else: st.radio("カテゴリ", cats, index=cats.index(st.session_state["active_category"]), horizontal=True, label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
-
-sel_cat = st.session_state.get("active_category")
-surv = cut_stocks(sorted(all_res, key=lambda x: x["expect_pct"], reverse=True), 75)
-
-if sel_cat == "🏆 総合TOP5":
-    for i, r in enumerate(surv[:5], 1): render_card(r, rank=i, kp="top5")
-elif sel_cat == "⚛️ 量子トンネル突破TOP10":
-    for i, r in enumerate(sorted(all_res, key=lambda x: x["q_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="qtop")
-elif sel_cat == "🏛️ 機関最新ミクロ構造TOP10":
-    for i, r in enumerate(sorted(all_res, key=lambda x: x["ms_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mstop")
-elif sel_cat == "🚨 重大ニュース＆連動株":
-    for n in all_impact_news:
-        st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="font-size:11px;color:#f87171;font-weight:800;">🚨 {n["cat"]}</div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-bottom:4px;">{n["title"]}</div></div>', unsafe_allow_html=True)
-        if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True): 
-            st.session_state["selected_news_item"] = n; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.rerun()
-elif sel_cat == "🎟️ IPO募集・新規上場":
-    st.markdown('<div class="glass-header"><div style="font-size:15px;font-weight:800;color:#f8fafc;">🎟️ 新規上場 (IPO) ブックビルディング募集</div></div>', unsafe_allow_html=True)
-    for ipo in IPO_OFFERINGS:
-        links_html = "".join([f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">🔗 {lbl}</a>' for lbl, url in ipo["links"]])
-        st.markdown(f'<div class="rank-card" style="border-left-color:#f59e0b;"><div><span style="font-size:16px;font-weight:800;">{ipo["name"]}</span></div><div style="margin-top:7px;">{links_html}</div></div>', unsafe_allow_html=True)
-elif sel_cat == "🏦 機関VPIN・OFI":
-    for i, r in enumerate(sorted(all_res, key=lambda x: x["inst_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
-elif sel_cat == "🔥 5ch＆短期モメンタム":
-    for i, r in enumerate(sorted(all_res, key=lambda x: x["board5ch_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
-elif sel_cat == "📋 監視シート":
-    if st.button("⚡ 総合TOP3を一括登録", use_container_width=True):
-        for it in surv[:3]: st.session_state["watchlist"][it["code"]] = it
-        st.rerun()
-    for wc, wi in list(st.session_state["watchlist"].items()): render_card(wi, kp=f"wl_{wc}")
-elif sel_cat.startswith("📂 "):
-    for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), 75), 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
+# JSから確実に叩かせる用の隠しボタン（UIを乱さないようドキュメント末尾に配置）
+st.markdown('<div style="display:none; position:absolute; opacity:0; pointer-events:none; z-index:-9999;" id="system-action-triggers">', unsafe_allow_html=True)
+if st.button("HID_TOP", key="hidden_top_trigger"):
+    st.session_state["navigation_page"] = "TOP"
+    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+    st.session_state["focused_stock_item"] = None
+    st.rerun()
+if st.button("HID_CLS", key="hidden_close_trigger"):
+    st.session_state["active_debates"] = {}
+    st.session_state["focused_stock_item"] = None
+    if st.session_state.get("navigation_page") != "TOP":
+        st.session_state["navigation_page"] = "TOP"
+        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+    elif st.session_state.get("custom_search_code"):
+        st.session_state["custom_search_code"] = ""
+    elif st.session_state.get("nav_history") and len(st.session_state["nav_history"]) > 0:
+        popped = st.session_state["nav_history"].pop()
+        st.session_state["active_category"] = popped
+        st.session_state["last_cat"] = popped
+    else:
+        st.session_state["active_category"] = "🏆 総合TOP5"
+        st.session_state["last_cat"] = "🏆 総合TOP5"
+    st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
