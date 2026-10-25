@@ -190,8 +190,9 @@ def get_active_ai_providers() -> list:
         if key: act.append((k, lbl, mod, key))
     return act
 
+
 # ==========================================
-# 4. UI と CSS / JS 注入
+# 4. UI と CSS / JS 注入 (完全刷新版)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -231,18 +232,102 @@ def inject_css():
         background: transparent !important; pointer-events: none !important;
         height: 3.5rem !important; z-index: 999990 !important;
     }
+    /* ヘッダー右上の余計な要素のみ消す。左上の展開ボタンは残す */
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
+
+    /* =========================================================
+       確実動作！サイドバー展開ボタンの純正上書きカスタム
+       ========================================================= */
+    /* Streamlit純正の展開ボタンを、ガラス風の美しいMENUボタンに作り変える */
+    [data-testid="collapsedControl"] {
+        display: flex !important;
+        opacity: 1 !important;
+        position: fixed !important;
+        top: 8px !important;
+        left: 9px !important;
+        z-index: 2147483647 !important;
+        background: rgba(11, 15, 25, 0.95) !important;
+        backdrop-filter: blur(16px) !important;
+        border: 1.5px solid rgba(56, 189, 248, 0.6) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.3) !important;
+        color: #38bdf8 !important;
+        width: auto !important;
+        height: 26px !important;
+        padding: 0 8px !important;
+        transition: all 0.2s ease !important;
+        pointer-events: auto !important;
+        cursor: pointer !important;
+    }
+    [data-testid="collapsedControl"]:hover {
+        border-color: #fde047 !important;
+        color: #fde047 !important;
+        box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important;
+    }
+    /* 純正アイコン(SVG)の調整 */
+    [data-testid="collapsedControl"] svg {
+        width: 18px !important;
+        height: 18px !important;
+        stroke: currentColor !important;
+    }
+    /* 「MENU」の文字をCSSだけで追加 */
+    [data-testid="collapsedControl"]::after {
+        content: "MENU";
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 800;
+        margin-left: 4px;
+        color: inherit;
+    }
+
+    /* =========================================================
+       確実動作！トップナビの絶対に縦割れしない横並び固定
+       ========================================================= */
+    /* JSが付与する専用クラスで、スマホでも横並びを強制維持する */
+    .force-horizontal-row {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+        gap: 8px !important;
+    }
+    .force-horizontal-row > div[data-testid="column"] {
+        width: 33.33% !important;
+        min-width: 0 !important;
+        flex: 1 1 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* ボタン自体のスタイリング */
+    .force-horizontal-row button {
+        width: 100% !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        background: linear-gradient(180deg, rgba(30,41,59,0.9), rgba(15,23,42,0.9)) !important;
+        color: #f8fafc !important;
+        border: 1px solid rgba(148,163,184,0.3) !important;
+        border-radius: 8px !important;
+        font-weight: 800 !important;
+        font-size: 13px !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important;
+        transition: all 0.2s ease !important;
+        white-space: nowrap !important;
+        padding: 0 2px !important;
+    }
+    .force-horizontal-row button:hover {
+        border-color: #38bdf8 !important;
+        background: rgba(56,189,248,0.15) !important;
+        box-shadow: 0 0 10px rgba(56,189,248,0.3) !important;
+        transform: translateY(-1px) !important;
+    }
 
     /* サイドバーのカスタマイズ */
     section[data-testid="stSidebar"] {
         background: rgba(11, 15, 25, 0.98) !important; backdrop-filter: blur(20px) !important;
         border-right: 1px solid rgba(56, 189, 248, 0.5) !important; box-shadow: 2px 0 15px rgba(56,189,248,0.3) !important;
         width: 320px !important; max-width: 88vw !important; min-width: 300px !important;
-    }
-    
-    [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], header button[kind="headerNoPadding"] {
-        opacity: 0 !important; position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; z-index: -1 !important;
     }
 
     div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"], div[role="listbox"] {
@@ -261,19 +346,6 @@ def inject_css():
         white-space: nowrap !important; display: block; width: 100%;
     }
     
-    /* 安全でスタイリッシュなトップナビゲーション */
-    .top-nav-button-group button {
-        background: linear-gradient(180deg, rgba(30,41,59,0.9), rgba(15,23,42,0.9)) !important;
-        color: #f8fafc !important; border: 1px solid rgba(148,163,184,0.3) !important;
-        border-radius: 8px !important; font-weight: 800 !important; font-size: 13px !important;
-        transition: all 0.2s ease !important; height: 38px !important; min-height: 38px !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important; margin-bottom: 10px !important;
-    }
-    .top-nav-button-group button:hover {
-        border-color: #38bdf8 !important; background: rgba(56,189,248,0.15) !important;
-        box-shadow: 0 0 10px rgba(56,189,248,0.3) !important; transform: translateY(-1px) !important;
-    }
-
     .glass-header {
         background: radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);
         border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; padding: 14px; margin-bottom: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
@@ -297,7 +369,6 @@ def inject_css():
         background: rgba(2,6,23,0.7) !important; padding: 6px 4px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.15); text-align: center;
     }
     
-    /* 管理画面用 スタイリッシュテーブルCSS */
     .admin-table-row {
         padding: 8px 5px; border-bottom: 1px solid rgba(148,163,184,0.2); align-items: center;
     }
@@ -402,7 +473,7 @@ check_auth()
 
 
 # ==========================================
-# 6. セッション状態の初期化 (エージェント等拡張)
+# 6. セッション状態の初期化
 # ==========================================
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
@@ -438,10 +509,12 @@ if "system_zero_status" not in st.session_state: st.session_state["system_zero_s
 
 
 # ==========================================
-# 7. トップナビゲーションとサイドバー開閉JS (安全に刷新)
+# 7. トップナビゲーション（JSとCSSの連携で絶対横割れ防止）
 # ==========================================
-st.markdown('<div class="top-nav-button-group">', unsafe_allow_html=True)
-nav_c1, nav_c2, nav_c3 = st.columns(3)
+# 識別用の目印を置く
+st.markdown('<div id="top-nav-marker"></div>', unsafe_allow_html=True)
+nav_c1, nav_c2, nav_c3 = st.columns([1, 1, 1])
+
 if nav_c1.button("🔝 トップ", key="top_nav_top", use_container_width=True):
     st.session_state["navigation_page"] = "TOP"
     st.session_state["scroll_top_trig"] = int(time.time() * 1000)
@@ -465,7 +538,6 @@ if nav_c3.button("↩ 戻る", key="top_nav_back", use_container_width=True):
         st.session_state["active_category"] = "🏆 総合TOP5"
         st.session_state["last_cat"] = "🏆 総合TOP5"
     st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
 
 scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
@@ -473,44 +545,31 @@ if st.session_state.get("scroll_target_id"):
     scroll_target_js = f"setTimeout(function(){{ try {{ const el = window.parent.document.getElementById('{tid}'); if(el){{ el.scrollIntoView({{behavior: 'smooth', block: 'start'}}); }} }} catch(e){{}} }}, 220);"
     st.session_state["scroll_target_id"] = ""
 
-# 無理なDOM書き換え (fixTopNav) を削除し、サイドバー開閉のみに限定したJS
+# ここで「目印」の次の要素(st.columnsの親)に強制横並びクラスを付与する。自作ボタンなどは作らない。
 components.html(
     f"""
     <script>
     (function(){{
         const doc = window.parent.document;
-        if(typeof window.parent.__yamashishi_sidebar_open === 'undefined') {{ window.parent.__yamashishi_sidebar_open = false; }}
         
-        function installCustomSidebarToggle(){{
+        /* 確実！トップナビゲーションを横並びに固定するスクリプト */
+        function forceHorizontalNav(){{
             try {{
-                if(doc.getElementById('yamashishi-floating-sidebar-btn')) return;
-                const style = doc.createElement('style');
-                style.textContent = `
-                    #yamashishi-floating-sidebar-btn {{ position: fixed !important; top: 8px !important; left: 9px !important; z-index: 2147483647 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 3px !important; height: 26px !important; padding: 0 8px 0 6px !important; background: rgba(11, 15, 25, 0.95) !important; backdrop-filter: blur(16px) !important; border: 1.5px solid rgba(56, 189, 248, 0.6) !important; border-radius: 8px !important; cursor: pointer !important; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.3) !important; user-select: none !important; transition: all 0.2s ease !important; color: #38bdf8 !important; }}
-                    #yamashishi-floating-sidebar-btn:hover {{ border-color: #fde047 !important; color: #fde047 !important; box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important; }}
-                `;
-                doc.head.appendChild(style);
-
-                const btn = doc.createElement('div'); btn.id = 'yamashishi-floating-sidebar-btn';
-                btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;">MENU</span>`;
-                
-                doc.body.appendChild(btn);
-
-                btn.addEventListener('click', function(e){{ 
-                    e.preventDefault(); e.stopPropagation(); 
-                    const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-                    const isCollapsed = sidebar && sidebar.getAttribute('aria-expanded') === 'false';
-                    const toggleBtn = doc.querySelector('[data-testid="collapsedControl"]');
-                    const closeBtn = sidebar ? sidebar.querySelector('button') : null;
-                    
-                    if(isCollapsed && toggleBtn) toggleBtn.click();
-                    else if(!isCollapsed && closeBtn) closeBtn.click();
-                }});
+                const marker = doc.getElementById('top-nav-marker');
+                if(marker){{
+                    // マーカーの親から見て、ボタンを含んでいる行のブロックを探す
+                    const container = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
+                    if(container){{
+                        const hBlock = container.querySelector('[data-testid="stHorizontalBlock"]');
+                        if(hBlock && !hBlock.classList.contains('force-horizontal-row')){{
+                            hBlock.classList.add('force-horizontal-row');
+                        }}
+                    }}
+                }}
             }} catch(e){{}}
         }}
 
-        installCustomSidebarToggle();
-
+        /* スクロールトップ処理 */
         function scrollToTopAbsolute(){{
             try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
             const targets = [doc.documentElement, doc.body, doc.querySelector('section.main'), doc.querySelector('[data-testid="stAppViewContainer"]')];
@@ -518,6 +577,11 @@ components.html(
             const topAnchor = doc.getElementById('page_top_anchor');
             if(topAnchor && typeof topAnchor.scrollIntoView === 'function') try {{ topAnchor.scrollIntoView({{behavior: 'instant', block: 'start'}}); }} catch(e){{}}
         }}
+
+        // 実行
+        forceHorizontalNav();
+        setTimeout(forceHorizontalNav, 100);
+        setTimeout(forceHorizontalNav, 500);
 
         if({st.session_state['scroll_top_trig']} > 0 && window.parent._lastScrollTrig !== {st.session_state['scroll_top_trig']}){{
             window.parent._lastScrollTrig = {st.session_state['scroll_top_trig']};
