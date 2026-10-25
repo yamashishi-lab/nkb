@@ -235,9 +235,12 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* Streamlit標準の開閉ボタンは隠し、上部中央の3連メニューボタンからJSでクリック制御 */
+    /* Streamlit標準の開閉ボタンはクリック判定を壊さず画面外・不可視に退避 */
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"] {
-        display: none !important;
+        opacity: 0 !important;
+        position: fixed !important;
+        left: -9999px !important;
+        pointer-events: none !important;
     }
 
     /* サイドバーのカスタマイズ */
@@ -514,17 +517,32 @@ components.html(
                     nav = doc.createElement('div');
                     nav.id = 'yamashishi-fixed-top-nav';
                     
-                    // 1. MENU ボタン (サイドバーを開閉)
+                    // 1. MENU ボタン (サイドバーを開閉トグル)
                     const btnMenu = doc.createElement('div');
                     btnMenu.className = 'yama-nav-btn';
                     btnMenu.innerHTML = '≡ MENU';
                     btnMenu.onclick = () => {{
-                        let openBtn = doc.querySelector('[data-testid="collapsedControl"] button, [data-testid="stSidebarCollapsedControl"] button');
-                        let closeBtn = doc.querySelector('section[data-testid="stSidebar"] button[kind="header"]');
-                        if (closeBtn) {{
-                            closeBtn.click();
-                        }} else if (openBtn) {{
-                            openBtn.click();
+                        const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
+                        const isOpen = sidebar && (
+                            sidebar.getAttribute("aria-expanded") === "true" || 
+                            sidebar.getBoundingClientRect().width > 0
+                        );
+
+                        if (isOpen) {{
+                            const closeBtn = doc.querySelector(
+                                '[data-testid="stSidebarCollapseButton"] button, ' +
+                                'section[data-testid="stSidebar"] button[kind="header"], ' +
+                                'section[data-testid="stSidebar"] button'
+                            );
+                            if (closeBtn) closeBtn.click();
+                        }} else {{
+                            const openBtn = doc.querySelector(
+                                '[data-testid="stSidebarCollapsedControl"] button, ' +
+                                '[data-testid="stSidebarCollapsedControl"], ' +
+                                '[data-testid="collapsedControl"] button, ' +
+                                '[data-testid="collapsedControl"]'
+                            );
+                            if (openBtn) openBtn.click();
                         }}
                     }};
 
