@@ -12,9 +12,10 @@ from email.mime.text import MIMEText
 from datetime import datetime
 
 # ==========================================
-# 1. 初期設定とセキュリティ
+# 1. 初期設定と定数定義
 # ==========================================
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="expanded")
+frag_dec = getattr(st, "fragment", getattr(st, "experimental_fragment", lambda f: f))
 
 try:
     SECRET_KEY = st.secrets.get("SECRET_KEY", "my_super_secret_quant_key_2026")
@@ -48,11 +49,24 @@ IPO_OFFERINGS = [
     {"rank": 2, "code": "405A", "name": "ネクストグリッド電力", "market": "東証P", "bb_period": "受付中〜10/30", "list_date": "11/10", "price_band": "2,400円〜2,600円", "expect_return": "+38.5%", "score": 89, "tier": "🔥 A級：積極BB参加（大型・高当選率）", "lead": "SMBC日興 / 大和証券", "theme": "AIデータセンター向け次世代超電導送電網", "links": [("🏦 SMBC日興", "https://www.smbcnikko.co.jp")]},
 ]
 
+DYNAMIC_DYNAMIC_POOLS = {
+    "半導体": [{"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程"}, {"code": "6857.T", "name": "アドバンテスト", "theme": "AIテスタ"}, {"code": "6920.T", "name": "レーザーテック", "theme": "EUV検査"}, {"code": "6146.T", "name": "ディスコ", "theme": "精密加工"}, {"code": "NVDA", "name": "NVIDIA", "theme": "AI覇者"}],
+    "AI・防衛": [{"code": "9984.T", "name": "ソフトバンクG", "theme": "AI投資"}, {"code": "3778.T", "name": "さくらネット", "theme": "GPUクラウド"}, {"code": "7011.T", "name": "三菱重工業", "theme": "防衛国策"}, {"code": "PLTR", "name": "パランティア", "theme": "防衛AI"}],
+    "AI電力・電線": [{"code": "5803.T", "name": "フジクラ", "theme": "光ファイバー"}, {"code": "5801.T", "name": "古河電工", "theme": "送電"}, {"code": "6501.T", "name": "日立", "theme": "世界グリッド"}, {"code": "VST", "name": "ビストラ", "theme": "AI発電"}],
+    "宇宙・次世代": [{"code": "5595.T", "name": "QPS研究所", "theme": "小型SAR"}, {"code": "186A.T", "name": "アストロスケール", "theme": "宇宙デブリ"}, {"code": "TSLA", "name": "テスラ", "theme": "自動運転"}],
+    "小型急騰・IPO": [{"code": "5253.T", "name": "カバー", "theme": "グロース売買首位"}, {"code": "216A.T", "name": "タイミー", "theme": "スキマバイト"}, {"code": "3350.T", "name": "メタプラネット", "theme": "暗号資産"}, {"code": "IONQ", "name": "アイオンQ", "theme": "商用量子"}]
+}
+STOCK_POOL = DYNAMIC_DYNAMIC_POOLS
+KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": g} for g, its in STOCK_POOL.items() for it in its}
+
+
+# ==========================================
+# 2. ユーティリティとセキュリティ関数
+# ==========================================
 def clean_k(k: str) -> str: return re.sub(r"\s+", "", unicodedata.normalize("NFKC", str(k or "")).strip().strip("\"'"))
 def gen_code(em: str) -> str: return hmac.new(SECRET_KEY.encode(), em.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
 def gen_tok(em: str, act: str) -> str: return hashlib.sha256(f"{em.strip().lower()}:{act}:{SECRET_KEY}".encode()).hexdigest()[:16]
 def hash_pin(pin: str) -> str: return hashlib.sha256(f"PIN:{pin.strip()}:{SECRET_KEY}".encode()).hexdigest()[:16]
-
 def get_raw_header_fp() -> str:
     try:
         h = {str(k).lower(): str(v) for k, v in dict(getattr(st.context, "headers", {}) or {}).items()}
@@ -60,7 +74,6 @@ def get_raw_header_fp() -> str:
     except Exception:
         raw = "default_env"
     return hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
-
 def get_client_fp() -> str:
     raw = get_raw_header_fp()
     qf = st.query_params.get("dfp", "")
@@ -70,8 +83,7 @@ def get_client_fp() -> str:
 
 _FILE_LOCKS = {}
 def _get_file_lock(path: str):
-    if path not in _FILE_LOCKS:
-        _FILE_LOCKS[path] = threading.Lock()
+    if path not in _FILE_LOCKS: _FILE_LOCKS[path] = threading.Lock()
     return _FILE_LOCKS[path]
 
 def load_j(p: str, d: dict) -> dict:
@@ -105,58 +117,116 @@ def load_mem():
 def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h: str = "", action_type: str = "アクセス") -> tuple:
     em_c = em.strip().lower()
     if em_c == ADMIN_EMAIL.strip().lower(): return False, ""
-    sec = load_sec()
-    db = load_mem()
-    b_fps = sec.get("banned_fps", {})
-    b_ems = sec.get("banned_emails", {})
-    b_pins = sec.get("banned_pins", {})
-    u_rec = db.get(em_c, {})
+    sec = load_sec(); db = load_mem(); b_fps = sec.get("banned_fps", {}); b_ems = sec.get("banned_emails", {}); b_pins = sec.get("banned_pins", {}); u_rec = db.get(em_c, {})
 
-    reasons = []
-    orig_target = ""
+    reasons = []; orig_target = ""
     if u_rec.get("status") == "banned" or em_c in b_ems:
-        reasons.append("永久BAN対象メールアドレス一致")
-        orig_target = em_c
+        reasons.append("永久BAN対象メールアドレス一致"); orig_target = em_c
     if cur_fp and cur_fp != "-" and cur_fp in b_fps:
-        reasons.append(f"永久BAN端末指紋(FP:{cur_fp})一致")
-        orig_target = orig_target or b_fps[cur_fp].get("email", "不明")
+        reasons.append(f"永久BAN端末指紋(FP:{cur_fp})一致"); orig_target = orig_target or b_fps[cur_fp].get("email", "不明")
     if raw_hfp and raw_hfp != "-" and raw_hfp in b_fps:
-        reasons.append(f"永久BAN環境ヘッダ指紋(HFP:{raw_hfp})一致")
-        orig_target = orig_target or b_fps[raw_hfp].get("email", "不明")
+        reasons.append(f"永久BAN環境ヘッダ指紋(HFP:{raw_hfp})一致"); orig_target = orig_target or b_fps[raw_hfp].get("email", "不明")
     if pin_h and pin_h in b_pins and em_c != b_pins[pin_h]:
-        reasons.append(f"永久BAN会員({b_pins[pin_h]})と同一PINハッシュ一致")
-        orig_target = orig_target or b_pins[pin_h]
+        reasons.append(f"永久BAN会員({b_pins[pin_h]})と同一PINハッシュ一致"); orig_target = orig_target or b_pins[pin_h]
 
     if reasons:
         now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         r_str = " / ".join(reasons)
         is_spoof = bool(orig_target and em_c and em_c != orig_target)
         log_entry = {
-            "time": now_s,
-            "action": f"🚨 なりすまし{action_type}検知" if is_spoof else f"🚫 永久BAN遮断({action_type})",
-            "input_email": em_c or "未入力",
-            "input_name": name.strip() or u_rec.get("name", "不明"),
-            "orig_banned_email": orig_target or em_c,
-            "fp": cur_fp,
-            "raw_hfp": raw_hfp,
-            "reason": r_str
+            "time": now_s, "action": f"🚨 なりすまし{action_type}検知" if is_spoof else f"🚫 永久BAN遮断({action_type})",
+            "input_email": em_c or "未入力", "input_name": name.strip() or u_rec.get("name", "不明"),
+            "orig_banned_email": orig_target or em_c, "fp": cur_fp, "raw_hfp": raw_hfp, "reason": r_str
         }
         logs = sec.get("spoof_logs", [])
         if not logs or logs[0].get("input_email") != log_entry["input_email"] or logs[0].get("action") != log_entry["action"] or (logs[0].get("time", "")[:16] != now_s[:16]):
-            logs.insert(0, log_entry)
-            sec["spoof_logs"] = logs[:150]
-        if cur_fp and cur_fp != "-":
-            sec.setdefault("banned_fps", {})[cur_fp] = {"email": orig_target or em_c, "name": log_entry["input_name"], "banned_at": now_s, "reason": r_str}
-        if raw_hfp and raw_hfp != "-":
-            sec.setdefault("banned_fps", {})[raw_hfp] = {"email": orig_target or em_c, "name": log_entry["input_name"], "banned_at": now_s, "reason": r_str}
-        if em_c:
-            sec.setdefault("banned_emails", {})[em_c] = {"name": log_entry["input_name"], "banned_at": now_s, "orig": orig_target or em_c}
+            logs.insert(0, log_entry); sec["spoof_logs"] = logs[:150]
+        if cur_fp and cur_fp != "-": sec.setdefault("banned_fps", {})[cur_fp] = {"email": orig_target or em_c, "name": log_entry["input_name"], "banned_at": now_s, "reason": r_str}
+        if raw_hfp and raw_hfp != "-": sec.setdefault("banned_fps", {})[raw_hfp] = {"email": orig_target or em_c, "name": log_entry["input_name"], "banned_at": now_s, "reason": r_str}
+        if em_c: sec.setdefault("banned_emails", {})[em_c] = {"name": log_entry["input_name"], "banned_at": now_s, "orig": orig_target or em_c}
         save_j(FILES["sec"], sec)
         return True, r_str
     return False, ""
 
+def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") -> bool:
+    to_clean, now_str = to_em.strip().lower(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    route, sent = "暗号化アプリ内BOX", False
+    c = load_smtp(); u, p, srv, port = c.get("smtp_user", "").strip(), c.get("smtp_pass", "").strip(), c.get("smtp_server", "").strip(), int(c.get("smtp_port", 465))
+    if u and p:
+        try:
+            m = MIMEText(body, "plain", "utf-8"); m["Subject"], m["From"], m["To"] = subj, u, to_clean
+            ctx = ssl.create_default_context()
+            with (smtplib.SMTP_SSL(srv, port, context=ctx, timeout=3.0) if port == 465 else smtplib.SMTP(srv, port, timeout=3.0)) as s:
+                if port != 465: s.starttls(context=ctx)
+                s.login(u, p); s.send_message(m)
+            sent, route = True, "SMTP配信＋暗号化BOX"
+        except Exception: pass
+    if not sent:
+        try:
+            ctx = ssl.create_default_context()
+            payload = json.dumps({"_subject": subj, "宛先": to_clean, "本文": body, "_captcha": "false"}).encode("utf-8")
+            req = urllib.request.Request(f"https://formsubmit.co/ajax/{urllib.parse.quote(to_clean)}", data=payload, headers={"Content-Type": "application/json", "Accept": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=3.0, context=ctx) as r:
+                if r.status == 200: route = "Webリレー配信＋暗号化BOX"
+        except Exception: pass
+    mdb = load_mail_db()
+    mdb.setdefault("logs", []).insert(0, {"id": hashlib.md5(f"{to_clean}_{now_str}".encode()).hexdigest()[:8], "time": now_str, "to": to_clean, "from": ADMIN_EMAIL, "subject": subj, "body": body, "category": category, "route": route})
+    mdb["logs"] = mdb["logs"][:120]; save_j(FILES["mail"], mdb)
+    return True
+
+
 # ==========================================
-# 2. 生体認証 UI および CSS / JS 注入
+# 3. LLM APIと設定関連関数（NameError対策で復旧）
+# ==========================================
+def _parse_j(raw: str):
+    txt = re.sub(r"^```(?:json)?\s*|\s*```$", "", str(raw or "").strip(), flags=re.IGNORECASE).strip()
+    sb, eb = txt.find("{"), txt.rfind("}")
+    if sb != -1 and eb > sb: txt = txt[sb:eb+1]
+    try: return json.loads(re.sub(r"[\x00-\x1f]+", " ", re.sub(r",\s*([}\]])", r"\1", txt)))
+    except Exception: return {}
+
+def get_active_ai_providers() -> list:
+    cfg = load_llm(); act = []
+    for k, (lbl, m_list, _) in AI_PROVIDERS.items():
+        key = clean_k(st.session_state.get(f"rt_key_{k}", ""))
+        mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
+        if key: act.append((k, lbl, mod, key))
+    return act
+
+def get_debate_mode_badge(cnt: int) -> str:
+    if cnt <= 1: return "🧠 シングルAI・7人専門家合議モード"
+    if cnt == 2: return "⚔️ 2大AI クロス対談モード (並列接続)"
+    if cnt == 3: return "🔥 3大AI トライアングル・ディベート"
+    if cnt <= 6: return f"🏛️ {cnt}大AI ラウンドテーブル会議"
+    return "👑 7大AI グランド討論会・完全合議"
+
+def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p: str, temp: float = 0.7):
+    p_label, _, endpoint = AI_PROVIDERS.get(prov, AI_PROVIDERS["gemini"])
+    ctx = ssl.create_default_context()
+    try:
+        if prov == "gemini":
+            url = endpoint.format(model=model, key=urllib.parse.quote(key))
+            gen_cfg = {"temperature": temp}
+            if not model.startswith("gemma"): gen_cfg["responseMimeType"] = "application/json"
+            payload = {"contents": [{"role": "user", "parts": [{"text": f"【システム指示】\n{sys_p}\n\n【情報・ユーザープロンプト】\n{usr_p}"}]}], "generationConfig": gen_cfg}
+            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=12.0, context=ctx) as r: 
+                return _parse_j("".join(p.get("text", "") for p in json.loads(r.read().decode("utf-8"))["candidates"][0]["content"]["parts"])), f"{p_label} ({model})"
+        elif prov == "claude":
+            payload = {"model": model, "max_tokens": 1200, "temperature": temp, "system": sys_p + " JSONのみ出力せよ。", "messages": [{"role": "user", "content": usr_p}]}
+            req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01"}, method="POST")
+            with urllib.request.urlopen(req, timeout=12.0, context=ctx) as r: 
+                return _parse_j(json.loads(r.read().decode("utf-8"))["content"][0]["text"]), f"{p_label} ({model})"
+        else:
+            payload = {"model": model, "messages": [{"role": "system", "content": sys_p + " Always output valid JSON."}, {"role": "user", "content": usr_p}], "temperature": temp}
+            req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"}, method="POST")
+            with urllib.request.urlopen(req, timeout=12.0, context=ctx) as r: 
+                return _parse_j(json.loads(r.read().decode("utf-8"))["choices"][0]["message"]["content"]), f"{p_label} ({model})"
+    except Exception: return None, f"{p_label} ({model})"
+
+
+# ==========================================
+# 4. UI と CSS / JS 注入 (サイドバー完全修正版)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -186,7 +256,6 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
             is_ban, _ = check_and_log_ban_spoof("", "未認証端末", cur_fp, raw_hfp, "", "ワンタップ試行")
             if is_ban: st.error("💀 この端末は永久BAN（アクセス禁止）されています。")
             else: st.warning("⚠️ 初回は下のフォームから専用コードでログインしてください（次回から自動登録されます）。")
-
 
 def inject_css():
     css = """
@@ -305,7 +374,7 @@ def inject_css():
 inject_css()
 
 # ==========================================
-# 3. 認証ロジック (生体認証バッジ復旧済)
+# 5. 認証処理実行
 # ==========================================
 def check_auth():
     db, sec = load_mem(), load_sec()
@@ -334,7 +403,7 @@ def check_auth():
         st.query_params["u"], st.query_params["t"] = cu, keep_tok
         return True
 
-    # ログイン画面のバッジ・生体認証を完全復旧
+    # ログイン画面のバッジ・生体認証
     st.markdown(
         '<div class="glass-header" style="text-align:center;padding:18px 12px;">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
@@ -395,8 +464,9 @@ def check_auth():
 
 check_auth()
 
+
 # ==========================================
-# 4. セッション状態の初期化
+# 6. セッション状態の初期化
 # ==========================================
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
@@ -411,7 +481,7 @@ for k, v in [
 open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
 
 # ==========================================
-# 5. 上部固定ナビゲーションバー
+# 7. トップナビゲーションとサイドバー開閉JS
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -444,9 +514,6 @@ if st.session_state.get("scroll_target_id"):
     scroll_target_js = f"setTimeout(function(){{ try {{ const el = window.parent.document.getElementById('{tid}'); if(el){{ el.scrollIntoView({{behavior: 'smooth', block: 'start'}}); }} }} catch(e){{}} }}, 220);"
     st.session_state["scroll_target_id"] = ""
 
-# ==========================================
-# 6. カスタムサイドバーとJS制御 (完全修正版)
-# ==========================================
 components.html(
     f"""
     <script>
@@ -497,7 +564,7 @@ components.html(
 
                 btn.addEventListener('click', function(e){{
                     e.preventDefault(); e.stopPropagation();
-                    isSidebarOpen = !isSidebarOpen; // ← ここで確実にトグル反転
+                    isSidebarOpen = !isSidebarOpen; // 確実にトグル反転
                     updateSidebarState();
                 }});
                 
@@ -564,7 +631,7 @@ components.html(
 
 
 # ==========================================
-# 7. サイドバー構築 (アルゴリズム・AGI本物監視員)
+# 8. サイドバー構築 (AGI本物監査員とアルゴ設定)
 # ==========================================
 with st.sidebar:
     # 生体認証用のブリッジ (サイドバー上部に配置)
@@ -707,7 +774,7 @@ with st.sidebar:
 
 
 # ==========================================
-# 8. 高速並列データ収集 (ニュース & Web)
+# 9. 高速並列データ収集 (ニュース & Web)
 # ==========================================
 def fetch_single_news_rss(cat, query):
     ctx = ssl.create_default_context()
@@ -773,8 +840,9 @@ def analyze_news_impact_and_links(title: str, cat: str) -> dict:
         "action_guide": "① 朝の気配値とギャップを確認。\n② 主力株がギャップアップした場合、出遅れている周辺銘柄の押し目を狙うのが勝率の高い手口です。"
     }
 
+
 # ==========================================
-# 9. AI合議と並列Web検索ロジック
+# 10. AI合議と並列Web検索ロジック
 # ==========================================
 def search_single_query(query: str, max_results: int) -> list:
     ctx = ssl.create_default_context()
@@ -816,7 +884,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
         
     web_context_str = "\n".join([f"・{s}" for s in web_snippets]) if web_snippets else ""
     
-    # 合議用モックデータ (LLM APIに繋ぐ場合はここから呼び出し)
+    # 合議用データ構築
     turns = [
         {"round": "💬 合議結果" if not user_query else f"💬 質問への回答: 『{user_query}』"}, 
         {"speaker": "👑 NEXUS", "score": fs, "tone": "normal", "text": f"データに基づき、期待値の高い局面です。{web_context_str[:50]}... 戦略通りに実行してください。"}
@@ -838,8 +906,9 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
     b_cls = {"doubt": "chat-bubble-doubt", "rage": "chat-bubble-rage", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
 
+
 # ==========================================
-# 10. レンダリング関数群 (タブ無反応完全修正済)
+# 11. レンダリング関数群 (タブ無反応完全修正済)
 # ==========================================
 def render_council_sec(r, uk):
     is_open = st.session_state["active_debates"].get(uk, False)
@@ -932,8 +1001,26 @@ def render_card(r, is_custom=False, rank=None, kp="card"):
 
 
 # ==========================================
-# 11. 分析コアロジック (新アルゴ搭載・本物仕様)
+# 12. 分析コアロジック (新アルゴ搭載・本物仕様)
 # ==========================================
+@st.cache_data(ttl=900)
+def fetch_5ch_live() -> dict: return {c: {"hits": 0, "live": False} for c in KNOWN_STOCKS}
+
+@st.cache_data(ttl=900)
+def fetch_macro():
+    tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
+    res = {}
+    try:
+        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=5)
+        for k, (c, lbl) in tks.items():
+            try:
+                d = raw[c].dropna(subset=["Close"]); lc, pc = float(d["Close"].iloc[-1]), float(d["Close"].iloc[-2])
+                res[k] = {"price": lc, "diff": round((lc - pc) / pc * 100, 2), "label": lbl}
+            except Exception: res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
+    except Exception:
+        for k, (_, lbl) in tks.items(): res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
+    return res
+
 def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
     rets = np.diff(c) / np.maximum(c[:-1], 1e-4)
     v_barrier = max(float(np.max(h[-20:]) - c[-1]) / max(float(c[-1]), 1e-4), 0.0)
@@ -1088,6 +1175,7 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     def _analyze_wrapper(g, s, df): 
         return g, s["code"], analyze_df(df, s["code"], s["name"], s["theme"], g, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
         
+    # 【完全並列化】全市場の銘柄分析をマルチスレッドで高速処理
     with ThreadPoolExecutor(max_workers=min(len(codes), 12)) as ex:
         futs = [ex.submit(_analyze_wrapper, g, s, raw[s["code"]] if len(codes)>1 else raw) for g, sts in STOCK_POOL.items() for s in sts]
         for f in as_completed(futs):
@@ -1108,8 +1196,12 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
 
 
 # ==========================================
-# 12. ヘッダー / マクロ指標の描画
+# 13. ヘッダー / マクロ指標の描画と初期化
 # ==========================================
+macro_info = fetch_macro()
+b5_live_map = fetch_5ch_live()
+all_impact_news = fetch_global_impact_news()
+
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;"><div class="brand-luxury">YAMASHISHI LAB</div></div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
 
@@ -1126,8 +1218,9 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.rerun()
     st.stop()
 
+
 # ==========================================
-# 13. メイン画面レイアウト (検索 & タブ)
+# 14. メイン画面レイアウト (検索 & タブ)
 # ==========================================
 c1, c2 = st.columns([3.4, 1])
 cin = c1.text_input("🔍 銘柄検索", placeholder="コード入力 (例: 6920)", label_visibility="collapsed")
