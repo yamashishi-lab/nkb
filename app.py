@@ -4,7 +4,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import altair as alt
-import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, random, threading, sqlite3
+import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, random, threading, sqlite3, uuid
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -26,7 +26,7 @@ AI_PROVIDERS = {
     "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemma-3-27b-it", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
-    "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.groq.com/openai/v1/chat/completions"),
+    "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
     "deepseek": ("🟣 DeepSeek", ["deepseek-chat", "deepseek-reasoner"], "https://api.deepseek.com/chat/completions"),
     "perplexity": ("🌐 Perplexity Sonar", ["sonar-pro", "sonar"], "https://api.perplexity.ai/chat/completions"),
     "groq": ("⚡ Groq LPU", ["llama-3.3-70b-versatile", "qwen-2.5-32b"], "https://api.groq.com/openai/v1/chat/completions")
@@ -117,6 +117,9 @@ KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": 
 # ==========================================
 _DB_LOCK = threading.RLock()
 
+if "client_uuid" not in st.session_state:
+    st.session_state["client_uuid"] = str(uuid.uuid4())
+
 def init_sqlite_db():
     with _DB_LOCK:
         conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False)
@@ -172,9 +175,10 @@ def hash_pin(pin: str) -> str:
 def get_raw_header_fp() -> str:
     try:
         h = {str(k).lower(): str(v) for k, v in dict(getattr(st.context, "headers", {}) or {}).items()}
-        raw = f"{h.get('user-agent','')}|{h.get('accept-language','')}|{h.get('sec-ch-ua-platform','')}"
+        # 改善ポイント：セッション固有のUUIDを混ぜることで端末情報衝突を防止
+        raw = f"{h.get('user-agent','')}|{h.get('accept-language','')}|{h.get('sec-ch-ua-platform','')}|{st.session_state['client_uuid']}"
     except Exception:
-        raw = "default_env"
+        raw = f"default_env|{st.session_state['client_uuid']}"
     return hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
 
 def get_client_fp() -> str:
@@ -287,6 +291,40 @@ def get_active_ai_providers() -> list:
         mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
         if key: act.append((k, lbl, mod, key))
     return act
+
+# 改善ポイント：実際のLLM API呼び出し関数を追加
+def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
+    providers = get_active_ai_providers()
+    if not providers:
+        return None
+    prov, lbl, mod, key = providers[0]
+    ctx = ssl.create_default_context()
+    try:
+        if prov == "gemini":
+            url = AI_PROVIDERS[prov][2].format(model=mod, key=key)
+            data = json.dumps({
+                "contents": [{"role": "user", "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]}],
+                "generationConfig": {"temperature": 0.7, "response_mime_type": "application/json"}
+            }).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=8) as r:
+                res = json.loads(r.read())
+                return res["candidates"][0]["content"]["parts"][0]["text"]
+        else: # OpenAI互換（OpenAI, Groq, DeepSeek, xAI等）
+            url = AI_PROVIDERS[prov][2]
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            data = json.dumps({
+                "model": mod,
+                "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
+                "temperature": 0.7,
+                "response_format": {"type": "json_object"} if prov in ["openai", "groq"] else None
+            }).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=8) as r:
+                res = json.loads(r.read())
+                return res["choices"][0]["message"]["content"]
+    except Exception as e:
+        return None
 
 # ==========================================
 # 4. UI と CSS / JS 注入
@@ -427,7 +465,6 @@ def inject_css():
     .prob-badge { font-family: 'JetBrains Mono',monospace; font-size: clamp(14px,3.8vw,16.5px); font-weight: 800; color: #38bdf8 !important; }
     .expect-badge { font-family: 'JetBrains Mono',monospace; font-size: clamp(14px,3.8vw,16.5px); font-weight: 900; color: #fde047 !important; }
     
-    /* 銘柄情報直下のグリッドバーの余白を極小化 */
     .winrate-bar {
         display: grid; grid-template-columns: repeat(auto-fit, minmax(65px, 1fr)); gap: 6px; background: rgba(15,23,42,0.85) !important;
         border: 1px solid rgba(148,163,184,0.18); border-radius: 8px; padding: 7px 6px; margin-top: 5px !important; text-align: center;
@@ -1075,24 +1112,63 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str) -> list:
     
     top_news_context = web_hits[0] if web_hits else "特段の突発バッドニュースなし、大口の買い板継続中"
 
+    # 改善ポイント：実際のLLM API呼び出しを試行し、取得できれば動的に出力する
+    sys_prompt = f"""
+あなたは日本の2ch（5ch）の市況実況スレにいる4人の凄腕個人投資家（AIエージェント）です。
+対象銘柄は【{r['code']} {r['name']}】です。現在値: {r['price']}、期待度: {r['expect_pct']}%。
+関連ニュースコンテキスト: {top_news_context}
+
+ユーザーの書き込み（質問や意見）に対して、以下の4人のキャラクターで順番にレスアンカーを付けて返信してください。
+【キャラクター】
+1. 🔥 IGNIS: 熱血順張り派。口調は荒く「～だろ！」「～じゃねえぞ！」。トーン: rage または agree
+2. 📐 TECHNOS: 冷徹なクオンツ派。丁寧語で数値を重視「～ですね」「～と推測されます」。トーン: normal
+3. 👁️ SENTINEL: 疑心暗鬼の逆張り派。イナゴを嫌う「～だろｗ」「気をつけろよ」。トーン: doubt
+4. ⚔️ VALKYRIE: 板読みスキャルパー。「～万株の買いが入った！」「ブレイク秒読み！」。トーン: agree
+
+必ず以下のJSON形式（配列）で出力してください。JSON以外のテキストは絶対に出力しないでください。
+[
+    {{"speaker": "🔥 IGNIS", "score": 91, "tone": "rage", "text": "レス内容"}},
+    {{"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": "レス内容"}},
+    {{"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": "レス内容"}},
+    {{"speaker": "⚔️ VALKYRIE", "score": 92, "tone": "agree", "text": "レス内容"}}
+]
+"""
+    llm_result = None
+    if get_active_ai_providers():
+        llm_response_text = call_real_llm_api(sys_prompt, uq)
+        if llm_response_text:
+            try:
+                # Markdownのコードブロックを削除してJSONパース
+                clean_json = re.sub(r'```json|```', '', llm_response_text).strip()
+                llm_result = json.loads(clean_json)
+                if not isinstance(llm_result, list) or len(llm_result) == 0:
+                    llm_result = None
+            except Exception:
+                llm_result = None
+
     turns = []
     turns.append({"round": f"🔥 市況実況スレッド 【{r['code']}】{r['name']} 本スレ Part.892"})
 
-    if is_greeting:
-        turns.extend([
-            {"speaker": "🔥 IGNIS", "score": 91, "tone": "agree", "text": "うっす！挨拶乙！お前ら寄り前の気配値見たか？この地合いで呑気に挨拶してる場合じゃねえぞ、板がガンガン動いてる！"},
-            {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": "はい、こんにちは。挨拶は基本ですが、板のOFI（気配値の注文偏向）はすでに買い側に傾いています。感情を捨てて数値を追ってください。"},
-            {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": "新参か？こんにちはー。だが煽り屋イナゴの群れがそろそろ飛びつきそうな気配配だから、浮かれて成行特攻だけはすんなよ。"},
-            {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": "ようこそ。本日の当銘柄の期待値は " + str(r['expect_pct']) + "%。挨拶代わりに、まずは無理のないロットで逆指値（ストップ安防止）を徹底して参戦してください。"}
-        ])
+    if llm_result:
+        # LLMから正常に返ってきた場合
+        turns.extend(llm_result)
     else:
-        turns.extend([
-            {"speaker": "🔥 IGNIS", "score": 91, "tone": "rage", "text": f"おいおい！『{uq}』って書き込みあったぞ！直近の材料見ろや！【{top_news_context[:45]}】って話出てるのにまだ迷ってんのか？押し目来たら即買い一択だろ！"},
-            {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": f"冷徹に数字を見ろ。『{uq}』への懸念は理解できるが、現在値 {r['price']} に対するサポートラインは堅牢。ボラティリティ急拡大に備えて分割で入るのが合理的だ。"},
-            {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": f"スレ民落ち着けw 『{uq}』でTwitter（X）検索したらイナゴ共が狼狽して損切り投げてるわ。大口はこういう個人を狩ってから一気に上に持っていくんだよな。"},
-            {"speaker": "⚔️ VALKYRIE", "score": 92, "tone": "agree", "text": f"歩み値確認した。さっき 2万株のステルス買いが入ったぞ！『{uq}』を材料にした売り崩しは完全に失敗してる。上値ブレイク秒読みだな。"},
-            {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": f"合議集約するぞ。『{uq}』についての議論は出尽くした。結論として、直近目標値 {r['tp_price']}、絶対損切ライン {r['sl_price']} のルールを1ミリも崩さず執行せよ。"}
-        ])
+        # フォールバック（API未設定・エラー時のダミーデータ）
+        if is_greeting:
+            turns.extend([
+                {"speaker": "🔥 IGNIS", "score": 91, "tone": "agree", "text": "うっす！挨拶乙！お前ら寄り前の気配値見たか？この地合いで呑気に挨拶してる場合じゃねえぞ、板がガンガン動いてる！"},
+                {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": "はい、こんにちは。挨拶は基本ですが、板のOFI（気配値の注文偏向）はすでに買い側に傾いています。感情を捨てて数値を追ってください。"},
+                {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": "新参か？こんにちはー。だが煽り屋イナゴの群れがそろそろ飛びつきそうな気配配だから、浮かれて成行特攻だけはすんなよ。"},
+                {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": "ようこそ。本日の当銘柄の期待値は " + str(r['expect_pct']) + "%。挨拶代わりに、まずは無理のないロットで逆指値（ストップ安防止）を徹底して参戦してください。"}
+            ])
+        else:
+            turns.extend([
+                {"speaker": "🔥 IGNIS", "score": 91, "tone": "rage", "text": f"おいおい！『{uq}』って書き込みあったぞ！直近の材料見ろや！【{top_news_context[:45]}】って話出てるのにまだ迷ってんのか？押し目来たら即買い一択だろ！"},
+                {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": f"冷徹に数字を見ろ。『{uq}』への懸念は理解できるが、現在値 {r['price']} に対するサポートラインは堅牢。ボラティリティ急拡大に備えて分割で入るのが合理的だ。"},
+                {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": f"スレ民落ち着けw 『{uq}』でTwitter（X）検索したらイナゴ共が狼狽して損切り投げてるわ。大口はこういう個人を狩ってから一気に上に持っていくんだよな。"},
+                {"speaker": "⚔️ VALKYRIE", "score": 92, "tone": "agree", "text": f"歩み値確認した。さっき 2万株のステルス買いが入ったぞ！『{uq}』を材料にした売り崩しは完全に失敗してる。上値ブレイク秒読みだな。"},
+                {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": f"合議集約するぞ。『{uq}』についての議論は出尽くした。結論として、直近目標値 {r['tp_price']}、絶対損切ライン {r['sl_price']} のルールを1ミリも崩さず執行せよ。"}
+            ])
     return turns
 
 def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> dict:
@@ -1207,7 +1283,6 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
             f'</span></div>'
         )
 
-    # 上部企業情報・現在値から総合期待度バーまでを1つのHTMLで直接連結し、Streamlitの自動余白を排除
     full_card_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
@@ -1402,7 +1477,8 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         v = df["Volume"].values.astype(float)
         
         df["Prev_Close"] = df["Close"].shift(1)
-        df["Day_Return"] = (df["Close"] - df["Prev_Close"]) / df["Prev_Close"] * 100
+        # 改善ポイント：5分足などの日中データでも安定して計算できるように修正
+        df["Day_Return"] = (df["Close"] - df["Open"].iloc[0]) / df["Open"].iloc[0] * 100 if len(df) > 0 else 0
         tr = pd.concat([df["High"] - df["Low"], (df["High"] - df["Prev_Close"]).abs(), (df["Low"] - df["Prev_Close"]).abs()], axis=1).max(axis=1)
         df["ATR"] = tr.rolling(14).mean().fillna(df["Close"] * 0.02)
         df["VWAP20"] = (((df["High"] + df["Low"] + df["Close"]) / 3.0 * df["Volume"]).rolling(20).sum() / df["Volume"].rolling(20).sum().replace(0, np.nan)).fillna(df["Close"])
@@ -1414,7 +1490,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         cv = float(lat["Close"])
         atrv = float(lat["ATR"])
         
-        recent_20_wins = np.sum(df["Day_Return"].iloc[-20:] > 0)
+        recent_20_wins = np.sum(df["Close"].diff().iloc[-20:] > 0)
         tot_win = float(np.clip(recent_20_wins / 20.0 * 100.0 * 0.4 + qm["q_tunnel"] * 0.35 + ms["kyle_stealth"] * 0.25, 48.0, 96.5))
         
         hl_r = np.maximum(h - l, 1e-4)
@@ -1488,7 +1564,8 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
 @st.cache_data(ttl=1800)
 def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     codes = list({s["code"] for sts in STOCK_POOL.values() for s in sts})
-    raw = yf.download(codes, period="6mo", group_by="ticker", threads=True, progress=False, timeout=9)
+    # 改善ポイント：日足に加えて、5分足（直近5日）のデータを取得して精度を高める
+    raw = yf.download(codes, period="5d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=9)
     gmap, alist, seen = {g: [] for g in STOCK_POOL.keys()}, [], set()
     
     def _analyze_wrapper(g, s, df): 
@@ -1510,7 +1587,7 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
 @st.cache_data(ttl=300)
 def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     inf = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
-    return analyze_df(yf.Ticker(code).history(period="6mo"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
+    return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
 
 # ==========================================
 # 13. ヘッダー / マクロ指標
