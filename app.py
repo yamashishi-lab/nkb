@@ -240,11 +240,6 @@ def inject_css():
         border-right: 1px solid rgba(56, 189, 248, 0.5) !important; box-shadow: 2px 0 15px rgba(56,189,248,0.3) !important;
         width: 320px !important; max-width: 88vw !important; min-width: 300px !important;
     }
-    
-    /* 修正点: opacityは0にするが、pointer-eventsは有効化しクリックをブロックさせない */
-    [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], header button[kind="headerNoPadding"] {
-        opacity: 0 !important; position: absolute !important; top: -9999px !important; left: -9999px !important; z-index: -1 !important; 
-    }
 
     div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"], div[role="listbox"] {
         z-index: 2147483647 !important; background-color: #0b0f19 !important; border: 1px solid rgba(56,189,248,0.4) !important;
@@ -425,7 +420,7 @@ if "system_zero_status" not in st.session_state: st.session_state["system_zero_s
 
 
 # ==========================================
-# 7. トップナビゲーションとサイドバー開閉JS (確実なDOMアクセスとクリーンアップ)
+# 7. トップナビゲーションとサイドバー開閉JS (究極のオーバーレイハック)
 # ==========================================
 scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
@@ -447,6 +442,7 @@ components.html(
         }};
         cleanupStrayElements();
 
+        // 不要なボタンを隠す
         const observer = new MutationObserver((mutations) => {{
             const btns = doc.querySelectorAll('button');
             btns.forEach(b => {{
@@ -456,17 +452,12 @@ components.html(
                         container.style.display = 'none';
                         container.style.position = 'absolute';
                         container.style.zIndex = '-9999';
-                        container.style.visibility = 'hidden';
-                        container.style.height = '0';
-                        container.style.width = '0';
-                        container.style.overflow = 'hidden';
                     }}
                 }}
             }});
         }});
         observer.observe(doc.body, {{childList: true, subtree: true}});
 
-        // 確実なクリックシミュレーション関数
         const simulateClick = (el) => {{
             if (!el) return false;
             try {{
@@ -477,41 +468,58 @@ components.html(
             return true;
         }};
         
-        // サイドバー開閉ボタンの堅牢な実装
+        // 【超強力ハック】見た目はカスタムボタン、実際クリックしているのは透明化させた純正ボタン
         function installCustomSidebarToggle(){{
             try {{
                 let btn = doc.getElementById('yamashishi-floating-sidebar-btn');
                 if (!btn) {{
                     const style = doc.createElement('style');
                     style.textContent = `
-                        #yamashishi-floating-sidebar-btn {{ position: fixed !important; top: 12px !important; left: 12px !important; z-index: 2147483647 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 4px !important; height: 32px !important; padding: 0 10px 0 8px !important; background: rgba(15, 23, 42, 0.95) !important; backdrop-filter: blur(16px) !important; border: 1.5px solid rgba(56, 189, 248, 0.5) !important; border-radius: 8px !important; cursor: pointer !important; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.2) !important; user-select: none !important; transition: all 0.1s ease !important; color: #38bdf8 !important; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 800; }}
-                        #yamashishi-floating-sidebar-btn:active {{ border-color: #fde047 !important; color: #fde047 !important; background: rgba(56, 189, 248, 0.4) !important; box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important; transform: scale(0.92) !important; }}
+                        #yamashishi-floating-sidebar-btn {{
+                            position: fixed !important; top: 12px !important; left: 12px !important; width: 90px !important; height: 32px !important;
+                            z-index: 2147483646 !important; /* 純正ボタンのすぐ下に配置 */
+                            display: flex !important; align-items: center !important; justify-content: center !important; gap: 4px !important;
+                            padding: 0 10px 0 8px !important; background: rgba(15, 23, 42, 0.95) !important; backdrop-filter: blur(16px) !important;
+                            border: 1.5px solid rgba(56, 189, 248, 0.5) !important; border-radius: 8px !important;
+                            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.2) !important;
+                            color: #38bdf8 !important; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 800;
+                            pointer-events: none !important; /* クリックは下の純正ボタンへスルー */
+                        }}
+                        
+                        /* THE MAGIC TRICK: 純正ボタンを完全に上書きしてMENUボタンの真上に配置 */
+                        [data-testid="collapsedControl"], 
+                        [data-testid="stSidebarCollapsedControl"], 
+                        button[aria-label="Expand sidebar"] {{
+                            position: fixed !important; top: 12px !important; left: 12px !important; width: 90px !important; height: 32px !important;
+                            z-index: 2147483647 !important; /* 常に最前面 */
+                            opacity: 0.001 !important; /* 見えないがクリック判定は残す */
+                            cursor: pointer !important; margin: 0 !important; padding: 0 !important; display: block !important; border: none !important;
+                        }}
+                        header[data-testid="stHeader"] {{ z-index: 2147483640 !important; }}
                     `;
                     doc.head.appendChild(style);
 
+                    // 視覚用のMENUボタン
                     btn = doc.createElement('div'); 
                     btn.id = 'yamashishi-floating-sidebar-btn';
                     btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span>MENU</span>`;
                     doc.body.appendChild(btn);
 
-                    btn.addEventListener('click', function(e){{ 
-                        e.preventDefault(); e.stopPropagation(); 
-                        
-                        // Streamlitの開閉ボタンはDOMの状況によって変わるので両方探してある方を叩く
-                        const expandBtn = doc.querySelector('[data-testid="collapsedControl"]') || doc.querySelector('[data-testid="stSidebarCollapsedControl"]');
-                        const closeBtn = doc.querySelector('[data-testid="stSidebarHeader"] button') || doc.querySelector('section[data-testid="stSidebar"] button');
-                        
-                        if (expandBtn && window.parent.getComputedStyle(expandBtn).display !== 'none') {{
-                            simulateClick(expandBtn);
-                        }} else if (closeBtn) {{
-                            simulateClick(closeBtn);
+                    // サイドバーが開いているときはMENUボタン自体を隠す（純正の「X」で閉じてもらう）
+                    const stateObserver = new MutationObserver(() => {{
+                        const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
+                        if(sidebar) {{
+                            const transform = window.parent.getComputedStyle(sidebar).transform;
+                            const isExpanded = (transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)' || sidebar.getAttribute('aria-expanded') === 'true');
+                            btn.style.display = isExpanded ? 'none' : 'flex';
                         }}
                     }});
+                    stateObserver.observe(doc.body, {{childList: true, subtree: true, attributes: true}});
                 }}
             }} catch(e){{}}
         }}
 
-        // 上部固定のカッコいいナビゲーションボタン（中央配置＆合議閉じる削除）
+        // 上部固定の中央ナビゲーションボタン
         function installFixedTopNav(){{
             try {{
                 let nav = doc.getElementById('yamashishi-fixed-top-nav');
