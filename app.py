@@ -320,10 +320,10 @@ def inject_css():
     div[data-testid="stElementContainer"]:has(div.top-nav-marker), div.element-container:has(div.top-nav-marker) {
         display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;
     }
-    /* flex-wrap: nowrap と width を強制し、はみ出しを防ぐ */
+    /* flex-wrap: nowrap と width を強制し、はみ出しを防ぐ。gapとpaddingを削って完全フィット */
     .fixed-top-nav-bar div[data-testid="stHorizontalBlock"] {
         display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important;
-        justify-content: space-between !important; gap: 4px !important; width: 100% !important; border: none !important; background: transparent !important;
+        justify-content: space-between !important; gap: 2px !important; width: 100% !important; border: none !important; background: transparent !important;
         margin: 0 !important; padding: 0 !important; overflow: hidden !important;
     }
     /* 各カラムが均等に33.33%を占めるように強制 */
@@ -332,12 +332,12 @@ def inject_css():
         padding: 0 !important; border: none !important; margin: 0 !important;
     }
     .fixed-top-nav-bar button {
-        width: 100% !important; min-width: 0 !important; height: 32px !important; min-height: 32px !important; max-height: 32px !important;
-        padding: 0 2px !important; margin: 0 !important; border-radius: 7px !important; background: rgba(15,23,42,0.92) !important;
+        width: 100% !important; min-width: 0 !important; height: 28px !important; min-height: 28px !important; max-height: 28px !important;
+        padding: 0 !important; margin: 0 !important; border-radius: 6px !important; background: rgba(15,23,42,0.92) !important;
         backdrop-filter: blur(10px) !important; color: #f8fafc !important; border: 1px solid rgba(56,189,248,0.25) !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.45) !important; pointer-events: auto !important; cursor: pointer !important; position: relative !important;
-        outline: none !important; transition: all 0.15s ease !important; font-size: 11px !important; font-weight: 700 !important;
-        white-space: nowrap !important; overflow: hidden !important; text-overflow: clip !important; /* テキストはみ出し防止 */
+        outline: none !important; transition: all 0.15s ease !important; font-size: 10px !important; font-weight: 700 !important;
+        white-space: nowrap !important; overflow: hidden !important; text-overflow: clip !important; letter-spacing: -0.5px !important;
     }
     .fixed-top-nav-bar button:hover { border-color: rgba(56,189,248,0.7) !important; background: rgba(30,41,59,0.92) !important; }
     .fixed-top-nav-bar button:active {
@@ -653,7 +653,7 @@ with st.sidebar:
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
     
     if cu == ADMIN_EMAIL.strip().lower():
-        with st.expander("👑 会員コントロール・管理画面", expanded=True):
+        with st.expander("👑 会員コントロール・管理画面", expanded=False):
             db_admin = load_mem()
             sec_admin = load_sec()
             pend_list = [v for v in db_admin.values() if v.get("status") == "pending"]
@@ -665,7 +665,7 @@ with st.sidebar:
 
     st.markdown("### ⚙️ QUANTUM 設定パネル")
     
-    with st.expander("🎯 投資スタイル ＆ アルゴリズム", expanded=True):
+    with st.expander("🎯 投資スタイル ＆ アルゴリズム", expanded=False):
         investment_style = st.selectbox("トレードスタイル", [
             "⚡ デイトレード (前場・後場の波及を狙う)", 
             "🚀 スキャルピング (秒〜分単位のモメンタム)", 
@@ -763,7 +763,7 @@ with st.sidebar:
                         new_name = agent["name"] + ("-Neo" if "-" not in agent["name"] else "X")
                         roster[target_k] = {
                             "name": new_name, "icon": agent["icon"], "age": max(18, agent["age"] - random.randint(1, 3)), 
-                            "score": 100, "good": f"欠点({reason_text})を完全克服し最適化済み", "bad": "実践データ収集中"
+                            "score": 100, "good": f"前任の弱点({reason_text})を完全学習し克服した最新鋭モデル", "bad": "実践データ収集中"
                         }
         
         if st.session_state["system_zero_logs"]:
@@ -804,6 +804,61 @@ with st.sidebar:
         st.session_state["authenticated_user"] = None
         st.query_params.clear()
         st.rerun()
+
+
+# ==========================================
+# 8.5 会員コントロール・管理画面 (ADMINコンソール復元)
+# ==========================================
+if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower():
+    st.markdown("### 👑 YAMASHISHI LAB 総合管理コンソール")
+    if st.button("⬅️ トップに戻る", use_container_width=True, type="primary"):
+        st.session_state["navigation_page"] = "TOP"
+        st.rerun()
+    
+    st.markdown("#### 👥 ユーザー承認・管理")
+    db_admin = load_mem()
+    
+    c_pend = sum(1 for d in db_admin.values() if d.get("status") == "pending")
+    if c_pend > 0:
+        st.warning(f"現在、承認待ちのユーザーが {c_pend} 名います。")
+        
+    for eml, dat in db_admin.items():
+        if eml == ADMIN_EMAIL.strip().lower(): continue
+        
+        stat = dat.get("status")
+        stat_lbl = "🟡 承認待ち" if stat == "pending" else "🟢 承認済" if stat == "approved" else "🔴 BAN済"
+        
+        st.markdown(f'<div style="background:rgba(15,23,42,0.8); border:1px solid rgba(148,163,184,0.3); border-radius:8px; padding:10px; margin-bottom:8px;">'
+                    f'<div style="font-weight:bold; font-size:14px;">{dat.get("name", "不明")} <span style="font-size:12px; color:#94a3b8;">({eml})</span></div>'
+                    f'<div style="font-size:12px; margin:4px 0;">ステータス: {stat_lbl} ｜ 申請日: {dat.get("applied_at", "-")}</div>'
+                    f'</div>', unsafe_allow_html=True)
+        
+        c1, c2, c3 = st.columns(3)
+        if stat == "pending" or stat == "banned":
+            if c1.button(f"✅ 承認する", key=f"app_{eml}", use_container_width=True):
+                db_admin[eml]["status"] = "approved"
+                save_j(FILES["mem"], db_admin); st.rerun()
+        if stat == "approved":
+            if c2.button(f"⏸️ 停止する", key=f"susp_{eml}", use_container_width=True):
+                db_admin[eml]["status"] = "pending"
+                save_j(FILES["mem"], db_admin); st.rerun()
+        if stat != "banned":
+            if c3.button(f"🚫 永久BAN", key=f"ban_{eml}", use_container_width=True):
+                db_admin[eml]["status"] = "banned"
+                save_j(FILES["mem"], db_admin); st.rerun()
+            
+    st.markdown("#### 🚨 セキュリティ監査ログ (なりすまし検知)")
+    sec_admin = load_sec()
+    logs = sec_admin.get("spoof_logs", [])
+    if logs:
+        for log in logs[:15]:
+            st.markdown(f'<div style="background:rgba(239,68,68,0.1); border-left:4px solid #ef4444; padding:8px; margin-bottom:5px; font-size:11px; color:#e2e8f0;">'
+                        f'<b>[{log["time"]}]</b> {log["action"]}<br>'
+                        f'入力アドレス: {log["input_email"]} ｜ 対象: {log.get("orig_banned_email","不明")}<br>'
+                        f'<span style="color:#fca5a5;">理由: {log["reason"]}</span></div>', unsafe_allow_html=True)
+    else:
+        st.info("現在、不審なアクセスログはありません。")
+    st.stop()
 
 
 # ==========================================
@@ -995,7 +1050,8 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     rel_news = next((n for n in all_impact_news if r["full_code"] in n["detail"]["related_codes"]), None)
     dc, ds, ps = "#10b981" if r["diff"] >= 0 else "#ef4444", ("+" if r["diff"] > 0 else ""), ("+" if r["pts_gap_pct"] > 0 else "")
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
-    lot, st_info = r["lot_info"], r["strat"]
+    lot, st_info = r["strat"], r["strat"] # lot_info fallback
+    lot = r.get("lot_info", {"shares": st_info.get("adj_shares", 100), "position_value": st_info.get("adj_shares", 100) * r.get("raw_close", 1000)})
     
     card_html_top = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
