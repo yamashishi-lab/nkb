@@ -100,7 +100,7 @@ def save_j(p: str, d: dict):
         except Exception: pass
 
 def load_smtp(): return load_j(FILES["smtp"], {"smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
-def load_llm(): return load_j(FILES["llm"], {"provider": "gemini", "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}})
+def load_llm(): return load_j(FILES["llm"], {"active_providers": ["gemini"], "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}})
 def load_sec(): return load_j(FILES["sec"], {"banned_fps": {}, "banned_emails": {}, "banned_pins": {}, "banned_names": [], "spoof_logs": [], "device_bio_map": {}})
 def load_mail_db(): return load_j(FILES["mail"], {"logs": [], "messages": []})
 def load_mem():
@@ -184,10 +184,13 @@ def _parse_j(raw: str):
 
 def get_active_ai_providers() -> list:
     cfg = load_llm(); act = []
-    for k, (lbl, m_list, _) in AI_PROVIDERS.items():
-        key = clean_k(st.session_state.get(f"rt_key_{k}", ""))
-        mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
-        if key: act.append((k, lbl, mod, key))
+    active_keys = cfg.get("active_providers", ["gemini"])
+    for k in active_keys:
+        if k in AI_PROVIDERS:
+            lbl, m_list, _ = AI_PROVIDERS[k]
+            key = clean_k(st.session_state.get(f"rt_key_{k}", ""))
+            mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
+            if key: act.append((k, lbl, mod, key))
     return act
 
 # ==========================================
@@ -272,47 +275,38 @@ def inject_css():
         white-space: nowrap !important; display: block; width: 100%;
     }
     
-    /* スタイリッシュなトップナビゲーション (刷新) */
-    .fixed-top-nav-bar {
-        position: fixed !important; top: 12px !important; left: 50% !important; transform: translateX(-50%) !important;
-        z-index: 999980 !important; width: min(420px, 92vw) !important; 
-        background: rgba(10, 15, 26, 0.75) !important; backdrop-filter: blur(20px) !important; 
-        border: 1px solid rgba(56, 189, 248, 0.3) !important; border-radius: 16px !important; 
-        box-shadow: 0 8px 32px rgba(0,0,0,0.6), inset 0 0 15px rgba(56,189,248,0.1) !important; 
-        padding: 6px !important; margin: 0 !important; pointer-events: auto !important;
+    /* === 新・堅牢トップナビゲーション === */
+    div[data-testid="stVerticalBlock"]:has(.yamashishi-top-nav) {
+        position: fixed !important;
+        top: 15px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, 92vw) !important;
+        background: rgba(10, 15, 26, 0.9) !important;
+        backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(56, 189, 248, 0.4) !important;
+        border-radius: 12px !important;
+        padding: 6px !important;
+        z-index: 999980 !important;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.6), inset 0 0 10px rgba(56, 189, 248, 0.1) !important;
     }
-    div[data-testid="stElementContainer"]:has(div.top-nav-marker), div.element-container:has(div.top-nav-marker) {
-        display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;
+    div[data-testid="stVerticalBlock"]:has(.yamashishi-top-nav) div[data-testid="stHorizontalBlock"] {
+        display: flex !important; gap: 6px !important; align-items: center !important; margin: 0 !important;
     }
-    .fixed-top-nav-bar div[data-testid="stHorizontalBlock"] {
-        display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important;
-        justify-content: space-between !important; gap: 6px !important; width: 100% !important; border: none !important; background: transparent !important;
-        margin: 0 !important; padding: 0 !important;
-    }
-    .fixed-top-nav-bar div[data-testid="column"] { 
-        width: 33.33% !important; min-width: 0 !important; max-width: 33.33% !important; flex: 1 1 0 !important; 
-        padding: 0 !important; border: none !important; margin: 0 !important;
-    }
-    .fixed-top-nav-bar button {
-        width: 100% !important; min-width: 0 !important; height: 34px !important; min-height: 34px !important; max-height: 34px !important;
-        padding: 0 !important; margin: 0 !important; border-radius: 10px !important; 
+    div[data-testid="stVerticalBlock"]:has(.yamashishi-top-nav) button {
         background: linear-gradient(180deg, rgba(30,41,59,0.9), rgba(15,23,42,0.9)) !important;
-        color: #f8fafc !important; border: 1px solid rgba(148,163,184,0.2) !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important; pointer-events: auto !important; cursor: pointer !important; 
-        outline: none !important; transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) !important; 
-        font-size: 13px !important; font-weight: 800 !important; 
-        display: flex !important; justify-content: center !important; align-items: center !important; letter-spacing: 0.5px !important;
+        border: 1px solid rgba(148,163,184,0.3) !important;
+        color: #38bdf8 !important;
+        border-radius: 8px !important;
+        height: 36px !important; min-height: 36px !important;
+        font-weight: 800 !important; font-size: 13px !important;
+        padding: 0 !important; width: 100% !important; transition: all 0.2s ease !important;
     }
-    .fixed-top-nav-bar button:hover { 
-        border-color: rgba(56,189,248,0.7) !important; background: linear-gradient(180deg, rgba(56,189,248,0.2), rgba(14,165,233,0.1)) !important; 
-        box-shadow: 0 0 15px rgba(56,189,248,0.4) !important; transform: translateY(-1px) !important;
+    div[data-testid="stVerticalBlock"]:has(.yamashishi-top-nav) button:hover {
+        border-color: #38bdf8 !important; background: rgba(56, 189, 248, 0.15) !important; color: #fff !important;
     }
-    .fixed-top-nav-bar button:active {
-        box-shadow: inset 0 2px 8px rgba(0,0,0,0.6) !important;
-        border-color: #38bdf8 !important; background: rgba(56, 189, 248, 0.3) !important; color: #ffffff !important; transform: translateY(1px) scale(0.97) !important;
-    }
-    .fixed-top-nav-bar button:focus, .fixed-top-nav-bar button:focus:not(:focus-visible) {
-        outline: none !important;
+    div[data-testid="stElementContainer"]:has(.yamashishi-top-nav) {
+        display: none !important;
     }
 
     .glass-header {
@@ -417,7 +411,7 @@ def check_auth():
                         save_j(FILES["mem"], db); send_mail(cm, "【YAMASHISHI LAB】会員登録申請の受付完了", f"{nm_clean} 様\n申請を受け付けました。管理者承認後、ログイン画面の『🔐 承認確認・暗号化コード照会』タブにて、暗証番号(PIN)を入力すると専用アクセスコードをご確認いただけます。")
                         st.success("✅ 申請を受け付けました！承認完了まで今しばらくお待ちください。")
     with tab_vault:
-        st.caption("🛡️ 第三者による盗み見を防止するため、**申請時のメールアドレス** と **秘密の4桁暗証番号(PIN)** の両方が一致した場合のみ専用アクセスコードを開示します。")
+        st.caption("🛡️ 第三者による盗み見を防止するため、**申請時のメールアドレス** と **秘密の4桁暗証番号(PIN)** 両方が一致した場合のみ専用アクセスコードを開示します。")
         with st.form("vault_check"):
             chk_em = st.text_input("📧 申請したメールアドレス").strip().lower()
             chk_pin = st.text_input("🔢 申請時に設定した4桁の暗証番号 (PIN)", type="password", max_chars=4).strip()
@@ -474,19 +468,22 @@ if "system_zero_status" not in st.session_state: st.session_state["system_zero_s
 # ==========================================
 # 7. トップナビゲーションとサイドバー開閉JS
 # ==========================================
-with st.container():
-    st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
-    # 刷新されたボタングループ
-    nav_c1, nav_c2, nav_c3 = st.columns([1, 1, 1])
-    if nav_c1.button("🔝 トップ", key="top_nav_top", use_container_width=True):
+
+# 堅牢な新トップナビゲーション
+st.markdown('<div class="yamashishi-top-nav"></div>', unsafe_allow_html=True)
+nav_c1, nav_c2, nav_c3 = st.columns(3)
+with nav_c1:
+    if st.button("🔝 トップ", key="top_nav_top", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
         st.session_state["focused_stock_item"] = None
         st.rerun()
-    if nav_c2.button(f"✖ 閉じる", key="top_nav_close", use_container_width=True):
+with nav_c2:
+    if st.button("✖ 閉じる", key="top_nav_close", use_container_width=True):
         st.session_state["active_debates"] = {}
         st.rerun()
-    if nav_c3.button("↩ 戻る", key="top_nav_back", use_container_width=True):
+with nav_c3:
+    if st.button("↩ 戻る", key="top_nav_back", use_container_width=True):
         st.session_state["focused_stock_item"] = None
         if st.session_state.get("navigation_page") != "TOP":
             st.session_state["navigation_page"] = "TOP"
@@ -552,18 +549,8 @@ components.html(
             }} catch(e){{}}
         }}
 
-        function fixTopNav(){{
-            try {{
-                const marker = doc.querySelector('.top-nav-marker');
-                if(!marker) return;
-                let box = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]') || marker.closest('[data-testid="stVerticalBlock"]');
-                if(box && box.querySelector('[data-testid="stHorizontalBlock"]')) box.classList.add('fixed-top-nav-bar');
-            }} catch(e){{}}
-        }}
-
-        installCustomSidebarToggle(); fixTopNav();
+        installCustomSidebarToggle(); 
         setInterval(updateSidebarState, 150);
-        setTimeout(fixTopNav, 100); setTimeout(fixTopNav, 500);
 
         function scrollToTopAbsolute(){{
             try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
@@ -595,7 +582,6 @@ with st.sidebar:
         with st.expander("👑 会員コントロール・管理画面", expanded=False):
             db_admin = load_mem(); sec_admin = load_sec()
             pend_list = [v for v in db_admin.values() if v.get("status") == "pending"]
-            spoof_cnt = len(sec_admin.get("spoof_logs", []))
             if st.button(f"👥 管理画面へ移動 ({len(pend_list)}件未承認)"):
                 st.session_state["navigation_page"] = "ADMIN"; st.rerun()
 
@@ -624,20 +610,40 @@ with st.sidebar:
         for label, key in BOOST_MAP.items():
             if st.checkbox(label, value=True, key=f"chk_{key}"): ac_b.add(key)
 
-    with st.expander("🧠 7大AI ＆ 量子エンジン設定", expanded=False):
+    # 複数API同時接続を可能にするUIへ変更（タブ不具合解消）
+    with st.expander("🧠 7大AI ＆ 量子エンジン設定 (複数選択可)", expanded=False):
+        st.caption("複数AIをオンにして各APIキーを設定すると、完全並列で合議・推論を実行します。")
         llm_cfg = load_llm()
-        cur_prov = st.selectbox("AIプロバイダー", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
-        p_name, p_models, _ = AI_PROVIDERS[cur_prov]
-        saved_m = llm_cfg.get("models", {}).get(cur_prov, p_models[0])
-        in_k = clean_k(st.text_input(f"🔑 {p_name} API Key", value=st.session_state.get(f"rt_key_{cur_prov}", ""), type="password"))
-        in_m = st.selectbox(f"🧠 モデル", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
+        
+        active_providers = st.multiselect(
+            "稼働させるAIプロバイダーを選択", 
+            list(AI_PROVIDERS.keys()), 
+            format_func=lambda k: AI_PROVIDERS[k][0], 
+            default=llm_cfg.get("active_providers", ["gemini"])
+        )
+        
+        if active_providers != llm_cfg.get("active_providers"):
+            llm_cfg["active_providers"] = active_providers
+            save_j(FILES["llm"], llm_cfg)
+        
+        for k in active_providers:
+            p_name, p_models, _ = AI_PROVIDERS[k]
+            saved_m = llm_cfg.get("models", {}).get(k, p_models[0])
+            st.markdown(f"<div style='font-size:12px;font-weight:bold;margin-top:10px;'>{p_name}</div>", unsafe_allow_html=True)
+            
+            in_k = clean_k(st.text_input(f"🔑 API Key", value=st.session_state.get(f"rt_key_{k}", ""), type="password", key=f"key_input_{k}", label_visibility="collapsed", placeholder="API Key"))
+            in_m = st.selectbox(f"🧠 モデル", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0, key=f"mod_input_{k}", label_visibility="collapsed")
+            
+            if in_m != saved_m:
+                llm_cfg.setdefault("models", {})[k] = in_m
+                save_j(FILES["llm"], llm_cfg)
+                st.session_state["council_threads"] = {}
+                
+            st.session_state[f"rt_key_{k}"] = in_k
+            st.session_state[f"rt_mod_{k}"] = in_m
+            
+        st.caption(f"🟢 現在起動中(APIキー設定済)のAI: **{len(get_active_ai_providers())}社**並列稼働")
 
-        if in_m != saved_m or cur_prov != llm_cfg.get("provider"):
-            llm_cfg["provider"] = cur_prov; llm_cfg.setdefault("models", {})[cur_prov] = in_m; save_j(FILES["llm"], llm_cfg); st.session_state["council_threads"] = {}
-        st.session_state[f"rt_key_{cur_prov}"] = in_k; st.session_state[f"rt_mod_{cur_prov}"] = in_m
-        st.caption(f"🟢 現在起動中のAI: **{len(get_active_ai_providers())} / 7社**")
-
-    # 復活・追加した設定項目
     with st.expander("🔔 リアルタイム通知 ＆ アラート", expanded=False):
         st.checkbox("🚨 異常ボラティリティ検知", value=True)
         st.checkbox("🐋 クジラ(大口)資金流入アラート", value=True)
@@ -736,53 +742,56 @@ with st.sidebar:
 # 8.5 会員コントロール・管理画面 (洗練された表形式へ刷新)
 # ==========================================
 if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower():
-    st.markdown("### 👑 YAMASHISHI LAB 総合管理コンソール")
+    st.markdown("### 👑 総合管理コンソール")
     if st.button("⬅️ トップに戻る", use_container_width=True, type="primary"):
         st.session_state["navigation_page"] = "TOP"; st.rerun()
     
-    st.markdown("#### 👥 ユーザー承認・管理")
+    st.markdown("#### 👥 ユーザー承認・管理リスト")
     db_admin = load_mem()
     c_pend = sum(1 for d in db_admin.values() if d.get("status") == "pending")
     if c_pend > 0: st.warning(f"現在、承認待ちのユーザーが {c_pend} 名います。")
     
-    # ユーザー管理をモダンなテーブル形式で表示
+    # ユーザー管理をモダンでスタイリッシュな表形式レイアウトに刷新
     st.markdown("""
-    <div style="background:rgba(15,23,42,0.8); border:1px solid rgba(56,189,248,0.4); border-radius:10px; padding:10px; margin-bottom:10px;">
+    <style>
+    .admin-table-header { font-size: 11px !important; color: #38bdf8; font-weight: bold; background: rgba(15,23,42,0.8); padding: 8px 6px; border-bottom: 2px solid rgba(56,189,248,0.5); border-radius: 6px 6px 0 0; display: flex; text-align: center; }
+    </style>
+    <div class="admin-table-header">
+        <div style="flex:3; text-align:left; padding-left:5px;">👤 ユーザー (Email)</div>
+        <div style="flex:1.5;">📊 状態</div>
+        <div style="flex:2;">📅 申請日</div>
+        <div style="flex:3;">⚙️ アクション</div>
+    </div>
     """, unsafe_allow_html=True)
-    
-    hc1, hc2, hc3, hc4 = st.columns([2.5, 1.5, 2, 4])
-    hc1.markdown("**👤 ユーザー (Email)**")
-    hc2.markdown("**📊 ステータス**")
-    hc3.markdown("**📅 申請日**")
-    hc4.markdown("**⚙️ アクション (承認/停止/BAN/削)**")
-    st.markdown("<hr style='margin: 4px 0; border-color: rgba(148,163,184,0.3);'>", unsafe_allow_html=True)
         
     for eml, dat in list(db_admin.items()):
         if eml == ADMIN_EMAIL.strip().lower(): continue
         stat = dat.get("status")
-        stat_lbl = "🟡 承認待ち" if stat == "pending" else "🟢 承認済" if stat == "approved" else "⏸️ 停止中" if stat == "suspended" else "🔴 BAN済"
+        stat_lbl = "🟡 承認待" if stat == "pending" else "🟢 承認済" if stat == "approved" else "⏸️ 停止中" if stat == "suspended" else "🔴 BAN済"
         
-        c1, c2, c3, c4 = st.columns([2.5, 1.5, 2, 4], vertical_alignment="center")
-        c1.markdown(f"<div style='font-size:13px; font-weight:bold;'>{dat.get('name', '不明')}</div><div style='font-size:11px;color:#94a3b8;'>{eml}</div>", unsafe_allow_html=True)
-        c2.markdown(f"<div style='font-size:13px;'>{stat_lbl}</div>", unsafe_allow_html=True)
-        c3.markdown(f"<div style='font-size:12px;color:#94a3b8;'>{dat.get('applied_at', '-')}</div>", unsafe_allow_html=True)
+        c_user, c_stat, c_date, c_acts = st.columns([3, 1.5, 2, 3], vertical_alignment="center")
         
-        with c4:
+        c_user.markdown(f"<div style='font-size:11px;font-weight:700;color:#f8fafc;padding-left:5px;line-height:1.2;'>{dat.get('name', '不明')}</div><div style='font-size:9.5px;color:#94a3b8;padding-left:5px;'>{eml}</div>", unsafe_allow_html=True)
+        c_stat.markdown(f"<div style='font-size:11px;font-weight:700;text-align:center;'>{stat_lbl}</div>", unsafe_allow_html=True)
+        c_date.markdown(f"<div style='font-size:10px;color:#94a3b8;text-align:center;'>{dat.get('applied_at', '-')}</div>", unsafe_allow_html=True)
+        
+        with c_acts:
             bc1, bc2, bc3, bc4 = st.columns(4)
             if stat in ["pending", "suspended", "banned"]:
-                if bc1.button("✅", key=f"app_{eml}", help="承認または利用再開", use_container_width=True):
+                if bc1.button("✅", key=f"app_{eml}", help="承認"):
                     db_admin[eml]["status"] = "approved"; save_j(FILES["mem"], db_admin); st.rerun()
             if stat == "approved":
-                if bc2.button("⏸️", key=f"susp_{eml}", help="一時停止", use_container_width=True):
+                if bc2.button("⏸️", key=f"susp_{eml}", help="一時停止"):
                     db_admin[eml]["status"] = "suspended"; save_j(FILES["mem"], db_admin); st.rerun()
             if stat != "banned":
-                if bc3.button("🚫", key=f"ban_{eml}", help="永久BAN", use_container_width=True):
+                if bc3.button("🚫", key=f"ban_{eml}", help="永久BAN"):
                     db_admin[eml]["status"] = "banned"; save_j(FILES["mem"], db_admin); st.rerun()
-            if bc4.button("🗑️", key=f"del_{eml}", help="アカウント削除", use_container_width=True):
+            if bc4.button("🗑️", key=f"del_{eml}", help="アカウント削除"):
                 del db_admin[eml]; save_j(FILES["mem"], db_admin); st.rerun()
-        st.markdown("<hr style='margin: 4px 0; border-color: rgba(148,163,184,0.1);'>", unsafe_allow_html=True)
+                
+        st.markdown("<hr style='margin: 2px 0; border: none; border-bottom: 1px solid rgba(148,163,184,0.15);'>", unsafe_allow_html=True)
     
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
             
     st.markdown("#### 👁️‍🗨️ SYSTEM-ZERO コントロールパネル")
     st.caption("総括神の管理は管理者のみ実行可能です。")
