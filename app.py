@@ -422,7 +422,7 @@ if "auditor_roster" not in st.session_state:
     st.session_state["auditor_roster"] = {
         "AUD1": {"name": "JUDGE-ALPHA", "icon": "⚖️", "score": 98, "good": "厳格なルール適用", "bad": "状況に応じた柔軟性がない"},
         "AUD2": {"name": "INQUISITOR-BETA", "icon": "👁️", "score": 96, "good": "隠れたバイアスの看破", "bad": "疑心暗鬼に陥る"},
-        "AUD3": {"name": "WARDEN-GAMMA", "icon": "⛓️", "score": 97, "good": "リスク管理の徹底監視", "bad": "極端に保守的"}
+        "AUD3": {"name": "WARDEN-GAMMA", "icon": "⛓️", "score": 97, "good": "リスク管理の徹底監視", "bad": "極端に保守적"}
     }
 if "fired_entities" not in st.session_state: st.session_state["fired_entities"] = []
 if "system_zero_logs" not in st.session_state: st.session_state["system_zero_logs"] = []
@@ -527,7 +527,7 @@ components.html(
                     nav = doc.createElement('div');
                     nav.id = 'yamashishi-fixed-top-nav';
                     
-                    // 1. MENU ボタン (サイドバー強制オープン/トグル)
+                    # 1. MENU ボタン (サイドバー強制オープン/トグル)
                     const btnMenu = doc.createElement('div');
                     btnMenu.className = 'yama-nav-btn';
                     btnMenu.innerHTML = '≡ MENU';
@@ -538,7 +538,6 @@ components.html(
                             sidebar.getBoundingClientRect().width === 0;
 
                         if (isClosed) {{
-                            // 強制的に開くための各種トリガー・セレクタを順次実行
                             const openBtn = doc.querySelector(
                                 '[data-testid="stSidebarCollapsedControl"] button, ' +
                                 '[data-testid="stSidebarCollapsedControl"], ' +
@@ -548,7 +547,6 @@ components.html(
                             if (openBtn) {{
                                 openBtn.click();
                             }}
-                            // 追加の安全策：Streamlit内部コンテナの属性直接書き換え
                             if (sidebar) {{
                                 sidebar.setAttribute("aria-expanded", "true");
                                 sidebar.style.transform = "translateX(0px)";
@@ -563,7 +561,7 @@ components.html(
                         }}
                     }};
 
-                    // 2. トップ ボタン
+                    # 2. トップ ボタン
                     const btnTop = doc.createElement('div');
                     btnTop.className = 'yama-nav-btn';
                     btnTop.innerHTML = '🔝 トップ';
@@ -572,7 +570,7 @@ components.html(
                         btns.forEach(b => {{ if(b.textContent.includes('HID_TOP')) b.click(); }});
                     }};
 
-                    // 3. 合議閉じる ボタン
+                    # 3. 合議閉じる ボタン
                     const btnClose = doc.createElement('div');
                     btnClose.className = 'yama-nav-btn';
                     btnClose.innerHTML = '✖ 合議閉じる';
@@ -621,7 +619,7 @@ with st.sidebar:
     if cu == ADMIN_EMAIL.strip().lower():
         with st.expander("👑 会員コントロール・管理画面", expanded=False):
             db_admin = load_mem(); sec_admin = load_sec()
-            pend_list = [v for v in db_admin.values() if v.get("status"] == "pending"]
+            pend_list = [v for v in db_admin.values() if v.get("status") == "pending"]
             spoof_cnt = len(sec_admin.get("spoof_logs", []))
             if st.button(f"👥 管理画面へ移動 ({len(pend_list)}件未承認)"):
                 st.session_state["navigation_page"] = "ADMIN"; st.rerun()
