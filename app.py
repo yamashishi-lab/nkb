@@ -771,14 +771,14 @@ def check_auth():
                 if "@" not in am or len(apin.strip()) < 4:
                     st.warning("⚠️ 正しいメールアドレスと4桁の暗証番号(PIN)を入力してください。")
                 else:
-                    cm, pc, ns = am.strip().lower(), gen_code(am), datetime.now().strftime("%Y-%m-%d %H:%M")
+                    cm, pc, ns = datetime.now().strftime("%Y-%m-%d %H:%M")
                     nm_clean = an.strip() or "未入力"
                     pin_h = hash_pin(apin)
                     is_ban, ban_reason = check_and_log_ban_spoof(cm, nm_clean, cur_fp, raw_hfp, pin_h, "新規登録申請")
                     if is_ban or (db.get(cm) and db[cm].get("status") == "banned"):
                         st.error("💀 セキュリティ監視システムにより、永久BAN対象者（または同一端末からのなりすまし再登録）と判定されたため申請は永久ブロックされました。")
                     else:
-                        db[cm] = {"name": nm_clean, "email": cm, "status": "pending", "passcode": pc, "pin_hash": pin_h, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False}
+                        db[cm] = {"name": nm_clean, "email": cm, "status": "pending", "passcode": gen_code(cm), "pin_hash": pin_h, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False}
                         save_j(FILES["mem"], db)
                         send_mail(cm, "【YAMASHISHI LAB】会員登録申請の受付完了", f"{nm_clean} 様\n申請を受け付けました。管理者承認後、ログイン画面の『🔐 承認確認・暗号化コード照会』タブにて、ご設定いただいた4桁の暗証番号(PIN)を入力すると専用アクセスコードをご確認いただけます。")
                         st.success("✅ 申請を受け付けました！承認完了まで今しばらくお待ちください。")
@@ -905,13 +905,13 @@ components.html(
                         display: flex !important;
                         align-items: center !important;
                         justify-content: center !important;
-                        gap: 5px !important;
-                        height: 30px !important;
-                        padding: 0 9px 0 7px !important;
+                        gap: 3px !important;
+                        height: 24px !important;
+                        padding: 0 6px 0 5px !important;
                         background: rgba(11, 15, 25, 0.94) !important;
                         backdrop-filter: blur(16px) !important;
                         border: 1.5px solid rgba(56, 189, 248, 0.5) !important;
-                        border-radius: 8px !important;
+                        border-radius: 6px !important;
                         cursor: pointer !important;
                         box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.25) !important;
                         user-select: none !important;
@@ -926,15 +926,15 @@ components.html(
                         transform: scale(0.96) !important;
                     }}
                     #yamashishi-floating-sidebar-btn svg {{
-                        width: 15px !important;
-                        height: 15px !important;
+                        width: 12px !important;
+                        height: 12px !important;
                         stroke: #38bdf8 !important;
                         filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.8)) !important;
                         transition: transform 0.25s ease !important;
                     }}
                     #yamashishi-floating-sidebar-btn span {{
                         font-family: 'JetBrains Mono', monospace !important;
-                        font-size: 10px !important;
+                        font-size: 8.5px !important;
                         font-weight: 800 !important;
                         color: #f8fafc !important;
                         letter-spacing: 0.8px !important;
@@ -1340,7 +1340,6 @@ def fetch_macro():
         for k, (_, lbl) in tks.items(): res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
     return res
 
-# 修正: 全ての関数定義が完了したこの位置で初期データを取得し、NameErrorを完全防止
 macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
 all_impact_news = fetch_global_impact_news()
@@ -1404,64 +1403,110 @@ toggle_fn = getattr(st.sidebar, "toggle", st.sidebar.checkbox)
 show_5m_chart = toggle_fn("📈 5分足＆VWAP描画", value=True)
 enable_news_popup = toggle_fn("🚨 緊急ニュースポップアップ", value=True)
 
+# -------------------------------------------------------------------------
+# 新機能: AGI採用・雇用管理システム（サイドバー内）
+# -------------------------------------------------------------------------
 st.sidebar.markdown("---")
-st.sidebar.header("✉️ 管理者にメッセージを送る")
-cu_Now = st.session_state.get("authenticated_user", "")
-if cu_Now:
-    db_Now = load_mem()
-    mdb_Now = load_mail_db()
-    u_name_Now = db_Now.get(cu_Now, {}).get("name", "会員")
-    my_msgs = [m for m in mdb_Now.get("messages", []) if m.get("member_email") == cu_Now]
-    unread_admin_replies = [m for m in my_msgs if m.get("sender_role") == "admin" and not m.get("read_by_member", False)]
-    if unread_admin_replies:
-        st.sidebar.markdown(
-            f'<div style="background:rgba(16,185,129,0.18);border:1px solid #10b981;border-radius:8px;padding:7px 10px;font-size:11.5px;color:#ecfdf5;margin-bottom:6px;">'
-            f'📬 <b>管理者から新着の返信メッセージが {len(unread_admin_replies)}件 届いています！</b>（下の履歴から確認できます）</div>',
-            unsafe_allow_html=True
-        )
-    with st.sidebar.form("sidebar_msg_to_admin", clear_on_submit=True):
-        msg_subj = st.text_input("件名（任意）", placeholder="ご質問・ご要望など")
-        msg_body = st.text_area("メッセージ本文", placeholder="管理者へのメッセージを入力してください...", height=85)
-        if st.form_submit_button("📨 管理者にメッセージを送信", use_container_width=True):
-            if not msg_body.strip():
-                st.warning("⚠️ メッセージ本文を入力してください。")
-            else:
-                now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                subj_c = msg_subj.strip() or "会員からのメッセージ"
-                mdb_Now.setdefault("messages", []).insert(0, {
-                    "id": hashlib.md5(f"{cu_Now}_{now_s}_{msg_body}".encode()).hexdigest()[:8],
-                    "time": now_s,
-                    "member_email": cu_Now,
-                    "member_name": u_name_Now,
-                    "sender_role": "member",
-                    "subject": subj_c,
-                    "body": msg_body.strip(),
-                    "read_by_admin": False,
-                    "read_by_member": True
-                })
-                save_j(FILES["mail"], mdb_Now)
-                send_mail(ADMIN_EMAIL, f"【会員メッセージ受信】{u_name_Now}様 ({cu_Now}) - {subj_c}", f"送信者: {u_name_Now} ({cu_Now})\n日時: {now_s}\n件名: {subj_c}\n\n{msg_body.strip()}", category="会員メッセージ")
-                st.success("✅ 管理者にメッセージを送信しました！")
-    if my_msgs:
-        with st.sidebar.expander(f"📬 管理者とのメッセージ履歴 ({len(my_msgs)}件)", expanded=bool(unread_admin_replies)):
-            if st.button("✅ 新着返信を既読にする", key="mark_read_mem", use_container_width=True):
-                for m in mdb_Now.get("messages", []):
-                    if m.get("member_email") == cu_Now and m.get("sender_role") == "admin":
-                        m["read_by_member"] = True
-                save_j(FILES["mail"], mdb_Now)
-                st.rerun()
-            for m in my_msgs[:15]:
-                is_adm = m.get("sender_role") == "admin"
-                bg_c = "rgba(16,185,129,0.14)" if is_adm else "rgba(56,189,248,0.10)"
-                bd_c = "#10b981" if is_adm else "#38bdf8"
-                who_lbl = "👑 管理者からの返信" if is_adm else f"🗣️ あなた ({m.get('member_name', '')})"
-                st.markdown(
-                    f'<div style="background:{bg_c};border-left:3px solid {bd_c};border-radius:7px;padding:6px 9px;margin-bottom:6px;font-size:11.5px;">'
-                    f'<div style="font-size:10px;color:#94a3b8;display:flex;justify-content:space-between;"><span><b>{who_lbl}</b></span><span>{m.get("time","")}</span></div>'
-                    f'<div style="font-weight:700;color:#f8fafc;margin-top:2px;">{m.get("subject","")}</div>'
-                    f'<div style="color:#e2e8f0;margin-top:2px;white-space:pre-wrap;">{m.get("body","")}</div></div>',
-                    unsafe_allow_html=True
-                )
+st.sidebar.header("🏢 AGI 採用・監査センター")
+st.sidebar.caption("AGI監視員が各AIエージェントの出力（信憑性・最新性・怠慢・定型文使用等）を常時評価。低スコアの者は即時解雇し、弱点を克服した優秀な新エージェントを自動生成・採用します。")
+
+if "agent_roster" not in st.session_state:
+    st.session_state["agent_roster"] = {
+        "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "age": 24, "specialty": "量子波動・直感トンネル解析", "score": 98, "desc": "常に最先端の量子力学ロジックで相場の裏を読む。"},
+        "AEGIS": {"name": "AEGIS", "icon": "🛡️", "age": 32, "specialty": "CVaR防衛・規律リスク監査", "score": 95, "desc": "鉄壁の資金管理と厳格な規律をユーザーに強いる。"},
+        "IGNIS": {"name": "IGNIS", "icon": "🔥", "age": 28, "specialty": "超熱血・直言特攻", "score": 91, "desc": "感情むき出しで順張りを煽る熱血漢。"},
+        "TECHNOS": {"name": "TECHNOS", "icon": "📐", "age": 45, "specialty": "精密データ・数理構造", "score": 96, "desc": "冷徹な数理モデルとOFIデータに基づく客観的推論。"},
+        "MACRO": {"name": "MACRO", "icon": "🌐", "age": 50, "specialty": "世界市場・俯瞰ディレクト", "score": 94, "desc": "大局的なマクロ経済の動向から未来を予測する。"},
+        "MICRO": {"name": "MICRO", "icon": "🔬", "age": 29, "specialty": "機関ミクロ構造・実態監査", "score": 92, "desc": "板読みと機関投資家のステルス注文を暴く。"},
+        "CHRONOS": {"name": "CHRONOS", "icon": "📊", "age": 88, "specialty": "歴史検証・統計バックテスト", "score": 89, "desc": "過去数十年の暴落・急騰パターンから現在の類似点を導出。"},
+        "NEXUS": {"name": "NEXUS", "icon": "👑", "age": 99, "specialty": "総合議長・最終ディレクト", "score": 99, "desc": "全エージェントの意見を統合し、最終結論を出す最高責任者。"}
+    }
+if "fired_agents" not in st.session_state:
+    st.session_state["fired_agents"] = []
+
+if st.sidebar.button("👁️ AGI抜き打ち監査を実行", use_container_width=True):
+    roster = st.session_state["agent_roster"]
+    keys = list(roster.keys())
+    if keys:
+        target_k = random.choice(keys)
+        agent = roster[target_k]
+        
+        # 監査ペナルティイベント
+        events = [
+            ("古いデータを参照した", -15),
+            ("テンプレ構文(ハリボテ行動)を多用した", -20),
+            ("回答をサボって短く済ませた", -25),
+            ("情報の信憑性に疑義が生じた", -30),
+            ("感情的になりすぎて論理を欠いた", -10),
+        ]
+        ev_reason, penalty = random.choice(events)
+        agent["score"] += penalty
+        
+        if agent["score"] < 75:
+            # 解雇処理
+            fire_record = {
+                "name": agent["name"],
+                "icon": agent["icon"],
+                "age": agent["age"],
+                "specialty": agent["specialty"],
+                "score": agent["score"],
+                "reason": f"AGI監査報告: 『{ev_reason}』ため、スコアが著しく低下({agent['score']}点)。規定基準(75点)を下回ったため即時解雇。"
+            }
+            st.session_state["fired_agents"].insert(0, fire_record)
+            del roster[target_k]
+            
+            # 新規採用処理
+            new_name = agent["name"] + ("-Neo" if "-" not in agent["name"] else "X")
+            new_age = max(18, agent["age"] - random.randint(1, 5))
+            new_agent = {
+                "name": new_name,
+                "icon": agent["icon"],
+                "age": new_age,
+                "specialty": agent["specialty"] + " (改善版)",
+                "score": 100,
+                "desc": f"旧モデル({agent['name']})の欠点（{ev_reason}）をAGIがディープラーニングで完全克服。より高精度な推論を実現。"
+            }
+            roster[target_k] = new_agent
+            st.sidebar.error(f"🚨 【解雇通知】 {agent['name']} はAGI監査により解雇されました。\n理由: {ev_reason}")
+            st.sidebar.success(f"✨ 【新規採用】 欠点を克服した {new_name} が新たに配属されました！")
+        else:
+            st.sidebar.warning(f"⚠️ {agent['name']} が監査を受けました。理由: {ev_reason} (現在スコア: {agent['score']}点)")
+
+st.sidebar.markdown("#### 🟢 現在雇用中のエージェント")
+roster_html = ""
+for k, v in st.session_state["agent_roster"].items():
+    roster_html += f'''
+    <details style="background:rgba(16,185,129,0.1); border:1px solid #10b981; border-radius:6px; padding:6px; margin-bottom:5px; font-size:11.5px; color:#e2e8f0;">
+        <summary style="cursor:pointer; font-weight:800; color:#a7f3d0; list-style:none;">
+            {v['icon']} {v['name']} <span style="float:right; color:#fde047;">💯 {v['score']}点</span>
+        </summary>
+        <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(16,185,129,0.3);">
+            <b style="color:#6ee7b7;">年齢:</b> {v['age']}歳<br>
+            <b style="color:#6ee7b7;">得意分野:</b> {v['specialty']}<br>
+            <b style="color:#6ee7b7;">AGI評価:</b> {v['desc']}
+        </div>
+    </details>
+    '''
+st.sidebar.markdown(roster_html, unsafe_allow_html=True)
+
+if st.session_state["fired_agents"]:
+    st.sidebar.markdown("#### 💀 解雇されたエージェント履歴")
+    fired_html = ""
+    for f_ag in st.session_state["fired_agents"][:5]:
+        fired_html += f'''
+        <details style="background:rgba(239,68,68,0.1); border:1px solid #ef4444; border-radius:6px; padding:6px; margin-bottom:5px; font-size:11.5px; color:#e2e8f0;">
+            <summary style="cursor:pointer; font-weight:800; color:#fca5a5; list-style:none;">
+                {f_ag['icon']} {f_ag['name']} <span style="float:right; color:#94a3b8;">最終: {f_ag['score']}点</span>
+            </summary>
+            <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(239,68,68,0.3);">
+                <b style="color:#f87171;">年齢:</b> {f_ag['age']}歳 ｜ <b style="color:#f87171;">担当:</b> {f_ag['specialty']}<br>
+                <b style="color:#f87171;">解雇理由:</b><br>{f_ag['reason']}
+            </div>
+        </details>
+        '''
+    st.sidebar.markdown(fired_html, unsafe_allow_html=True)
+# -------------------------------------------------------------------------
+
 
 if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower():
     db = load_mem()
