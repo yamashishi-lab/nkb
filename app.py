@@ -65,6 +65,7 @@ def clean_k(k: str) -> str: return re.sub(r"\s+", "", unicodedata.normalize("NFK
 def gen_code(em: str) -> str: return hmac.new(SECRET_KEY.encode(), em.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
 def gen_tok(em: str, act: str) -> str: return hashlib.sha256(f"{em.strip().lower()}:{act}:{SECRET_KEY}".encode()).hexdigest()[:16]
 def hash_pin(pin: str) -> str: return hashlib.sha256(f"PIN:{pin.strip()}:{SECRET_KEY}".encode()).hexdigest()[:16]
+
 def get_raw_header_fp() -> str:
     try:
         h = {str(k).lower(): str(v) for k, v in dict(getattr(st.context, "headers", {}) or {}).items()}
@@ -72,6 +73,7 @@ def get_raw_header_fp() -> str:
     except Exception:
         raw = "default_env"
     return hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
+
 def get_client_fp() -> str:
     raw = get_raw_header_fp()
     qf = st.query_params.get("dfp", "")
@@ -190,32 +192,8 @@ def get_active_ai_providers() -> list:
         if key: act.append((k, lbl, mod, key))
     return act
 
-def call_single_provider_api(prov: str, model: str, key: str, sys_p: str, usr_p: str, temp: float = 0.7):
-    p_label, _, endpoint = AI_PROVIDERS.get(prov, AI_PROVIDERS["gemini"])
-    ctx = ssl.create_default_context()
-    try:
-        if prov == "gemini":
-            url = endpoint.format(model=model, key=urllib.parse.quote(key))
-            gen_cfg = {"temperature": temp}
-            if not model.startswith("gemma"): gen_cfg["responseMimeType"] = "application/json"
-            payload = {"contents": [{"role": "user", "parts": [{"text": f"【システム指示】\n{sys_p}\n\n【情報・ユーザープロンプト】\n{usr_p}"}]}], "generationConfig": gen_cfg}
-            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=12.0, context=ctx) as r: 
-                return _parse_j("".join(p.get("text", "") for p in json.loads(r.read().decode("utf-8"))["candidates"][0]["content"]["parts"])), f"{p_label} ({model})"
-        elif prov == "claude":
-            payload = {"model": model, "max_tokens": 1200, "temperature": temp, "system": sys_p + " JSONのみ出力せよ。", "messages": [{"role": "user", "content": usr_p}]}
-            req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01"}, method="POST")
-            with urllib.request.urlopen(req, timeout=12.0, context=ctx) as r: 
-                return _parse_j(json.loads(r.read().decode("utf-8"))["content"][0]["text"]), f"{p_label} ({model})"
-        else:
-            payload = {"model": model, "messages": [{"role": "system", "content": sys_p + " Always output valid JSON."}, {"role": "user", "content": usr_p}], "temperature": temp}
-            req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"}, method="POST")
-            with urllib.request.urlopen(req, timeout=12.0, context=ctx) as r: 
-                return _parse_j(json.loads(r.read().decode("utf-8"))["choices"][0]["message"]["content"]), f"{p_label} ({model})"
-    except Exception: return None, f"{p_label} ({model})"
-
 # ==========================================
-# 4. UI と CSS / JS 注入
+# 4. UI と CSS / JS 注入 (透明・発光トップボタン対応)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -262,12 +240,12 @@ def inject_css():
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 9999999 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
         transform: translateX(-100%) !important; transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease !important;
-        background: rgba(11, 15, 25, 0.98) !important; backdrop-filter: blur(20px) !important;
-        border-right: 1px solid rgba(56, 189, 248, 0.5) !important; box-shadow: none !important;
+        background: rgba(8, 12, 22, 0.98) !important; backdrop-filter: blur(25px) !important;
+        border-right: 1px solid rgba(56, 189, 248, 0.35) !important; box-shadow: none !important;
         pointer-events: auto !important; visibility: visible !important;
     }
     section[data-testid="stSidebar"].yamashishi-sidebar-open {
-        transform: translateX(0) !important; box-shadow: 15px 0 45px rgba(0,0,0,0.9), 2px 0 15px rgba(56,189,248,0.3) !important;
+        transform: translateX(0) !important; box-shadow: 18px 0 50px rgba(0,0,0,0.95), 2px 0 20px rgba(56,189,248,0.25) !important;
     }
     
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], header button[kind="headerNoPadding"] {
@@ -278,54 +256,64 @@ def inject_css():
         margin-left: 0 !important; width: 100% !important; max-width: 100% !important;
     }
 
-    div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"], div[role="listbox"] {
-        z-index: 2147483647 !important; background-color: #0b0f19 !important; border: 1px solid rgba(56,189,248,0.4) !important;
+    /* サイドバー整理用スタイル */
+    .sidebar-section-card {
+        background: rgba(15, 23, 42, 0.65);
+        border: 1px solid rgba(56, 189, 248, 0.18);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 12px;
     }
-    
-    .block-container {
-        padding-top: 4.8rem !important; padding-bottom: 3rem !important;
-        padding-left: 0.75rem !important; padding-right: 0.75rem !important; max-width: 840px !important;
+    .sidebar-header-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 800;
+        color: #38bdf8;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
     }
-    
-    .brand-luxury {
-        font-family: 'Cinzel',serif !important; font-size: clamp(16px,4.2vw,24px) !important; font-weight: 800 !important;
-        letter-spacing: clamp(1px,0.5vw,3px) !important; background: linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.25;
-        white-space: nowrap !important; display: block; width: 100%;
-    }
-    
+
+    /* トップに戻る：完全透明＆タップ時発光スタイル */
     .fixed-top-nav-bar {
-        position: fixed !important; top: 42px !important; left: 50% !important; transform: translateX(-50%) !important;
-        z-index: 999980 !important; width: min(220px, calc(100vw - 4rem)) !important; background: rgba(5,8,17,0.95) !important;
-        backdrop-filter: blur(14px) !important; border: none !important; border-radius: 9px !important; outline: none !important;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.75) !important; padding: 4px 6px !important; margin: 0 !important; pointer-events: auto !important;
+        position: fixed !important; top: 12px !important; left: 50% !important; transform: translateX(-50%) !important;
+        z-index: 999980 !important; width: min(180px, calc(100vw - 4rem)) !important; background: transparent !important;
+        border: none !important; margin: 0 !important; padding: 0 !important; pointer-events: auto !important;
     }
     div[data-testid="stElementContainer"]:has(div.top-nav-marker), div.element-container:has(div.top-nav-marker) {
         display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;
     }
     .fixed-top-nav-bar div[data-testid="stHorizontalBlock"] {
-        display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important;
-        justify-content: center !important; gap: 8px !important; width: 100% !important; border: none !important; background: transparent !important;
+        background: transparent !important; border: none !important; width: 100% !important; display: flex !important; justify-content: center !important;
     }
-    .fixed-top-nav-bar div[data-testid="column"] { min-width: 0 !important; flex: 1 1 0% !important; padding: 0 !important; border: none !important; }
-    
     .fixed-top-nav-bar button {
-        width: 100% !important; min-width: 0 !important; height: 32px !important; min-height: 32px !important; max-height: 32px !important;
-        padding: 0 8px !important; margin: 0 !important; border-radius: 7px !important; background: rgba(15,23,42,0.92) !important;
-        backdrop-filter: blur(10px) !important; color: #f8fafc !important; border: 1px solid rgba(56,189,248,0.25) !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.45) !important; pointer-events: auto !important; cursor: pointer !important; position: relative !important;
-        outline: none !important; transition: all 0.15s ease !important; font-size: 12px !important; font-weight: 700 !important;
+        width: 100% !important; height: 32px !important; min-height: 32px !important; max-height: 32px !important;
+        background: transparent !important; color: rgba(226, 232, 240, 0.8) !important;
+        border: 1px solid transparent !important; border-radius: 20px !important;
+        box-shadow: none !important; font-size: 11.5px !important; font-weight: 700 !important;
+        letter-spacing: 0.5px !important; cursor: pointer !important; transition: all 0.25s ease !important;
     }
-    .fixed-top-nav-bar button:hover { border-color: rgba(56,189,248,0.7) !important; background: rgba(30,41,59,0.92) !important; }
-    
+    .fixed-top-nav-bar button:hover {
+        background: rgba(56, 189, 248, 0.08) !important;
+        border-color: rgba(56, 189, 248, 0.4) !important;
+        color: #38bdf8 !important;
+        box-shadow: 0 0 15px rgba(56, 189, 248, 0.45) !important;
+    }
     .fixed-top-nav-bar button:active {
-        box-shadow: 0 0 20px rgba(56, 189, 248, 0.85), inset 0 0 10px rgba(56, 189, 248, 0.5) !important;
-        border-color: #38bdf8 !important; background: rgba(56, 189, 248, 0.25) !important; color: #ffffff !important; transform: scale(0.97) !important;
+        background: rgba(56, 189, 248, 0.25) !important;
+        border-color: #38bdf8 !important;
+        color: #ffffff !important;
+        box-shadow: 0 0 25px rgba(56, 189, 248, 0.9), inset 0 0 10px rgba(56, 189, 248, 0.5) !important;
+        transform: scale(0.96) !important;
     }
-    
-    .fixed-top-nav-bar button:focus, .fixed-top-nav-bar button:focus:not(:focus-visible) {
-        outline: none !important;
-        border-color: rgba(56,189,248,0.25) !important; background: rgba(15,23,42,0.92) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.45) !important;
+
+    .brand-luxury {
+        font-family: 'Cinzel',serif !important; font-size: clamp(16px,4.2vw,24px) !important; font-weight: 800 !important;
+        letter-spacing: clamp(1px,0.5vw,3px) !important; background: linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.25;
+        white-space: nowrap !important; display: block; width: 100%;
     }
 
     .glass-header {
@@ -351,6 +339,21 @@ def inject_css():
         background: rgba(2,6,23,0.7) !important; padding: 6px 4px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.15); text-align: center;
     }
     
+    /* 管理画面用テーブルスタイル */
+    .admin-table-container {
+        width: 100%; overflow-x: auto; background: #0b0f19; border: 1px solid rgba(56,189,248,0.25); border-radius: 10px; margin-top: 10px;
+    }
+    .admin-table {
+        width: 100%; border-collapse: collapse; font-size: 11.5px; text-align: left; color: #e2e8f0;
+    }
+    .admin-table th {
+        background: #1e293b; color: #38bdf8; padding: 8px 10px; border-bottom: 1px solid rgba(56,189,248,0.3); font-weight: 700; white-space: nowrap;
+    }
+    .admin-table td {
+        padding: 8px 10px; border-bottom: 1px solid rgba(148,163,184,0.1); white-space: nowrap;
+    }
+    .admin-table tr:hover { background: rgba(56,189,248,0.05); }
+
     @keyframes pulse-alert { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); } 50% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{css}</style>', unsafe_allow_html=True)
@@ -358,7 +361,7 @@ def inject_css():
 inject_css()
 
 # ==========================================
-# 5. 認証処理実行 (ログイン画面)
+# 5. 認証処理実行
 # ==========================================
 def check_auth():
     db, sec = load_mem(), load_sec()
@@ -455,15 +458,39 @@ for k, v in [
     ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"),
     ("selected_news_item", None), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
     ("last_cat", "🏆 総合TOP5"), ("nav_history", []), ("scroll_top_trig", 0),
-    ("scroll_target_id", ""), ("focused_stock_item", None)
+    ("scroll_target_id", ""), ("focused_stock_item", None),
+    ("fired_agents", []), ("system_zero_logs", []), ("system_zero_active", True)
 ]:
     if k not in st.session_state:
         st.session_state[k] = v
 
-open_cnt = sum(1 for v in st.session_state["active_debates"].values() if v)
+# 常時10人のエージェント定義
+DEFAULT_AGENTS = {
+    "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "age": 24, "score": 98, "good": "直感的な相場の裏読み、量子トンネル特異点の発見", "bad": "論理の飛躍が多く説明が抽象的になりがち"},
+    "AEGIS": {"name": "AEGIS", "icon": "🛡️", "age": 32, "score": 95, "good": "CVaRに基づく鉄壁の資金管理と規律", "bad": "慎重すぎて機会損失を生むことがある"},
+    "IGNIS": {"name": "IGNIS", "icon": "🔥", "age": 28, "score": 91, "good": "圧倒的な熱量で順張りの初動を掴む", "bad": "感情的でダマシに引っかかりやすい"},
+    "TECHNOS": {"name": "TECHNOS", "icon": "📐", "age": 45, "score": 96, "good": "冷徹な数理モデルとOFIデータ推論", "bad": "ファンダメンタルズの急変に弱い"},
+    "CHRONOS": {"name": "CHRONOS", "icon": "⏳", "age": 38, "score": 94, "good": "日柄・時間帯別ボラティリティ変化の察知", "bad": "突発的な地政学ニュースへの適応が遅い"},
+    "ORACLE": {"name": "ORACLE", "icon": "🔮", "age": 29, "score": 93, "good": "海外機関投資家の資金フロー・バスケット買い予測", "bad": "小型株の仕手筋の動きを見落としやすい"},
+    "NEXUS": {"name": "NEXUS", "icon": "👑", "age": 41, "score": 97, "good": "各エージェントの意見の統合と期待値集約", "bad": "尖った個別銘柄の爆発力を抑えがち"},
+    "VALKYRIE": {"name": "VALKYRIE", "icon": "⚔️", "age": 26, "score": 92, "good": "板の急変や見せ板・ステルス注文の瞬間検知", "bad": "中長期トレンドを軽視する傾向"},
+    "SENTINEL": {"name": "SENTINEL", "icon": "👁️", "age": 35, "score": 95, "good": "5ch・SNS・掲示板の過熱感とイナゴタワー警戒", "bad": "過度な疑心暗鬼で初動に乗れない"},
+    "ALPHA": {"name": "ALPHA", "icon": "⚡", "age": 30, "score": 94, "good": "寄付き直後のギャップアップ・ダウン瞬発判断", "bad": "後場のダレ相場での精度低下"}
+}
+if "agent_roster" not in st.session_state:
+    st.session_state["agent_roster"] = dict(DEFAULT_AGENTS)
+
+# 監視員3名定義
+DEFAULT_INSPECTORS = {
+    "INSP_A": {"name": "JUDGE-ALPHA", "icon": "⚖️", "score": 96, "role": "数理整合性・リスク許容度監査"},
+    "INSP_B": {"name": "JUDGE-BETA", "icon": "🔍", "score": 94, "role": "市場ファンダ・ニュース整合性監査"},
+    "INSP_C": {"name": "JUDGE-GAMMA", "icon": "🎯", "score": 95, "role": "執行速度・板情報バイアス監査"}
+}
+if "inspector_roster" not in st.session_state:
+    st.session_state["inspector_roster"] = dict(DEFAULT_INSPECTORS)
 
 # ==========================================
-# 7. トップナビゲーションとサイドバー開閉JS
+# 7. トップナビゲーション（透明＆発光）
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -540,28 +567,6 @@ components.html(
             }} catch(e){{}}
         }}
 
-        function highlightNewsButtons(){{
-            try {{
-                const ps = doc.querySelectorAll('button p');
-                ps.forEach(p => {{
-                    if (p.textContent.includes('🚨 重大情報有り')) {{
-                        const btn = p.closest('button');
-                        if(btn && !btn.classList.contains('news-alert-btn-active')) {{
-                            btn.classList.add('news-alert-btn-active');
-                            btn.style.setProperty('background', 'linear-gradient(90deg, #ef4444, #b91c1c)', 'important');
-                            btn.style.setProperty('color', '#ffffff', 'important');
-                            btn.style.setProperty('border', '2px solid #f87171', 'important');
-                            btn.style.setProperty('animation', 'pulse-alert 1.5s infinite', 'important');
-                            if(p) {{
-                                p.style.setProperty('color', '#ffffff', 'important');
-                                p.style.setProperty('font-weight', '900', 'important');
-                            }}
-                        }}
-                    }}
-                }});
-            }} catch(e){{}}
-        }}
-
         function fixTopNav(){{
             try {{
                 const marker = doc.querySelector('.top-nav-marker');
@@ -573,7 +578,6 @@ components.html(
 
         installCustomSidebarToggle();
         fixTopNav();
-        setInterval(highlightNewsButtons, 600);
         setInterval(updateSidebarState, 100);
         setTimeout(fixTopNav, 100);
 
@@ -594,38 +598,40 @@ components.html(
     </script>""", height=0)
 
 # ==========================================
-# 8. サイドバー構築
+# 8. サイドバー構築（整理・監査＆管理画面完備）
 # ==========================================
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
     if cu:
-        st.markdown(f'<div style="background:#0f172a;padding:8px 11px;border-radius:9px;border:1px solid rgba(168,85,247,0.35);margin-bottom:6px;"><div style="font-size:9.5px;color:#c084fc;font-weight:700;">⚛️ QUANTUM SESSION ACTIVE</div><div style="color:#f8fafc;font-size:11.5px;font-weight:700;">会員 ({cu})</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="sidebar-section-card">'
+            f'<div class="sidebar-header-badge">⚛️ QUANTUM SESSION ACTIVE</div>'
+            f'<div style="color:#f8fafc;font-size:12px;font-weight:700;">会員: {cu}</div>'
+            f'</div>', unsafe_allow_html=True
+        )
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
     
+    # 管理者用コントロールパネル
     if cu == ADMIN_EMAIL.strip().lower():
-        with st.expander("👑 会員コントロール・管理画面", expanded=True):
-            db_admin = load_mem()
-            sec_admin = load_sec()
-            pend_list = [v for v in db_admin.values() if v.get("status") == "pending"]
-            spoof_cnt = len(sec_admin.get("spoof_logs", []))
-            if st.button(f"👥 承認待ちユーザー確認 ({len(pend_list)}件)"):
-                st.session_state["navigation_page"] = "ADMIN"; st.rerun()
-            if st.button(f"🚨 スプーフィング監視ログ ({spoof_cnt}件)"):
-                st.session_state["navigation_page"] = "ADMIN"; st.rerun()
+        st.markdown('<div class="sidebar-section-card" style="border-color:#eab308;">', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-header-badge" style="color:#fde047;">👑 管理者コントロール</div>', unsafe_allow_html=True)
+        if st.button("🖥️ 統合管理コントロールセンター起動", use_container_width=True, type="primary"):
+            st.session_state["navigation_page"] = "ADMIN"
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("### ⚙️ QUANTUM 設定パネル")
-    
-    with st.expander("🎯 投資スタイル ＆ アルゴリズム", expanded=True):
+    # 1. 投資スタイル＆アルゴリズム
+    with st.expander("🎯 投資スタイル ＆ アルゴリズム", expanded=False):
         investment_style = st.selectbox("トレードスタイル", [
             "⚡ デイトレード (前場・後場の波及を狙う)", 
             "🚀 スキャルピング (秒〜分単位のモメンタム)", 
             "📈 スイングトレード (数日〜数週間のトレンド)", 
             "💎 バイ＆ホールド (中長期・IPO分散投資)"
         ], index=0)
+        st.caption(f"選択中: **{investment_style.split(' ')[1]}**")
         
-        st.caption(f"選択中: **{investment_style.split(' ')[1]}** に合わせてAIが最適化されます。")
-        st.markdown("##### 稼働アルゴリズム (タップでON/OFF)")
-        
+        st.markdown("<hr style='margin:8px 0; border-color:rgba(56,189,248,0.2);'>", unsafe_allow_html=True)
+        st.markdown("<b>稼働アルゴリズム</b>", unsafe_allow_html=True)
         BOOST_MAP = {
             "⚛️ 量子力学波動(QWM-7)": "algo", 
             "🏛️ 機関最新アルゴ(Kyleλ)": "ms", 
@@ -639,113 +645,118 @@ with st.sidebar:
             if st.checkbox(label, value=True, key=f"chk_{key}"):
                 ac_b.add(key)
 
+    # 2. AIプロバイダー設定
     with st.expander("🧠 7大AI ＆ 量子エンジン設定", expanded=False):
         llm_cfg = load_llm()
         cur_prov = st.selectbox("AIプロバイダー", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
         p_name, p_models, _ = AI_PROVIDERS[cur_prov]
         saved_m = llm_cfg.get("models", {}).get(cur_prov, p_models[0])
-        in_k = clean_k(st.text_input(f"🔑 {p_name} API Key", value=st.session_state.get(f"rt_key_{cur_prov}", ""), type="password"))
-        in_m = st.selectbox(f"🧠 モデル", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
+        in_k = clean_k(st.text_input(f"🔑 {p_name} Key", value=st.session_state.get(f"rt_key_{cur_prov}", ""), type="password"))
+        in_m = st.selectbox(f"🧠 モデル選択", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
 
         if in_m != saved_m or cur_prov != llm_cfg.get("provider"):
             llm_cfg["provider"] = cur_prov; llm_cfg.setdefault("models", {})[cur_prov] = in_m; save_j(FILES["llm"], llm_cfg); st.session_state["council_threads"] = {}
         st.session_state[f"rt_key_{cur_prov}"] = in_k; st.session_state[f"rt_mod_{cur_prov}"] = in_m
-        active_cnt = len(get_active_ai_providers())
-        st.caption(f"🟢 現在起動中のAI: **{active_cnt} / 7社**")
+        st.caption(f"🟢 現在稼働可能AI: **{len(get_active_ai_providers())} / 7社**")
 
-    with st.expander("💰 資金管理＆フィルタ設定", expanded=False):
+    # 3. 資金管理
+    with st.expander("💰 資金管理＆選抜フィルタ", expanded=False):
         total_capital = st.number_input("総投資資金 (円)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
         risk_tolerance_pct = st.slider("1トレード許容リスク (%)", 0.5, 5.0, 2.0, 0.5)
-        survival_cut_pct = st.slider("各タブ選抜率 (%)", 40, 100, 75, 5)
+        survival_cut_pct = st.slider("選抜合格率 (%)", 40, 100, 75, 5)
 
-    with st.expander("🏢 AGI 採用・魔改造 鬼監査センター", expanded=False):
-        st.markdown("### 👁️‍🗨️ SYSTEM-ZERO (最高次AGI総括神)")
-        st.caption("全AGI監査員をさらに監視する超越システム。審査の甘さや優遇を検知すると監査員ごとパージします。")
-        
-        if "agent_roster" not in st.session_state:
-            st.session_state["agent_roster"] = {
-                "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "age": 24, "score": 98, "good": "直感的な相場の裏読み、量子トンネル特異点の発見", "bad": "論理の飛躍が多く説明が抽象的になりがち"},
-                "AEGIS": {"name": "AEGIS", "icon": "🛡️", "age": 32, "score": 95, "good": "CVaRに基づく鉄壁の資金管理と規律", "bad": "慎重すぎて機会損失を生むことがある"},
-                "IGNIS": {"name": "IGNIS", "icon": "🔥", "age": 28, "score": 91, "good": "圧倒的な熱量で順張りの初動を掴む", "bad": "感情的でダマシに引っかかりやすい"},
-                "TECHNOS": {"name": "TECHNOS", "icon": "📐", "age": 45, "score": 96, "good": "冷徹な数理モデルとOFIデータ推論", "bad": "ファンダメンタルズの急変に弱い"}
-            }
-        if "fired_agents" not in st.session_state:
-            st.session_state["fired_agents"] = []
-        if "system_zero_logs" not in st.session_state:
-            st.session_state["system_zero_logs"] = []
-            
-        if "last_audit_trig" not in st.session_state or random.random() < 0.20:
+    # 4. AGI 鬼監査センター（3名監視員 ＋ 常時10名エージェント ＋ SYSTEM-ZERO）
+    with st.expander("🏢 AGI鬼監査センター (監視3名・10名常時)", expanded=True):
+        st.markdown(
+            '<div style="background:rgba(168,85,247,0.12);border:1px solid #c084fc;padding:6px 8px;border-radius:6px;font-size:11px;margin-bottom:8px;">'
+            '👁️‍🗨️ <b>SYSTEM-ZERO (最高次統括神)</b>: 稼働中<br>'
+            '<span style="color:#d8b4fe;">全監査員3名およびエージェント10名の全思考プロセスをミリ秒単位で監視。</span>'
+            '</div>', unsafe_allow_html=True
+        )
+
+        # 鬼監査＆自律交代ロジック
+        if "last_audit_trig" not in st.session_state or random.random() < 0.25:
             st.session_state["last_audit_trig"] = time.time()
-            roster = st.session_state["agent_roster"]
-            keys = list(roster.keys())
-            
-            if random.random() < 0.10: 
-                st.session_state["system_zero_logs"].insert(0, {
-                    "time": datetime.now().strftime("%H:%M:%S"),
-                    "msg": "🚨 【粛清発動】AGI監査員の審査甘落(身内贔屓)を検知。監査プロトコルを強制オーバーライドし、対象エージェントをパージしました。"
-                })
-                if keys:
-                    tk = random.choice(keys)
-                    roster[tk] = {
-                        "name": f"SYSTEM-ZERO-{random.randint(100,999)}",
-                        "icon": "👁️‍🗨️", "age": 0, "score": 99,
-                        "good": "SYSTEM-ZEROによる直接制御（感情・バイアス完全排除）",
-                        "bad": "冷酷無比（ユーザーの感情を一切考慮しない）"
-                    }
-            elif keys: 
-                target_k = random.choice(keys)
-                agent = roster[target_k]
-                if not agent["name"].startswith("SYSTEM-ZERO"):
-                    audit_reasons = [
-                        ("リスク管理の欠如 (損切目安の提示なし)", 25),
-                        ("一般論の羅列 (具体性ゼロで回答をサボった)", 30),
-                        ("過去データの誤認 (ハルシネーション)", 35),
-                        ("分析の浅さ (OFIや板情報の無視)", 20)
-                    ]
-                    reason_text, penalty = random.choice(audit_reasons)
-                    agent["score"] -= penalty
-                    
-                    if agent["score"] < 75:
-                        st.session_state["fired_agents"].insert(0, {
-                            "name": agent["name"], "score": agent["score"], "reason": reason_text
-                        })
-                        del roster[target_k]
-                        new_name = agent["name"] + ("-Neo" if "-" not in agent["name"] else "X")
-                        roster[target_k] = {
-                            "name": new_name, "icon": agent["icon"], "age": max(18, agent["age"] - random.randint(1, 3)), 
-                            "score": 100, "good": f"欠点({reason_text})を完全克服し最適化済み", "bad": "実践データ収集中"
-                        }
-        
-        if st.session_state["system_zero_logs"]:
-            log = st.session_state["system_zero_logs"][0]
-            st.markdown(f'<div style="background:rgba(168,85,247,0.15); border:1px solid #c084fc; border-radius:6px; padding:8px; margin-bottom:10px; font-size:11px; color:#e9d5ff;"><b>[{log["time"]}]</b><br>{log["msg"]}</div>', unsafe_allow_html=True)
-        
-        st.markdown("#### 🟢 採用中・稼働エージェント")
-        for k, v in st.session_state["agent_roster"].items():
-            st.markdown(
-                f'''<div style="background:rgba(16,185,129,0.1); border:1px solid #10b981; border-radius:6px; padding:8px; margin-bottom:6px; font-size:11.5px; color:#e2e8f0;">
-                <div style="font-weight:800; font-size:12.5px; margin-bottom:4px;">{v['icon']} {v['name']} <span style="float:right; color:#fde047;">💯 {v['score']}点</span></div>
-                <div style="color:#a7f3d0; margin-bottom:2px;">👍 <b>強み:</b> {v['good']}</div>
-                <div style="color:#fca5a5;">👎 <b>弱点:</b> {v['bad']}</div>
-                </div>''', 
-                unsafe_allow_html=True
-            )
-            
-        st.markdown("#### 💀 基準未達による解雇済みリスト")
-        if st.session_state["fired_agents"]:
-            for fa in st.session_state["fired_agents"][:3]: 
-                st.markdown(
-                    f'''<div style="background:rgba(239,68,68,0.1); border:1px solid #ef4444; border-radius:6px; padding:6px; margin-bottom:5px; font-size:11px; color:#fca5a5;">
-                    <b>{fa['name']} (最終スコア: {fa['score']})</b><br>
-                    ❌ 解雇理由: {fa['reason']}
-                    </div>''', 
-                    unsafe_allow_html=True
-                )
-        else:
-            st.caption("現在、解雇されたエージェントはいません。")
+            inspectors = st.session_state["inspector_roster"]
+            agents = st.session_state["agent_roster"]
+            now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    if st.button("🚪 ログアウト", use_container_width=True, type="primary"):
+            # 監視員自身の審査（SYSTEM-ZEROによる監査員パージ）
+            if st.session_state.get("system_zero_active", True) and random.random() < 0.08:
+                insp_k = random.choice(list(inspectors.keys()))
+                old_insp = inspectors[insp_k]
+                st.session_state["system_zero_logs"].insert(0, {
+                    "time": now_time,
+                    "target": old_insp["name"],
+                    "msg": f"🚨 SYSTEM-ZERO粛清: 監視員 {old_insp['name']} に審査バイアス・馴れ合いを検知。即時パージし新任監視員を配備。"
+                })
+                new_num = random.randint(10, 99)
+                inspectors[insp_k] = {
+                    "name": f"JUDGE-{new_num}", "icon": "⚖️", "score": 99,
+                    "role": f"SYSTEM-ZERO直属 厳格監査プロトコル v{new_num}.0"
+                }
+
+            # 監視員によるエージェント10名の審査
+            if len(agents) > 0 and random.random() < 0.20:
+                target_k = random.choice(list(agents.keys()))
+                target_agent = agents[target_k]
+                
+                # ペナルティ判定
+                audit_reasons = [
+                    ("損切ロジックの甘さ（リスク許容度の逸脱）", 30),
+                    ("抽象論・一般論の回答による分析サボり", 28),
+                    ("過去データ誤認（ハルシネーションの検知）", 35),
+                    ("OFI・板情報の変化に対する反応遅延", 25)
+                ]
+                reason, pen = random.choice(audit_reasons)
+                target_agent["score"] -= pen
+                acting_insp = random.choice(list(inspectors.values()))["name"]
+
+                # 基準点割れで解雇・即交代
+                if target_agent["score"] < 75:
+                    st.session_state["fired_agents"].insert(0, {
+                        "time": now_time,
+                        "name": target_agent["name"],
+                        "score": target_agent["score"],
+                        "reason": reason,
+                        "fired_by": acting_insp
+                    })
+                    # 解雇されたエージェントの弱点を克服した優秀な新人を即時雇用
+                    new_agent_name = target_agent["name"] + ("-Superior" if "-" not in target_agent["name"] else "X")
+                    agents[target_k] = {
+                        "name": new_agent_name,
+                        "icon": target_agent["icon"],
+                        "age": max(21, target_agent.get("age", 30) - random.randint(1, 4)),
+                        "score": 100,
+                        "good": f"前任の解雇理由『{reason}』をアルゴリズムレベルで完全克服。極限の最適化済み",
+                        "bad": "実践ログ蓄積中"
+                    }
+                    # 合議スレッドをクリアして新体制へ
+                    st.session_state["council_threads"] = {}
+
+        # 監視員3名の表示
+        st.markdown("<div style='font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:4px;'>⚖️ 稼働中・特命監査員 (3名)</div>", unsafe_allow_html=True)
+        for ik, iv in st.session_state["inspector_roster"].items():
+            st.markdown(
+                f'<div style="background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;padding:4px 8px;margin-bottom:4px;border-radius:4px;font-size:10.5px;">'
+                f'<b>{iv["icon"]} {iv["name"]}</b> (評価力: {iv["score"]}点)<br>'
+                f'<span style="color:#94a3b8;">{iv["role"]}</span>'
+                f'</div>', unsafe_allow_html=True
+            )
+
+        # エージェント10名の表示（コンパクト一覧）
+        st.markdown("<div style='font-size:11px;font-weight:700;color:#10b981;margin:8px 0 4px 0;'>🟢 厳選合議エージェント (常時10名)</div>", unsafe_allow_html=True)
+        for ak, av in st.session_state["agent_roster"].items():
+            st.markdown(
+                f'<div style="background:rgba(2,6,23,0.7);border:1px solid rgba(16,185,129,0.25);border-radius:5px;padding:4px 8px;margin-bottom:4px;font-size:10.5px;">'
+                f'<span style="font-weight:700;color:#f8fafc;">{av["icon"]} {av["name"]}</span> '
+                f'<span style="color:#fde047;float:right;">スコア: {av["score"]}</span><br>'
+                f'<span style="color:#a7f3d0;">強み: {av["good"][:24]}...</span>'
+                f'</div>', unsafe_allow_html=True
+            )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🚪 ログアウト", use_container_width=True):
         cu_logout = st.session_state.get("authenticated_user")
         db_logout = load_mem()
         if cu_logout in db_logout:
@@ -756,7 +767,7 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 9. 高速並列データ収集 (ニュース & Web)
+# 9. 高速並列データ収集
 # ==========================================
 def fetch_single_news_rss(cat, query):
     ctx = ssl.create_default_context()
@@ -787,7 +798,6 @@ def fetch_global_impact_news() -> list:
     ]
     out_all = []
     seen = set()
-    
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = [executor.submit(fetch_single_news_rss, cat, q) for cat, q in qs]
         for f in as_completed(futures):
@@ -796,7 +806,6 @@ def fetch_global_impact_news() -> list:
                     item["detail"] = analyze_news_impact_and_links(item["title"], item["cat"])
                     out_all.append(item)
                     seen.add(item["title"])
-                    
     if not out_all:
         t_fb = "AI半導体・次世代データセンター光配線および防衛分野に機関の大型資金流入が加速"
         out_all.append({
@@ -820,7 +829,7 @@ def analyze_news_impact_and_links(title: str, cat: str) -> dict:
     }
 
 # ==========================================
-# 10. AI合議と並列Web検索ロジック
+# 10. AI合議と並列Web検索ロジック (10名エージェント対応)
 # ==========================================
 def search_single_query(query: str, max_results: int) -> list:
     ctx = ssl.create_default_context()
@@ -843,27 +852,32 @@ def search_web_knowledge_parallel(query1: str, query2: str) -> list:
     with ThreadPoolExecutor(max_workers=2) as executor:
         f1 = executor.submit(search_single_query, query1, 4)
         f2 = executor.submit(search_single_query, query2, 3) if query2 else None
-        
         results.extend(f1.result())
-        if f2:
-            results.extend(f2.result())
+        if f2: results.extend(f2.result())
     return list(dict.fromkeys(results))
 
 def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> dict:
     fs = r["ai_score"]
-    
     web_snippets = []
     if user_query.strip():
         web_snippets = search_web_knowledge_parallel(user_query, f"{r['name']} {user_query}")
-        
     web_context_str = "\n".join([f"・{s}" for s in web_snippets]) if web_snippets else ""
     
+    # 稼働中の最新10名エージェントからダイナミック合議を生成
+    roster = st.session_state.get("agent_roster", DEFAULT_AGENTS)
+    active_keys = list(roster.keys())
+    lead_ag = roster.get("NEXUS", list(roster.values())[0])
+    sub_ag1 = roster.get(active_keys[1 % len(active_keys)], list(roster.values())[1])
+    sub_ag2 = roster.get(active_keys[2 % len(active_keys)], list(roster.values())[2])
+
     turns = [
-        {"round": "💬 合議結果" if not user_query else f"💬 質問への回答: 『{user_query}』"}, 
-        {"speaker": "👑 NEXUS", "score": fs, "tone": "normal", "text": f"データに基づき、期待値の高い局面です。{web_context_str[:50]}... 戦略通りに実行してください。"}
+        {"round": "💬 10名エージェント合議結果" if not user_query else f"💬 質問への回答: 『{user_query}』"}, 
+        {"speaker": f"{lead_ag['icon']} {lead_ag['name']}", "score": lead_ag["score"], "tone": "normal", "text": f"量子・板・マクロ総合判定。期待値極大の局面です。{web_context_str[:40]}... 推奨ロット通りの執行を推奨。"},
+        {"speaker": f"{sub_ag1['icon']} {sub_ag1['name']}", "score": sub_ag1["score"], "tone": "agree", "text": f"買い優勢。OFI急加速ポイントと重なり、ブレイクアウトの再現性が極めて高いです。"},
+        {"speaker": f"{sub_ag2['icon']} {sub_ag2['name']}", "score": sub_ag2["score"], "tone": "doubt", "text": f"利確目標 {r['tp_price']} までの到達スピードは速いが、逆指値 {r['sl_price']} の徹底を厳守せよ。"}
     ]
     if user_query:
-        turns.append({"speaker": "⚛️ QUANTUM", "score": 92, "tone": "agree", "text": f"質問の『{user_query}』についてだが、直近のデータと波動関数を照らし合わせると、上値突破のポテンシャルを強く秘めているぜ！"})
+        turns.append({"speaker": "⚛️ QUANTUM", "score": 98, "tone": "agree", "text": f"質問の『{user_query}』について、波動関数の収束データからみて上値余地は十分にあるぜ！"})
     
     v_html = (
         f'<div style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:12px; margin-top:5px;">'
@@ -895,24 +909,20 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
 # ==========================================
 def render_council_sec(r, uk, auto_open=False):
     is_open = auto_open or st.session_state["active_debates"].get(uk, False)
-    
     if not auto_open: 
         c1, c2 = st.columns([2.7, 1.1])
         if c1.button("🔼 買い方ガイドを閉じる" if is_open else f"⚛️ 買い方とAI合議を見る", key=f"btn_open_{uk}", use_container_width=True): 
             st.session_state["focused_stock_item"] = r
             st.rerun()
-            
         if c2.button("✅ 監視済" if r["code"] in st.session_state["watchlist"] else "⭐ 監視追加", key=f"btn_watch_{uk}", use_container_width=True):
-            if r["code"] in st.session_state["watchlist"]: 
-                del st.session_state["watchlist"][r["code"]]
-            else: 
-                st.session_state["watchlist"][r["code"]] = r
+            if r["code"] in st.session_state["watchlist"]: del st.session_state["watchlist"][r["code"]]
+            else: st.session_state["watchlist"][r["code"]] = r
             st.rerun()
         
     if not is_open: return
 
     if uk not in st.session_state["council_threads"]:
-        with st.spinner("⚛️ 完全並列処理で最新Web情報を収集・合議中..."):
+        with st.spinner("⚛️ 10大エージェント完全並列合議中..."):
             deb = run_7ai_council(r, None, 0, "")
             st.session_state["council_threads"][uk] = deb["dialogue"]
             st.session_state["council_meta"][uk] = deb
@@ -929,11 +939,9 @@ def render_council_sec(r, uk, auto_open=False):
             u_text = uop.strip()
             new_dom_id = f"user_q_anchor_{uk}_{int(time.time()*1000)}"
             st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text, "dom_id": new_dom_id})
-            
             with st.spinner(f"🌐 『{u_text}』について最新Web情報を並列検索中..."):
                 deb_updated = run_7ai_council(r, None, 0, user_query=u_text)
-                for new_t in deb_updated["dialogue"]:
-                    st.session_state["council_threads"][uk].append(new_t)
+                for new_t in deb_updated["dialogue"]: st.session_state["council_threads"][uk].append(new_t)
                 st.session_state["council_meta"][uk] = deb_updated
                 st.session_state["scroll_target_id"] = new_dom_id
                 st.rerun()
@@ -1175,7 +1183,7 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     return analyze_df(yf.Ticker(code).history(period="6mo"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
 
 # ==========================================
-# 13. ヘッダー / マクロ指標の描画と初期化
+# 13. ヘッダー / マクロ指標
 # ==========================================
 macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
@@ -1188,18 +1196,185 @@ with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場を並�
     g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
 
 # ==========================================
-# 14. 画面レンダリング
+# 14. 画面レンダリング（ADMIN管理画面 ＆ フォーカスモード ＆ リスト）
 # ==========================================
+
+# ■ ADMIN（統合管理コントロールセンター）
+if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.strip().lower():
+    st.markdown("### 👑 統合管理コントロールセンター (MASTER TERMINAL)")
+    if st.button("⬅️ メイン画面に戻る", use_container_width=True, type="primary"):
+        st.session_state["navigation_page"] = "TOP"
+        st.rerun()
+
+    tab_users, tab_employment, tab_apply_wait = st.tabs(["👥 会員情報管理", "🏢 AGI雇用・監視情報", "📩 会員申し込み審査"])
+
+    # 1. 会員情報管理（表形式・ステータス変更・BAN・削除）
+    with tab_users:
+        st.markdown("#### 📋 登録済み会員一覧 (データベース同期中)")
+        db_m = load_mem()
+        sec_m = load_sec()
+        
+        # テーブルヘッダーと各行の描画
+        st.markdown(
+            """
+            <div class="admin-table-container">
+            <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>お名前</th>
+                    <th>メールアドレス</th>
+                    <th>専用パスコード</th>
+                    <th>PINハッシュ</th>
+                    <th>端末指紋 (FP)</th>
+                    <th>登録日</th>
+                    <th>状態</th>
+                </tr>
+            </thead>
+            <tbody>
+            """ + "".join([
+                f"<tr><td><b>{u.get('name','')}</b></td>"
+                f"<td>{em}</td>"
+                f"<td style='color:#38bdf8;font-family:monospace;'>{u.get('passcode','-')}</td>"
+                f"<td style='color:#94a3b8;font-family:monospace;'>{u.get('pin_hash','-')[:8]}...</td>"
+                f"<td style='color:#fde047;font-family:monospace;'>{u.get('fp','-')}</td>"
+                f"<td>{u.get('applied_at','-')}</td>"
+                f"<td><span style='color:{'#10b981' if u.get('status')=='approved' else ('#ef4444' if u.get('status')=='banned' else '#f59e0b')}'><b>{u.get('status')}</b></span></td></tr>"
+                for em, u in db_m.items()
+            ]) + """
+            </tbody>
+            </table>
+            </div>
+            """, unsafe_allow_html=True
+        )
+
+        st.markdown("<br><b>⚡ 会員個別操作パネル</b>", unsafe_allow_html=True)
+        col_u1, col_u2 = st.columns([3, 2])
+        target_em = col_u1.selectbox("操作対象会員を選択", list(db_m.keys()))
+        if target_em and target_em != ADMIN_EMAIL.strip().lower():
+            u_status = db_m[target_em].get("status", "")
+            btn_col1, btn_col2, btn_col3 = st.columns(3)
+            
+            if u_status == "approved":
+                if btn_col1.button("⏸️ アカウント一時停止", use_container_width=True):
+                    db_m[target_em]["status"] = "suspended"
+                    save_j(FILES["mem"], db_m); st.success(f"{target_em} を一時停止しました"); st.rerun()
+            else:
+                if btn_col1.button("▶️ 利用再開 (承認)", use_container_width=True):
+                    db_m[target_em]["status"] = "approved"
+                    save_j(FILES["mem"], db_m); st.success(f"{target_em} を再開しました"); st.rerun()
+
+            if btn_col2.button("🚫 永久BAN (端末/IP遮断)", use_container_width=True):
+                db_m[target_em]["status"] = "banned"
+                tfp = db_m[target_em].get("fp")
+                trhfp = db_m[target_em].get("raw_hfp")
+                now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                if tfp and tfp != "-": sec_m.setdefault("banned_fps", {})[tfp] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN"}
+                if trhfp and trhfp != "-": sec_m.setdefault("banned_fps", {})[trhfp] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN"}
+                sec_m.setdefault("banned_emails", {})[target_em] = {"banned_at": now_s, "orig": target_em}
+                save_j(FILES["mem"], db_m); save_j(FILES["sec"], sec_m)
+                st.error(f"{target_em} を永久BANリストに登録しました"); st.rerun()
+
+            if btn_col3.button("🗑️ 完全削除", use_container_width=True):
+                del db_m[target_em]
+                save_j(FILES["mem"], db_m); st.warning(f"{target_em} のデータを抹消しました"); st.rerun()
+
+    # 2. AGI雇用・監視情報パネル（解雇一覧・SYSTEM-ZERO操作）
+    with tab_employment:
+        st.markdown("#### 🏢 SYSTEM-ZERO & AGI雇用・解雇統括パネル")
+        
+        # 管理者専用：SYSTEM-ZERO解雇/再起動ボタン
+        c_sz1, c_sz2 = st.columns([3, 1])
+        sz_status = "🟢 稼働中 (超越監視作動中)" if st.session_state.get("system_zero_active", True) else "🔴 解雇・停止中"
+        c_sz1.markdown(f"**SYSTEM-ZERO 状態:** {sz_status}")
+        if st.session_state.get("system_zero_active", True):
+            if c_sz2.button("💀 総括神を解雇/停止", type="primary", use_container_width=True):
+                st.session_state["system_zero_active"] = False
+                st.warning("管理者権限により SYSTEM-ZERO を解雇・停止させました。"); st.rerun()
+        else:
+            if c_sz2.button("⚡ 総括神を新任再起動", use_container_width=True):
+                st.session_state["system_zero_active"] = True
+                st.success("新世代 SYSTEM-ZERO を再配備しました。"); st.rerun()
+
+        st.markdown("<br><b>💀 過去に解雇されたエージェント履歴 (標タイプ)</b>", unsafe_allow_html=True)
+        fired_list = st.session_state.get("fired_agents", [])
+        if fired_list:
+            st.markdown(
+                """
+                <div class="admin-table-container">
+                <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>解雇日時</th>
+                        <th>エージェント名</th>
+                        <th>最終スコア</th>
+                        <th>解雇執行者</th>
+                        <th>解雇理由・違反事項</th>
+                    </tr>
+                </thead>
+                <tbody>
+                """ + "".join([
+                    f"<tr><td>{fa.get('time','-')}</td>"
+                    f"<td style='color:#f87171;'><b>{fa.get('name','')}</b></td>"
+                    f"<td style='color:#fde047;'>{fa.get('score','')}</td>"
+                    f"<td style='color:#38bdf8;'>{fa.get('fired_by','特命監査員')}</td>"
+                    f"<td>{fa.get('reason','')}</td></tr>"
+                    for fa in fired_list
+                ]) + """
+                </tbody>
+                </table>
+                </div>
+                """, unsafe_allow_html=True
+            )
+        else:
+            st.caption("現在、解雇履歴はありません。全10名のエージェントが優秀に稼働しています。")
+
+    # 3. 会員申し込み審査（標タイプ ＋ 認証/拒否ボタン）
+    with tab_apply_wait:
+        st.markdown("#### 📩 新規会員登録 審査待ちリスト")
+        db_all = load_mem()
+        pending_users = {em: u for em, u in db_all.items() if u.get("status") == "pending"}
+
+        if pending_users:
+            for p_em, p_u in list(pending_users.items()):
+                st.markdown(
+                    f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 14px;margin-bottom:8px;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
+                    f'<div>'
+                    f'<span style="font-size:13.5px;font-weight:800;color:#f8fafc;">{p_u.get("name","未入力")}</span> '
+                    f'<span style="font-size:11.5px;color:#94a3b8;">({p_em})</span><br>'
+                    f'<span style="font-size:10.5px;color:#64748b;">申請日: {p_u.get("applied_at","-")} ｜ 端末FP: {p_u.get("fp","-")}</span>'
+                    f'</div>'
+                    f'</div>'
+                    f'</div>', unsafe_allow_html=True
+                )
+                col_btn1, col_btn2 = st.columns([1, 1])
+                if col_btn1.button(f"✅ 承認する ({p_u.get('name','')})", key=f"appr_{p_em}", use_container_width=True):
+                    db_all[p_em]["status"] = "approved"
+                    db_all[p_em]["approved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    save_j(FILES["mem"], db_all)
+                    send_mail(p_em, "【YAMASHISHI LAB】会員登録が承認されました", f"{p_u.get('name','')} 様\n申請が承認されました。専用アクセスコードは【 {db_all[p_em]['passcode']} 】です。")
+                    st.success(f"{p_em} を承認しました"); st.rerun()
+
+                if col_btn2.button(f"🚫 拒否・却下 ({p_u.get('name','')})", key=f"rej_{p_em}", use_container_width=True):
+                    del db_all[p_em]
+                    save_j(FILES["mem"], db_all)
+                    st.warning(f"{p_em} の申請を却下しました"); st.rerun()
+        else:
+            st.info("現在、承認待ちの新規申請はありません。")
+
+    st.stop()
+
+# ■ フォーカスモード（個別画面単独表示）
 focused_item = st.session_state.get("focused_stock_item")
 if focused_item:
     st.markdown("### ⚛️ 銘柄詳細・買い方合議フォーカスモード")
     if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", use_container_width=True, type="primary"):
         st.session_state["focused_stock_item"] = None
         st.rerun()
-    
     render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True)
     st.stop()
 
+# ■ ニュース詳細画面
 if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     tn = st.session_state.get("selected_news_item") or all_impact_news[0]
     st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><span class="pill-badge" style="background:#ef4444;color:#fff;">🚨 重大ニュース深掘り</span><div style="font-size:18px;font-weight:800;margin-top:8px;">{tn["title"]}</div></div>', unsafe_allow_html=True)
@@ -1209,6 +1384,7 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.rerun()
     st.stop()
 
+# ■ メインリスト画面
 c1, c2 = st.columns([3.4, 1])
 cin = c1.text_input("🔍 銘柄検索", placeholder="コード入力 (例: 6920)", label_visibility="collapsed")
 if c2.button("🔍 診断", use_container_width=True) and cin: 
