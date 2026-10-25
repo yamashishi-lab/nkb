@@ -4,7 +4,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import altair as alt
-import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, random, threading, sqlite3
+import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, random, threading, sqlite3, uuid
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -26,10 +26,10 @@ AI_PROVIDERS = {
     "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemma-3-27b-it", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
-    "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.x.ai/v1/chat/completions"),
+    "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
     "deepseek": ("🟣 DeepSeek", ["deepseek-chat", "deepseek-reasoner"], "https://api.deepseek.com/chat/completions"),
     "perplexity": ("🌐 Perplexity Sonar", ["sonar-pro", "sonar"], "https://api.perplexity.ai/chat/completions"),
-    "groq": ("⚡ Groq LPU", ["llama-3.3-70b-versatile", "qwen-2.5-32b"], "https://api.groq.com/openai/v1/chat/completions")
+    "groq": ("⚡ Groq LPU", ["llama-3.3-70b-versatile", "qwen-2.5-32b"], "https://api.openai.com/v1/chat/completions")
 }
 
 IPO_OFFERINGS = [
@@ -71,7 +71,6 @@ IPO_OFFERINGS = [
     }
 ]
 
-# 市場全銘柄・主要セクター網羅プール
 STOCK_POOL = {
     "半導体・前工程・検査": [
         {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程コータ/エッチャ"},
@@ -117,6 +116,9 @@ KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": 
 # 2. データベース・ユーティリティ・セキュリティ堅牢化
 # ==========================================
 _DB_LOCK = threading.RLock()
+
+if "client_uuid" not in st.session_state:
+    st.session_state["client_uuid"] = str(uuid.uuid4())
 
 def init_sqlite_db():
     with _DB_LOCK:
@@ -289,8 +291,41 @@ def get_active_ai_providers() -> list:
         if key: act.append((k, lbl, mod, key))
     return act
 
+def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
+    providers = get_active_ai_providers()
+    if not providers:
+        return None
+    prov, lbl, mod, key = providers[0]
+    ctx = ssl.create_default_context()
+    try:
+        if prov == "gemini":
+            url = AI_PROVIDERS[prov][2].format(model=mod, key=key)
+            data = json.dumps({
+                "contents": [{"role": "user", "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]}],
+                "generationConfig": {"temperature": 0.7, "response_mime_type": "application/json"}
+            }).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=8) as r:
+                res = json.loads(r.read())
+                return res["candidates"][0]["content"]["parts"][0]["text"]
+        else:
+            url = AI_PROVIDERS[prov][2]
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            data = json.dumps({
+                "model": mod,
+                "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
+                "temperature": 0.7,
+                "response_format": {"type": "json_object"} if prov in ["openai", "groq"] else None
+            }).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=8) as r:
+                res = json.loads(r.read())
+                return res["choices"][0]["message"]["content"]
+    except Exception as e:
+        return None
+
 # ==========================================
-# 4. UI と CSS / JS 注入
+# 4. UI と CSS / JS 注入 (セレクトボックスの展開不具合を完全修正)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -329,16 +364,29 @@ def inject_css():
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
+    /* セレクトボックスのポップオーバーやドロップダウンを最前面化 */
+    div[data-baseweb="popover"],
+    div[data-baseweb="menu"],
+    div[data-baseweb="tooltip"],
+    div[role="listbox"],
+    ul[role="listbox"],
+    li[role="option"],
+    div[id^="bui-"] {
+        z-index: 2147483647 !important;
+        pointer-events: auto !important;
+    }
+    
     header[data-testid="stHeader"] {
         background: transparent !important; pointer-events: none !important;
-        height: 3.5rem !important; z-index: 999990 !important;
+        height: 3.5rem !important; z-index: 999980 !important;
     }
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
+    /* サイドバー基本設定（オーバーレイとの重なり順序を正常化） */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
-        z-index: 9999999 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
+        z-index: 9999995 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
         transform: translateX(-100%) !important; transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease !important;
         background: rgba(8, 12, 22, 0.98) !important; backdrop-filter: blur(25px) !important;
         border-right: 1px solid rgba(56, 189, 248, 0.35) !important; box-shadow: none !important;
@@ -346,6 +394,13 @@ def inject_css():
     }
     section[data-testid="stSidebar"].yamashishi-sidebar-open {
         transform: translateX(0) !important; box-shadow: 18px 0 50px rgba(0,0,0,0.95), 2px 0 20px rgba(56,189,248,0.25) !important;
+    }
+    
+    /* サイドバー内部全要素のクリック操作を保証 */
+    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
+    section[data-testid="stSidebar"] form,
+    section[data-testid="stSidebar"] div {
+        pointer-events: auto !important;
     }
     
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], header button[kind="headerNoPadding"] {
@@ -419,10 +474,9 @@ def inject_css():
         border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; padding: 14px; margin-bottom: 16px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
     }
     
-    /* 銘柄カード間の余白を広げて視認性を大幅向上 */
     .rank-card, .search-result-card {
         background: linear-gradient(180deg,#0f172a 0%,#090d16 100%) !important; color: #f8fafc !important; border-radius: 16px;
-        padding: 16px 18px; margin-top: 14px; margin-bottom: 28px; box-shadow: 0 12px 32px rgba(0,0,0,0.65); border: 1px solid rgba(148,163,184,0.22); border-left: 5px solid #38bdf8;
+        padding: 16px 18px; margin-top: 14px; margin-bottom: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.65); border: 1px solid rgba(148,163,184,0.22); border-left: 5px solid #38bdf8;
     }
     .search-result-card { border-left-color: #f59e0b; }
     
@@ -431,11 +485,11 @@ def inject_css():
     
     .winrate-bar {
         display: grid; grid-template-columns: repeat(auto-fit, minmax(65px, 1fr)); gap: 6px; background: rgba(15,23,42,0.85) !important;
-        border: 1px solid rgba(148,163,184,0.18); border-radius: 8px; padding: 8px 6px; margin-top: 9px; text-align: center;
+        border: 1px solid rgba(148,163,184,0.18); border-radius: 8px; padding: 7px 6px; margin-top: 5px !important; text-align: center;
     }
     .trade-plan-box {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 6px; margin-top: 8px;
-        background: rgba(2,6,23,0.7) !important; padding: 8px 6px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.18); text-align: center;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 6px; margin-top: 5px !important;
+        background: rgba(2,6,23,0.7) !important; padding: 7px 6px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.18); text-align: center;
     }
     
     .admin-table-container {
@@ -459,7 +513,6 @@ def inject_css():
         padding: 12px;
         margin-top: 12px;
     }
-    /* スクロールバー常時表示と独立スクロールの修正 */
     .council-scroll-window {
         max-height: 380px !important;
         height: 350px !important;
@@ -470,25 +523,12 @@ def inject_css():
         flex-direction: column;
         gap: 6px;
     }
-    .council-scroll-window::-webkit-scrollbar {
-        width: 6px;
-    }
-    .council-scroll-window::-webkit-scrollbar-track {
-        background: rgba(15, 23, 42, 0.6);
-        border-radius: 4px;
-    }
-    .council-scroll-window::-webkit-scrollbar-thumb {
-        background: #38bdf8;
-        border-radius: 4px;
-    }
+    .council-scroll-window::-webkit-scrollbar { width: 6px; }
+    .council-scroll-window::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); border-radius: 4px; }
+    .council-scroll-window::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 4px; }
 
     .chat-bubble-ai, .chat-bubble-user, .chat-bubble-agree, .chat-bubble-doubt, .chat-bubble-rage {
-        padding: 9px 12px;
-        border-radius: 8px;
-        margin-bottom: 4px;
-        font-size: 12px;
-        line-height: 1.5;
-        word-break: break-word;
+        padding: 9px 12px; border-radius: 8px; margin-bottom: 4px; font-size: 12px; line-height: 1.5; word-break: break-word;
     }
     .chat-bubble-ai { background: rgba(15, 23, 42, 0.85); border-left: 3px solid #38bdf8; }
     .chat-bubble-agree { background: rgba(6, 78, 59, 0.65); border-left: 3px solid #10b981; }
@@ -498,28 +538,14 @@ def inject_css():
     .round-divider { font-size: 11px; font-weight: 800; color: #94a3b8; text-align: center; margin: 6px 0; letter-spacing: 1px; }
 
     .beginner-action-box {
-        background: rgba(16, 185, 129, 0.12);
-        border: 1px solid rgba(16, 185, 129, 0.4);
-        border-radius: 10px;
-        padding: 12px 14px;
-        font-size: 12px;
-        line-height: 1.7;
-        color: #d1fae5;
+        background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 10px; padding: 12px 14px; font-size: 12px; line-height: 1.7; color: #d1fae5;
     }
     .sizing-box {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: rgba(2, 6, 23, 0.7);
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        padding: 8px 12px;
-        border-radius: 6px;
-        margin-top: 8px;
-        font-size: 11.5px;
+        display: flex; justify-content: space-between; align-items: center; background: rgba(2, 6, 23, 0.7); border: 1px solid rgba(148, 163, 184, 0.16); padding: 7px 12px; border-radius: 6px; margin-top: 5px; font-size: 11.5px;
     }
-    .quant-detail-drawer { margin-top: 8px; font-size: 11.5px; cursor: pointer; }
+    .quant-detail-drawer { margin-top: 6px; font-size: 11.5px; cursor: pointer; }
     .signal-10tier-badge {
-        padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; display: flex; justify-content: space-between; margin-bottom: 8px;
+        padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; display: flex; justify-content: space-between; margin-bottom: 6px;
     }
     .pill-badge {
         font-size: 11px; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(148,163,184,0.3); margin-right: 4px; display: inline-block;
@@ -534,39 +560,13 @@ def inject_css():
         display: inline-block; padding: 5px 12px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 6px; color: #fde047; text-decoration: none; font-size: 11.5px; font-weight: 700; margin-right: 6px; margin-top: 4px;
     }
     .consensus-banner {
-        background: rgba(15, 23, 42, 0.95);
-        border: 1px solid rgba(250, 204, 21, 0.4);
-        border-radius: 10px;
-        padding: 12px;
-        margin-top: 12px;
+        background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(250, 204, 21, 0.4); border-radius: 10px; padding: 12px; margin-top: 12px;
     }
 
-    /* 重大情報の赤点滅・1行ボタンスタイル */
     @keyframes alert-pulse {
         0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
         70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
         100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-    }
-    div[data-testid="stElementContainer"]:has(button[key*="nb_card_"]),
-    div[data-testid="stElementContainer"]:has(button[key*="nb_custom_"]),
-    div[data-testid="stElementContainer"]:has(button[key*="nb_top5_"]) {
-        margin-top: 8px !important;
-        margin-bottom: 8px !important;
-    }
-    button[key*="nb_card_"], button[key*="nb_custom_"], button[key*="nb_top5_"] {
-        background: linear-gradient(90deg, #b91c1c 0%, #ef4444 50%, #b91c1c 100%) !important;
-        color: #ffffff !important;
-        border: 1.5px solid #fca5a5 !important;
-        border-radius: 8px !important;
-        font-weight: 800 !important;
-        font-size: 12px !important;
-        padding: 6px 12px !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        display: block !important;
-        width: 100% !important;
-        animation: alert-pulse 2s infinite !important;
     }
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{css}</style>', unsafe_allow_html=True)
@@ -708,7 +708,7 @@ if "inspector_roster" not in st.session_state:
     st.session_state["inspector_roster"] = dict(DEFAULT_INSPECTORS)
 
 # ==========================================
-# 7. トップナビゲーションとサイドバー開閉JS
+# 7. トップナビゲーションとサイドバー開閉JS (メニュー閉じ防止・選択肢保護)
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -738,13 +738,25 @@ components.html(
         function applySidebarState() {{
             const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
             const overlay = doc.getElementById('yamashishi-sidebar-overlay');
+            
             if (sidebar) {{
                 if (pWin._yamashishi_sidebar_open) {{
-                    sidebar.classList.add('yamashishi-sidebar-open');
+                    if (!sidebar.classList.contains('yamashishi-sidebar-open')) {{
+                        sidebar.classList.add('yamashishi-sidebar-open');
+                    }}
+                    try {{
+                        sidebar.removeAttribute('inert');
+                        sidebar.removeAttribute('aria-hidden');
+                        const inerts = sidebar.querySelectorAll('[inert]');
+                        inerts.forEach(el => el.removeAttribute('inert'));
+                    }} catch(err) {{}}
                 }} else {{
-                    sidebar.classList.remove('yamashishi-sidebar-open');
+                    if (sidebar.classList.contains('yamashishi-sidebar-open')) {{
+                        sidebar.classList.remove('yamashishi-sidebar-open');
+                    }}
                 }}
             }}
+            
             if (overlay) {{
                 if (pWin._yamashishi_sidebar_open) {{
                     overlay.classList.add('active');
@@ -782,7 +794,7 @@ components.html(
                         #yamashishi-sidebar-overlay {{
                             position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important;
                             background: rgba(0,0,0,0.7) !important; backdrop-filter: blur(4px) !important;
-                            z-index: 9999998 !important; opacity: 0 !important; visibility: hidden !important;
+                            z-index: 9999980 !important; opacity: 0 !important; visibility: hidden !important;
                             transition: all 0.35s ease !important; pointer-events: none !important;
                         }}
                         #yamashishi-sidebar-overlay.active {{
@@ -812,11 +824,6 @@ components.html(
                     e.stopPropagation();
                     pWin._yamashishi_sidebar_open = !pWin._yamashishi_sidebar_open;
                     applySidebarState();
-
-                    const nativeCollapsed = doc.querySelector('[data-testid="collapsedControl"] button') || doc.querySelector('[data-testid="stSidebarCollapsedControl"] button');
-                    if (nativeCollapsed) {{
-                        try {{ nativeCollapsed.click(); }} catch(err) {{}}
-                    }}
                 }};
 
                 overlay.onclick = function(e) {{
@@ -841,7 +848,6 @@ components.html(
 
         setupCustomSidebar();
         fixTopNav();
-        setInterval(applySidebarState, 150);
         setTimeout(fixTopNav, 100);
 
         function scrollToTopAbsolute(){{
@@ -1004,7 +1010,6 @@ with st.sidebar:
                 f'</div>', unsafe_allow_html=True
             )
 
-        # 解雇されたエージェントのログと理由をサイドバー最下部に詳細表示
         st.markdown("<hr style='margin:10px 0 6px 0; border-color:rgba(239,68,68,0.3);'>", unsafe_allow_html=True)
         st.markdown("<div style='font-size:11px;font-weight:800;color:#ef4444;margin-bottom:6px;'>💀 直近の解雇・粛清履歴 (鬼監視室)</div>", unsafe_allow_html=True)
         fired_list = st.session_state.get("fired_agents", [])
@@ -1122,35 +1127,68 @@ def search_web_knowledge_parallel(query1: str, query2: str) -> list:
     return list(dict.fromkeys(results))
 
 def generate_humanlike_2ch_debate(r: dict, user_query: str) -> list:
-    """定型文一切禁止・Web検索情報を加味した2ch風スレッド対話生成"""
     uq = user_query.strip()
     is_greeting = any(w in uq for w in ["こんにちは", "こんちは", "こんばんは", "おはよ", "初めまして", "よろしく", "押忍", "ども"])
     
-    # リアルタイムWeb検索を実施して材料を仕入れる
     web_hits = []
     if not is_greeting and len(uq) > 1:
         web_hits = search_web_knowledge_parallel(f"{r['name']} {uq}", f"{r['code']} 株価 掲示板")
     
     top_news_context = web_hits[0] if web_hits else "特段の突発バッドニュースなし、大口の買い板継続中"
 
+    sys_prompt = f"""
+あなたは日本の2ch（5ch）の市況実況スレにいる4人の凄腕個人投資家（AIエージェント）です。
+対象銘柄は【{r['code']} {r['name']}】です。現在値: {r['price']}、期待度: {r['expect_pct']}%。
+関連ニュースコンテキスト: {top_news_context}
+
+ユーザーの書き込み（質問や意見）に対して、以下の4人のキャラクターで順番にレスアンカーを付けて返信してください。
+【キャラクター】
+1. 🔥 IGNIS: 熱血順張り派。口調は荒く「～だろ！」「～じゃねえぞ！」。トーン: rage または agree
+2. 📐 TECHNOS: 冷徹なクオンツ派。丁寧語で数値を重視「～ですね」「～と推測されます」。トーン: normal
+3. 👁️ SENTINEL: 疑心暗鬼の逆張り派。イナゴを嫌う「～だろｗ」「気をつけろよ」。トーン: doubt
+4. ⚔️ VALKYRIE: 板読みスキャルパー。「～万株の買いが入った！」「ブレイク秒読み！」。トーン: agree
+
+必ず以下のJSON形式（配列）で出力してください。JSON以外のテキストは絶対に出力しないでください。
+[
+    {{"speaker": "🔥 IGNIS", "score": 91, "tone": "rage", "text": "レス内容"}},
+    {{"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": "レス内容"}},
+    {{"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": "レス内容"}},
+    {{"speaker": "⚔️ VALKYRIE", "score": 92, "tone": "agree", "text": "レス内容"}}
+]
+"""
+    llm_result = None
+    if get_active_ai_providers():
+        llm_response_text = call_real_llm_api(sys_prompt, uq)
+        if llm_response_text:
+            try:
+                clean_json = re.sub(r'```json|```', '', llm_response_text).strip()
+                llm_result = json.loads(clean_json)
+                if not isinstance(llm_result, list) or len(llm_result) == 0:
+                    llm_result = None
+            except Exception:
+                llm_result = None
+
     turns = []
     turns.append({"round": f"🔥 市況実況スレッド 【{r['code']}】{r['name']} 本スレ Part.892"})
 
-    if is_greeting:
-        turns.extend([
-            {"speaker": "🔥 IGNIS", "score": 91, "tone": "agree", "text": "うっす！挨拶乙！お前ら寄り前の気配値見たか？この地合いで呑気に挨拶してる場合じゃねえぞ、板がガンガン動いてる！"},
-            {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": "はい、こんにちは。挨拶は基本ですが、板のOFI（気配値の注文偏向）はすでに買い側に傾いています。感情を捨てて数値を追ってください。"},
-            {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": "新参か？こんにちはー。だが煽り屋イナゴの群れがそろそろ飛びつきそうな気配配だから、浮かれて成行特攻だけはすんなよ。"},
-            {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": "ようこそ。本日の当銘柄の期待値は " + str(r['expect_pct']) + "%。挨拶代わりに、まずは無理のないロットで逆指値（ストップ安防止）を徹底して参戦してください。"}
-        ])
+    if llm_result:
+        turns.extend(llm_result)
     else:
-        turns.extend([
-            {"speaker": "🔥 IGNIS", "score": 91, "tone": "rage", "text": f"おいおい！『{uq}』って書き込みあったぞ！直近の材料見ろや！【{top_news_context[:45]}】って話出てるのにまだ迷ってんのか？押し目来たら即買い一択だろ！"},
-            {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": f"冷徹に数字を見ろ。『{uq}』への懸念は理解できるが、現在値 {r['price']} に対するサポートラインは堅牢。ボラティリティ急拡大に備えて分割で入るのが合理的だ。"},
-            {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": f"スレ民落ち着けw 『{uq}』でTwitter（X）検索したらイナゴ共が狼狽して損切り投げてるわ。大口はこういう個人を狩ってから一気に上に持っていくんだよな。"},
-            {"speaker": "⚔️ VALKYRIE", "score": 92, "tone": "agree", "text": f"歩み値確認した。さっき 2万株のステルス買いが入ったぞ！『{uq}』を材料にした売り崩しは完全に失敗してる。上値ブレイク秒読みだな。"},
-            {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": f"合議集約するぞ。『{uq}』についての議論は出尽くした。結論として、直近目標値 {r['tp_price']}、絶対損切ライン {r['sl_price']} のルールを1ミリも崩さず執行せよ。"}
-        ])
+        if is_greeting:
+            turns.extend([
+                {"speaker": "🔥 IGNIS", "score": 91, "tone": "agree", "text": "うっす！挨拶乙！お前ら寄り前の気配値見たか？この地合いで呑気に挨拶してる場合じゃねえぞ、板がガンガン動いてる！"},
+                {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": "はい、こんにちは。挨拶は基本ですが、板のOFI（気配値の注文偏向）はすでに買い側に傾いています。感情を捨てて数値を追ってください。"},
+                {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": "新参か？こんにちはー。だが煽り屋イナゴの群れがそろそろ飛びつきそうな気配配だから、浮かれて成行特攻だけはすんなよ。"},
+                {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": "ようこそ。本日の当銘柄の期待値は " + str(r['expect_pct']) + "%。挨拶代わりに、まずは無理のないロットで逆指値（ストップ安防止）を徹底して参戦してください。"}
+            ])
+        else:
+            turns.extend([
+                {"speaker": "🔥 IGNIS", "score": 91, "tone": "rage", "text": f"おいおい！『{uq}』って書き込みあったぞ！直近の材料見ろや！【{top_news_context[:45]}】って話出てるのにまだ迷ってんのか？押し目来たら即買い一択だろ！"},
+                {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": f"冷徹に数字を見ろ。『{uq}』への懸念は理解できるが、現在値 {r['price']} に対するサポートラインは堅牢。ボラティリティ急拡大に備えて分割で入るのが合理的だ。"},
+                {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": f"スレ民落ち着けw 『{uq}』でTwitter（X）検索したらイナゴ共が狼狽して損切り投げてるわ。大口はこういう個人を狩ってから一気に上に持っていくんだよな。"},
+                {"speaker": "⚔️ VALKYRIE", "score": 92, "tone": "agree", "text": f"歩み値確認した。さっき 2万株のステルス買いが入ったぞ！『{uq}』を材料にした売り崩しは完全に失敗してる。上値ブレイク秒読みだな。"},
+                {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": f"合議集約するぞ。『{uq}』についての議論は出尽くした。結論として、直近目標値 {r['tp_price']}、絶対損切ライン {r['sl_price']} のルールを1ミリも崩さず執行せよ。"}
+            ])
     return turns
 
 def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> dict:
@@ -1242,7 +1280,6 @@ def render_council_sec(r, uk, auto_open=False):
 
     st.markdown(f'<div class="consensus-banner"><div style="font-weight:800;color:#fde047;font-size:13px;margin-bottom:6px;">🏛️ 最終結論 ＆ プロ推奨買い方アクションプラン</div>{meta["verdict_html"]}</div>', unsafe_allow_html=True)
 
-    # ユーザー要望：一覧に戻るボタンを一番下に配置
     if auto_open:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", key=f"btn_back_bottom_{uk}", use_container_width=True, type="primary"):
@@ -1255,38 +1292,44 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
     lot, st_info = r["lot_info"], r["strat"]
     
-    card_html_top = (
+    news_banner_html = ""
+    if rel_news:
+        short_t = rel_news['title'][:32] + "..." if len(rel_news['title']) > 32 else rel_news['title']
+        news_banner_html = (
+            f'<div style="margin-top:6px; margin-bottom:4px;">'
+            f'<span style="display:inline-block; width:100%; text-align:center; background:linear-gradient(90deg, #b91c1c 0%, #ef4444 50%, #b91c1c 100%); '
+            f'color:#ffffff; font-weight:800; font-size:11.5px; padding:5px 8px; border-radius:6px; border:1px solid #fca5a5; animation:alert-pulse 2s infinite;">'
+            f'🚨【重大情報】{short_t}'
+            f'</span></div>'
+        )
+
+    full_card_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
-        f'<div style="margin-bottom:7px;">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点</span></div>'
+        f'<div style="margin-bottom:6px;">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点</span></div>'
         f'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'
         f'<div style="min-width:0;flex:1;">'
         f'<div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;"><span style="font-size:16px;font-weight:800;color:#f8fafc;white-space:nowrap;">{r["name"]}</span> <span style="font-size:11.5px;color:#94a3b8;white-space:nowrap;">({r["code"]} / {r["genre"]})</span></div>'
-        f'<div style="font-size:11px;color:#94a3b8;margin-top:4px;word-break:keep-all;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div>'
+        f'<div style="font-size:11px;color:#94a3b8;margin-top:3px;word-break:keep-all;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div>'
         f'</div>'
         f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;">🔥 期待度 / 勝率</div><div style="white-space:nowrap;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div></div></div>'
+        f'{news_banner_html}'
+        f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ 量子トンネル</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ Kyle吸収</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 翌朝GU / 陽線</div><div style="font-size:12px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
+        f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 理論寄付き</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
+        f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>VWAP: <b>{r["vwap_price"]}</b></span></div>'
+        f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 機関戦略詳細（タップで開閉）</summary>'
+        f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}</div>'
+        f'</details></div>'
     )
-    st.markdown(card_html_top, unsafe_allow_html=True)
-    
-    # 重大情報有りを赤色アニメーション・1行スタイルでレンダリング
+    st.markdown(full_card_html, unsafe_allow_html=True)
+
     if rel_news:
-        short_t = rel_news['title'][:32] + "..." if len(rel_news['title']) > 32 else rel_news['title']
-        if st.button(f"🚨【重大情報】{short_t}（即座に詳細を確認する）", key=f"nb_{kp}_{r['code']}"):
+        if st.button(f"🚨【速報】重大ニュースの詳細分析を開く", key=f"nb_{kp}_{r['code']}", use_container_width=True):
             st.session_state["selected_news_item"] = rel_news
             st.session_state["navigation_page"] = "NEWS_DETAIL"
             st.session_state["scroll_top_trig"] = int(time.time()*1000)
             st.rerun()
 
-    card_html_bottom = (
-        f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ 量子トンネル</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ Kyle吸収</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 翌朝GU / 陽線</div><div style="font-size:12px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
-        f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 理論寄付き</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
-        f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>VWAP: <b>{r["vwap_price"]}</b></span></div>'
-        f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 機関戦略詳細（タップで開閉）</summary>'
-        f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:5px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}</div>'
-        f'</details></div>'
-    )
-    st.markdown(card_html_bottom, unsafe_allow_html=True)
-    
     if is_focused:
         render_council_sec(r, f"foc_{r['code']}", auto_open=True)
     else:
@@ -1415,7 +1458,6 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
             )
         }
     
-    # デイトレード（デフォルト）
     sh = max(1, int(round(base_sh * 1.65)))
     return {
         "algo_name": f"🔥 [{st_prefix}] 情報精度S級・寄り前モメンタム特攻型",
@@ -1455,7 +1497,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         v = df["Volume"].values.astype(float)
         
         df["Prev_Close"] = df["Close"].shift(1)
-        df["Day_Return"] = (df["Close"] - df["Prev_Close"]) / df["Prev_Close"] * 100
+        df["Day_Return"] = (df["Close"] - df["Open"].iloc[0]) / df["Open"].iloc[0] * 100 if len(df) > 0 else 0
         tr = pd.concat([df["High"] - df["Low"], (df["High"] - df["Prev_Close"]).abs(), (df["Low"] - df["Prev_Close"]).abs()], axis=1).max(axis=1)
         df["ATR"] = tr.rolling(14).mean().fillna(df["Close"] * 0.02)
         df["VWAP20"] = (((df["High"] + df["Low"] + df["Close"]) / 3.0 * df["Volume"]).rolling(20).sum() / df["Volume"].rolling(20).sum().replace(0, np.nan)).fillna(df["Close"])
@@ -1467,7 +1509,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         cv = float(lat["Close"])
         atrv = float(lat["ATR"])
         
-        recent_20_wins = np.sum(df["Day_Return"].iloc[-20:] > 0)
+        recent_20_wins = np.sum(df["Close"].diff().iloc[-20:] > 0)
         tot_win = float(np.clip(recent_20_wins / 20.0 * 100.0 * 0.4 + qm["q_tunnel"] * 0.35 + ms["kyle_stealth"] * 0.25, 48.0, 96.5))
         
         hl_r = np.maximum(h - l, 1e-4)
@@ -1541,7 +1583,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
 @st.cache_data(ttl=1800)
 def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     codes = list({s["code"] for sts in STOCK_POOL.values() for s in sts})
-    raw = yf.download(codes, period="6mo", group_by="ticker", threads=True, progress=False, timeout=9)
+    raw = yf.download(codes, period="5d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=9)
     gmap, alist, seen = {g: [] for g in STOCK_POOL.keys()}, [], set()
     
     def _analyze_wrapper(g, s, df): 
@@ -1563,7 +1605,7 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
 @st.cache_data(ttl=300)
 def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     inf = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
-    return analyze_df(yf.Ticker(code).history(period="6mo"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
+    return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
 
 # ==========================================
 # 13. ヘッダー / マクロ指標
@@ -1852,4 +1894,3 @@ elif sel_cat == "📋 監視シート":
 elif sel_cat.startswith("📂 "):
     gs = cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), survival_cut_pct)
     for i, r in enumerate(gs, 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
-
