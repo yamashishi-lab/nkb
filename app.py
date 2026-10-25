@@ -364,8 +364,8 @@ def inject_css():
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
-    /* Selectboxなどのポップオーバーがサイドバーの後ろに隠れないようにする */
-    div[data-baseweb="popover"], div[data-baseweb="menu"], div[data-baseweb="tooltip"], div[role="listbox"], .stSelectbox [data-baseweb="popover"] {
+    /* あらゆるポップオーバーやドロップダウンがサイドバーの下に隠れないようにする */
+    div[data-baseweb="popover"], div[data-baseweb="menu"], div[data-baseweb="tooltip"], div[role="listbox"], .stSelectbox [data-baseweb="popover"], div[id^="bui-"] {
         z-index: 2147483647 !important;
     }
     
@@ -376,6 +376,7 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
+    /* サイドバー自体に対する設定（inert解除はJSで行うためここはベースの表示制御のみ） */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 9999999 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
@@ -723,13 +724,22 @@ components.html(
         function applySidebarState() {{
             const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
             const overlay = doc.getElementById('yamashishi-sidebar-overlay');
+            
             if (sidebar) {{
                 if (pWin._yamashishi_sidebar_open) {{
                     sidebar.classList.add('yamashishi-sidebar-open');
+                    try {{
+                        /* Streamlitによるネイティブな不活性化(ロック)を強制解除 */
+                        sidebar.removeAttribute('inert');
+                        sidebar.removeAttribute('aria-hidden');
+                        const inerts = sidebar.querySelectorAll('[inert]');
+                        inerts.forEach(el => el.removeAttribute('inert'));
+                    }} catch(err) {{}}
                 }} else {{
                     sidebar.classList.remove('yamashishi-sidebar-open');
                 }}
             }}
+            
             if (overlay) {{
                 if (pWin._yamashishi_sidebar_open) {{
                     overlay.classList.add('active');
@@ -792,16 +802,12 @@ components.html(
                     doc.body.appendChild(btn);
                 }}
 
+                /* Streamlitのネイティブボタンと連動させない（inertロックを回避するため削除） */
                 btn.onclick = function(e) {{
                     e.preventDefault();
                     e.stopPropagation();
                     pWin._yamashishi_sidebar_open = !pWin._yamashishi_sidebar_open;
                     applySidebarState();
-
-                    const nativeCollapsed = doc.querySelector('[data-testid="collapsedControl"] button') || doc.querySelector('[data-testid="stSidebarCollapsedControl"] button');
-                    if (nativeCollapsed) {{
-                        try {{ nativeCollapsed.click(); }} catch(err) {{}}
-                    }}
                 }};
 
                 overlay.onclick = function(e) {{
