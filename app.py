@@ -192,7 +192,7 @@ def get_active_ai_providers() -> list:
 
 
 # ==========================================
-# 4. UI と CSS / JS 注入 (安全設計版)
+# 4. UI と CSS / JS 注入 (絶対に崩れない改修版)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -229,30 +229,64 @@ def inject_css():
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
     /* 
-     * 修正ポイント：ヘッダーそのものは透過にするが、ポインターイベント（クリック判定）は消さない。
-     * 右上の不要なメニュー(Deploy等)だけを隠し、左上のサイドバー開閉ボタンはそのまま残す。
+     * ヘッダーの完全無効化
+     * 純正のボタンなどが干渉しないように完全に隠し、クリックも無効にする
      */
-    header[data-testid="stHeader"] { background: rgba(5, 8, 17, 0.9) !important; }
-    header[data-testid="stHeader"] [data-testid="stToolbar"] { visibility: hidden !important; }
+    header[data-testid="stHeader"] {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /*
+     * トップの3連ボタンを絶対に横1行に固定する最強CSS
+     * 目印（#top-nav-marker）があるブロックだけに適用し、他の画面レイアウトは壊さない
+     */
+    div[data-testid="stVerticalBlock"]:has(#top-nav-marker) div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important; /* 絶対に折り返さず1行をキープ */
+        width: 100% !important;
+        gap: 6px !important;
+        padding: 0 !important;
+        margin-bottom: 8px !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(#top-nav-marker) div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        width: 33.33% !important;
+        min-width: 0 !important; /* スマホ画面が狭い時に要素が縮むのを許可（はみ出し防止） */
+        flex: 1 1 0 !important;
+    }
     
-    /* 標準ボタンのデザインを少しコンパクトにし、はみ出しを防ぐ */
-    button[kind="secondary"], button[kind="primary"] {
+    /* トップ3連ボタンのスタイル（文字がはみ出さないように設定） */
+    div[data-testid="stVerticalBlock"]:has(#top-nav-marker) button {
+        width: 100% !important;
+        min-height: 38px !important;
+        height: auto !important;
+        padding: 6px 2px !important; /* 左右の余白を極限まで減らす */
+        font-size: 11.5px !important;
+        line-height: 1.2 !important;
+        white-space: normal !important; /* はみ出し防止：必要ならテキストを折り返す */
+        word-break: keep-all !important;
+        background: linear-gradient(180deg, rgba(30,41,59,0.9), rgba(15,23,42,0.9)) !important;
+        color: #f8fafc !important;
+        border: 1px solid rgba(148,163,184,0.3) !important;
         border-radius: 8px !important;
         font-weight: 800 !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important;
         transition: all 0.2s ease !important;
     }
-    button[kind="secondary"]:hover {
-        border-color: #38bdf8 !important; background: rgba(56,189,248,0.15) !important;
+    div[data-testid="stVerticalBlock"]:has(#top-nav-marker) button:hover {
+        border-color: #38bdf8 !important;
+        background: rgba(56,189,248,0.15) !important;
     }
 
     /* サイドバーのカスタマイズ */
     section[data-testid="stSidebar"] {
         background: rgba(11, 15, 25, 0.98) !important; backdrop-filter: blur(20px) !important;
         border-right: 1px solid rgba(56, 189, 248, 0.5) !important; box-shadow: 2px 0 15px rgba(56,189,248,0.3) !important;
-    }
-
-    div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"], div[role="listbox"] {
-        z-index: 2147483647 !important; background-color: #0b0f19 !important; border: 1px solid rgba(56,189,248,0.4) !important;
     }
     
     .block-container {
@@ -430,20 +464,22 @@ if "system_zero_status" not in st.session_state: st.session_state["system_zero_s
 
 
 # ==========================================
-# 7. トップナビゲーション（標準機能で安全に配置）
+# 7. トップナビゲーション＆完全独立型サイドバーボタン
 # ==========================================
-# 強引なCSSをすべて排除し、標準のst.columnsのみで構成。画面サイズに応じて安全にリサイズ・縦並び(スマホ時)になります。
+# これが「絶対に縦割れしない」ためのCSS用目印
+st.markdown('<div id="top-nav-marker"></div>', unsafe_allow_html=True)
 nav_c1, nav_c2, nav_c3 = st.columns(3)
 
-if nav_c1.button("🔝 トップへ戻る", key="top_nav_top", use_container_width=True):
+# ※ボタン文字を長くすると枠を破って巨大化するので、短いままにしています！
+if nav_c1.button("🔝 トップ", key="top_nav_top", use_container_width=True):
     st.session_state["navigation_page"] = "TOP"
     st.session_state["scroll_top_trig"] = int(time.time() * 1000)
     st.session_state["focused_stock_item"] = None
     st.rerun()
-if nav_c2.button("✖ 合議を閉じる", key="top_nav_close", use_container_width=True):
+if nav_c2.button("✖ 閉じる", key="top_nav_close", use_container_width=True):
     st.session_state["active_debates"] = {}
     st.rerun()
-if nav_c3.button("↩ 前の画面に戻る", key="top_nav_back", use_container_width=True):
+if nav_c3.button("↩ 戻る", key="top_nav_back", use_container_width=True):
     st.session_state["focused_stock_item"] = None
     if st.session_state.get("navigation_page") != "TOP":
         st.session_state["navigation_page"] = "TOP"
@@ -465,12 +501,37 @@ if st.session_state.get("scroll_target_id"):
     scroll_target_js = f"setTimeout(function(){{ try {{ const el = window.parent.document.getElementById('{tid}'); if(el){{ el.scrollIntoView({{behavior: 'smooth', block: 'start'}}); }} }} catch(e){{}} }}, 220);"
     st.session_state["scroll_target_id"] = ""
 
-# 不要なハックJSを全削除し、スクロール機能のみ維持
+# ブラウザ画面全体に直接「MENUボタン」を貼り付ける（Streamlitの影響を受けない完全独立版）
 components.html(
     f"""
     <script>
     (function(){{
         const doc = window.parent.document;
+        
+        /* 完全に独立したサイドバー開閉ボタンの生成 */
+        if (!doc.getElementById('yama-menu-btn')) {{
+            const btn = doc.createElement('div');
+            btn.id = 'yama-menu-btn';
+            btn.innerHTML = '<span style="font-size:15px; margin-right:5px;">☰</span>MENU';
+            /* CSSを直接指定するため、Streamlitに上書きされて消えることが物理的に不可能です */
+            btn.style.cssText = 'position: fixed; top: 12px; left: 12px; z-index: 9999999; background: rgba(15, 23, 42, 0.95); border: 1.5px solid #38bdf8; color: #38bdf8; padding: 6px 12px; border-radius: 6px; font-weight: 800; font-size: 11px; font-family: sans-serif; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.5); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; user-select: none;';
+            doc.body.appendChild(btn);
+
+            /* クリックで純正の隠しボタンを探して作動させる */
+            btn.addEventListener('click', function(e) {{
+                e.preventDefault(); e.stopPropagation();
+                const openBtn = doc.querySelector('[data-testid="collapsedControl"]') || doc.querySelector('[data-testid="stSidebarCollapsedControl"]');
+                const closeBtn = doc.querySelector('section[data-testid="stSidebar"] button');
+                const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
+                const isExpanded = sidebar && sidebar.getAttribute('aria-expanded') === 'true';
+
+                if (isExpanded && closeBtn) {{ closeBtn.click(); }}
+                else if (!isExpanded && openBtn) {{ openBtn.click(); }}
+                else if (openBtn) {{ openBtn.click(); }}
+            }});
+        }}
+        
+        /* 画面上部へのスクロール処理 */
         function scrollToTopAbsolute(){{
             try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
             const targets = [doc.documentElement, doc.body, doc.querySelector('section.main'), doc.querySelector('[data-testid="stAppViewContainer"]')];
