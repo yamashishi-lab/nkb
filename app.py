@@ -156,8 +156,38 @@ def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h
     return False, ""
 
 # ==========================================
-# 2. CSS / JS 注入 (サイドバー＆トップナビ修正済)
+# 2. 生体認証 UI および CSS / JS 注入
 # ==========================================
+def render_biometric_bridge(mode="login", user_email="", bio_token=""):
+    db, sec = load_mem(), load_sec()
+    raw_hfp, cur_fp = get_client_fp(), get_raw_header_fp()
+    if mode == "register":
+        lbl = "✅ 生体・ワンタップ認証 登録済" if db.get(user_email, {}).get("bio_enabled") else "🧬 この端末をワンタップ登録"
+        if st.button(lbl, key=f"bio_{user_email}", use_container_width=True):
+            if user_email in db: db[user_email].update({"bio_enabled": True, "fp": cur_fp, "raw_hfp": raw_hfp}); save_j(FILES["mem"], db)
+            sec.setdefault("device_bio_map", {})[raw_hfp] = sec["device_bio_map"][cur_fp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
+            save_j(FILES["sec"], sec); st.success("✅ 端末認証を登録しました")
+        return
+    mapped = sec.get("device_bio_map", {}).get(raw_hfp) or sec.get("device_bio_map", {}).get(cur_fp)
+    if not mapped:
+        for k, v in db.items():
+            if v.get("bio_enabled") and v.get("status") == "approved" and (v.get("raw_hfp") == raw_hfp or v.get("fp") == cur_fp):
+                mapped = {"email": k, "token": gen_tok(k, "session_keep"), "fp": cur_fp}; break
+    if st.button("🧬 登録済み端末：生体認証 / ワンタップで即ログイン", use_container_width=True, type="primary"):
+        if mapped and mapped.get("email"):
+            t_em = mapped["email"].strip().lower(); u_rec = db.get(t_em, {})
+            is_ban, _ = check_and_log_ban_spoof(t_em, u_rec.get("name", ""), cur_fp, raw_hfp, u_rec.get("pin_hash", ""), "ワンタップログイン")
+            if is_ban or u_rec.get("status") == "banned": st.error("💀 このアカウントまたは端末は永久BAN（アクセス禁止）されています。")
+            elif u_rec.get("status") == "suspended": st.error("🚫 アカウント一時停止中です。")
+            elif (cur_fp in sec.get("banned_fps", {}) or raw_hfp in sec.get("banned_fps", {})) and t_em != ADMIN_EMAIL.strip().lower(): st.error("🚫 端末制限中です。")
+            elif (u_rec and u_rec.get("status") == "approved") or t_em == ADMIN_EMAIL.strip().lower():
+                st.session_state["authenticated_user"] = t_em; st.query_params["u"], st.query_params["t"] = t_em, gen_tok(t_em, "session_keep"); st.rerun()
+        else:
+            is_ban, _ = check_and_log_ban_spoof("", "未認証端末", cur_fp, raw_hfp, "", "ワンタップ試行")
+            if is_ban: st.error("💀 この端末は永久BAN（アクセス禁止）されています。")
+            else: st.warning("⚠️ 初回は下のフォームから専用コードでログインしてください（次回から自動登録されます）。")
+
+
 def inject_css():
     css = """
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
@@ -275,7 +305,7 @@ def inject_css():
 inject_css()
 
 # ==========================================
-# 3. 認証ロジック
+# 3. 認証ロジック (生体認証バッジ復旧済)
 # ==========================================
 def check_auth():
     db, sec = load_mem(), load_sec()
@@ -304,14 +334,20 @@ def check_auth():
         st.query_params["u"], st.query_params["t"] = cu, keep_tok
         return True
 
-    # ログイン画面
+    # ログイン画面のバッジ・生体認証を完全復旧
     st.markdown(
         '<div class="glass-header" style="text-align:center;padding:18px 12px;">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
         '<div class="brand-sub" style="margin-top:4px;">QUANTUM WAVEFUNCTION MULTI-AGENT TERMINAL</div>'
-        '</div>',
+        '<div style="display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;">'
+        '<span class="quantum-badge">⚛️ 独自量子力学波動エンジン QWM-7搭載</span>'
+        '<span class="inst-badge">🏛️ 機関最新ミクロ構造 Kyle-λ・Hurst搭載</span>'
+        '<span class="pill-badge" style="color:#10b981;border-color:rgba(16,185,129,0.3);">🧬 生体認証対応</span>'
+        '</div></div>',
         unsafe_allow_html=True
     )
+    
+    render_biometric_bridge(mode="login")
 
     tab_login, tab_apply, tab_vault = st.tabs(["🔑 コードログイン", "📩 新規会員登録申請", "🔐 承認確認・暗号化コード照会"])
     with tab_login:
@@ -324,6 +360,37 @@ def check_auth():
                     st.session_state["authenticated_user"] = cm; st.rerun()
                 else:
                     st.warning("⚠️ 未承認または専用アクセスコードが異なります。")
+    with tab_apply:
+        with st.form("apply"):
+            st.caption("🔐 セキュリティ保護のため、申請時に「あなただけの4桁の暗証番号(PIN)」を設定してください。承認後にコードを確認する際に必要となります。")
+            an = st.text_input("👤 お名前（ニックネーム可）")
+            am = st.text_input("📧 メールアドレス")
+            apin = st.text_input("🔢 秘密の4桁暗証番号 (PIN・数字4桁)", type="password", max_chars=4, placeholder="例: 7788")
+            if st.form_submit_button("📨 セキュア会員登録を申請する", use_container_width=True):
+                if "@" not in am or len(apin.strip()) < 4: st.warning("⚠️ 正しいメールアドレスと4桁の暗証番号(PIN)を入力してください。")
+                else:
+                    cm, pc, ns = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    nm_clean = an.strip() or "未入力"; pin_h = hash_pin(apin)
+                    is_ban, ban_reason = check_and_log_ban_spoof(cm, nm_clean, cur_fp, raw_hfp, pin_h, "新規登録申請")
+                    if is_ban or (db.get(cm) and db[cm].get("status") == "banned"): st.error("💀 セキュリティ監視システムにより、申請は永久ブロックされました。")
+                    else:
+                        db[cm] = {"name": nm_clean, "email": cm, "status": "pending", "passcode": gen_code(cm), "pin_hash": pin_h, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": False}
+                        save_j(FILES["mem"], db); send_mail(cm, "【YAMASHISHI LAB】会員登録申請の受付完了", f"{nm_clean} 様\n申請を受け付けました。管理者承認後、ログイン画面の『🔐 承認確認・暗号化コード照会』タブにて、暗証番号(PIN)を入力すると専用アクセスコードをご確認いただけます。")
+                        st.success("✅ 申請を受け付けました！承認完了まで今しばらくお待ちください。")
+    with tab_vault:
+        st.caption("🛡️ 第三者による盗み見を防止するため、**申請時のメールアドレス** と **秘密の4桁暗証番号(PIN)** の両方が一致した場合のみ専用アクセスコードを開示します。")
+        with st.form("vault_check"):
+            chk_em = st.text_input("📧 申請したメールアドレス").strip().lower()
+            chk_pin = st.text_input("🔢 申請時に設定した4桁の暗証番号 (PIN)", type="password", max_chars=4).strip()
+            if st.form_submit_button("🔍 本人確認して承認ステータスを照会", use_container_width=True):
+                u_info = db.get(chk_em)
+                is_ban, _ = check_and_log_ban_spoof(chk_em, (u_info or {}).get("name", ""), cur_fp, raw_hfp, hash_pin(chk_pin) if chk_pin else "", "コード照会")
+                if is_ban or (u_info and u_info.get("status") == "banned"): st.error("💀 このアカウントまたは端末は永久BANされています。")
+                elif not u_info: st.error("❌ 該当する申請データが見つかりません。")
+                elif u_info.get("pin_hash") and not hmac.compare_digest(u_info.get("pin_hash", ""), hash_pin(chk_pin)): st.error("🚫 暗証番号(PIN)が一致しません。第三者による照会はブロックされました。")
+                elif u_info.get("status") == "approved": st.success(f"🎉 本人確認完了・承認済みです！あなたの専用アクセスコードは **`{u_info.get('passcode', gen_code(chk_em))}`** です。「🔑 コードログイン」タブからログインしてください。")
+                elif u_info.get("status") == "pending": st.info("⏳ 本人確認完了：現在、管理者の承認審査待ちです。")
+                else: st.error("🚫 現在このアカウントは一時停止中または利用できません。")
     st.stop()
 
 check_auth()
@@ -500,6 +567,12 @@ components.html(
 # 7. サイドバー構築 (アルゴリズム・AGI本物監視員)
 # ==========================================
 with st.sidebar:
+    # 生体認証用のブリッジ (サイドバー上部に配置)
+    cu = st.session_state.get("authenticated_user", "")
+    if cu:
+        st.markdown(f'<div style="background:#0f172a;padding:8px 11px;border-radius:9px;border:1px solid rgba(168,85,247,0.35);margin-bottom:6px;"><div style="font-size:9.5px;color:#c084fc;font-weight:700;">⚛️ QUANTUM SESSION ACTIVE</div><div style="color:#f8fafc;font-size:11.5px;font-weight:700;">会員 ({cu})</div></div>', unsafe_allow_html=True)
+        render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
+        
     st.markdown("### ⚙️ QUANTUM 設定パネル")
     
     with st.expander("🎯 投資スタイル ＆ アルゴリズム", expanded=True):
@@ -524,7 +597,6 @@ with st.sidebar:
         }
         ac_b = set()
         for label, key in BOOST_MAP.items():
-            # HFTフロントランニングはデフォルトOFFにするなど調整可能だが今回は全てデフォルトONにする
             if st.checkbox(label, value=True, key=f"chk_{key}"):
                 ac_b.add(key)
 
@@ -624,11 +696,11 @@ with st.sidebar:
     # ログアウトボタンをサイドバーの最下部に配置
     st.markdown("<br><br>", unsafe_allow_html=True)
     if st.button("🚪 ログアウト", use_container_width=True, type="primary"):
-        cu = st.session_state.get("authenticated_user")
-        db = load_mem()
-        if cu in db:
-            db[cu]["last_seen_ts"] = 0
-            save_j(FILES["mem"], db)
+        cu_logout = st.session_state.get("authenticated_user")
+        db_logout = load_mem()
+        if cu_logout in db_logout:
+            db_logout[cu_logout]["last_seen_ts"] = 0
+            save_j(FILES["mem"], db_logout)
         st.session_state["authenticated_user"] = None
         st.query_params.clear()
         st.rerun()
@@ -767,14 +839,13 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
 
 # ==========================================
-# 10. レンダリング関数群
+# 10. レンダリング関数群 (タブ無反応完全修正済)
 # ==========================================
-# ※タブ無反応バグを防ぐため、@frag_dec (st.fragment) を外して全体を素直に再描画させる
 def render_council_sec(r, uk):
     is_open = st.session_state["active_debates"].get(uk, False)
     c1, c2 = st.columns([2.7, 1.1])
     
-    # 買い方ガイド開閉ボタン (押した時に状態を反転させて全体再描画)
+    # 買い方ガイド開閉ボタン (全体を再描画させて確実に状態を反映させる)
     if c1.button("🔼 買い方ガイドを閉じる" if is_open else f"⚛️ 買い方とAI合議を見る", key=f"btn_open_{uk}", use_container_width=True): 
         st.session_state["active_debates"][uk] = not is_open
         st.rerun()
@@ -818,7 +889,6 @@ def render_council_sec(r, uk):
                 st.rerun()
 
     st.markdown(f'<div class="consensus-banner"><div style="font-weight:800;color:#fde047;font-size:12.5px;margin-bottom:5px;">🏛️ 最終結論 ＆ 買い方アクションプラン</div>{meta["verdict_html"]}</div>', unsafe_allow_html=True)
-
 
 def render_card(r, is_custom=False, rank=None, kp="card"):
     rel_news = next((n for n in all_impact_news if r["full_code"] in n["detail"]["related_codes"]), None)
@@ -1036,6 +1106,7 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     inf = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
     return analyze_df(yf.Ticker(code).history(period="6mo"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
 
+
 # ==========================================
 # 12. ヘッダー / マクロ指標の描画
 # ==========================================
@@ -1045,7 +1116,7 @@ st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content
 with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場を並列ディープスキャン中..."):
     g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
 
-# ニュース詳細画面
+# ニュース詳細画面へのルーティング
 if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     tn = st.session_state.get("selected_news_item") or all_impact_news[0]
     st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><span class="pill-badge" style="background:#ef4444;color:#fff;">🚨 重大ニュース深掘り</span><div style="font-size:18px;font-weight:800;margin-top:8px;">{tn["title"]}</div></div>', unsafe_allow_html=True)
