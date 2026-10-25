@@ -325,7 +325,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
         return None
 
 # ==========================================
-# 4. UI と CSS / JS 注入 (クリック阻害を完全解消)
+# 4. UI と CSS / JS 注入 (セレクトボックスの展開不具合を完全修正)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -364,8 +364,14 @@ def inject_css():
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
-    /* あらゆるポップオーバーやドロップダウンがサイドバーの下に隠れないようにする */
-    div[data-baseweb="popover"], div[data-baseweb="menu"], div[data-baseweb="tooltip"], div[role="listbox"], .stSelectbox [data-baseweb="popover"], div[id^="bui-"] {
+    /* セレクトボックスのポップオーバーやドロップダウンを最前面化 */
+    div[data-baseweb="popover"],
+    div[data-baseweb="menu"],
+    div[data-baseweb="tooltip"],
+    div[role="listbox"],
+    ul[role="listbox"],
+    li[role="option"],
+    div[id^="bui-"] {
         z-index: 2147483647 !important;
         pointer-events: auto !important;
     }
@@ -377,7 +383,7 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* サイドバー自体に対する設定（z-indexを整理しポインタイベントを完全保証） */
+    /* サイドバー基本設定（オーバーレイとの重なり順序を正常化） */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 9999995 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
@@ -390,11 +396,10 @@ def inject_css():
         transform: translateX(0) !important; box-shadow: 18px 0 50px rgba(0,0,0,0.95), 2px 0 20px rgba(56,189,248,0.25) !important;
     }
     
-    /* サイドバー内部要素のクリック阻害を完全防止 */
-    section[data-testid="stSidebar"] * {
-        pointer-events: auto !important;
-    }
-    [data-testid="stSidebarUserContent"] {
+    /* サイドバー内部全要素のクリック操作を保証 */
+    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
+    section[data-testid="stSidebar"] form,
+    section[data-testid="stSidebar"] div {
         pointer-events: auto !important;
     }
     
@@ -703,7 +708,7 @@ if "inspector_roster" not in st.session_state:
     st.session_state["inspector_roster"] = dict(DEFAULT_INSPECTORS)
 
 # ==========================================
-# 7. トップナビゲーションとサイドバー開閉JS (イベント貫通を最適化)
+# 7. トップナビゲーションとサイドバー開閉JS (メニュー閉じ防止・選択肢保護)
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -736,7 +741,9 @@ components.html(
             
             if (sidebar) {{
                 if (pWin._yamashishi_sidebar_open) {{
-                    sidebar.classList.add('yamashishi-sidebar-open');
+                    if (!sidebar.classList.contains('yamashishi-sidebar-open')) {{
+                        sidebar.classList.add('yamashishi-sidebar-open');
+                    }}
                     try {{
                         sidebar.removeAttribute('inert');
                         sidebar.removeAttribute('aria-hidden');
@@ -744,7 +751,9 @@ components.html(
                         inerts.forEach(el => el.removeAttribute('inert'));
                     }} catch(err) {{}}
                 }} else {{
-                    sidebar.classList.remove('yamashishi-sidebar-open');
+                    if (sidebar.classList.contains('yamashishi-sidebar-open')) {{
+                        sidebar.classList.remove('yamashishi-sidebar-open');
+                    }}
                 }}
             }}
             
@@ -785,7 +794,7 @@ components.html(
                         #yamashishi-sidebar-overlay {{
                             position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important;
                             background: rgba(0,0,0,0.7) !important; backdrop-filter: blur(4px) !important;
-                            z-index: 9999990 !important; opacity: 0 !important; visibility: hidden !important;
+                            z-index: 9999980 !important; opacity: 0 !important; visibility: hidden !important;
                             transition: all 0.35s ease !important; pointer-events: none !important;
                         }}
                         #yamashishi-sidebar-overlay.active {{
@@ -839,7 +848,6 @@ components.html(
 
         setupCustomSidebar();
         fixTopNav();
-        setInterval(applySidebarState, 150);
         setTimeout(fixTopNav, 100);
 
         function scrollToTopAbsolute(){{
