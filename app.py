@@ -261,19 +261,6 @@ def inject_css():
         white-space: nowrap !important; display: block; width: 100%;
     }
     
-    /* 安全でスタイリッシュなトップナビゲーション */
-    .top-nav-button-group button {
-        background: linear-gradient(180deg, rgba(30,41,59,0.9), rgba(15,23,42,0.9)) !important;
-        color: #f8fafc !important; border: 1px solid rgba(148,163,184,0.3) !important;
-        border-radius: 8px !important; font-weight: 800 !important; font-size: 13px !important;
-        transition: all 0.2s ease !important; height: 38px !important; min-height: 38px !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important; margin-bottom: 10px !important;
-    }
-    .top-nav-button-group button:hover {
-        border-color: #38bdf8 !important; background: rgba(56,189,248,0.15) !important;
-        box-shadow: 0 0 10px rgba(56,189,248,0.3) !important; transform: translateY(-1px) !important;
-    }
-
     .glass-header {
         background: radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);
         border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; padding: 14px; margin-bottom: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
@@ -440,17 +427,15 @@ if "system_zero_status" not in st.session_state: st.session_state["system_zero_s
 # ==========================================
 # 7. トップナビゲーションとサイドバー開閉JS (安全に刷新)
 # ==========================================
-st.markdown('<div class="top-nav-button-group">', unsafe_allow_html=True)
-nav_c1, nav_c2, nav_c3 = st.columns(3)
-if nav_c1.button("🔝 トップ", key="top_nav_top", use_container_width=True):
+# UIから非表示の隠しボタンブロック (JSからクリックされる)
+st.markdown('<div style="display:none;">', unsafe_allow_html=True)
+if st.button("HIDDEN_TOP_BTN", key="hidden_top"):
     st.session_state["navigation_page"] = "TOP"
     st.session_state["scroll_top_trig"] = int(time.time() * 1000)
     st.session_state["focused_stock_item"] = None
     st.rerun()
-if nav_c2.button(f"✖ 閉じる", key="top_nav_close", use_container_width=True):
+if st.button("HIDDEN_CLOSE_BTN", key="hidden_close"):
     st.session_state["active_debates"] = {}
-    st.rerun()
-if nav_c3.button("↩ 戻る", key="top_nav_back", use_container_width=True):
     st.session_state["focused_stock_item"] = None
     if st.session_state.get("navigation_page") != "TOP":
         st.session_state["navigation_page"] = "TOP"
@@ -473,43 +458,91 @@ if st.session_state.get("scroll_target_id"):
     scroll_target_js = f"setTimeout(function(){{ try {{ const el = window.parent.document.getElementById('{tid}'); if(el){{ el.scrollIntoView({{behavior: 'smooth', block: 'start'}}); }} }} catch(e){{}} }}, 220);"
     st.session_state["scroll_target_id"] = ""
 
-# 無理なDOM書き換え (fixTopNav) を削除し、サイドバー開閉のみに限定したJS
 components.html(
     f"""
     <script>
     (function(){{
         const doc = window.parent.document;
-        if(typeof window.parent.__yamashishi_sidebar_open === 'undefined') {{ window.parent.__yamashishi_sidebar_open = false; }}
         
+        // サイドバー開閉ボタン
         function installCustomSidebarToggle(){{
             try {{
                 if(doc.getElementById('yamashishi-floating-sidebar-btn')) return;
                 const style = doc.createElement('style');
                 style.textContent = `
-                    #yamashishi-floating-sidebar-btn {{ position: fixed !important; top: 8px !important; left: 9px !important; z-index: 2147483647 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 3px !important; height: 26px !important; padding: 0 8px 0 6px !important; background: rgba(11, 15, 25, 0.95) !important; backdrop-filter: blur(16px) !important; border: 1.5px solid rgba(56, 189, 248, 0.6) !important; border-radius: 8px !important; cursor: pointer !important; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.3) !important; user-select: none !important; transition: all 0.2s ease !important; color: #38bdf8 !important; }}
+                    #yamashishi-floating-sidebar-btn {{ position: fixed !important; top: 12px !important; left: 12px !important; z-index: 2147483647 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 4px !important; height: 32px !important; padding: 0 10px 0 8px !important; background: rgba(15, 23, 42, 0.95) !important; backdrop-filter: blur(16px) !important; border: 1.5px solid rgba(56, 189, 248, 0.5) !important; border-radius: 8px !important; cursor: pointer !important; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.2) !important; user-select: none !important; transition: all 0.15s ease !important; color: #38bdf8 !important; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 800; }}
                     #yamashishi-floating-sidebar-btn:hover {{ border-color: #fde047 !important; color: #fde047 !important; box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important; }}
+                    #yamashishi-floating-sidebar-btn:active {{ background: rgba(56, 189, 248, 0.4) !important; border-color: #38bdf8 !important; color: #fff !important; transform: scale(0.92) !important; }}
                 `;
                 doc.head.appendChild(style);
 
                 const btn = doc.createElement('div'); btn.id = 'yamashishi-floating-sidebar-btn';
-                btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;">MENU</span>`;
-                
+                btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span>MENU</span>`;
                 doc.body.appendChild(btn);
 
                 btn.addEventListener('click', function(e){{ 
                     e.preventDefault(); e.stopPropagation(); 
-                    const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-                    const isCollapsed = sidebar && sidebar.getAttribute('aria-expanded') === 'false';
-                    const toggleBtn = doc.querySelector('[data-testid="collapsedControl"]');
-                    const closeBtn = sidebar ? sidebar.querySelector('button') : null;
                     
-                    if(isCollapsed && toggleBtn) toggleBtn.click();
-                    else if(!isCollapsed && closeBtn) closeBtn.click();
+                    // 開くボタンを探す
+                    const expandBtn = doc.querySelector('[data-testid="collapsedControl"]');
+                    if(expandBtn) {{ expandBtn.click(); return; }}
+                    
+                    // 閉じるボタンを探す
+                    const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+                    if(sidebar) {{
+                        const closeBtn = sidebar.querySelector('button');
+                        if(closeBtn) closeBtn.click();
+                    }}
                 }});
             }} catch(e){{}}
         }}
 
+        // 上部固定のカッコいいナビゲーションボタン
+        function installFixedTopNav(){{
+            try {{
+                if(doc.getElementById('yamashishi-fixed-top-nav')) return;
+                const nav = doc.createElement('div');
+                nav.id = 'yamashishi-fixed-top-nav';
+                nav.style.cssText = 'position:fixed; top:12px; right:12px; z-index:2147483647; display:flex; gap:10px; pointer-events:none;';
+                
+                const btnStyle = 'pointer-events:auto; background: linear-gradient(180deg, rgba(30,41,59,0.95), rgba(15,23,42,0.95)); color: #f8fafc; border: 1px solid rgba(56,189,248,0.4); border-radius: 8px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.6), 0 0 8px rgba(56,189,248,0.2); transition: all 0.15s ease; display:flex; align-items:center; backdrop-filter: blur(8px);';
+                
+                const btnTop = doc.createElement('div');
+                btnTop.innerHTML = '🔝 トップへ戻る';
+                btnTop.style.cssText = btnStyle;
+                
+                const btnClose = doc.createElement('div');
+                btnClose.innerHTML = '✖ 合議閉じて戻る';
+                btnClose.style.cssText = btnStyle;
+
+                function addHoverActive(el) {{
+                    el.onmouseenter = () => {{ el.style.borderColor = '#fde047'; el.style.color = '#fde047'; el.style.boxShadow = '0 6px 16px rgba(0,0,0,0.8), 0 0 12px rgba(253,224,71,0.4)'; el.style.transform = 'translateY(-1px)'; }};
+                    el.onmouseleave = () => {{ el.style.borderColor = 'rgba(56,189,248,0.4)'; el.style.color = '#f8fafc'; el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.6), 0 0 8px rgba(56,189,248,0.2)'; el.style.transform = 'none'; }};
+                    el.onmousedown = () => {{ el.style.transform = 'scale(0.92)'; el.style.background = 'rgba(56,189,248,0.3)'; }};
+                    el.onmouseup = () => {{ el.style.transform = 'translateY(-1px)'; el.style.background = 'linear-gradient(180deg, rgba(30,41,59,0.95), rgba(15,23,42,0.95))'; }};
+                }}
+                
+                addHoverActive(btnTop);
+                addHoverActive(btnClose);
+
+                btnTop.onclick = () => {{
+                    const btns = doc.querySelectorAll('button');
+                    btns.forEach(b => {{ if(b.innerText.includes('HIDDEN_TOP_BTN')) b.click(); }});
+                }};
+                
+                btnClose.onclick = () => {{
+                    const btns = doc.querySelectorAll('button');
+                    btns.forEach(b => {{ if(b.innerText.includes('HIDDEN_CLOSE_BTN')) b.click(); }});
+                }};
+
+                nav.appendChild(btnTop);
+                nav.appendChild(btnClose);
+                doc.body.appendChild(nav);
+            }} catch(e){{}}
+        }}
+
         installCustomSidebarToggle();
+        installFixedTopNav();
 
         function scrollToTopAbsolute(){{
             try {{ window.parent.scrollTo(0, 0); }} catch(e){{}}
