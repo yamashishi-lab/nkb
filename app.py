@@ -72,6 +72,7 @@ def get_raw_header_fp() -> str:
     except Exception:
         raw = "default_env"
     return hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
+
 def get_client_fp() -> str:
     raw = get_raw_header_fp()
     qf = st.query_params.get("dfp", "")
@@ -234,27 +235,9 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* サイドバー開閉ボタンの純正CSSジャック（10,000回試行して辿り着いた100%確実に動く最強手法） */
+    /* Streamlit標準の開閉ボタンは隠し、上部中央の3連メニューボタンからJSでクリック制御 */
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"] {
-        position: fixed !important; top: 12px !important; left: 12px !important; z-index: 2147483647 !important;
-    }
-    [data-testid="collapsedControl"] button, [data-testid="stSidebarCollapsedControl"] button {
-        background: rgba(15, 23, 42, 0.95) !important;
-        backdrop-filter: blur(16px) !important;
-        border: 1.5px solid rgba(56, 189, 248, 0.5) !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.2) !important;
-        color: #38bdf8 !important; width: 90px !important; height: 32px !important; padding: 0 !important;
-        display: flex !important; align-items: center !important; justify-content: center !important;
-        transition: all 0.1s ease !important;
-    }
-    [data-testid="collapsedControl"] button:active, [data-testid="stSidebarCollapsedControl"] button:active {
-        border-color: #fde047 !important; color: #fde047 !important; background: rgba(56, 189, 248, 0.4) !important;
-        box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important; transform: scale(0.92) !important;
-    }
-    [data-testid="collapsedControl"] button svg, [data-testid="stSidebarCollapsedControl"] button svg { display: none !important; }
-    [data-testid="collapsedControl"] button::before, [data-testid="stSidebarCollapsedControl"] button::before {
-        content: "≡ MENU"; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 800; color: inherit;
+        display: none !important;
     }
 
     /* サイドバーのカスタマイズ */
@@ -269,7 +252,7 @@ def inject_css():
     }
     
     .block-container {
-        padding-top: 2rem !important; padding-bottom: 3rem !important;
+        padding-top: 2.8rem !important; padding-bottom: 3rem !important;
         padding-left: 0.75rem !important; padding-right: 0.75rem !important; max-width: 840px !important;
     }
     
@@ -405,7 +388,6 @@ def check_auth():
 
 check_auth()
 
-
 # ==========================================
 # 6. セッション状態の初期化 (エージェント等拡張)
 # ==========================================
@@ -441,9 +423,8 @@ if "fired_entities" not in st.session_state: st.session_state["fired_entities"] 
 if "system_zero_logs" not in st.session_state: st.session_state["system_zero_logs"] = []
 if "system_zero_status" not in st.session_state: st.session_state["system_zero_status"] = {"name": "SYSTEM-ZERO", "status": "🟢 正常稼働中"}
 
-
 # ==========================================
-# 7. トップナビゲーションとサイドバー開閉JS (究極のネイティブ動作ハック)
+# 7. トップナビゲーション (1行3連: MENU / トップ / 合議閉じる)
 # ==========================================
 scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
@@ -463,7 +444,7 @@ components.html(
         }};
         cleanupStrayElements();
 
-        // 隠しボタン(Python側からのトリガー用)をDOMから完全に見えなくする
+        // 隠しボタン(Python側からのトリガー用)をDOMから隠す
         const observer = new MutationObserver((mutations) => {{
             const btns = doc.querySelectorAll('button');
             btns.forEach(b => {{
@@ -479,38 +460,93 @@ components.html(
         }});
         observer.observe(doc.body, {{childList: true, subtree: true}});
 
-        // 上部固定の中央ナビゲーションボタン（合議閉じて戻るも追加）
+        // 上部固定の3連ナビゲーションボタン（MENU / トップ / 合議閉じる）
         function installFixedTopNav(){{
             try {{
                 let nav = doc.getElementById('yamashishi-fixed-top-nav');
                 if(!nav){{
                     const style = doc.createElement('style');
                     style.textContent = `
-                        #yamashishi-fixed-top-nav {{ position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:2147483647; display:flex; gap:10px; pointer-events:none; }}
-                        .yama-nav-btn {{ pointer-events:auto; background: linear-gradient(180deg, rgba(30,41,59,0.95), rgba(15,23,42,0.95)); color: #f8fafc; border: 1px solid rgba(56,189,248,0.4); border-radius: 8px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.6), 0 0 8px rgba(56,189,248,0.2); transition: all 0.1s ease; display:flex; align-items:center; backdrop-filter: blur(8px); }}
-                        .yama-nav-btn:active {{ border-color: #fde047 !important; color: #fde047 !important; background: rgba(56, 189, 248, 0.4) !important; box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important; transform: scale(0.92) !important; }}
+                        #yamashishi-fixed-top-nav {{
+                            position: fixed;
+                            top: 10px;
+                            left: 50%;
+                            transform: translateX(-50%);
+                            z-index: 2147483647;
+                            display: flex;
+                            gap: 6px;
+                            pointer-events: none;
+                            max-width: 96vw;
+                        }}
+                        .yama-nav-btn {{
+                            pointer-events: auto;
+                            background: rgba(15, 23, 42, 0.95);
+                            color: #f8fafc;
+                            border: 1px solid rgba(56, 189, 248, 0.45);
+                            border-radius: 8px;
+                            padding: 6px 12px;
+                            font-size: 11.5px;
+                            font-weight: 800;
+                            cursor: pointer;
+                            box-shadow: 0 4px 14px rgba(0,0,0,0.7), 0 0 10px rgba(56,189,248,0.25);
+                            transition: all 0.1s ease;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            backdrop-filter: blur(12px);
+                            white-space: nowrap;
+                            user-select: none;
+                        }}
+                        .yama-nav-btn:hover {{
+                            border-color: #38bdf8;
+                            background: rgba(30, 41, 59, 0.98);
+                        }}
+                        .yama-nav-btn:active {{
+                            border-color: #fde047 !important;
+                            color: #fde047 !important;
+                            background: rgba(56, 189, 248, 0.4) !important;
+                            box-shadow: 0 6px 20px rgba(0,0,0,0.9), 0 0 15px rgba(253, 224, 71, 0.4) !important;
+                            transform: scale(0.93) !important;
+                        }}
                     `;
                     doc.head.appendChild(style);
 
                     nav = doc.createElement('div');
                     nav.id = 'yamashishi-fixed-top-nav';
                     
+                    // 1. MENU ボタン (サイドバーを開閉)
+                    const btnMenu = doc.createElement('div');
+                    btnMenu.className = 'yama-nav-btn';
+                    btnMenu.innerHTML = '≡ MENU';
+                    btnMenu.onclick = () => {{
+                        let openBtn = doc.querySelector('[data-testid="collapsedControl"] button, [data-testid="stSidebarCollapsedControl"] button');
+                        let closeBtn = doc.querySelector('section[data-testid="stSidebar"] button[kind="header"]');
+                        if (closeBtn) {{
+                            closeBtn.click();
+                        }} else if (openBtn) {{
+                            openBtn.click();
+                        }}
+                    }};
+
+                    // 2. トップ ボタン
                     const btnTop = doc.createElement('div');
                     btnTop.className = 'yama-nav-btn';
-                    btnTop.innerHTML = '🔝 トップへ戻る';
+                    btnTop.innerHTML = '🔝 トップ';
                     btnTop.onclick = () => {{
                         const btns = doc.querySelectorAll('button');
                         btns.forEach(b => {{ if(b.textContent.includes('HID_TOP')) b.click(); }});
                     }};
 
+                    // 3. 合議閉じる ボタン
                     const btnClose = doc.createElement('div');
                     btnClose.className = 'yama-nav-btn';
-                    btnClose.innerHTML = '✖ 合議閉じて戻る';
+                    btnClose.innerHTML = '✖ 合議閉じる';
                     btnClose.onclick = () => {{
                         const btns = doc.querySelectorAll('button');
                         btns.forEach(b => {{ if(b.textContent.includes('HID_CLS')) b.click(); }});
                     }};
 
+                    nav.appendChild(btnMenu);
                     nav.appendChild(btnTop);
                     nav.appendChild(btnClose);
                     doc.body.appendChild(nav);
@@ -537,7 +573,6 @@ components.html(
     </script>
     <style>iframe {{ display: none; }}</style>
     """, height=0)
-
 
 # ==========================================
 # 8. サイドバー構築
@@ -684,7 +719,6 @@ with st.sidebar:
         st.session_state["authenticated_user"] = None
         st.query_params.clear(); st.rerun()
 
-
 # ==========================================
 # 8.5 会員コントロール・管理画面
 # ==========================================
@@ -757,7 +791,6 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
                         f'<b>[{log["time"]}]</b> {log["action"]}<br>入力: {log["input_email"]} ｜ 対象: {log.get("orig_banned_email","不明")}<br>'
                         f'<span style="color:#fca5a5;">理由: {log["reason"]}</span></div>', unsafe_allow_html=True)
     st.stop()
-
 
 # ==========================================
 # 9. 高速並列データ収集 (ニュース & Web)
@@ -903,9 +936,8 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     rel_news = next((n for n in all_impact_news if r["full_code"] in n["detail"]["related_codes"]), None)
     dc, ds, ps = "#10b981" if r["diff"] >= 0 else "#ef4444", ("+" if r["diff"] > 0 else ""), ("+" if r["pts_gap_pct"] > 0 else "")
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
-    lot, st_info = r["strat"], r["strat"] 
+    st_info = r["strat"] 
 
-    # スクロール復帰用のアンカーポイント
     st.markdown(f'<div id="card_anchor_{r["code"]}"></div>', unsafe_allow_html=True)
 
     card_html_top = (
@@ -1084,7 +1116,6 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     inf = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
     return analyze_df(yf.Ticker(code).history(period="6mo"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
 
-
 # ==========================================
 # 13. ヘッダー / マクロ指標の描画
 # ==========================================
@@ -1095,7 +1126,6 @@ st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content
 
 with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場を並列ディープスキャン中..."):
     g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
-
 
 # ==========================================
 # 14. 画面レンダリング 
@@ -1108,7 +1138,6 @@ if focused_item:
     st.markdown("<br><hr style='border-color:rgba(56,189,248,0.3);'><br>", unsafe_allow_html=True)
     if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", use_container_width=True, type="primary"):
         st.session_state["focused_stock_item"] = None
-        # Return to the previous view position
         st.session_state["scroll_target_id"] = f"card_anchor_{focused_item['code']}"
         st.rerun()
 else:
@@ -1176,8 +1205,7 @@ else:
         elif sel_cat.startswith("📂 "):
             for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), 75), 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
 
-
-# JSから叩かせる用の隠しボタントリガー群（MutationObserverでDOM構築直後に非表示になります）
+# JSから叩かせる用の隠しボタントリガー群（MutationObserverで非表示化）
 if st.button("HID_TOP", key="hidden_top_trigger"):
     st.session_state["navigation_page"] = "TOP"
     st.session_state["scroll_top_trig"] = int(time.time() * 1000)
@@ -1186,7 +1214,6 @@ if st.button("HID_TOP", key="hidden_top_trigger"):
 
 if st.button("HID_CLS", key="hidden_close_trigger"):
     if st.session_state.get("focused_stock_item"):
-        # 合議が開いている場合は、合議状態を解除し、元のカード要素へのスクロールIDをセット
         st.session_state["scroll_target_id"] = f"card_anchor_{st.session_state['focused_stock_item']['code']}"
         st.session_state["focused_stock_item"] = None
     else:
