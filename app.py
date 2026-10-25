@@ -26,7 +26,7 @@ AI_PROVIDERS = {
     "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemma-3-27b-it", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
-    "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.x.ai/v1/chat/completions"),
+    "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.groq.com/openai/v1/chat/completions"),
     "deepseek": ("🟣 DeepSeek", ["deepseek-chat", "deepseek-reasoner"], "https://api.deepseek.com/chat/completions"),
     "perplexity": ("🌐 Perplexity Sonar", ["sonar-pro", "sonar"], "https://api.perplexity.ai/chat/completions"),
     "groq": ("⚡ Groq LPU", ["llama-3.3-70b-versatile", "qwen-2.5-32b"], "https://api.groq.com/openai/v1/chat/completions")
@@ -71,7 +71,6 @@ IPO_OFFERINGS = [
     }
 ]
 
-# 市場全銘柄・主要セクター網羅プール
 STOCK_POOL = {
     "半導体・前工程・検査": [
         {"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程コータ/エッチャ"},
@@ -419,23 +418,23 @@ def inject_css():
         border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; padding: 14px; margin-bottom: 16px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
     }
     
-    /* 銘柄カード間の余白を広げて視認性を大幅向上 */
     .rank-card, .search-result-card {
         background: linear-gradient(180deg,#0f172a 0%,#090d16 100%) !important; color: #f8fafc !important; border-radius: 16px;
-        padding: 16px 18px; margin-top: 14px; margin-bottom: 28px; box-shadow: 0 12px 32px rgba(0,0,0,0.65); border: 1px solid rgba(148,163,184,0.22); border-left: 5px solid #38bdf8;
+        padding: 16px 18px; margin-top: 14px; margin-bottom: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.65); border: 1px solid rgba(148,163,184,0.22); border-left: 5px solid #38bdf8;
     }
     .search-result-card { border-left-color: #f59e0b; }
     
     .prob-badge { font-family: 'JetBrains Mono',monospace; font-size: clamp(14px,3.8vw,16.5px); font-weight: 800; color: #38bdf8 !important; }
     .expect-badge { font-family: 'JetBrains Mono',monospace; font-size: clamp(14px,3.8vw,16.5px); font-weight: 900; color: #fde047 !important; }
     
+    /* 銘柄情報直下のグリッドバーの余白を極小化 */
     .winrate-bar {
         display: grid; grid-template-columns: repeat(auto-fit, minmax(65px, 1fr)); gap: 6px; background: rgba(15,23,42,0.85) !important;
-        border: 1px solid rgba(148,163,184,0.18); border-radius: 8px; padding: 8px 6px; margin-top: 9px; text-align: center;
+        border: 1px solid rgba(148,163,184,0.18); border-radius: 8px; padding: 7px 6px; margin-top: 5px !important; text-align: center;
     }
     .trade-plan-box {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 6px; margin-top: 8px;
-        background: rgba(2,6,23,0.7) !important; padding: 8px 6px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.18); text-align: center;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 6px; margin-top: 5px !important;
+        background: rgba(2,6,23,0.7) !important; padding: 7px 6px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.18); text-align: center;
     }
     
     .admin-table-container {
@@ -459,7 +458,6 @@ def inject_css():
         padding: 12px;
         margin-top: 12px;
     }
-    /* スクロールバー常時表示と独立スクロールの修正 */
     .council-scroll-window {
         max-height: 380px !important;
         height: 350px !important;
@@ -470,25 +468,12 @@ def inject_css():
         flex-direction: column;
         gap: 6px;
     }
-    .council-scroll-window::-webkit-scrollbar {
-        width: 6px;
-    }
-    .council-scroll-window::-webkit-scrollbar-track {
-        background: rgba(15, 23, 42, 0.6);
-        border-radius: 4px;
-    }
-    .council-scroll-window::-webkit-scrollbar-thumb {
-        background: #38bdf8;
-        border-radius: 4px;
-    }
+    .council-scroll-window::-webkit-scrollbar { width: 6px; }
+    .council-scroll-window::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); border-radius: 4px; }
+    .council-scroll-window::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 4px; }
 
     .chat-bubble-ai, .chat-bubble-user, .chat-bubble-agree, .chat-bubble-doubt, .chat-bubble-rage {
-        padding: 9px 12px;
-        border-radius: 8px;
-        margin-bottom: 4px;
-        font-size: 12px;
-        line-height: 1.5;
-        word-break: break-word;
+        padding: 9px 12px; border-radius: 8px; margin-bottom: 4px; font-size: 12px; line-height: 1.5; word-break: break-word;
     }
     .chat-bubble-ai { background: rgba(15, 23, 42, 0.85); border-left: 3px solid #38bdf8; }
     .chat-bubble-agree { background: rgba(6, 78, 59, 0.65); border-left: 3px solid #10b981; }
@@ -498,28 +483,14 @@ def inject_css():
     .round-divider { font-size: 11px; font-weight: 800; color: #94a3b8; text-align: center; margin: 6px 0; letter-spacing: 1px; }
 
     .beginner-action-box {
-        background: rgba(16, 185, 129, 0.12);
-        border: 1px solid rgba(16, 185, 129, 0.4);
-        border-radius: 10px;
-        padding: 12px 14px;
-        font-size: 12px;
-        line-height: 1.7;
-        color: #d1fae5;
+        background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 10px; padding: 12px 14px; font-size: 12px; line-height: 1.7; color: #d1fae5;
     }
     .sizing-box {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: rgba(2, 6, 23, 0.7);
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        padding: 8px 12px;
-        border-radius: 6px;
-        margin-top: 8px;
-        font-size: 11.5px;
+        display: flex; justify-content: space-between; align-items: center; background: rgba(2, 6, 23, 0.7); border: 1px solid rgba(148, 163, 184, 0.16); padding: 7px 12px; border-radius: 6px; margin-top: 5px; font-size: 11.5px;
     }
-    .quant-detail-drawer { margin-top: 8px; font-size: 11.5px; cursor: pointer; }
+    .quant-detail-drawer { margin-top: 6px; font-size: 11.5px; cursor: pointer; }
     .signal-10tier-badge {
-        padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; display: flex; justify-content: space-between; margin-bottom: 8px;
+        padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; display: flex; justify-content: space-between; margin-bottom: 6px;
     }
     .pill-badge {
         font-size: 11px; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(148,163,184,0.3); margin-right: 4px; display: inline-block;
@@ -534,39 +505,13 @@ def inject_css():
         display: inline-block; padding: 5px 12px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 6px; color: #fde047; text-decoration: none; font-size: 11.5px; font-weight: 700; margin-right: 6px; margin-top: 4px;
     }
     .consensus-banner {
-        background: rgba(15, 23, 42, 0.95);
-        border: 1px solid rgba(250, 204, 21, 0.4);
-        border-radius: 10px;
-        padding: 12px;
-        margin-top: 12px;
+        background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(250, 204, 21, 0.4); border-radius: 10px; padding: 12px; margin-top: 12px;
     }
 
-    /* 重大情報の赤点滅・1行ボタンスタイル */
     @keyframes alert-pulse {
         0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
         70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
         100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-    }
-    div[data-testid="stElementContainer"]:has(button[key*="nb_card_"]),
-    div[data-testid="stElementContainer"]:has(button[key*="nb_custom_"]),
-    div[data-testid="stElementContainer"]:has(button[key*="nb_top5_"]) {
-        margin-top: 8px !important;
-        margin-bottom: 8px !important;
-    }
-    button[key*="nb_card_"], button[key*="nb_custom_"], button[key*="nb_top5_"] {
-        background: linear-gradient(90deg, #b91c1c 0%, #ef4444 50%, #b91c1c 100%) !important;
-        color: #ffffff !important;
-        border: 1.5px solid #fca5a5 !important;
-        border-radius: 8px !important;
-        font-weight: 800 !important;
-        font-size: 12px !important;
-        padding: 6px 12px !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        display: block !important;
-        width: 100% !important;
-        animation: alert-pulse 2s infinite !important;
     }
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{css}</style>', unsafe_allow_html=True)
@@ -1004,7 +949,6 @@ with st.sidebar:
                 f'</div>', unsafe_allow_html=True
             )
 
-        # 解雇されたエージェントのログと理由をサイドバー最下部に詳細表示
         st.markdown("<hr style='margin:10px 0 6px 0; border-color:rgba(239,68,68,0.3);'>", unsafe_allow_html=True)
         st.markdown("<div style='font-size:11px;font-weight:800;color:#ef4444;margin-bottom:6px;'>💀 直近の解雇・粛清履歴 (鬼監視室)</div>", unsafe_allow_html=True)
         fired_list = st.session_state.get("fired_agents", [])
@@ -1122,11 +1066,9 @@ def search_web_knowledge_parallel(query1: str, query2: str) -> list:
     return list(dict.fromkeys(results))
 
 def generate_humanlike_2ch_debate(r: dict, user_query: str) -> list:
-    """定型文一切禁止・Web検索情報を加味した2ch風スレッド対話生成"""
     uq = user_query.strip()
     is_greeting = any(w in uq for w in ["こんにちは", "こんちは", "こんばんは", "おはよ", "初めまして", "よろしく", "押忍", "ども"])
     
-    # リアルタイムWeb検索を実施して材料を仕入れる
     web_hits = []
     if not is_greeting and len(uq) > 1:
         web_hits = search_web_knowledge_parallel(f"{r['name']} {uq}", f"{r['code']} 株価 掲示板")
@@ -1199,7 +1141,7 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
 
 # ==========================================
-# 11. レンダリング関数群
+# 11. レンダリング関数群（余白完全排除）
 # ==========================================
 def render_council_sec(r, uk, auto_open=False):
     is_open = auto_open or st.session_state["active_debates"].get(uk, False)
@@ -1242,7 +1184,6 @@ def render_council_sec(r, uk, auto_open=False):
 
     st.markdown(f'<div class="consensus-banner"><div style="font-weight:800;color:#fde047;font-size:13px;margin-bottom:6px;">🏛️ 最終結論 ＆ プロ推奨買い方アクションプラン</div>{meta["verdict_html"]}</div>', unsafe_allow_html=True)
 
-    # ユーザー要望：一覧に戻るボタンを一番下に配置
     if auto_open:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", key=f"btn_back_bottom_{uk}", use_container_width=True, type="primary"):
@@ -1255,38 +1196,45 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
     lot, st_info = r["lot_info"], r["strat"]
     
-    card_html_top = (
+    news_banner_html = ""
+    if rel_news:
+        short_t = rel_news['title'][:32] + "..." if len(rel_news['title']) > 32 else rel_news['title']
+        news_banner_html = (
+            f'<div style="margin-top:6px; margin-bottom:4px;">'
+            f'<span style="display:inline-block; width:100%; text-align:center; background:linear-gradient(90deg, #b91c1c 0%, #ef4444 50%, #b91c1c 100%); '
+            f'color:#ffffff; font-weight:800; font-size:11.5px; padding:5px 8px; border-radius:6px; border:1px solid #fca5a5; animation:alert-pulse 2s infinite;">'
+            f'🚨【重大情報】{short_t}'
+            f'</span></div>'
+        )
+
+    # 上部企業情報・現在値から総合期待度バーまでを1つのHTMLで直接連結し、Streamlitの自動余白を排除
+    full_card_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
-        f'<div style="margin-bottom:7px;">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点</span></div>'
+        f'<div style="margin-bottom:6px;">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点</span></div>'
         f'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'
         f'<div style="min-width:0;flex:1;">'
         f'<div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;"><span style="font-size:16px;font-weight:800;color:#f8fafc;white-space:nowrap;">{r["name"]}</span> <span style="font-size:11.5px;color:#94a3b8;white-space:nowrap;">({r["code"]} / {r["genre"]})</span></div>'
-        f'<div style="font-size:11px;color:#94a3b8;margin-top:4px;word-break:keep-all;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div>'
+        f'<div style="font-size:11px;color:#94a3b8;margin-top:3px;word-break:keep-all;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div>'
         f'</div>'
         f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;">🔥 期待度 / 勝率</div><div style="white-space:nowrap;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div></div></div>'
+        f'{news_banner_html}'
+        f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ 量子トンネル</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ Kyle吸収</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 翌朝GU / 陽線</div><div style="font-size:12px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
+        f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 理論寄付き</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
+        f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>VWAP: <b>{r["vwap_price"]}</b></span></div>'
+        f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 機関戦略詳細（タップで開閉）</summary>'
+        f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}</div>'
+        f'</details></div>'
     )
-    st.markdown(card_html_top, unsafe_allow_html=True)
-    
-    # 重大情報有りを赤色アニメーション・1行スタイルでレンダリング
+    st.markdown(full_card_html, unsafe_allow_html=True)
+
     if rel_news:
-        short_t = rel_news['title'][:32] + "..." if len(rel_news['title']) > 32 else rel_news['title']
-        if st.button(f"🚨【重大情報】{short_t}（即座に詳細を確認する）", key=f"nb_{kp}_{r['code']}"):
+        if st.button(f"🚨【速報】重大ニュースの詳細分析を開く", key=f"nb_{kp}_{r['code']}", use_container_width=True):
             st.session_state["selected_news_item"] = rel_news
             st.session_state["navigation_page"] = "NEWS_DETAIL"
             st.session_state["scroll_top_trig"] = int(time.time()*1000)
             st.rerun()
 
-    card_html_bottom = (
-        f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ 量子トンネル</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ Kyle吸収</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 翌朝GU / 陽線</div><div style="font-size:12px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
-        f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 理論寄付き</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
-        f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>VWAP: <b>{r["vwap_price"]}</b></span></div>'
-        f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 機関戦略詳細（タップで開閉）</summary>'
-        f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:5px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}</div>'
-        f'</details></div>'
-    )
-    st.markdown(card_html_bottom, unsafe_allow_html=True)
-    
     if is_focused:
         render_council_sec(r, f"foc_{r['code']}", auto_open=True)
     else:
@@ -1415,7 +1363,6 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
             )
         }
     
-    # デイトレード（デフォルト）
     sh = max(1, int(round(base_sh * 1.65)))
     return {
         "algo_name": f"🔥 [{st_prefix}] 情報精度S級・寄り前モメンタム特攻型",
