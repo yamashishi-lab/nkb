@@ -1,4 +1,4 @@
-import streamlit as st
+Import streamlit as st
 import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
@@ -438,27 +438,6 @@ components.html(
     (function(){{
         const doc = window.parent.document;
         
-        // 不要なボタン（HID_TOP, HID_CLS）をDOMから徹底的に隠蔽
-        const hideStrayBtns = () => {{
-            const btns = doc.querySelectorAll('button');
-            btns.forEach(b => {{
-                if(b.textContent.includes('HID_TOP') || b.textContent.includes('HID_CLS')) {{
-                    let parentContainer = b.closest('div[data-testid="stButton"]') || b.closest('.stElementContainer') || b.parentElement;
-                    if(parentContainer) {{
-                        parentContainer.style.display = 'none';
-                        parentContainer.style.position = 'absolute';
-                        parentContainer.style.opacity = '0';
-                        parentContainer.style.zIndex = '-9999';
-                        parentContainer.style.pointerEvents = 'none';
-                    }}
-                }}
-            }});
-        }};
-        hideStrayBtns();
-        // Streamlitの動的レンダリングにも対応するためMutationObserverで監視
-        const observer = new MutationObserver(() => {{ hideStrayBtns(); }});
-        observer.observe(doc.body, {{ childList: true, subtree: true }});
-        
         // iframe再生成時のDOM要素の蓄積を防止（古いUI部品を綺麗に削除）
         const cleanupStrayElements = () => {{
             const oldMenus = doc.querySelectorAll('#yamashishi-floating-sidebar-btn');
@@ -467,6 +446,16 @@ components.html(
             if (oldNavs.length > 1) {{ for(let i=0; i<oldNavs.length-1; i++) oldNavs[i].remove(); }}
         }};
         cleanupStrayElements();
+
+        // 確実なクリックシミュレーション関数
+        const simulateClick = (el) => {{
+            if (!el) return false;
+            const mouseEventInit = {{ bubbles: true, cancelable: true, view: window.parent }};
+            el.dispatchEvent(new MouseEvent('mousedown', mouseEventInit));
+            el.dispatchEvent(new MouseEvent('mouseup', mouseEventInit));
+            el.dispatchEvent(new MouseEvent('click', mouseEventInit));
+            return true;
+        }};
         
         // サイドバー開閉ボタン
         function installCustomSidebarToggle(){{
@@ -490,20 +479,17 @@ components.html(
                         e.preventDefault(); e.stopPropagation(); 
                         
                         // Streamlitのサイドバーの状態を正しく判定する
-                        const sidebar = doc.querySelector('[data-testid="stSidebar"]');
-                        const isSidebarVisible = sidebar && window.getComputedStyle(sidebar).display !== 'none' && sidebar.getAttribute('aria-expanded') !== 'false';
+                        const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
+                        const isSidebarVisible = sidebar && window.parent.getComputedStyle(sidebar).display !== 'none' && sidebar.getAttribute('aria-expanded') !== 'false';
                         
-                        let expandBtn = doc.querySelector('[data-testid="collapsedControl"]') || 
-                                        doc.querySelector('[data-testid="stSidebarCollapsedControl"]') || 
-                                        doc.querySelector('header button[kind="headerNoPadding"]');
-                                        
-                        let closeBtn = doc.querySelector('[data-testid="stSidebar"] button') ||
-                                       doc.querySelector('[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"]');
-
                         if (isSidebarVisible) {{
-                            if (closeBtn) closeBtn.click();
+                            const closeBtn = doc.querySelector('section[data-testid="stSidebar"] button') || doc.querySelector('[aria-label="Close"]');
+                            simulateClick(closeBtn);
                         }} else {{
-                            if (expandBtn) expandBtn.click();
+                            const expandBtn = doc.querySelector('[data-testid="collapsedControl"]') || 
+                                              doc.querySelector('[data-testid="stSidebarCollapsedControl"]') || 
+                                              doc.querySelector('header button');
+                            simulateClick(expandBtn);
                         }}
                     }});
                 }}
@@ -538,12 +524,12 @@ components.html(
                     // Python側の隠しボタンのクリックを確実にエミュレート
                     btnTop.onclick = () => {{
                         const btns = doc.querySelectorAll('button');
-                        btns.forEach(b => {{ if(b.textContent.includes('HID_TOP')) b.click(); }});
+                        btns.forEach(b => {{ if(b.textContent.includes('HID_TOP')) simulateClick(b); }});
                     }};
                     
                     btnClose.onclick = () => {{
                         const btns = doc.querySelectorAll('button');
-                        btns.forEach(b => {{ if(b.textContent.includes('HID_CLS')) b.click(); }});
+                        btns.forEach(b => {{ if(b.textContent.includes('HID_CLS')) simulateClick(b); }});
                     }};
 
                     nav.appendChild(btnTop);
@@ -900,7 +886,12 @@ def render_council_sec(r, uk, auto_open=False):
     if not auto_open: 
         c1, c2 = st.columns([2.7, 1.1])
         if c1.button("🔼 買い方ガイドを閉じる" if is_open else f"⚛️ 買い方とAI合議を見る", key=f"btn_open_{uk}", use_container_width=True): 
-            st.session_state["focused_stock_item"] = r; st.rerun()
+            if not is_open:
+                st.session_state["focused_stock_item"] = r
+                st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+            else:
+                st.session_state["focused_stock_item"] = None
+            st.rerun()
         if c2.button("✅ 監視済" if r["code"] in st.session_state["watchlist"] else "⭐ 監視追加", key=f"btn_watch_{uk}", use_container_width=True):
             if r["code"] in st.session_state["watchlist"]: del st.session_state["watchlist"][r["code"]]
             else: st.session_state["watchlist"][r["code"]] = r
@@ -1102,9 +1093,13 @@ with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場を並�
 focused_item = st.session_state.get("focused_stock_item")
 if focused_item:
     st.markdown("### ⚛️ 銘柄詳細・買い方合議フォーカスモード")
-    if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", use_container_width=True, type="primary"):
-        st.session_state["focused_stock_item"] = None; st.rerun()
     render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True)
+    
+    st.markdown("<br><hr style='border-color:rgba(56,189,248,0.3);'><br>", unsafe_allow_html=True)
+    if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", use_container_width=True, type="primary"):
+        st.session_state["focused_stock_item"] = None
+        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+        st.rerun()
 else:
     if st.session_state.get("navigation_page") == "NEWS_DETAIL":
         tn = st.session_state.get("selected_news_item") or all_impact_news[0]
@@ -1171,7 +1166,7 @@ else:
             for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), 75), 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
 
 # JSから確実に叩かせる用の隠しボタン（UIを乱さないようドキュメント末尾に配置）
-st.markdown('<div style="display:none; position:absolute; opacity:0; pointer-events:none; z-index:-9999;" id="system-action-triggers">', unsafe_allow_html=True)
+st.markdown('<div style="opacity:0.01; position:absolute; height:1px; width:1px; overflow:hidden; z-index:-9999;" id="system-action-triggers">', unsafe_allow_html=True)
 if st.button("HID_TOP", key="hidden_top_trigger"):
     st.session_state["navigation_page"] = "TOP"
     st.session_state["scroll_top_trig"] = int(time.time() * 1000)
