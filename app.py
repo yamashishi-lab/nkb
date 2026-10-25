@@ -31,7 +31,6 @@ AI_PROVIDERS = {
     "groq": ("⚡ Groq LPU", ["llama-3.3-70b-versatile", "qwen-2.5-32b"], "https://api.groq.com/openai/v1/chat/completions")
 }
 
-# IPO情報を徹底的に深掘りしたデータ構造へ強化
 IPO_OFFERINGS = [
     {
         "rank": 1,
@@ -73,7 +72,6 @@ IPO_OFFERINGS = [
     }
 ]
 
-# 市場全体（主力大型、中小型、グロース、米国主要株）を網羅する全方位プール
 STOCK_POOL = {
     "半導体": [{"code": "8035.T", "name": "東京エレクトロン", "theme": "前工程装置世界大手"}, {"code": "6857.T", "name": "アドバンテスト", "theme": "AI半導体テスタ首位"}, {"code": "6920.T", "name": "レーザーテック", "theme": "EUVマスク検査独占"}, {"code": "6146.T", "name": "ディスコ", "theme": "切断・研削装置世界首位"}, {"code": "NVDA", "name": "NVIDIA", "theme": "AIアクセラレータ絶対覇者"}],
     "AI・防衛": [{"code": "9984.T", "name": "ソフトバンクG", "theme": "世界AIユニコーン投資総本山"}, {"code": "3778.T", "name": "さくらインターネット", "theme": "政府認定国産クラウド基盤"}, {"code": "7011.T", "name": "三菱重工業", "theme": "防衛省国策予算・迎撃誘導弾"}, {"code": "PLTR", "name": "パランティア", "theme": "米軍・国防省AIビッグデータ"}],
@@ -84,7 +82,7 @@ STOCK_POOL = {
 KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": g} for g, its in STOCK_POOL.items() for it in its}
 
 # ==========================================
-# 2. データベース・セキュリティ
+# 2. データベース・セキュリティ・暗号化
 # ==========================================
 _DB_LOCK = threading.RLock()
 
@@ -213,13 +211,98 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
     return True
 
 # ==========================================
-# 3. CSS / JS 注入 (視認性UP・カード間余白拡大・アニメーション)
+# 3. ニュース・マクロ収集関数群（完全先頭定義でNameError根絶）
+# ==========================================
+def fetch_single_news_rss(cat, query):
+    ctx = ssl.create_default_context()
+    out = []
+    url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=ja&gl=JP&ceid=JP:ja"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        with urllib.request.urlopen(req, timeout=3.0, context=ctx) as res:
+            root = ET.fromstring(res.read())
+            for it in root.findall("./channel/item")[:3]:
+                t = re.sub(r"\s*-\s*[^-]+$", "", (it.findtext("title") or "").strip())
+                if t:
+                    out.append({
+                        "id": hashlib.md5(t.encode()).hexdigest()[:8], 
+                        "cat": cat, "title": t, "link": it.findtext("link") or "", 
+                        "source": it.findtext("source") or "Market Wire", 
+                        "pub_date": (it.findtext("pubDate") or "")[:25], 
+                        "impact_score": 92
+                    })
+    except Exception: pass
+    return out
+
+def analyze_news_impact_and_links(title: str, cat: str) -> dict:
+    t_up = title.upper()
+    if any(w in t_up for w in ["半導体", "エヌビディア", "NVDA", "TSMC", "AI"]): 
+        codes, sf, mech = ["6857.T", "8035.T", "6146.T", "5803.T", "NVDA"], "AI半導体・データセンター", "米SOX指数とNVIDIAの動きに連動。機関投資家がバスケット買いを仕掛けやすい状況です。"
+    elif any(w in t_up for w in ["防衛", "三菱重", "宇宙", "衛星"]): 
+        codes, sf, mech = ["7011.T", "7012.T", "5595.T", "186A.T", "PLTR"], "防衛国策・航空宇宙", "地政学リスクや国策防衛予算の拡大を背景に、主力大型株へ資金が流入しています。"
+    else: 
+        codes, sf, mech = ["9984.T", "6857.T", "5803.T"], "日米主力・モメンタム", "市場全体のセンチメントを押し上げる材料です。指数寄与度の高い銘柄から動意づきます。"
+    return {
+        "sector_focus": sf, "mechanism": mech, "related_codes": codes, 
+        "action_guide": "① 朝の気配値とギャップを確認。\n② 主力株がギャップアップした場合、出遅れている周辺銘柄の押し目を狙うのが勝率の高い手口です。"
+    }
+
+@st.cache_data(ttl=180)
+def fetch_global_impact_news() -> list:
+    qs = [
+        ("半導体・AIサプライズ", "半導体 OR エヌビディア OR TSMC OR アドバンテスト 株価"), 
+        ("急騰・上方修正", "ストップ高 OR 上方修正 OR 防衛 OR 量子 株")
+    ]
+    out_all = []
+    seen = set()
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(fetch_single_news_rss, cat, q) for cat, q in qs]
+        for f in as_completed(futures):
+            for item in f.result():
+                if item["title"] not in seen:
+                    item["detail"] = analyze_news_impact_and_links(item["title"], item["cat"])
+                    out_all.append(item)
+                    seen.add(item["title"])
+    if not out_all:
+        t_fb = "AI半導体・次世代データセンター光配線および防衛分野に機関の大型資金流入が加速"
+        out_all.append({
+            "id": "fb_01", "cat": "機関速報", "title": t_fb, "link": "https://jp.reuters.com/", 
+            "source": "QUANT WIRE", "pub_date": datetime.now().strftime("%Y-%m-%d %H:%M"), 
+            "impact_score": 94, "detail": analyze_news_impact_and_links(t_fb, "半導体・AIサプライズ")
+        })
+    return out_all[:4]
+
+@st.cache_data(ttl=900)
+def fetch_macro():
+    tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
+    res = {}
+    try:
+        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=5)
+        for k, (c, lbl) in tks.items():
+            try:
+                d = raw[c].dropna(subset=["Close"]); lc, pc = float(d["Close"].iloc[-1]), float(d["Close"].iloc[-2])
+                res[k] = {"price": lc, "diff": round((lc - pc) / pc * 100, 2), "label": lbl}
+            except Exception: res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
+    except Exception:
+        for k, (_, lbl) in tks.items(): res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
+    return res
+
+@st.cache_data(ttl=900)
+def fetch_5ch_live() -> dict: 
+    return {c: {"hits": 10 + (hash(c) % 25), "live": True} for c in KNOWN_STOCKS}
+
+# 即時初期化（後続の関数・UIが安全に参照可能）
+macro_info = fetch_macro()
+b5_live_map = fetch_5ch_live()
+all_impact_news = fetch_global_impact_news()
+
+# ==========================================
+# 4. CSS / JS 注入 (視認性向上・カード余白拡大・赤アニメーション)
 # ==========================================
 def inject_css():
     css = """
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     
-    /* サイト全体のフォントサイズをやや拡大し、自然な行送りと可読性を確保 */
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         font-size: 15px !important;
@@ -237,7 +320,6 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* サイドバー */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 9999999 !important; width: 340px !important; max-width: 88vw !important; min-width: 320px !important;
@@ -258,7 +340,7 @@ def inject_css():
         margin-left: 0 !important; width: 100% !important; max-width: 100% !important;
     }
 
-    /* 銘柄カード間の余白をしっかり確保（繋がって見えないようマージンと影を強化） */
+    /* 銘柄カード間の余白をしっかり離して独立表示 */
     .rank-card, .search-result-card {
         background: linear-gradient(180deg, #0f172a 0%, #090d16 100%) !important;
         color: #f8fafc !important;
@@ -296,7 +378,7 @@ def inject_css():
         margin: 10px 0 !important;
     }
 
-    /* エージェント合議のスクロール窓を確実に動作させるスタイル */
+    /* エージェント合議スクロール窓の完全動作化 */
     .ai-council-box {
         background: rgba(8, 12, 22, 0.98);
         border: 1px solid rgba(56, 189, 248, 0.4);
@@ -315,19 +397,11 @@ def inject_css():
         border-radius: 8px;
         background: rgba(2, 6, 23, 0.6);
     }
-    .council-scroll-window::-webkit-scrollbar {
-        width: 8px;
-    }
-    .council-scroll-window::-webkit-scrollbar-track {
-        background: rgba(15, 23, 42, 0.8);
-        border-radius: 4px;
-    }
-    .council-scroll-window::-webkit-scrollbar-thumb {
-        background: #38bdf8;
-        border-radius: 4px;
-    }
+    .council-scroll-window::-webkit-scrollbar { width: 8px; }
+    .council-scroll-window::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.8); border-radius: 4px; }
+    .council-scroll-window::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 4px; }
 
-    /* 2chスレッド風の会話吹き出しスタイル */
+    /* 2ch風スレッドレス表示 */
     .thread-post {
         background: rgba(15, 23, 42, 0.7);
         border-left: 3px solid #64748b;
@@ -346,18 +420,13 @@ def inject_css():
         font-size: 14px;
     }
     .thread-header {
-        font-size: 11.5px;
-        color: #94a3b8;
-        margin-bottom: 4px;
-        display: flex;
-        gap: 8px;
-        align-items: center;
+        font-size: 11.5px; color: #94a3b8; margin-bottom: 4px; display: flex; gap: 8px; align-items: center;
     }
     .thread-name { font-weight: 700; color: #38bdf8; }
     .thread-id { color: #64748b; font-family: monospace; }
     .thread-body { color: #f1f5f9; }
 
-    /* 初心者ガイドのボックス（読みやすさ最優先） */
+    /* 初心者ガイド解説枠 */
     .beginner-action-box {
         background: rgba(6, 78, 59, 0.25);
         border: 1.5px solid #10b981;
@@ -394,13 +463,50 @@ def inject_css():
         margin-bottom: 24px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.6);
     }
+
+    .brand-luxury {
+        font-family: 'Cinzel',serif !important; font-size: clamp(17px,4.2vw,25px) !important; font-weight: 800 !important;
+        letter-spacing: clamp(1px,0.5vw,3px) !important; background: linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.25;
+        white-space: nowrap !important; display: block; width: 100%;
+    }
+    .glass-header {
+        background: radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);
+        border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+    }
+    .pill-badge {
+        font-size: 11px; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(148,163,184,0.3); margin-right: 4px; display: inline-block;
+    }
+    .quantum-badge {
+        font-size: 11px; padding: 2px 7px; border-radius: 4px; background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.4); color: #c084fc; margin-right: 4px;
+    }
+    .inst-badge {
+        font-size: 11px; padding: 2px 7px; border-radius: 4px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.4); color: #38bdf8; margin-right: 4px;
+    }
+    .prob-badge { font-family: 'JetBrains Mono',monospace; font-size: 16px; font-weight: 800; color: #38bdf8 !important; }
+    .expect-badge { font-family: 'JetBrains Mono',monospace; font-size: 16px; font-weight: 900; color: #fde047 !important; }
+    .signal-10tier-badge {
+        padding: 4px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 800; display: flex; justify-content: space-between; margin-bottom: 6px;
+    }
+    .sizing-box {
+        display: flex; justify-content: space-between; align-items: center; background: rgba(2, 6, 23, 0.6);
+        border: 1px solid rgba(148, 163, 184, 0.12); padding: 7px 12px; border-radius: 6px; margin-top: 8px; font-size: 12px;
+    }
+    .quant-detail-drawer { margin-top: 8px; font-size: 12px; cursor: pointer; }
+    .ipo-link-btn {
+        display: inline-block; padding: 6px 14px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 6px; color: #fde047; text-decoration: none; font-size: 12px; font-weight: 700; margin-right: 6px;
+    }
+    .admin-table-container { width: 100%; overflow-x: auto; background: #0b0f19; border: 1px solid rgba(56,189,248,0.25); border-radius: 10px; margin-top: 10px; }
+    .admin-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; color: #e2e8f0; }
+    .admin-table th { background: #1e293b; color: #38bdf8; padding: 8px 10px; border-bottom: 1px solid rgba(56,189,248,0.3); font-weight: 700; white-space: nowrap; }
+    .admin-table td { padding: 8px 10px; border-bottom: 1px solid rgba(148,163,184,0.1); white-space: nowrap; }
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{css}</style>', unsafe_allow_html=True)
 
 inject_css()
 
 # ==========================================
-# 4. 生体・ワンタップ認証ブリッジ
+# 5. 生体認証＆ログイン処理
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -465,7 +571,7 @@ def check_auth():
     st.markdown(
         '<div class="glass-header" style="text-align:center;padding:18px 12px;">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
-        '<div class="brand-sub" style="margin-top:4px;">QUANTUM WAVEFUNCTION MULTI-AGENT TERMINAL</div>'
+        '<div class="brand-sub" style="margin-top:4px;font-size:12px;color:#94a3b8;">QUANTUM WAVEFUNCTION MULTI-AGENT TERMINAL</div>'
         '<div style="display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;">'
         '<span class="quantum-badge">⚛️ 独自量子力学波動エンジン QWM-7搭載</span>'
         '<span class="inst-badge">🏛️ 機関最新ミクロ構造 Kyle-λ・Hurst搭載</span>'
@@ -529,7 +635,7 @@ def check_auth():
 check_auth()
 
 # ==========================================
-# 5. セッション初期化とエージェント管理
+# 6. セッション状態初期化
 # ==========================================
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
@@ -543,8 +649,7 @@ for k, v in [
     ]),
     ("system_zero_logs", []), ("system_zero_active", True)
 ]:
-    if k not in st.session_state:
-        st.session_state[k] = v
+    if k not in st.session_state: st.session_state[k] = v
 
 DEFAULT_AGENTS = {
     "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "age": 24, "score": 98, "good": "直感的な相場の裏読み、量子トンネル特異点の発見", "bad": "論理の飛躍が多く説明が抽象的になりがち"},
@@ -558,19 +663,17 @@ DEFAULT_AGENTS = {
     "SENTINEL": {"name": "SENTINEL", "icon": "👁️", "age": 35, "score": 95, "good": "5ch・SNS・掲示板の過熱感とイナゴタワー警戒", "bad": "過度な疑心暗鬼で初動に乗れない"},
     "ALPHA": {"name": "ALPHA", "icon": "⚡", "age": 30, "score": 94, "good": "寄付き直後のギャップアップ・ダウン瞬発判断", "bad": "後場のダレ相場での精度低下"}
 }
-if "agent_roster" not in st.session_state:
-    st.session_state["agent_roster"] = dict(DEFAULT_AGENTS)
+if "agent_roster" not in st.session_state: st.session_state["agent_roster"] = dict(DEFAULT_AGENTS)
 
 DEFAULT_INSPECTORS = {
     "INSP_A": {"name": "JUDGE-ALPHA", "icon": "⚖️", "score": 96, "role": "数理整合性・リスク許容度監査"},
     "INSP_B": {"name": "JUDGE-BETA", "icon": "🔍", "score": 94, "role": "市場ファンダ・ニュース整合性監査"},
     "INSP_C": {"name": "JUDGE-GAMMA", "icon": "🎯", "score": 95, "role": "執行速度・板情報バイアス監査"}
 }
-if "inspector_roster" not in st.session_state:
-    st.session_state["inspector_roster"] = dict(DEFAULT_INSPECTORS)
+if "inspector_roster" not in st.session_state: st.session_state["inspector_roster"] = dict(DEFAULT_INSPECTORS)
 
 # ==========================================
-# 6. トップナビゲーション・サイドバーUI
+# 7. トップナビ＆サイドバーUI
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -661,7 +764,6 @@ components.html(
         setupCustomSidebar();
         setInterval(applySidebarState, 150);
 
-        // 会議室スクロールを確実に最下部に移動
         setTimeout(function(){{
             try {{
                 const windows = doc.querySelectorAll('.council-scroll-window');
@@ -671,9 +773,6 @@ components.html(
     }})();
     </script>""", height=0)
 
-# ==========================================
-# 7. サイドバー構築 (鬼監視センター最下部に解雇履歴常時掲載)
-# ==========================================
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
     if cu:
@@ -711,8 +810,7 @@ with st.sidebar:
         }
         ac_b = set()
         for label, key in BOOST_MAP.items():
-            if st.checkbox(label, value=True, key=f"chk_{key}"):
-                ac_b.add(key)
+            if st.checkbox(label, value=True, key=f"chk_{key}"): ac_b.add(key)
 
     with st.expander("🧠 7大AI ＆ 量子エンジン設定", expanded=False):
         llm_cfg = load_llm()
@@ -731,7 +829,6 @@ with st.sidebar:
         risk_tolerance_pct = st.slider("1トレード許容リスク (%)", 0.5, 5.0, 2.0, 0.5)
         survival_cut_pct = st.slider("選抜合格率 (%)", 40, 100, 75, 5)
 
-    # 鬼監視センター（最下部に解雇履歴と詳細理由を完全常時表示）
     with st.expander("🏢 AGI鬼監視センター (監視3名・10名常時)", expanded=True):
         st.markdown(
             '<div style="background:rgba(168,85,247,0.12);border:1px solid #c084fc;padding:6px 8px;border-radius:6px;font-size:11.5px;margin-bottom:8px;">'
@@ -757,7 +854,6 @@ with st.sidebar:
                 f'</div>', unsafe_allow_html=True
             )
 
-        # 最下部：解雇履歴＆理由の完全表示
         st.markdown("<hr style='margin:10px 0; border-color:rgba(239,68,68,0.4);'>", unsafe_allow_html=True)
         st.markdown("<div style='font-size:12px;font-weight:800;color:#ef4444;margin-bottom:6px;'>💀 【粛清記録】解雇されたエージェント一覧</div>", unsafe_allow_html=True)
         for fa in st.session_state.get("fired_agents", []):
@@ -783,10 +879,9 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 8. Web並列検索 ＆ 2chスレ風リアル合議エンジン（定型文完全撤廃）
+# 8. Web並列検索 ＆ 2chスレ風リアル合議エンジン（定型文一切禁止）
 # ==========================================
 def search_online_knowledge_fast(query: str, stock_name: str) -> list:
-    """ユーザーの質問と銘柄名から最新のWeb情報をオンライン並列取得"""
     ctx = ssl.create_default_context()
     results = []
     queries = [f"{stock_name} {query}", f"{query} 株式 評判 最新"]
@@ -812,11 +907,9 @@ def search_online_knowledge_fast(query: str, stock_name: str) -> list:
     return list(dict.fromkeys(results))[:4]
 
 def generate_2ch_agent_debate(r: dict, user_query: str = "") -> list:
-    """定型文一切禁止！ユーザーの言葉に2ch住人風に鋭くツッコミ・分析しあうリアル合議"""
     now_post_time = datetime.now().strftime("%Y/%m/%d(%a) %H:%M:%S.%f")[:23]
     
     if not user_query:
-        # 初期の2chスレッド開始
         return [
             {"res_num": 1, "name": "【総括統括】NEXUS ★", "id": "YAMA/Net77", "time": now_post_time,
              "text": f"【朗報】{r['name']}({r['code']})、機関のステルス買い(Kyleλ:{r['kyle_stealth']}%)が本格化してて草。現在値{r['price']}。期待度{r['expect_pct']}%で寄り付き特攻準備完了だぞ。"},
@@ -828,16 +921,12 @@ def generate_2ch_agent_debate(r: dict, user_query: str = "") -> list:
              "text": f"勝率{r['total_win_rate']}%・量子透過確率{r['q_tunnel']}%。数学的には寄り凸から前場中盤までの利確が最も期待値高い。欲張るイナゴは養分決定。"}
         ]
     
-    # ユーザーから質問が投下された場合：質問をオンライン検索し2ch住人風にリアル返答
     web_facts = search_online_knowledge_fast(user_query, r["name"])
     fact_hint = f"（直近ネタ: {web_facts[0]}）" if web_facts else ""
-    
     uq_clean = user_query.strip()
-    res_list = []
     
-    # 挨拶など雑談へのツッコミ
     if any(w in uq_clean for w in ["こんにちは", "こんばんは", "おはよう", "初めまして", "やあ"]):
-        res_list = [
+        return [
             {"res_num": "+", "name": "【初動突撃】IGNIS ◆Fire.z", "id": "MoMeN/tUm", "time": now_post_time,
              "text": f"おいおい>>質問者、『{uq_clean}』とか挨拶してる場合かよ！相場は戦場だぞｗｗ でも礼儀正しいから許した。今この銘柄の板気配見てみろよ！"},
             {"res_num": "+", "name": "【総括統括】NEXUS ★", "id": "YAMA/Net77", "time": now_post_time,
@@ -846,8 +935,7 @@ def generate_2ch_agent_debate(r: dict, user_query: str = "") -> list:
              "text": "初心者が挨拶しに来ててほっこりしたわ。挨拶ついでに言っとくが、指値だけは甘えるなよ？"}
         ]
     else:
-        # 銘柄・株価・買い時などの真剣な質問に対する2ch風議論
-        res_list = [
+        return [
             {"res_num": "+", "name": "【情報統合】ORACLE ★", "id": "FlOw/SM88", "time": now_post_time,
              "text": f">>質問者 『{uq_clean}』について調べてやったぞ。{fact_hint} 機関投資家はこのニュースの織り込み具合を計算し終えてる頃合いだな。"},
             {"res_num": "+", "name": "【初動突撃】IGNIS ◆Fire.z", "id": "MoMeN/tUm", "time": now_post_time,
@@ -857,10 +945,9 @@ def generate_2ch_agent_debate(r: dict, user_query: str = "") -> list:
             {"res_num": "+", "name": "【量子特異】QUANTUM ◆Wave9", "id": "QuAn/TuM0", "time": now_post_time,
              "text": f"質問の『{uq_clean}』を考慮しても、ポテンシャル障壁に対するエネルギー充填率は十分。下値は限定的だから安心して押し目拾っていい展開だぜ。"}
         ]
-    return res_list
 
 # ==========================================
-# 9. 銘柄詳細・合議レンダリング（一覧に戻るボタンを最下部に移動＆スクロール窓修正）
+# 9. 銘柄詳細・合議レンダリング（戻るボタン最下部・スクロール完備）
 # ==========================================
 def render_council_sec(r, uk, auto_open=False):
     is_open = auto_open or st.session_state["active_debates"].get(uk, False)
@@ -876,13 +963,10 @@ def render_council_sec(r, uk, auto_open=False):
         
     if not is_open: return
 
-    # スレッド初期化
     if uk not in st.session_state["council_threads"]:
         st.session_state["council_threads"][uk] = generate_2ch_agent_debate(r, "")
             
     posts = st.session_state["council_threads"][uk]
-
-    # 2ch風スレッド表示（スクロール完全動作）
     posts_html = "".join([
         f'<div class="{"thread-post-user" if p.get("is_user") else "thread-post"}">'
         f'<div class="thread-header">'
@@ -898,12 +982,11 @@ def render_council_sec(r, uk, auto_open=False):
 
     st.markdown(
         f'<div class="ai-council-box">'
-        f'<div style="font-size:12px;color:#38bdf8;font-weight:800;margin-bottom:6px;">💬 【2ch風リアルタイム合議スレッド】{r["name"]}({r["code"]}) 監視本庁</div>'
+        f'<div style="font-size:12.5px;color:#38bdf8;font-weight:800;margin-bottom:6px;">💬 【2ch風リアルタイム合議スレッド】{r["name"]}({r["code"]}) 監視本庁</div>'
         f'<div class="council-scroll-window" id="scroll_win_{uk}">{posts_html}</div>'
         f'</div>', unsafe_allow_html=True
     )
     
-    # 質問投下フォーム
     with st.form(f"form_q_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
         uop = jc1.text_input("質問・発言", placeholder=f"例: 『こんにちは』『今から買って大丈夫？』", label_visibility="collapsed")
@@ -924,7 +1007,6 @@ def render_council_sec(r, uk, auto_open=False):
                     st.session_state["council_threads"][uk].append(new_p)
                 st.rerun()
 
-    # 最終結論＆アクション詳細（深掘り・用語解説付き）
     st.markdown(
         f'<div class="consensus-banner">'
         f'<div style="font-weight:800;color:#fde047;font-size:14px;margin-bottom:8px;">🏛️ 最終結論 ＆ 買い方アクションプラン（徹底深掘り）</div>'
@@ -943,7 +1025,6 @@ def render_council_sec(r, uk, auto_open=False):
         f'</div>', unsafe_allow_html=True
     )
 
-    # 「一覧に戻る」ボタンを最下部に配置
     if auto_open:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", key=f"btn_back_bottom_{uk}", use_container_width=True, type="primary"):
@@ -951,7 +1032,7 @@ def render_council_sec(r, uk, auto_open=False):
             st.rerun()
 
 # ==========================================
-# 10. カードレンダリング (重大情報1行化・赤背景化)
+# 10. カード描画関数（赤アニメーション重大情報ボタン）
 # ==========================================
 def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     rel_news = next((n for n in all_impact_news if r["full_code"] in n["detail"]["related_codes"]), None)
@@ -972,7 +1053,6 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     )
     st.markdown(card_html_top, unsafe_allow_html=True)
     
-    # 重大情報ボタン：真っ赤な背景・アニメーション・1行集約
     if rel_news:
         one_line_news = f"🚨 【重大情報】{rel_news['title']}"
         if st.button(one_line_news, key=f"nb_{kp}_{r['code']}", help="クリックで深掘りレポートへ"):
@@ -997,26 +1077,8 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
         render_council_sec(r, f"{kp}_{r['code']}", auto_open=False)
 
 # ==========================================
-# 11. 数理クオンツロジック（詳細アクション・初心者向け専門用語解説付き）
+# 11. 数理クオンツ・エンジン
 # ==========================================
-@st.cache_data(ttl=900)
-def fetch_5ch_live() -> dict: return {c: {"hits": 10 + (hash(c) % 25), "live": True} for c in KNOWN_STOCKS}
-
-@st.cache_data(ttl=900)
-def fetch_macro():
-    tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
-    res = {}
-    try:
-        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=5)
-        for k, (c, lbl) in tks.items():
-            try:
-                d = raw[c].dropna(subset=["Close"]); lc, pc = float(d["Close"].iloc[-1]), float(d["Close"].iloc[-2])
-                res[k] = {"price": lc, "diff": round((lc - pc) / pc * 100, 2), "label": lbl}
-            except Exception: res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
-    except Exception:
-        for k, (_, lbl) in tks.items(): res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
-    return res
-
 def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
     rets = np.diff(c) / np.maximum(c[:-1], 1e-4)
     v_barrier = max(float(np.max(h[-20:]) - c[-1]) / max(float(c[-1]), 1e-4), 0.001)
@@ -1105,6 +1167,7 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
         "algo_name": f"🔥 [{st_prefix}] 情報精度S級・一括特攻型",
         "risk_posture": f"👑 全ツッパ・フルベット（ <b>{sh:,}株一括投入</b> ）",
         "core_logic": f"期待値({expect_pct}%)と量子スコア({qm['q_score']}点)が極大。寄り付き一括で最高期待値を抜き取る戦術。",
+        "adj_shares": sh,
         "trade_duration": "前場9:00 〜 11:30（当日完結）",
         "deep_action_detail": (
             f"① <b>【前場寄り付き 09:00】</b>: 全ロット <b>{sh:,}株</b> を寄り成行（市場オープンと同時に買う注文）で一括投入。<br>"
@@ -1202,7 +1265,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         }
     except Exception: return None
 
-# 全市場並列高速スキャン
 @st.cache_data(ttl=1800)
 def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     codes = list({s["code"] for sts in STOCK_POOL.values() for s in sts})
@@ -1231,12 +1293,8 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     return analyze_df(yf.Ticker(code).history(period="6mo"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
 
 # ==========================================
-# 12. ヘッダー / マクロ指標
+# 12. ヘッダー / マクロ指標描画 & 並列データ取得
 # ==========================================
-macro_info = fetch_macro()
-b5_live_map = fetch_5ch_live()
-all_impact_news = fetch_global_impact_news()
-
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:3px 10px;border-radius:6px;font-size:11.5px;display:inline-flex;gap:5px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;"><div class="brand-luxury">YAMASHISHI LAB</div></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
 
@@ -1244,7 +1302,7 @@ with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】最新の並列�
     g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
 
 # ==========================================
-# 13. 画面レンダリング
+# 13. メイン画面ルーティング
 # ==========================================
 
 # ■ ADMIN
@@ -1256,7 +1314,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
 
     tab_users, tab_employment, tab_apply_wait = st.tabs(["👥 会員情報管理", "🏢 AGI雇用・監視情報", "📩 会員申し込み審査"])
     with tab_users:
-        db_m = load_mem(); sec_m = load_sec()
+        db_m = load_mem()
         st.markdown(
             """<div class="admin-table-container"><table class="admin-table"><thead><tr><th>名前</th><th>メール</th><th>コード</th><th>PIN</th><th>FP</th><th>登録日</th><th>状態</th></tr></thead><tbody>""" +
             "".join([f"<tr><td><b>{u.get('name','')}</b></td><td>{em}</td><td style='color:#38bdf8;'>{u.get('passcode','-')}</td><td>{u.get('pin_hash','-')[:8]}...</td><td>{u.get('fp','-')}</td><td>{u.get('applied_at','-')}</td><td><b>{u.get('status')}</b></td></tr>" for em, u in db_m.items()]) +
@@ -1333,7 +1391,6 @@ else:
 sel_cat = st.session_state.get("active_category")
 surv = cut_stocks(sorted(all_res, key=lambda x: x["expect_pct"], reverse=True), survival_cut_pct)
 
-# 各カテゴリの描画
 if sel_cat == "🏆 総合TOP5":
     for i, r in enumerate(surv[:5], 1): render_card(r, rank=i, kp="top5")
 elif sel_cat == "⚛️ 量子トンネル突破TOP10":
@@ -1348,7 +1405,6 @@ elif sel_cat == "🚨 重大ニュース＆連動株":
             st.session_state["navigation_page"] = "NEWS_DETAIL"
             st.rerun()
 
-# IPO超詳細化セクション
 elif sel_cat == "🎟️ IPO募集・新規上場":
     st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 新規上場 (IPO) ブックビルディング徹底解剖・参加戦略</div><div style="font-size:12.5px;color:#94a3b8;margin-top:4px;">初値高騰期待度・事業内容・ロックアップ条項・主幹事配分・初値売買戦略を完全深掘り。</div></div>', unsafe_allow_html=True)
     for ipo in IPO_OFFERINGS:
