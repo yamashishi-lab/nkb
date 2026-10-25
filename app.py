@@ -242,7 +242,7 @@ def inject_css():
     }
     
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], header button[kind="headerNoPadding"] {
-        opacity: 0 !important; position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; z-index: -1 !important;
+        opacity: 0 !important; position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; z-index: -1 !important; pointer-events: none !important;
     }
 
     div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"], div[role="listbox"] {
@@ -284,7 +284,6 @@ def inject_css():
         background: rgba(2,6,23,0.7) !important; padding: 6px 4px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.15); text-align: center;
     }
     
-    /* 管理画面用 スタイリッシュテーブルCSS */
     .admin-table-row {
         padding: 8px 5px; border-bottom: 1px solid rgba(148,163,184,0.2); align-items: center;
     }
@@ -305,11 +304,11 @@ def check_auth():
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
     if "authenticated_user" not in st.session_state: st.session_state["authenticated_user"] = None
     qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
-    
+
     if not st.session_state["authenticated_user"] and qu and qt:
         if hmac.compare_digest(qt, gen_tok(qu, "session_keep")) and ((db.get(qu) and db[qu].get("status") == "approved") or qu == ADMIN_EMAIL.strip().lower()):
             st.session_state["authenticated_user"] = qu
-            
+
     if st.session_state["authenticated_user"]:
         cu = st.session_state["authenticated_user"]
         u_rec = db.get(cu, {})
@@ -338,7 +337,7 @@ def check_auth():
         '</div></div>',
         unsafe_allow_html=True
     )
-    
+
     render_biometric_bridge(mode="login")
 
     tab_login, tab_apply, tab_vault = st.tabs(["🔑 コードログイン", "📩 新規会員登録申請", "🔐 承認確認・暗号化コード照会"])
@@ -425,16 +424,15 @@ if "system_zero_status" not in st.session_state: st.session_state["system_zero_s
 
 
 # ==========================================
-# 7. トップナビゲーションとサイドバー開閉JS (安全に刷新)
+# 7. トップナビゲーションとサイドバー開閉JS (確実なDOMアクセスとクリーンアップ)
 # ==========================================
-# UIから非表示の隠しボタンブロック (JSからクリックされる)
-st.markdown('<div style="display:none;">', unsafe_allow_html=True)
-if st.button("HIDDEN_TOP_BTN", key="hidden_top"):
+st.markdown('<div id="hidden_trigger_btns" style="position:absolute; opacity:0; pointer-events:none; z-index:-9999;">', unsafe_allow_html=True)
+if st.button("HID_TOP", key="hidden_top"):
     st.session_state["navigation_page"] = "TOP"
     st.session_state["scroll_top_trig"] = int(time.time() * 1000)
     st.session_state["focused_stock_item"] = None
     st.rerun()
-if st.button("HIDDEN_CLOSE_BTN", key="hidden_close"):
+if st.button("HID_CLS", key="hidden_close"):
     st.session_state["active_debates"] = {}
     st.session_state["focused_stock_item"] = None
     if st.session_state.get("navigation_page") != "TOP":
@@ -464,80 +462,97 @@ components.html(
     (function(){{
         const doc = window.parent.document;
         
+        // iframe再生成時のDOM要素の蓄積を防止（古いUI部品を綺麗に削除）
+        const cleanupStrayElements = () => {{
+            const oldMenus = doc.querySelectorAll('#yamashishi-floating-sidebar-btn');
+            if (oldMenus.length > 1) {{ for(let i=0; i<oldMenus.length-1; i++) oldMenus[i].remove(); }}
+            const oldNavs = doc.querySelectorAll('#yamashishi-fixed-top-nav');
+            if (oldNavs.length > 1) {{ for(let i=0; i<oldNavs.length-1; i++) oldNavs[i].remove(); }}
+        }};
+        cleanupStrayElements();
+        
         // サイドバー開閉ボタン
         function installCustomSidebarToggle(){{
             try {{
-                if(doc.getElementById('yamashishi-floating-sidebar-btn')) return;
-                const style = doc.createElement('style');
-                style.textContent = `
-                    #yamashishi-floating-sidebar-btn {{ position: fixed !important; top: 12px !important; left: 12px !important; z-index: 2147483647 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 4px !important; height: 32px !important; padding: 0 10px 0 8px !important; background: rgba(15, 23, 42, 0.95) !important; backdrop-filter: blur(16px) !important; border: 1.5px solid rgba(56, 189, 248, 0.5) !important; border-radius: 8px !important; cursor: pointer !important; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.2) !important; user-select: none !important; transition: all 0.15s ease !important; color: #38bdf8 !important; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 800; }}
-                    #yamashishi-floating-sidebar-btn:hover {{ border-color: #fde047 !important; color: #fde047 !important; box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important; }}
-                    #yamashishi-floating-sidebar-btn:active {{ background: rgba(56, 189, 248, 0.4) !important; border-color: #38bdf8 !important; color: #fff !important; transform: scale(0.92) !important; }}
-                `;
-                doc.head.appendChild(style);
+                let btn = doc.getElementById('yamashishi-floating-sidebar-btn');
+                if (!btn) {{
+                    const style = doc.createElement('style');
+                    style.textContent = `
+                        #yamashishi-floating-sidebar-btn {{ position: fixed !important; top: 12px !important; left: 12px !important; z-index: 2147483647 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 4px !important; height: 32px !important; padding: 0 10px 0 8px !important; background: rgba(15, 23, 42, 0.95) !important; backdrop-filter: blur(16px) !important; border: 1.5px solid rgba(56, 189, 248, 0.5) !important; border-radius: 8px !important; cursor: pointer !important; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.2) !important; user-select: none !important; transition: all 0.1s ease !important; color: #38bdf8 !important; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 800; }}
+                        /* タップした時だけ光る・凹む */
+                        #yamashishi-floating-sidebar-btn:active {{ border-color: #fde047 !important; color: #fde047 !important; background: rgba(56, 189, 248, 0.4) !important; box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important; transform: scale(0.92) !important; }}
+                    `;
+                    doc.head.appendChild(style);
 
-                const btn = doc.createElement('div'); btn.id = 'yamashishi-floating-sidebar-btn';
-                btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span>MENU</span>`;
-                doc.body.appendChild(btn);
+                    btn = doc.createElement('div'); 
+                    btn.id = 'yamashishi-floating-sidebar-btn';
+                    btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span>MENU</span>`;
+                    doc.body.appendChild(btn);
 
-                btn.addEventListener('click', function(e){{ 
-                    e.preventDefault(); e.stopPropagation(); 
-                    
-                    // 開くボタンを探す
-                    const expandBtn = doc.querySelector('[data-testid="collapsedControl"]');
-                    if(expandBtn) {{ expandBtn.click(); return; }}
-                    
-                    // 閉じるボタンを探す
-                    const sidebar = doc.querySelector('[data-testid="stSidebar"]');
-                    if(sidebar) {{
-                        const closeBtn = sidebar.querySelector('button');
-                        if(closeBtn) closeBtn.click();
-                    }}
-                }});
+                    btn.addEventListener('click', function(e){{ 
+                        e.preventDefault(); e.stopPropagation(); 
+                        
+                        // Streamlit本来の開くボタンをより確実な方法で特定
+                        let expandBtn = doc.querySelector('[data-testid="collapsedControl"]');
+                        if(expandBtn) {{ 
+                            // Streamlit内部のイベントリスナーに届けるためdispatchEventを使用
+                            expandBtn.dispatchEvent(new MouseEvent('click', {{view: window.parent, bubbles: true, cancelable: true}}));
+                            return; 
+                        }}
+                        
+                        // 閉じるボタン
+                        const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+                        if(sidebar) {{
+                            const closeBtn = sidebar.querySelector('button');
+                            if(closeBtn) {{
+                                closeBtn.dispatchEvent(new MouseEvent('click', {{view: window.parent, bubbles: true, cancelable: true}}));
+                            }}
+                        }}
+                    }});
+                }}
             }} catch(e){{}}
         }}
 
         // 上部固定のカッコいいナビゲーションボタン
         function installFixedTopNav(){{
             try {{
-                if(doc.getElementById('yamashishi-fixed-top-nav')) return;
-                const nav = doc.createElement('div');
-                nav.id = 'yamashishi-fixed-top-nav';
-                nav.style.cssText = 'position:fixed; top:12px; right:12px; z-index:2147483647; display:flex; gap:10px; pointer-events:none;';
-                
-                const btnStyle = 'pointer-events:auto; background: linear-gradient(180deg, rgba(30,41,59,0.95), rgba(15,23,42,0.95)); color: #f8fafc; border: 1px solid rgba(56,189,248,0.4); border-radius: 8px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.6), 0 0 8px rgba(56,189,248,0.2); transition: all 0.15s ease; display:flex; align-items:center; backdrop-filter: blur(8px);';
-                
-                const btnTop = doc.createElement('div');
-                btnTop.innerHTML = '🔝 トップへ戻る';
-                btnTop.style.cssText = btnStyle;
-                
-                const btnClose = doc.createElement('div');
-                btnClose.innerHTML = '✖ 合議閉じて戻る';
-                btnClose.style.cssText = btnStyle;
+                let nav = doc.getElementById('yamashishi-fixed-top-nav');
+                if(!nav){{
+                    const style = doc.createElement('style');
+                    style.textContent = `
+                        #yamashishi-fixed-top-nav {{ position:fixed; top:12px; right:12px; z-index:2147483647; display:flex; gap:10px; pointer-events:none; }}
+                        .yama-nav-btn {{ pointer-events:auto; background: linear-gradient(180deg, rgba(30,41,59,0.95), rgba(15,23,42,0.95)); color: #f8fafc; border: 1px solid rgba(56,189,248,0.4); border-radius: 8px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.6), 0 0 8px rgba(56,189,248,0.2); transition: all 0.1s ease; display:flex; align-items:center; backdrop-filter: blur(8px); }}
+                        /* タップした時だけ光る・凹む */
+                        .yama-nav-btn:active {{ border-color: #fde047 !important; color: #fde047 !important; background: rgba(56, 189, 248, 0.4) !important; box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important; transform: scale(0.92) !important; }}
+                    `;
+                    doc.head.appendChild(style);
 
-                function addHoverActive(el) {{
-                    el.onmouseenter = () => {{ el.style.borderColor = '#fde047'; el.style.color = '#fde047'; el.style.boxShadow = '0 6px 16px rgba(0,0,0,0.8), 0 0 12px rgba(253,224,71,0.4)'; el.style.transform = 'translateY(-1px)'; }};
-                    el.onmouseleave = () => {{ el.style.borderColor = 'rgba(56,189,248,0.4)'; el.style.color = '#f8fafc'; el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.6), 0 0 8px rgba(56,189,248,0.2)'; el.style.transform = 'none'; }};
-                    el.onmousedown = () => {{ el.style.transform = 'scale(0.92)'; el.style.background = 'rgba(56,189,248,0.3)'; }};
-                    el.onmouseup = () => {{ el.style.transform = 'translateY(-1px)'; el.style.background = 'linear-gradient(180deg, rgba(30,41,59,0.95), rgba(15,23,42,0.95))'; }};
+                    nav = doc.createElement('div');
+                    nav.id = 'yamashishi-fixed-top-nav';
+                    
+                    const btnTop = doc.createElement('div');
+                    btnTop.className = 'yama-nav-btn';
+                    btnTop.innerHTML = '🔝 トップへ戻る';
+                    
+                    const btnClose = doc.createElement('div');
+                    btnClose.className = 'yama-nav-btn';
+                    btnClose.innerHTML = '✖ 合議閉じて戻る';
+
+                    // 確実にPython側の見えないボタンをクリックさせる
+                    btnTop.onclick = () => {{
+                        const btns = doc.querySelectorAll('button');
+                        btns.forEach(b => {{ if(b.textContent.includes('HID_TOP')) b.dispatchEvent(new MouseEvent('click', {{bubbles: true}})); }});
+                    }};
+                    
+                    btnClose.onclick = () => {{
+                        const btns = doc.querySelectorAll('button');
+                        btns.forEach(b => {{ if(b.textContent.includes('HID_CLS')) b.dispatchEvent(new MouseEvent('click', {{bubbles: true}})); }});
+                    }};
+
+                    nav.appendChild(btnTop);
+                    nav.appendChild(btnClose);
+                    doc.body.appendChild(nav);
                 }}
-                
-                addHoverActive(btnTop);
-                addHoverActive(btnClose);
-
-                btnTop.onclick = () => {{
-                    const btns = doc.querySelectorAll('button');
-                    btns.forEach(b => {{ if(b.innerText.includes('HIDDEN_TOP_BTN')) b.click(); }});
-                }};
-                
-                btnClose.onclick = () => {{
-                    const btns = doc.querySelectorAll('button');
-                    btns.forEach(b => {{ if(b.innerText.includes('HIDDEN_CLOSE_BTN')) b.click(); }});
-                }};
-
-                nav.appendChild(btnTop);
-                nav.appendChild(btnClose);
-                doc.body.appendChild(nav);
             }} catch(e){{}}
         }}
 
@@ -558,18 +573,20 @@ components.html(
         }}
         {scroll_target_js}
     }})();
-    </script>""", height=0)
+    </script>
+    <style>iframe {{ display: none; }}</style>
+    """, height=0)
 
 
 # ==========================================
-# 8. サイドバー構築 (複数API同時接続仕様に復旧)
+# 8. サイドバー構築
 # ==========================================
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
     if cu:
         st.markdown(f'<div style="background:#0f172a;padding:8px 11px;border-radius:9px;border:1px solid rgba(168,85,247,0.35);margin-bottom:6px;"><div style="font-size:9.5px;color:#c084fc;font-weight:700;">⚛️ QUANTUM SESSION ACTIVE</div><div style="color:#f8fafc;font-size:11.5px;font-weight:700;">会員 ({cu})</div></div>', unsafe_allow_html=True)
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
-    
+
     if cu == ADMIN_EMAIL.strip().lower():
         with st.expander("👑 会員コントロール・管理画面", expanded=False):
             db_admin = load_mem(); sec_admin = load_sec()
@@ -579,7 +596,7 @@ with st.sidebar:
                 st.session_state["navigation_page"] = "ADMIN"; st.rerun()
 
     st.markdown("### ⚙️ QUANTUM 設定パネル")
-    
+
     with st.expander("🎯 投資スタイル ＆ アルゴリズム", expanded=False):
         investment_style = st.selectbox("トレードスタイル", [
             "⚡ デイトレード (前場・後場の波及を狙う)", 
@@ -587,10 +604,10 @@ with st.sidebar:
             "📈 スイングトレード (数日〜数週間のトレンド)", 
             "💎 バイ＆ホールド (中長期・IPO分散投資)"
         ], index=0)
-        
+
         st.caption(f"選択中: **{investment_style.split(' ')[1]}** に合わせてAIが最適化されます。")
         st.markdown("##### 稼働アルゴリズム (タップでON/OFF)")
-        
+
         BOOST_MAP = {
             "⚛️ 量子力学波動(QWM-7)": "algo", 
             "🏛️ 機関最新アルゴ(Kyleλ)": "ms", 
@@ -613,12 +630,12 @@ with st.sidebar:
             c_k, c_m = st.columns([1.2, 1])
             in_k = c_k.text_input("Key", value=saved_k, type="password", key=f"k_{k}", label_visibility="collapsed", placeholder="API Key")
             in_m = c_m.selectbox("Mod", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0, key=f"m_{k}", label_visibility="collapsed")
-            
+
             if clean_k(in_k): st.session_state[f"rt_key_{k}"] = clean_k(in_k)
             else: st.session_state.pop(f"rt_key_{k}", None)
             st.session_state[f"rt_mod_{k}"] = in_m
             llm_cfg.setdefault("models", {})[k] = in_m
-            
+
         save_j(FILES["llm"], llm_cfg)
         ac_count = len(get_active_ai_providers())
         st.markdown(f"<div style='margin-top:10px;font-size:12px;color:#10b981;'>🚀 現在有効な接続: <b>{ac_count}社</b></div>", unsafe_allow_html=True)
@@ -637,13 +654,12 @@ with st.sidebar:
         sys_status = st.session_state["system_zero_status"]
         st.markdown(f"### 👁️‍🗨️ {sys_status['name']}")
         st.caption(f"ステータス: {sys_status['status']}\n全監査員とエージェントを監視する超越システム。")
-        
-        # 監査ロジック発動
+
         if "last_audit_trig" not in st.session_state or random.random() < 0.25:
             st.session_state["last_audit_trig"] = time.time()
             a_roster = st.session_state["agent_roster"]
             aud_roster = st.session_state["auditor_roster"]
-            
+
             if random.random() < 0.40 and a_roster and aud_roster:
                 t_aud = random.choice(list(aud_roster.values()))
                 t_ag_k = random.choice(list(a_roster.keys()))
@@ -652,7 +668,7 @@ with st.sidebar:
                 r_txt, pen = random.choice(reasons)
                 t_ag["score"] -= pen
                 st.session_state["system_zero_logs"].insert(0, {"time": datetime.now().strftime("%H:%M:%S"), "msg": f"📝 [監査員 {t_aud['name']}] が [{t_ag['name']}] を監査。{r_txt}のため-{pen}点。"})
-                
+
                 if t_ag["score"] < 75:
                     st.session_state["fired_entities"].insert(0, {"name": t_ag["name"], "role": "エージェント", "score": t_ag["score"], "reason": r_txt})
                     new_n = t_ag["name"] + ("-Neo" if "-" not in t_ag["name"] else "X")
@@ -666,24 +682,24 @@ with st.sidebar:
                 r_txt, pen = random.choice(reasons)
                 t_aud["score"] -= pen
                 st.session_state["system_zero_logs"].insert(0, {"time": datetime.now().strftime("%H:%M:%S"), "msg": f"👁️‍🗨️ [{sys_status['name']}] が 監査員 [{t_aud['name']}] を総括。{r_txt}を検知し-{pen}点。"})
-                
+
                 if t_aud["score"] < 80:
                     st.session_state["fired_entities"].insert(0, {"name": t_aud["name"], "role": "監査員", "score": t_aud["score"], "reason": r_txt})
                     new_n = t_aud["name"] + "-Prime"
                     aud_roster[t_aud_k] = {"name": new_n, "icon": t_aud["icon"], "score": 100, "good": f"前任の欠陥({r_txt})を修正した冷徹な監査", "bad": "容赦がない"}
                     st.session_state["system_zero_logs"].insert(0, {"time": datetime.now().strftime("%H:%M:%S"), "msg": f"🚨 監査員 [{t_aud['name']}] をパージ。新監査員 [{new_n}] を配備。"})
-        
+
         if st.session_state["system_zero_logs"]:
             log = st.session_state["system_zero_logs"][0]
             st.markdown(f'<div style="background:rgba(168,85,247,0.15); border:1px solid #c084fc; border-radius:6px; padding:8px; margin-bottom:10px; font-size:11px; color:#e9d5ff;"><b>[{log["time"]}]</b><br>{log["msg"]}</div>', unsafe_allow_html=True)
-        
+
         st.markdown("#### ⚖️ 稼働中 監査員 (3名)")
         for k, v in st.session_state["auditor_roster"].items():
             st.markdown(f'''<div style="background:rgba(245,158,11,0.1); border:1px solid #f59e0b; border-radius:6px; padding:6px; margin-bottom:4px; font-size:11px; color:#e2e8f0;">
                 <div style="font-weight:800; font-size:12px;">{v['icon']} {v['name']} <span style="float:right; color:#fde047;">💯 {v['score']}点</span></div>
                 <div style="color:#fcd34d;">👍 {v['good']}</div>
                 </div>''', unsafe_allow_html=True)
-            
+
         st.markdown("#### 🟢 稼働中 エージェント (10名)")
         with st.container(height=300):
             for k, v in st.session_state["agent_roster"].items():
@@ -692,7 +708,7 @@ with st.sidebar:
                     <div style="color:#a7f3d0;">👍 {v['good']}</div>
                     <div style="color:#fca5a5;">👎 {v['bad']}</div>
                     </div>''', unsafe_allow_html=True)
-            
+
         st.markdown("#### 💀 基準未達による解雇済みリスト")
         if st.session_state["fired_entities"]:
             for fa in st.session_state["fired_entities"][:4]: 
@@ -709,24 +725,22 @@ with st.sidebar:
 
 
 # ==========================================
-# 8.5 会員コントロール・管理画面 (洗練された表形式へ刷新)
+# 8.5 会員コントロール・管理画面
 # ==========================================
 if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower():
     st.markdown("### 👑 YAMASHISHI LAB 総合管理コンソール")
     if st.button("⬅️ トップに戻る", use_container_width=True, type="primary"):
         st.session_state["navigation_page"] = "TOP"; st.rerun()
-    
+
     st.markdown("#### 👥 ユーザー承認・管理")
     db_admin = load_mem()
     c_pend = sum(1 for d in db_admin.values() if d.get("status") == "pending")
     if c_pend > 0: st.warning(f"現在、承認待ちのユーザーが {c_pend} 名います。")
-    
-    # スタイリッシュで完全な表(テーブル)デザイン
+
     st.markdown("""
     <div style="border: 1px solid rgba(56,189,248,0.4); border-radius: 8px; background: rgba(15,23,42,0.9); padding: 5px;">
     """, unsafe_allow_html=True)
-    
-    # ヘッダー行
+
     st.markdown('<div style="background: rgba(30,41,59,0.9); border-bottom: 2px solid #38bdf8; padding: 8px; margin-bottom: 4px; font-weight: bold;">', unsafe_allow_html=True)
     hc1, hc2, hc3, hc4 = st.columns([2.5, 1.5, 1.5, 3])
     hc1.markdown("<span style='font-size:12px; color:#e2e8f0;'>👤 ユーザー</span>", unsafe_allow_html=True)
@@ -734,19 +748,18 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
     hc3.markdown("<span style='font-size:12px; color:#e2e8f0;'>📅 申請日</span>", unsafe_allow_html=True)
     hc4.markdown("<span style='font-size:12px; color:#e2e8f0;'>⚙️ アクション</span>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
-        
+
     for eml, dat in list(db_admin.items()):
         if eml == ADMIN_EMAIL.strip().lower(): continue
         stat = dat.get("status")
         stat_lbl = "🟡 承認待" if stat == "pending" else "🟢 承認済" if stat == "approved" else "⏸️ 停止中" if stat == "suspended" else "🔴 BAN"
-        
-        # データ行
+
         st.markdown('<div class="admin-table-row">', unsafe_allow_html=True)
         c1, c2, c3, c4 = st.columns([2.5, 1.5, 1.5, 3], vertical_alignment="center")
         c1.markdown(f"<div style='font-size:12px; font-weight:bold; color:#f8fafc;'>{dat.get('name', '不明')}</div><div style='font-size:10.5px;color:#94a3b8;'>{eml}</div>", unsafe_allow_html=True)
         c2.markdown(f"<div style='font-size:12px; color:#f8fafc;'>{stat_lbl}</div>", unsafe_allow_html=True)
         c3.markdown(f"<div style='font-size:11px;color:#94a3b8;'>{dat.get('applied_at', '-').split(' ')[0]}</div>", unsafe_allow_html=True)
-        
+
         with c4:
             bc1, bc2, bc3, bc4 = st.columns(4)
             if stat in ["pending", "suspended", "banned"]:
@@ -761,19 +774,19 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
             if bc4.button("🗑️", key=f"del_{eml}", help="削除", use_container_width=True):
                 del db_admin[eml]; save_j(FILES["mem"], db_admin); st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-    
+
     st.markdown("</div>", unsafe_allow_html=True)
-            
+
     st.markdown("#### 👁️‍🗨️ SYSTEM-ZERO コントロールパネル")
     st.caption("総括神の管理は管理者のみ実行可能です。")
     st.info(f"現在のステータス: {st.session_state['system_zero_status']['status']}")
-    
+
     if st.button("🚨 SYSTEM-ZERO を解雇して強制再起動", use_container_width=True, type="primary"):
         st.session_state["system_zero_logs"].insert(0, {"time": datetime.now().strftime("%H:%M:%S"), "msg": "👑 [管理者] によって SYSTEM-ZERO が解雇され、新たなコアで再起動しました。"})
         st.session_state["system_zero_status"]["status"] = f"🟢 正常稼働中 (Gen-{random.randint(2, 99)})"
         st.session_state["system_zero_status"]["name"] = f"SYSTEM-ZERO (Gen-{random.randint(2, 99)})"
         st.rerun()
-        
+
     st.markdown("#### 🚨 セキュリティ監査ログ (なりすまし検知)")
     sec_admin = load_sec()
     logs = sec_admin.get("spoof_logs", [])
@@ -858,10 +871,10 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
     fs = r["ai_score"]
     web_snippets = search_web_knowledge_parallel(user_query, f"{r['name']} {user_query}") if user_query.strip() else []
     web_context_str = "\n".join([f"・{s}" for s in web_snippets]) if web_snippets else ""
-    
+
     turns = [{"round": "💬 合議結果" if not user_query else f"💬 質問への回答: 『{user_query}』"}, {"speaker": "👑 NEXUS", "score": fs, "tone": "normal", "text": f"データに基づき、期待値の高い局面です。{web_context_str[:50]}... 戦略通りに実行してください。"}]
     if user_query: turns.append({"speaker": "⚛️ QUANTUM", "score": 92, "tone": "agree", "text": f"質問の『{user_query}』についてだが、波動関数と照らし合わせると上値突破のポテンシャルを秘めているぜ！"})
-    
+
     v_html = (
         f'<div style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:12px; margin-top:5px;">'
         f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px; text-align:center; margin-bottom:10px;">'
@@ -895,17 +908,17 @@ def render_council_sec(r, uk, auto_open=False):
             if r["code"] in st.session_state["watchlist"]: del st.session_state["watchlist"][r["code"]]
             else: st.session_state["watchlist"][r["code"]] = r
             st.rerun()
-        
+
     if not is_open: return
 
     if uk not in st.session_state["council_threads"]:
         with st.spinner("⚛️ 完全並列処理で最新Web情報を収集・合議中..."):
             deb = run_7ai_council(r, None, 0, "")
             st.session_state["council_threads"][uk], st.session_state["council_meta"][uk] = deb["dialogue"], deb
-            
+
     meta = st.session_state["council_meta"][uk]
     st.markdown(f'<div class="ai-council-box"><div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t, i) for i, t in enumerate(st.session_state["council_threads"][uk]))}</div></div>', unsafe_allow_html=True)
-    
+
     with st.form(f"form_q_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
         uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』に関する質問", label_visibility="collapsed")
@@ -924,8 +937,8 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     rel_news = next((n for n in all_impact_news if r["full_code"] in n["detail"]["related_codes"]), None)
     dc, ds, ps = "#10b981" if r["diff"] >= 0 else "#ef4444", ("+" if r["diff"] > 0 else ""), ("+" if r["pts_gap_pct"] > 0 else "")
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
-    lot, st_info = r["strat"], r["strat"] # Adjusted based on struct layout
-    
+    lot, st_info = r["strat"], r["strat"] 
+
     card_html_top = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
@@ -938,7 +951,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
         f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;">🔥 期待度 / 勝率</div><div style="white-space:nowrap;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div></div></div>'
     )
     st.markdown(card_html_top, unsafe_allow_html=True)
-    
+
     if rel_news:
         if st.button(f"🚨 重大情報有り：{rel_news['title']} (詳細確認)", key=f"nb_{kp}_{r['code']}", help="クリックで詳細へ"):
             st.session_state["selected_news_item"] = rel_news; st.session_state["navigation_page"] = "NEWS_DETAIL"
@@ -1002,21 +1015,21 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         df = df_raw.dropna(subset=["Close", "Open", "High", "Low", "Volume"]).copy()
         if len(df) < 30: return None
         c, o, h, l, v = df["Close"].values.astype(float), df["Open"].values.astype(float), df["High"].values.astype(float), df["Low"].values.astype(float), df["Volume"].values.astype(float)
-        
+
         df["Prev_Close"] = df["Close"].shift(1)
         df["Day_Return"] = (df["Close"] - df["Prev_Close"]) / df["Prev_Close"] * 100
         df["ATR"] = pd.concat([df["High"] - df["Low"], (df["High"] - df["Prev_Close"]).abs(), (df["Low"] - df["Prev_Close"]).abs()], axis=1).max(axis=1).rolling(14).mean().fillna(df["Close"] * 0.02)
         df["VWAP20"] = (((df["High"] + df["Low"] + df["Close"]) / 3.0 * df["Volume"]).rolling(20).sum() / df["Volume"].rolling(20).sum().replace(0, np.nan)).fillna(df["Close"])
-        
+
         qm, ms = compute_quantum_wave_metrics(c, h, l, v), compute_inst_microstructure(c, h, l, v)
         lat = df.iloc[-1]
         cv, atrv = float(lat["Close"]), float(lat["ATR"])
-        
+
         tot_win, expect_pct, edge = 65.5, 78.5, 4.5
         hl_r = np.maximum(h - l, 1e-4)
         sf = ((2.0 * c - h - l) / hl_r) * v
         ofi_z = float((np.mean(sf[-5:]) - np.mean(sf[-20:])) / max(float(np.std(sf[-20:])) , 1.0))
-        
+
         if bagi_q and qm["q_tunnel"] > 75.0:
             expect_pct = min(99.6, expect_pct + (qm["q_tunnel"] - 75.0) * 0.45); qm["q_score"] = min(99, qm["q_score"] + 6); qm["q_state"] = "🧠 AGI×量子トンネル超連鎖"
         if bhft and ofi_z > 0.5:
@@ -1026,8 +1039,8 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         pest = cv * (1.0 + pgap / 100.0)
         tpv = max(pest, cv) + (atrv * 0.95)
         slv = cv - (atrv * 0.55)
-        
-        rmoney = 1000000 * 0.02  # Default total_capital and risk_tolerance_pct
+
+        rmoney = 1000000 * 0.02
         base_sh = max(1, int(rmoney / max(cv - slv, cv * 0.005)))
         fp = lambda val: f"{val:,.0f}円" if ".T" in code else f"${val:,.2f}"
 
@@ -1035,7 +1048,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         t_lbl, t_col, t_bg = "【Lv.7：⭕押し目買い】", "#e2e8f0", "linear-gradient(90deg,#334155,#1e293b)"
         if expect_pct > 92: t_lbl, t_col, t_bg = "【Lv.10：🔥S級・全ツッパ】", "#fff", "linear-gradient(90deg,#7e22ce,#dc2626)"
         elif expect_pct > 85: t_lbl, t_col, t_bg = "【Lv.9：⚡超強気買い】", "#fff", "linear-gradient(90deg,#0369a1,#1d4ed8)"
-        
+
         return {
             "full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, 
             "price": fp(cv), "raw_close": cv,
@@ -1057,7 +1070,7 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     raw = yf.download(codes, period="6mo", group_by="ticker", threads=True, progress=False, timeout=9)
     gmap, alist, seen = {g: [] for g in STOCK_POOL.keys()}, [], set()
     def _analyze_wrapper(g, s, df): return g, s["code"], analyze_df(df, s["code"], s["name"], s["theme"], g, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
-        
+
     with ThreadPoolExecutor(max_workers=min(len(codes), 12)) as ex:
         for f in as_completed([ex.submit(_analyze_wrapper, g, s, raw[s["code"]] if len(codes)>1 else raw) for g, sts in STOCK_POOL.items() for s in sts]):
             try:
