@@ -325,7 +325,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
         return None
 
 # ==========================================
-# 4. UI と CSS / JS 注入 (セレクトボックスの展開不具合を完全修正)
+# 4. UI と CSS / JS 注入 (BaseWeb Popoverと完全調和)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -364,14 +364,11 @@ def inject_css():
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
-    /* セレクトボックスのポップオーバーやドロップダウンを最前面化 */
+    /* Popover/メニュー（BaseWeb）を最上位に配置しクリッピングを解除 */
     div[data-baseweb="popover"],
     div[data-baseweb="menu"],
-    div[data-baseweb="tooltip"],
     div[role="listbox"],
-    ul[role="listbox"],
-    li[role="option"],
-    div[id^="bui-"] {
+    ul[role="listbox"] {
         z-index: 2147483647 !important;
         pointer-events: auto !important;
     }
@@ -383,26 +380,20 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* サイドバー基本設定（オーバーレイとの重なり順序を正常化） */
+    /* サイドバー：transformの固定化を解除し、座標計算を正常化 */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
-        z-index: 9999995 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
-        transform: translateX(-100%) !important; transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease !important;
+        z-index: 999995 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
         background: rgba(8, 12, 22, 0.98) !important; backdrop-filter: blur(25px) !important;
-        border-right: 1px solid rgba(56, 189, 248, 0.35) !important; box-shadow: none !important;
+        border-right: 1px solid rgba(56, 189, 248, 0.35) !important;
         pointer-events: auto !important; visibility: visible !important;
     }
-    section[data-testid="stSidebar"].yamashishi-sidebar-open {
-        transform: translateX(0) !important; box-shadow: 18px 0 50px rgba(0,0,0,0.95), 2px 0 20px rgba(56,189,248,0.25) !important;
-    }
     
-    /* サイドバー内部全要素のクリック操作を保証 */
-    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
-    section[data-testid="stSidebar"] form,
-    section[data-testid="stSidebar"] div {
+    /* サイドバー内部要素が正常にクリックを受け取る指定 */
+    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
         pointer-events: auto !important;
     }
-    
+
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], header button[kind="headerNoPadding"] {
         opacity: 0 !important; position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; z-index: -1 !important;
     }
@@ -708,7 +699,7 @@ if "inspector_roster" not in st.session_state:
     st.session_state["inspector_roster"] = dict(DEFAULT_INSPECTORS)
 
 # ==========================================
-# 7. トップナビゲーションとサイドバー開閉JS (メニュー閉じ防止・選択肢保護)
+# 7. トップナビゲーションとサイドバー開閉JS (競合を根絶)
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -730,41 +721,6 @@ components.html(
     (function(){{
         const doc = window.parent.document;
         const pWin = window.parent;
-
-        if (typeof pWin._yamashishi_sidebar_open === 'undefined') {{
-            pWin._yamashishi_sidebar_open = false;
-        }}
-
-        function applySidebarState() {{
-            const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-            const overlay = doc.getElementById('yamashishi-sidebar-overlay');
-            
-            if (sidebar) {{
-                if (pWin._yamashishi_sidebar_open) {{
-                    if (!sidebar.classList.contains('yamashishi-sidebar-open')) {{
-                        sidebar.classList.add('yamashishi-sidebar-open');
-                    }}
-                    try {{
-                        sidebar.removeAttribute('inert');
-                        sidebar.removeAttribute('aria-hidden');
-                        const inerts = sidebar.querySelectorAll('[inert]');
-                        inerts.forEach(el => el.removeAttribute('inert'));
-                    }} catch(err) {{}}
-                }} else {{
-                    if (sidebar.classList.contains('yamashishi-sidebar-open')) {{
-                        sidebar.classList.remove('yamashishi-sidebar-open');
-                    }}
-                }}
-            }}
-            
-            if (overlay) {{
-                if (pWin._yamashishi_sidebar_open) {{
-                    overlay.classList.add('active');
-                }} else {{
-                    overlay.classList.remove('active');
-                }}
-            }}
-        }}
 
         function setupCustomSidebar() {{
             try {{
@@ -790,25 +746,8 @@ components.html(
                         #yamashishi-floating-sidebar-btn:active {{ transform: scale(0.95) !important; }}
                         #yamashishi-floating-sidebar-btn svg {{ width: 15px !important; height: 15px !important; }}
                         #yamashishi-floating-sidebar-btn span {{ font-family: 'JetBrains Mono', monospace !important; font-size: 11px !important; font-weight: 800 !important; }}
-                        
-                        #yamashishi-sidebar-overlay {{
-                            position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important;
-                            background: rgba(0,0,0,0.7) !important; backdrop-filter: blur(4px) !important;
-                            z-index: 9999980 !important; opacity: 0 !important; visibility: hidden !important;
-                            transition: all 0.35s ease !important; pointer-events: none !important;
-                        }}
-                        #yamashishi-sidebar-overlay.active {{
-                            opacity: 1 !important; visibility: visible !important; pointer-events: auto !important;
-                        }}
                     `;
                     doc.head.appendChild(style);
-                }}
-
-                let overlay = doc.getElementById('yamashishi-sidebar-overlay');
-                if (!overlay) {{
-                    overlay = doc.createElement('div');
-                    overlay.id = 'yamashishi-sidebar-overlay';
-                    doc.body.appendChild(overlay);
                 }}
 
                 let btn = doc.getElementById('yamashishi-floating-sidebar-btn');
@@ -819,21 +758,22 @@ components.html(
                     doc.body.appendChild(btn);
                 }}
 
+                /* Streamlit標準の開閉トグルボタンを直接発火（BaseWebが誤認識しない正規トグル） */
                 btn.onclick = function(e) {{
                     e.preventDefault();
                     e.stopPropagation();
-                    pWin._yamashishi_sidebar_open = !pWin._yamashishi_sidebar_open;
-                    applySidebarState();
+                    const nativeBtn = doc.querySelector('[data-testid="collapsedControl"] button, [data-testid="stSidebarCollapseButton"] button, header button[kind="headerNoPadding"]');
+                    if (nativeBtn) {{
+                        nativeBtn.click();
+                    }} else {{
+                        const sb = doc.querySelector('section[data-testid="stSidebar"]');
+                        if (sb) {{
+                            const isHidden = (sb.style.display === 'none' || sb.getAttribute('aria-expanded') === 'false');
+                            sb.style.display = isHidden ? 'block' : 'none';
+                            sb.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+                        }}
+                    }}
                 }};
-
-                overlay.onclick = function(e) {{
-                    e.preventDefault();
-                    e.stopPropagation();
-                    pWin._yamashishi_sidebar_open = false;
-                    applySidebarState();
-                }};
-
-                applySidebarState();
             }} catch(e) {{}}
         }}
 
