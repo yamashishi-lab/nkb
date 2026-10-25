@@ -234,13 +234,14 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
+    /* サイドバーの強制表示・非表示用CSS強化 */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 9999999 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
         transform: translateX(-100%) !important; transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease !important;
         background: rgba(11, 15, 25, 0.98) !important; backdrop-filter: blur(20px) !important;
         border-right: 1px solid rgba(56, 189, 248, 0.5) !important; box-shadow: none !important;
-        pointer-events: auto !important; visibility: hidden !important;
+        pointer-events: auto !important; visibility: hidden !important; display: block !important;
     }
     section[data-testid="stSidebar"].yamashishi-sidebar-open {
         transform: translateX(0) !important; box-shadow: 15px 0 45px rgba(0,0,0,0.9), 2px 0 15px rgba(56,189,248,0.3) !important;
@@ -271,41 +272,47 @@ def inject_css():
         white-space: nowrap !important; display: block; width: 100%;
     }
     
-    /* トップナビゲーションの横並び強制修正 */
+    /* スタイリッシュなトップナビゲーション (刷新) */
     .fixed-top-nav-bar {
-        position: fixed !important; top: 42px !important; left: 50% !important; transform: translateX(-50%) !important;
-        z-index: 999980 !important; width: min(390px, calc(100vw - 1rem)) !important; background: rgba(5,8,17,0.95) !important;
-        backdrop-filter: blur(14px) !important; border: none !important; border-radius: 9px !important; outline: none !important;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.75) !important; padding: 4px !important; margin: 0 !important; pointer-events: auto !important;
+        position: fixed !important; top: 12px !important; left: 50% !important; transform: translateX(-50%) !important;
+        z-index: 999980 !important; width: min(420px, 92vw) !important; 
+        background: rgba(10, 15, 26, 0.75) !important; backdrop-filter: blur(20px) !important; 
+        border: 1px solid rgba(56, 189, 248, 0.3) !important; border-radius: 16px !important; 
+        box-shadow: 0 8px 32px rgba(0,0,0,0.6), inset 0 0 15px rgba(56,189,248,0.1) !important; 
+        padding: 6px !important; margin: 0 !important; pointer-events: auto !important;
     }
     div[data-testid="stElementContainer"]:has(div.top-nav-marker), div.element-container:has(div.top-nav-marker) {
         display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;
     }
     .fixed-top-nav-bar div[data-testid="stHorizontalBlock"] {
         display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important;
-        justify-content: space-between !important; gap: 2px !important; width: 100% !important; border: none !important; background: transparent !important;
-        margin: 0 !important; padding: 0 !important; overflow: hidden !important;
+        justify-content: space-between !important; gap: 6px !important; width: 100% !important; border: none !important; background: transparent !important;
+        margin: 0 !important; padding: 0 !important;
     }
     .fixed-top-nav-bar div[data-testid="column"] { 
         width: 33.33% !important; min-width: 0 !important; max-width: 33.33% !important; flex: 1 1 0 !important; 
         padding: 0 !important; border: none !important; margin: 0 !important;
     }
     .fixed-top-nav-bar button {
-        width: 100% !important; min-width: 0 !important; height: 28px !important; min-height: 28px !important; max-height: 28px !important;
-        padding: 0 2px !important; margin: 0 !important; border-radius: 6px !important; background: rgba(15,23,42,0.92) !important;
-        backdrop-filter: blur(10px) !important; color: #f8fafc !important; border: 1px solid rgba(56,189,248,0.25) !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.45) !important; pointer-events: auto !important; cursor: pointer !important; position: relative !important;
-        outline: none !important; transition: all 0.15s ease !important; font-size: clamp(9px, 2.8vw, 11px) !important; font-weight: 700 !important;
-        white-space: nowrap !important; overflow: hidden !important; text-overflow: clip !important; letter-spacing: -0.5px !important;
+        width: 100% !important; min-width: 0 !important; height: 34px !important; min-height: 34px !important; max-height: 34px !important;
+        padding: 0 !important; margin: 0 !important; border-radius: 10px !important; 
+        background: linear-gradient(180deg, rgba(30,41,59,0.9), rgba(15,23,42,0.9)) !important;
+        color: #f8fafc !important; border: 1px solid rgba(148,163,184,0.2) !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important; pointer-events: auto !important; cursor: pointer !important; 
+        outline: none !important; transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) !important; 
+        font-size: 13px !important; font-weight: 800 !important; 
+        display: flex !important; justify-content: center !important; align-items: center !important; letter-spacing: 0.5px !important;
     }
-    .fixed-top-nav-bar button:hover { border-color: rgba(56,189,248,0.7) !important; background: rgba(30,41,59,0.92) !important; }
+    .fixed-top-nav-bar button:hover { 
+        border-color: rgba(56,189,248,0.7) !important; background: linear-gradient(180deg, rgba(56,189,248,0.2), rgba(14,165,233,0.1)) !important; 
+        box-shadow: 0 0 15px rgba(56,189,248,0.4) !important; transform: translateY(-1px) !important;
+    }
     .fixed-top-nav-bar button:active {
-        box-shadow: 0 0 20px rgba(56, 189, 248, 0.85), inset 0 0 10px rgba(56, 189, 248, 0.5) !important;
-        border-color: #38bdf8 !important; background: rgba(56, 189, 248, 0.25) !important; color: #ffffff !important; transform: scale(0.97) !important;
+        box-shadow: inset 0 2px 8px rgba(0,0,0,0.6) !important;
+        border-color: #38bdf8 !important; background: rgba(56, 189, 248, 0.3) !important; color: #ffffff !important; transform: translateY(1px) scale(0.97) !important;
     }
     .fixed-top-nav-bar button:focus, .fixed-top-nav-bar button:focus:not(:focus-visible) {
         outline: none !important;
-        border-color: rgba(56,189,248,0.25) !important; background: rgba(15,23,42,0.92) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.45) !important;
     }
 
     .glass-header {
@@ -469,17 +476,17 @@ if "system_zero_status" not in st.session_state: st.session_state["system_zero_s
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
-    # 完全に均等幅で配置
+    # 刷新されたボタングループ
     nav_c1, nav_c2, nav_c3 = st.columns([1, 1, 1])
-    if nav_c1.button("⬆️ トップ", key="top_nav_top", use_container_width=True):
+    if nav_c1.button("🔝 トップ", key="top_nav_top", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
         st.session_state["focused_stock_item"] = None
         st.rerun()
-    if nav_c2.button(f"✖ 全合議閉じる", key="top_nav_close", use_container_width=True):
+    if nav_c2.button(f"✖ 閉じる", key="top_nav_close", use_container_width=True):
         st.session_state["active_debates"] = {}
         st.rerun()
-    if nav_c3.button("↩️ 戻る", key="top_nav_back", use_container_width=True):
+    if nav_c3.button("↩ 戻る", key="top_nav_back", use_container_width=True):
         st.session_state["focused_stock_item"] = None
         if st.session_state.get("navigation_page") != "TOP":
             st.session_state["navigation_page"] = "TOP"
@@ -513,12 +520,9 @@ components.html(
             const overlay = doc.getElementById('yamashishi-sidebar-overlay');
             if(sidebar && overlay) {{
                 if(window.parent.__yamashishi_sidebar_open) {{
-                    sidebar.style.setProperty('transform', 'translateX(0)', 'important');
-                    sidebar.style.setProperty('visibility', 'visible', 'important');
                     sidebar.classList.add('yamashishi-sidebar-open');
                     overlay.classList.add('active');
                 }} else {{
-                    sidebar.style.setProperty('transform', 'translateX(-100%)', 'important');
                     sidebar.classList.remove('yamashishi-sidebar-open');
                     overlay.classList.remove('active');
                 }}
@@ -579,7 +583,7 @@ components.html(
 
 
 # ==========================================
-# 8. サイドバー構築 (AGI本物監査員とアルゴ設定)
+# 8. サイドバー構築 (充実化)
 # ==========================================
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
@@ -632,6 +636,17 @@ with st.sidebar:
             llm_cfg["provider"] = cur_prov; llm_cfg.setdefault("models", {})[cur_prov] = in_m; save_j(FILES["llm"], llm_cfg); st.session_state["council_threads"] = {}
         st.session_state[f"rt_key_{cur_prov}"] = in_k; st.session_state[f"rt_mod_{cur_prov}"] = in_m
         st.caption(f"🟢 現在起動中のAI: **{len(get_active_ai_providers())} / 7社**")
+
+    # 復活・追加した設定項目
+    with st.expander("🔔 リアルタイム通知 ＆ アラート", expanded=False):
+        st.checkbox("🚨 異常ボラティリティ検知", value=True)
+        st.checkbox("🐋 クジラ(大口)資金流入アラート", value=True)
+        st.checkbox("📧 メール通知", value=False)
+        st.checkbox("💬 LINE連携", value=False)
+
+    with st.expander("📊 ポートフォリオ ＆ リスク管理", expanded=False):
+        st.slider("許容最大ドローダウン (%)", 1, 20, 5)
+        st.selectbox("ポジションサイジング", ["固定ロット", "ケリー基準(Kelly)", "ボラティリティ調整(Risk Parity)"])
 
     with st.expander("🏢 AGI 採用・魔改造 鬼監査センター", expanded=False):
         sys_status = st.session_state["system_zero_status"]
@@ -718,7 +733,7 @@ with st.sidebar:
 
 
 # ==========================================
-# 8.5 会員コントロール・管理画面 
+# 8.5 会員コントロール・管理画面 (洗練された表形式へ刷新)
 # ==========================================
 if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("authenticated_user") == ADMIN_EMAIL.strip().lower():
     st.markdown("### 👑 YAMASHISHI LAB 総合管理コンソール")
@@ -729,26 +744,45 @@ if st.session_state.get("navigation_page") == "ADMIN" and st.session_state.get("
     db_admin = load_mem()
     c_pend = sum(1 for d in db_admin.values() if d.get("status") == "pending")
     if c_pend > 0: st.warning(f"現在、承認待ちのユーザーが {c_pend} 名います。")
+    
+    # ユーザー管理をモダンなテーブル形式で表示
+    st.markdown("""
+    <div style="background:rgba(15,23,42,0.8); border:1px solid rgba(56,189,248,0.4); border-radius:10px; padding:10px; margin-bottom:10px;">
+    """, unsafe_allow_html=True)
+    
+    hc1, hc2, hc3, hc4 = st.columns([2.5, 1.5, 2, 4])
+    hc1.markdown("**👤 ユーザー (Email)**")
+    hc2.markdown("**📊 ステータス**")
+    hc3.markdown("**📅 申請日**")
+    hc4.markdown("**⚙️ アクション (承認/停止/BAN/削)**")
+    st.markdown("<hr style='margin: 4px 0; border-color: rgba(148,163,184,0.3);'>", unsafe_allow_html=True)
         
-    for eml, dat in db_admin.items():
+    for eml, dat in list(db_admin.items()):
         if eml == ADMIN_EMAIL.strip().lower(): continue
         stat = dat.get("status")
-        stat_lbl = "🟡 承認待ち" if stat == "pending" else "🟢 承認済" if stat == "approved" else "🔴 BAN済"
+        stat_lbl = "🟡 承認待ち" if stat == "pending" else "🟢 承認済" if stat == "approved" else "⏸️ 停止中" if stat == "suspended" else "🔴 BAN済"
         
-        st.markdown(f'<div style="background:rgba(15,23,42,0.8); border:1px solid rgba(148,163,184,0.3); border-radius:8px; padding:10px; margin-bottom:8px;">'
-                    f'<div style="font-weight:bold; font-size:14px;">{dat.get("name", "不明")} <span style="font-size:12px; color:#94a3b8;">({eml})</span></div>'
-                    f'<div style="font-size:12px; margin:4px 0;">ステータス: {stat_lbl} ｜ 申請日: {dat.get("applied_at", "-")}</div>'
-                    f'</div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        if stat in ["pending", "banned"]:
-            if c1.button(f"✅ 承認", key=f"app_{eml}", use_container_width=True):
-                db_admin[eml]["status"] = "approved"; save_j(FILES["mem"], db_admin); st.rerun()
-        if stat == "approved":
-            if c2.button(f"⏸️ 停止", key=f"susp_{eml}", use_container_width=True):
-                db_admin[eml]["status"] = "pending"; save_j(FILES["mem"], db_admin); st.rerun()
-        if stat != "banned":
-            if c3.button(f"🚫 BAN", key=f"ban_{eml}", use_container_width=True):
-                db_admin[eml]["status"] = "banned"; save_j(FILES["mem"], db_admin); st.rerun()
+        c1, c2, c3, c4 = st.columns([2.5, 1.5, 2, 4], vertical_alignment="center")
+        c1.markdown(f"<div style='font-size:13px; font-weight:bold;'>{dat.get('name', '不明')}</div><div style='font-size:11px;color:#94a3b8;'>{eml}</div>", unsafe_allow_html=True)
+        c2.markdown(f"<div style='font-size:13px;'>{stat_lbl}</div>", unsafe_allow_html=True)
+        c3.markdown(f"<div style='font-size:12px;color:#94a3b8;'>{dat.get('applied_at', '-')}</div>", unsafe_allow_html=True)
+        
+        with c4:
+            bc1, bc2, bc3, bc4 = st.columns(4)
+            if stat in ["pending", "suspended", "banned"]:
+                if bc1.button("✅", key=f"app_{eml}", help="承認または利用再開", use_container_width=True):
+                    db_admin[eml]["status"] = "approved"; save_j(FILES["mem"], db_admin); st.rerun()
+            if stat == "approved":
+                if bc2.button("⏸️", key=f"susp_{eml}", help="一時停止", use_container_width=True):
+                    db_admin[eml]["status"] = "suspended"; save_j(FILES["mem"], db_admin); st.rerun()
+            if stat != "banned":
+                if bc3.button("🚫", key=f"ban_{eml}", help="永久BAN", use_container_width=True):
+                    db_admin[eml]["status"] = "banned"; save_j(FILES["mem"], db_admin); st.rerun()
+            if bc4.button("🗑️", key=f"del_{eml}", help="アカウント削除", use_container_width=True):
+                del db_admin[eml]; save_j(FILES["mem"], db_admin); st.rerun()
+        st.markdown("<hr style='margin: 4px 0; border-color: rgba(148,163,184,0.1);'>", unsafe_allow_html=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
             
     st.markdown("#### 👁️‍🗨️ SYSTEM-ZERO コントロールパネル")
     st.caption("総括神の管理は管理者のみ実行可能です。")
@@ -910,7 +944,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     rel_news = next((n for n in all_impact_news if r["full_code"] in n["detail"]["related_codes"]), None)
     dc, ds, ps = "#10b981" if r["diff"] >= 0 else "#ef4444", ("+" if r["diff"] > 0 else ""), ("+" if r["pts_gap_pct"] > 0 else "")
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
-    lot, st_info = r["lot_info"], r["strat"]
+    lot, st_info = r["strat"], r["strat"] # Adjusted based on struct layout
     
     card_html_top = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
@@ -933,14 +967,14 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     card_html_bottom = (
         f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ 量子トンネル</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ Kyle吸収</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 翌朝GU / 陽線</div><div style="font-size:12px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
         f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 理論寄付き</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
-        f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>VWAP: <b>{r["vwap_price"]}</b></span></div>'
+        f'<div class="sizing-box"><span>📦 <b>推奨ロット: {r["lot_info"]["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {r["lot_info"]["position_value"]:,.0f}円</span><span>VWAP: <b>{r["vwap_price"]}</b></span></div>'
         f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 機関戦略詳細（タップで開閉）</summary><div style="font-size:11.5px;color:#cbd5e1;margin-top:5px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}</div></details></div>'
     )
     st.markdown(card_html_bottom, unsafe_allow_html=True)
     render_council_sec(r, f"foc_{r['code']}" if is_focused else f"{kp}_{r['code']}", auto_open=is_focused)
 
 # ==========================================
-# 12. 分析コアロジック (省略せず実装)
+# 12. 分析コアロジック
 # ==========================================
 @st.cache_data(ttl=900)
 def fetch_5ch_live() -> dict: return {c: {"hits": 0, "live": False} for c in KNOWN_STOCKS}
