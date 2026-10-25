@@ -325,7 +325,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
         return None
 
 # ==========================================
-# 4. UI と CSS / JS 注入
+# 4. UI と CSS / JS 注入 (クリック阻害を完全解消)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -367,19 +367,20 @@ def inject_css():
     /* あらゆるポップオーバーやドロップダウンがサイドバーの下に隠れないようにする */
     div[data-baseweb="popover"], div[data-baseweb="menu"], div[data-baseweb="tooltip"], div[role="listbox"], .stSelectbox [data-baseweb="popover"], div[id^="bui-"] {
         z-index: 2147483647 !important;
+        pointer-events: auto !important;
     }
     
     header[data-testid="stHeader"] {
         background: transparent !important; pointer-events: none !important;
-        height: 3.5rem !important; z-index: 999990 !important;
+        height: 3.5rem !important; z-index: 999980 !important;
     }
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* サイドバー自体に対する設定（inert解除はJSで行うためここはベースの表示制御のみ） */
+    /* サイドバー自体に対する設定（z-indexを整理しポインタイベントを完全保証） */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
-        z-index: 9999999 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
+        z-index: 9999995 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
         transform: translateX(-100%) !important; transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease !important;
         background: rgba(8, 12, 22, 0.98) !important; backdrop-filter: blur(25px) !important;
         border-right: 1px solid rgba(56, 189, 248, 0.35) !important; box-shadow: none !important;
@@ -387,6 +388,14 @@ def inject_css():
     }
     section[data-testid="stSidebar"].yamashishi-sidebar-open {
         transform: translateX(0) !important; box-shadow: 18px 0 50px rgba(0,0,0,0.95), 2px 0 20px rgba(56,189,248,0.25) !important;
+    }
+    
+    /* サイドバー内部要素のクリック阻害を完全防止 */
+    section[data-testid="stSidebar"] * {
+        pointer-events: auto !important;
+    }
+    [data-testid="stSidebarUserContent"] {
+        pointer-events: auto !important;
     }
     
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], header button[kind="headerNoPadding"] {
@@ -694,7 +703,7 @@ if "inspector_roster" not in st.session_state:
     st.session_state["inspector_roster"] = dict(DEFAULT_INSPECTORS)
 
 # ==========================================
-# 7. トップナビゲーションとサイドバー開閉JS
+# 7. トップナビゲーションとサイドバー開閉JS (イベント貫通を最適化)
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -729,7 +738,6 @@ components.html(
                 if (pWin._yamashishi_sidebar_open) {{
                     sidebar.classList.add('yamashishi-sidebar-open');
                     try {{
-                        /* Streamlitによるネイティブな不活性化(ロック)を強制解除 */
                         sidebar.removeAttribute('inert');
                         sidebar.removeAttribute('aria-hidden');
                         const inerts = sidebar.querySelectorAll('[inert]');
@@ -777,7 +785,7 @@ components.html(
                         #yamashishi-sidebar-overlay {{
                             position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important;
                             background: rgba(0,0,0,0.7) !important; backdrop-filter: blur(4px) !important;
-                            z-index: 9999998 !important; opacity: 0 !important; visibility: hidden !important;
+                            z-index: 9999990 !important; opacity: 0 !important; visibility: hidden !important;
                             transition: all 0.35s ease !important; pointer-events: none !important;
                         }}
                         #yamashishi-sidebar-overlay.active {{
@@ -802,7 +810,6 @@ components.html(
                     doc.body.appendChild(btn);
                 }}
 
-                /* Streamlitのネイティブボタンと連動させない（inertロックを回避するため削除） */
                 btn.onclick = function(e) {{
                     e.preventDefault();
                     e.stopPropagation();
@@ -1222,7 +1229,7 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
 
 # ==========================================
-# 11. レンダリング関数群（余白完全排除）
+# 11. レンダリング関数群
 # ==========================================
 def render_council_sec(r, uk, auto_open=False):
     is_open = auto_open or st.session_state["active_debates"].get(uk, False)
