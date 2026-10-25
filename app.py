@@ -230,12 +230,11 @@ def inject_css():
     
     header[data-testid="stHeader"] {
         background: transparent !important; 
-        height: 3.5rem !important; z-index: 999990 !important;
+        height: 2.8rem !important; z-index: 999990 !important;
     }
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* Streamlit標準の開閉ボタンはクリック判定を壊さず画面外・不可視に退避 */
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"] {
         opacity: 0 !important;
         position: fixed !important;
@@ -258,7 +257,7 @@ def inject_css():
     }
     
     .block-container {
-        padding-top: 3.5rem !important; padding-bottom: 3rem !important;
+        padding-top: 2.8rem !important; padding-bottom: 3rem !important;
         padding-left: 0.75rem !important; padding-right: 0.75rem !important; max-width: 840px !important;
     }
     
@@ -271,7 +270,7 @@ def inject_css():
     
     .glass-header {
         background: radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);
-        border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; padding: 14px; margin-bottom: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+        border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; padding: 12px; margin-bottom: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
     }
     
     .rank-card, .search-result-card {
@@ -430,7 +429,7 @@ if "system_zero_logs" not in st.session_state: st.session_state["system_zero_log
 if "system_zero_status" not in st.session_state: st.session_state["system_zero_status"] = {"name": "SYSTEM-ZERO", "status": "🟢 正常稼働中"}
 
 # ==========================================
-# 7. トップナビゲーション (画面幅いっぱい・均等3連 & サイドバー強制オープン)
+# 7. トップナビゲーション (極薄スリム・均等3連 & 青枠防止・タップ時のみ発光)
 # ==========================================
 scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
@@ -450,7 +449,6 @@ components.html(
         }};
         cleanupStrayElements();
 
-        // 隠しボタン(Python側からのトリガー用)をDOMから隠す
         const observer = new MutationObserver((mutations) => {{
             const btns = doc.querySelectorAll('button');
             btns.forEach(b => {{
@@ -466,7 +464,6 @@ components.html(
         }});
         observer.observe(doc.body, {{childList: true, subtree: true}});
 
-        // 上部固定の3連ナビゲーション（画面幅いっぱい・均等割り）
         function installFixedTopNav(){{
             try {{
                 let nav = doc.getElementById('yamashishi-fixed-top-nav');
@@ -475,13 +472,13 @@ components.html(
                     style.textContent = `
                         #yamashishi-fixed-top-nav {{
                             position: fixed;
-                            top: 8px;
-                            left: 8px;
-                            right: 8px;
-                            width: calc(100% - 16px);
+                            top: 4px;
+                            left: 6px;
+                            right: 6px;
+                            width: calc(100% - 12px);
                             z-index: 2147483647;
                             display: flex;
-                            gap: 6px;
+                            gap: 5px;
                             pointer-events: none;
                             box-sizing: border-box;
                         }}
@@ -491,20 +488,26 @@ components.html(
                             background: rgba(15, 23, 42, 0.95);
                             color: #f8fafc;
                             border: 1px solid rgba(56, 189, 248, 0.45);
-                            border-radius: 8px;
-                            padding: 8px 4px;
-                            font-size: clamp(11px, 3.2vw, 13px);
+                            border-radius: 6px;
+                            padding: 4px 2px;
+                            font-size: clamp(11px, 3vw, 12.5px);
                             font-weight: 800;
                             cursor: pointer;
-                            box-shadow: 0 4px 14px rgba(0,0,0,0.7), 0 0 10px rgba(56,189,248,0.25);
-                            transition: all 0.1s ease;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+                            transition: all 0.08s ease;
                             display: flex;
                             align-items: center;
                             justify-content: center;
-                            backdrop-filter: blur(12px);
+                            backdrop-filter: blur(10px);
                             white-space: nowrap;
                             user-select: none;
                             text-align: center;
+                            outline: none !important;
+                            -webkit-tap-highlight-color: transparent;
+                        }}
+                        .yama-nav-btn:focus {{
+                            outline: none !important;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.6) !important;
                         }}
                         .yama-nav-btn:hover {{
                             border-color: #38bdf8;
@@ -514,8 +517,9 @@ components.html(
                             border-color: #fde047 !important;
                             color: #fde047 !important;
                             background: rgba(56, 189, 248, 0.4) !important;
-                            box-shadow: 0 6px 20px rgba(0,0,0,0.9), 0 0 15px rgba(253, 224, 71, 0.4) !important;
-                            transform: scale(0.96) !important;
+                            box-shadow: 0 0 16px rgba(253, 224, 71, 0.6) !important;
+                            transform: scale(0.95) !important;
+                            outline: none !important;
                         }}
                     `;
                     doc.head.appendChild(style);
@@ -523,46 +527,37 @@ components.html(
                     nav = doc.createElement('div');
                     nav.id = 'yamashishi-fixed-top-nav';
                     
-                    // 1. MENU ボタン (サイドバーを直接・強制的に開く)
+                    // 1. MENU ボタン (サイドバー強制オープン/トグル)
                     const btnMenu = doc.createElement('div');
                     btnMenu.className = 'yama-nav-btn';
                     btnMenu.innerHTML = '≡ MENU';
                     btnMenu.onclick = () => {{
                         const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-                        
-                        // サイドバーが閉じているか判定
                         const isClosed = !sidebar || 
                             sidebar.getAttribute("aria-expanded") === "false" || 
                             sidebar.getBoundingClientRect().width === 0;
 
                         if (isClosed) {{
-                            // 開くためのボタンを多角的・網羅的に探索して実行
-                            const selectors = [
-                                '[data-testid="stSidebarCollapsedControl"] button',
-                                '[data-testid="stSidebarCollapsedControl"]',
-                                '[data-testid="collapsedControl"] button',
-                                '[data-testid="collapsedControl"]',
-                                'button[aria-label="Open sidebar"]',
-                                'button[aria-label="サイドバーを開く"]'
-                            ];
-                            for (let sel of selectors) {{
-                                const el = doc.querySelector(sel);
-                                if (el) {{
-                                    el.click();
-                                    return;
-                                }}
+                            // 強制的に開くための各種トリガー・セレクタを順次実行
+                            const openBtn = doc.querySelector(
+                                '[data-testid="stSidebarCollapsedControl"] button, ' +
+                                '[data-testid="stSidebarCollapsedControl"], ' +
+                                '[data-testid="collapsedControl"] button, ' +
+                                '[data-testid="collapsedControl"]'
+                            );
+                            if (openBtn) {{
+                                openBtn.click();
                             }}
-                            // DOMイベント直接発火によるフォールバック
+                            // 追加の安全策：Streamlit内部コンテナの属性直接書き換え
                             if (sidebar) {{
                                 sidebar.setAttribute("aria-expanded", "true");
+                                sidebar.style.transform = "translateX(0px)";
                             }}
                         }} else {{
-                            // すでに開いている場合はトグル動作（閉じる）
                             const closeBtn = doc.querySelector(
                                 '[data-testid="stSidebarCollapseButton"] button, ' +
                                 'section[data-testid="stSidebar"] button[kind="header"], ' +
-                                'section[data-testid="stSidebar"] button, ' +
-                                'button[aria-label="Close sidebar"]'
+                                'section[data-testid="stSidebar"] button'
                             );
                             if (closeBtn) closeBtn.click();
                         }}
@@ -626,7 +621,7 @@ with st.sidebar:
     if cu == ADMIN_EMAIL.strip().lower():
         with st.expander("👑 会員コントロール・管理画面", expanded=False):
             db_admin = load_mem(); sec_admin = load_sec()
-            pend_list = [v for v in db_admin.values() if v.get("status") == "pending"]
+            pend_list = [v for v in db_admin.values() if v.get("status"] == "pending"]
             spoof_cnt = len(sec_admin.get("spoof_logs", []))
             if st.button(f"👥 管理画面へ移動 ({len(pend_list)}件未承認)"):
                 st.session_state["navigation_page"] = "ADMIN"; st.rerun()
