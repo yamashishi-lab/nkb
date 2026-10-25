@@ -192,7 +192,7 @@ def get_active_ai_providers() -> list:
     return act
 
 # ==========================================
-# 4. UI と CSS / JS 注入
+# 4. UI と 最先端サイバー・ガラスモーフィズム CSS 注入
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -225,79 +225,139 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
 
 def inject_css():
     css = """
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
-    html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
     
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        background: #030712 !important;
+        color: #f3f4f6 !important;
+    }
+    
+    /* ヘッダーのミニマル化・最新フロート */
     header[data-testid="stHeader"] {
-        background: transparent !important; 
-        height: 2.8rem !important; z-index: 999990 !important;
+        background: rgba(3, 7, 18, 0.8) !important;
+        backdrop-filter: blur(12px) !important;
+        height: 3rem !important;
+        z-index: 999990 !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
     }
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
+    /* Streamlit標準のサイドバー開閉ボタンを洗練されたサイバー調にカスタム */
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"] {
-        opacity: 0 !important;
+        display: flex !important;
         position: fixed !important;
-        left: -9999px !important;
-        top: 0 !important;
-        pointer-events: none !important;
-        width: 1px !important;
-        height: 1px !important;
+        top: 8px !important;
+        left: 12px !important;
+        z-index: 2147483647 !important;
+    }
+    [data-testid="collapsedControl"] button, [data-testid="stSidebarCollapsedControl"] button {
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.9)) !important;
+        backdrop-filter: blur(16px) !important;
+        border: 1px solid rgba(56, 189, 248, 0.3) !important;
+        border-radius: 8px !important;
+        color: #38bdf8 !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    [data-testid="collapsedControl"] button:hover, [data-testid="stSidebarCollapsedControl"] button:hover {
+        border-color: #38bdf8 !important;
+        box-shadow: 0 0 15px rgba(56, 189, 248, 0.4) !important;
     }
 
-    /* サイドバーのカスタマイズ */
+    /* 最先端ガラスモーフィズム・サイドバー */
     section[data-testid="stSidebar"] {
-        background: rgba(11, 15, 25, 0.98) !important; backdrop-filter: blur(20px) !important;
-        border-right: 1px solid rgba(56, 189, 248, 0.5) !important; box-shadow: 2px 0 15px rgba(56,189,248,0.3) !important;
-        width: 320px !important; max-width: 88vw !important; min-width: 300px !important;
+        background: rgba(8, 12, 22, 0.95) !important;
+        backdrop-filter: blur(24px) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+        box-shadow: 10px 0 40px rgba(0, 0, 0, 0.8) !important;
     }
 
-    div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"], div[role="listbox"] {
-        z-index: 2147483647 !important; background-color: #0b0f19 !important; border: 1px solid rgba(56,189,248,0.4) !important;
-    }
-    
+    /* メインコンテナのレイアウト調整 */
     .block-container {
-        padding-top: 2.8rem !important; padding-bottom: 3rem !important;
-        padding-left: 0.75rem !important; padding-right: 0.75rem !important; max-width: 840px !important;
+        padding-top: 3.2rem !important;
+        padding-bottom: 4rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 860px !important;
     }
     
+    /* 高級感のあるネオン・グラデーションブランド */
     .brand-luxury {
-        font-family: 'Cinzel',serif !important; font-size: clamp(16px,4.2vw,24px) !important; font-weight: 800 !important;
-        letter-spacing: clamp(1px,0.5vw,3px) !important; background: linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.25;
-        white-space: nowrap !important; display: block; width: 100%;
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        font-size: clamp(18px, 4.5vw, 26px) !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.02em !important;
+        background: linear-gradient(135deg, #ffffff 0%, #38bdf8 50%, #818cf8 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.2;
     }
     
+    /* ガラスカード（最先端UIトレンド） */
     .glass-header {
-        background: radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);
-        border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; padding: 12px; margin-bottom: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.7) 0%, rgba(30, 41, 59, 0.4) 100%);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
     
     .rank-card, .search-result-card {
-        background: linear-gradient(180deg,#0f172a 0%,#090d16 100%) !important; color: #f8fafc !important; border-radius: 14px;
-        padding: 13px 14px; margin-bottom: 11px; box-shadow: 0 8px 24px rgba(0,0,0,0.45); border: 1px solid rgba(148,163,184,0.16); border-left: 4px solid #38bdf8;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.85) 0%, rgba(7, 11, 20, 0.95) 100%) !important;
+        color: #f8fafc !important;
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 14px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-left: 4px solid #38bdf8;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .rank-card:hover, .search-result-card:hover {
+        border-color: rgba(56, 189, 248, 0.4);
+        transform: translateY(-2px);
     }
     .search-result-card { border-left-color: #f59e0b; }
     
-    .prob-badge { font-family: 'JetBrains Mono',monospace; font-size: clamp(14px,3.8vw,16.5px); font-weight: 800; color: #38bdf8 !important; }
-    .expect-badge { font-family: 'JetBrains Mono',monospace; font-size: clamp(14px,3.8vw,16.5px); font-weight: 900; color: #fde047 !important; }
+    .prob-badge { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; color: #38bdf8 !important; }
+    .expect-badge { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 800; color: #fde047 !important; }
     
     .winrate-bar {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(65px, 1fr)); gap: 5px; background: rgba(15,23,42,0.85) !important;
-        border: 1px solid rgba(148,163,184,0.15); border-radius: 8px; padding: 6px 4px; margin-top: 7px; text-align: center;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(65px, 1fr)); gap: 6px;
+        background: rgba(3, 7, 18, 0.6) !important;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        border-radius: 10px; padding: 8px 6px; margin-top: 10px; text-align: center;
     }
     .trade-plan-box {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 5px; margin-top: 6px;
-        background: rgba(2,6,23,0.7) !important; padding: 6px 4px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.15); text-align: center;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 6px; margin-top: 8px;
+        background: rgba(3, 7, 18, 0.8) !important; padding: 8px 6px; border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.04); text-align: center;
     }
     
+    /* モダンプライマリボタン */
+    .stButton > button {
+        background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%) !important;
+        border: 1px solid rgba(56, 189, 248, 0.3) !important;
+        border-radius: 10px !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+        transition: all 0.2s ease !important;
+    }
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%) !important;
+        box-shadow: 0 6px 20px rgba(56, 189, 248, 0.5);
+        border-color: #38bdf8 !important;
+    }
+
     .admin-table-row {
-        padding: 8px 5px; border-bottom: 1px solid rgba(148,163,184,0.2); align-items: center;
+        padding: 10px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); align-items: center;
     }
-    .admin-table-row:hover { background: rgba(56,189,248,0.1); }
-    .admin-table-row button {
-        min-height: 28px !important; height: 28px !important; padding: 0 5px !important; font-size: 11px !important; line-height: 1 !important; margin:0 !important;
-    }
+    .admin-table-row:hover { background: rgba(56, 189, 248, 0.05); }
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{css}</style>', unsafe_allow_html=True)
 
@@ -334,13 +394,12 @@ def check_auth():
         return True
 
     st.markdown(
-        '<div class="glass-header" style="text-align:center;padding:18px 12px;">'
+        '<div class="glass-header" style="text-align:center;padding:24px 16px;">'
         '<div class="brand-luxury">YAMASHISHI LAB</div>'
-        '<div class="brand-sub" style="margin-top:4px;">QUANTUM WAVEFUNCTION MULTI-AGENT TERMINAL</div>'
-        '<div style="display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;">'
-        '<span class="quantum-badge">⚛️ 独自量子力学波動エンジン QWM-7搭載</span>'
-        '<span class="inst-badge">🏛️ 機関最新ミクロ構造 Kyle-λ・Hurst搭載</span>'
-        '<span class="pill-badge" style="color:#10b981;border-color:rgba(16,185,129,0.3);">🧬 生体認証対応</span>'
+        '<div class="brand-sub" style="margin-top:6px; color:#94a3b8; font-size:12px; font-weight:500;">QUANTUM WAVEFUNCTION MULTI-AGENT TERMINAL</div>'
+        '<div style="display:flex;justify-content:center;gap:8px;margin-top:12px;flex-wrap:wrap;">'
+        '<span style="background:rgba(56,189,248,0.1); color:#38bdf8; border:1px solid rgba(56,189,248,0.2); padding:2px 8px; border-radius:6px; font-size:11px;">⚛️ 独自量子力学波動エンジン QWM-7搭載</span>'
+        '<span style="background:rgba(168,85,247,0.1); color:#c084fc; border:1px solid rgba(168,85,247,0.2); padding:2px 8px; border-radius:6px; font-size:11px;">🏛️ 機関最新ミクロ構造 Kyle-λ搭載</span>'
         '</div></div>',
         unsafe_allow_html=True
     )
@@ -422,14 +481,14 @@ if "auditor_roster" not in st.session_state:
     st.session_state["auditor_roster"] = {
         "AUD1": {"name": "JUDGE-ALPHA", "icon": "⚖️", "score": 98, "good": "厳格なルール適用", "bad": "状況に応じた柔軟性がない"},
         "AUD2": {"name": "INQUISITOR-BETA", "icon": "👁️", "score": 96, "good": "隠れたバイアスの看破", "bad": "疑心暗鬼に陥る"},
-        "AUD3": {"name": "WARDEN-GAMMA", "icon": "⛓️", "score": 97, "good": "リスク管理の徹底監視", "bad": "極端に保守적"}
+        "AUD3": {"name": "WARDEN-GAMMA", "icon": "⛓️", "score": 97, "good": "リスク管理の徹底監視", "bad": "極端に保守的"}
     }
 if "fired_entities" not in st.session_state: st.session_state["fired_entities"] = []
 if "system_zero_logs" not in st.session_state: st.session_state["system_zero_logs"] = []
 if "system_zero_status" not in st.session_state: st.session_state["system_zero_status"] = {"name": "SYSTEM-ZERO", "status": "🟢 正常稼働中"}
 
 # ==========================================
-# 7. トップナビゲーション (極薄スリム・均等3連 & 青枠防止・タップ時のみ発光)
+# 7. トップナビゲーション (極薄スリム・均等3連 & 最先端発光アニメーション)
 # ==========================================
 scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
@@ -473,32 +532,32 @@ components.html(
                         #yamashishi-fixed-top-nav {{
                             position: fixed;
                             top: 4px;
-                            left: 6px;
-                            right: 6px;
-                            width: calc(100% - 12px);
+                            left: 8px;
+                            right: 8px;
+                            width: calc(100% - 16px);
                             z-index: 2147483647;
                             display: flex;
-                            gap: 5px;
+                            gap: 6px;
                             pointer-events: none;
                             box-sizing: border-box;
                         }}
                         .yama-nav-btn {{
                             flex: 1 1 0;
                             pointer-events: auto;
-                            background: rgba(15, 23, 42, 0.95);
+                            background: rgba(15, 23, 42, 0.85);
                             color: #f8fafc;
-                            border: 1px solid rgba(56, 189, 248, 0.45);
-                            border-radius: 6px;
-                            padding: 4px 2px;
+                            border: 1px solid rgba(56, 189, 248, 0.3);
+                            border-radius: 8px;
+                            padding: 5px 4px;
                             font-size: clamp(11px, 3vw, 12.5px);
-                            font-weight: 800;
+                            font-weight: 700;
                             cursor: pointer;
-                            box-shadow: 0 2px 8px rgba(0,0,0,0.6);
-                            transition: all 0.08s ease;
+                            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
                             display: flex;
                             align-items: center;
                             justify-content: center;
-                            backdrop-filter: blur(10px);
+                            backdrop-filter: blur(12px);
                             white-space: nowrap;
                             user-select: none;
                             text-align: center;
@@ -507,18 +566,19 @@ components.html(
                         }}
                         .yama-nav-btn:focus {{
                             outline: none !important;
-                            box-shadow: 0 2px 8px rgba(0,0,0,0.6) !important;
+                            box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
                         }}
                         .yama-nav-btn:hover {{
                             border-color: #38bdf8;
-                            background: rgba(30, 41, 59, 0.98);
+                            background: rgba(30, 41, 59, 0.95);
+                            box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
                         }}
                         .yama-nav-btn:active {{
                             border-color: #fde047 !important;
                             color: #fde047 !important;
-                            background: rgba(56, 189, 248, 0.4) !important;
-                            box-shadow: 0 0 16px rgba(253, 224, 71, 0.6) !important;
-                            transform: scale(0.95) !important;
+                            background: rgba(56, 189, 248, 0.3) !important;
+                            box-shadow: 0 0 20px rgba(253, 224, 71, 0.5) !important;
+                            transform: scale(0.96) !important;
                             outline: none !important;
                         }}
                     `;
@@ -527,37 +587,21 @@ components.html(
                     nav = doc.createElement('div');
                     nav.id = 'yamashishi-fixed-top-nav';
                     
-                    # 1. MENU ボタン (サイドバー強制オープン/トグル)
+                    # 1. MENU ボタン (サイドバーを開くための公式トリガーを確実に叩く)
                     const btnMenu = doc.createElement('div');
                     btnMenu.className = 'yama-nav-btn';
                     btnMenu.innerHTML = '≡ MENU';
                     btnMenu.onclick = () => {{
-                        const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-                        const isClosed = !sidebar || 
-                            sidebar.getAttribute("aria-expanded") === "false" || 
-                            sidebar.getBoundingClientRect().width === 0;
-
-                        if (isClosed) {{
-                            const openBtn = doc.querySelector(
-                                '[data-testid="stSidebarCollapsedControl"] button, ' +
-                                '[data-testid="stSidebarCollapsedControl"], ' +
-                                '[data-testid="collapsedControl"] button, ' +
-                                '[data-testid="collapsedControl"]'
-                            );
-                            if (openBtn) {{
-                                openBtn.click();
-                            }}
-                            if (sidebar) {{
-                                sidebar.setAttribute("aria-expanded", "true");
-                                sidebar.style.transform = "translateX(0px)";
-                            }}
+                        const toggleBtn = doc.querySelector('[data-testid="collapsedControl"] button, [data-testid="stSidebarCollapsedControl"] button');
+                        if (toggleBtn) {{
+                            toggleBtn.click();
                         }} else {{
-                            const closeBtn = doc.querySelector(
-                                '[data-testid="stSidebarCollapseButton"] button, ' +
-                                'section[data-testid="stSidebar"] button[kind="header"], ' +
-                                'section[data-testid="stSidebar"] button'
-                            );
-                            if (closeBtn) closeBtn.click();
+                            // フォールバック: サイドバー要素を直接操作
+                            const sb = doc.querySelector('section[data-testid="stSidebar"]');
+                            if (sb) {{
+                                sb.setAttribute("aria-expanded", "true");
+                                sb.style.transform = "translateX(0px)";
+                            }}
                         }}
                     }};
 
@@ -613,7 +657,7 @@ components.html(
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
     if cu:
-        st.markdown(f'<div style="background:#0f172a;padding:8px 11px;border-radius:9px;border:1px solid rgba(168,85,247,0.35);margin-bottom:6px;"><div style="font-size:9.5px;color:#c084fc;font-weight:700;">⚛️ QUANTUM SESSION ACTIVE</div><div style="color:#f8fafc;font-size:11.5px;font-weight:700;">会員 ({cu})</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="background:rgba(15,23,42,0.8);padding:10px 12px;border-radius:12px;border:1px solid rgba(168,85,247,0.3);margin-bottom:10px;"><div style="font-size:10px;color:#c084fc;font-weight:700;">⚛️ QUANTUM SESSION ACTIVE</div><div style="color:#f8fafc;font-size:12px;font-weight:700;">会員 ({cu})</div></div>', unsafe_allow_html=True)
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
 
     if cu == ADMIN_EMAIL.strip().lower():
@@ -1154,8 +1198,8 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
 # ==========================================
 macro_info = fetch_macro(); b5_live_map = fetch_5ch_live(); all_impact_news = fetch_global_impact_news()
 
-mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
-st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;"><div class="brand-luxury">YAMASHISHI LAB</div></div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
+mpills = "".join([f'<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:3px 8px;border-radius:6px;font-size:10px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
+st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;"><div class="brand-luxury">YAMASHISHI LAB</div></div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
 
 with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場を並列ディープスキャン中..."):
     g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
@@ -1168,7 +1212,7 @@ if focused_item:
     st.markdown("### ⚛️ 銘柄詳細・買い方合議フォーカスモード")
     render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True)
     
-    st.markdown("<br><hr style='border-color:rgba(56,189,248,0.3);'><br>", unsafe_allow_html=True)
+    st.markdown("<br><hr style='border-color:rgba(255,255,255,0.06);'><br>", unsafe_allow_html=True)
     if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", use_container_width=True, type="primary"):
         st.session_state["focused_stock_item"] = None
         st.session_state["scroll_target_id"] = f"card_anchor_{focused_item['code']}"
