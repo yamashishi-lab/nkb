@@ -241,8 +241,9 @@ def inject_css():
         width: 320px !important; max-width: 88vw !important; min-width: 300px !important;
     }
     
+    /* 修正点: opacityは0にするが、pointer-eventsは有効化しクリックをブロックさせない */
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], header button[kind="headerNoPadding"] {
-        opacity: 0 !important; position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; z-index: -1 !important; pointer-events: none !important;
+        opacity: 0 !important; position: absolute !important; top: -9999px !important; left: -9999px !important; z-index: -1 !important; 
     }
 
     div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"], div[role="listbox"] {
@@ -429,7 +430,6 @@ if "system_zero_status" not in st.session_state: st.session_state["system_zero_s
 scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
     tid = st.session_state.get("scroll_target_id")
-    # center配置で指定IDへ確実に戻る
     scroll_target_js = f"setTimeout(function(){{ try {{ const el = window.parent.document.getElementById('{tid}'); if(el){{ el.scrollIntoView({{behavior: 'smooth', block: 'center'}}); }} }} catch(e){{}} }}, 300);"
     st.session_state["scroll_target_id"] = ""
 
@@ -439,7 +439,6 @@ components.html(
     (function(){{
         const doc = window.parent.document;
         
-        // ゴースト化する古い要素の掃除
         const cleanupStrayElements = () => {{
             const oldMenus = doc.querySelectorAll('#yamashishi-floating-sidebar-btn');
             if (oldMenus.length > 1) {{ for(let i=0; i<oldMenus.length-1; i++) oldMenus[i].remove(); }}
@@ -448,11 +447,10 @@ components.html(
         }};
         cleanupStrayElements();
 
-        // 不要なHID_TOP / HID_CLSのボタンをDOM監視で完全に消し去るオブザーバー
         const observer = new MutationObserver((mutations) => {{
             const btns = doc.querySelectorAll('button');
             btns.forEach(b => {{
-                if(b.textContent.includes('HID_TOP') || b.textContent.includes('HID_CLS')) {{
+                if(b.textContent.includes('HID_TOP')) {{
                     const container = b.closest('div[data-testid="stElementContainer"]');
                     if(container && container.style.display !== 'none') {{
                         container.style.display = 'none';
@@ -472,11 +470,9 @@ components.html(
         const simulateClick = (el) => {{
             if (!el) return false;
             try {{
+                el.click();
                 const mouseEventInit = {{ bubbles: true, cancelable: true, view: window.parent }};
-                el.dispatchEvent(new MouseEvent('mousedown', mouseEventInit));
-                el.dispatchEvent(new MouseEvent('mouseup', mouseEventInit));
                 el.dispatchEvent(new MouseEvent('click', mouseEventInit));
-                el.click(); // fallback for native React behavior
             }} catch(e){{}}
             return true;
         }};
@@ -501,35 +497,28 @@ components.html(
                     btn.addEventListener('click', function(e){{ 
                         e.preventDefault(); e.stopPropagation(); 
                         
-                        const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-                        const isExpanded = sidebar && (window.parent.getComputedStyle(sidebar).display !== 'none') && (sidebar.getAttribute('aria-expanded') !== 'false');
+                        // Streamlitの開閉ボタンはDOMの状況によって変わるので両方探してある方を叩く
+                        const expandBtn = doc.querySelector('[data-testid="collapsedControl"]') || doc.querySelector('[data-testid="stSidebarCollapsedControl"]');
+                        const closeBtn = doc.querySelector('[data-testid="stSidebarHeader"] button') || doc.querySelector('section[data-testid="stSidebar"] button');
                         
-                        if (isExpanded) {{
-                            // 閉じるボタンを探す
-                            let closeBtn = doc.querySelector('[data-testid="stSidebarHeader"] button');
-                            if(!closeBtn) closeBtn = doc.querySelector('section[data-testid="stSidebar"] button');
-                            if(!closeBtn) closeBtn = doc.querySelector('[aria-label="Close"]');
-                            simulateClick(closeBtn);
-                        }} else {{
-                            // 開くボタンを探す
-                            let expandBtn = doc.querySelector('[data-testid="collapsedControl"]');
-                            if(!expandBtn) expandBtn = doc.querySelector('[data-testid="stSidebarCollapsedControl"]');
-                            if(!expandBtn) expandBtn = doc.querySelector('header button');
+                        if (expandBtn && window.parent.getComputedStyle(expandBtn).display !== 'none') {{
                             simulateClick(expandBtn);
+                        }} else if (closeBtn) {{
+                            simulateClick(closeBtn);
                         }}
                     }});
                 }}
             }} catch(e){{}}
         }}
 
-        // 上部固定のカッコいいナビゲーションボタン
+        // 上部固定のカッコいいナビゲーションボタン（中央配置＆合議閉じる削除）
         function installFixedTopNav(){{
             try {{
                 let nav = doc.getElementById('yamashishi-fixed-top-nav');
                 if(!nav){{
                     const style = doc.createElement('style');
                     style.textContent = `
-                        #yamashishi-fixed-top-nav {{ position:fixed; top:12px; right:12px; z-index:2147483647; display:flex; gap:10px; pointer-events:none; }}
+                        #yamashishi-fixed-top-nav {{ position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:2147483647; display:flex; gap:10px; pointer-events:none; }}
                         .yama-nav-btn {{ pointer-events:auto; background: linear-gradient(180deg, rgba(30,41,59,0.95), rgba(15,23,42,0.95)); color: #f8fafc; border: 1px solid rgba(56,189,248,0.4); border-radius: 8px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.6), 0 0 8px rgba(56,189,248,0.2); transition: all 0.1s ease; display:flex; align-items:center; backdrop-filter: blur(8px); }}
                         .yama-nav-btn:active {{ border-color: #fde047 !important; color: #fde047 !important; background: rgba(56, 189, 248, 0.4) !important; box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important; transform: scale(0.92) !important; }}
                     `;
@@ -542,22 +531,12 @@ components.html(
                     btnTop.className = 'yama-nav-btn';
                     btnTop.innerHTML = '🔝 トップへ戻る';
                     
-                    const btnClose = doc.createElement('div');
-                    btnClose.className = 'yama-nav-btn';
-                    btnClose.innerHTML = '✖ 合議閉じて戻る';
-
                     btnTop.onclick = () => {{
                         const btns = doc.querySelectorAll('button');
                         btns.forEach(b => {{ if(b.textContent.includes('HID_TOP')) simulateClick(b); }});
                     }};
-                    
-                    btnClose.onclick = () => {{
-                        const btns = doc.querySelectorAll('button');
-                        btns.forEach(b => {{ if(b.textContent.includes('HID_CLS')) simulateClick(b); }});
-                    }};
 
                     nav.appendChild(btnTop);
-                    nav.appendChild(btnClose);
                     doc.body.appendChild(nav);
                 }}
             }} catch(e){{}}
@@ -1017,208 +996,4 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
     st_prefix = style.split(" ")[1] if " " in style else "デイトレード"
     if st_prefix == "スキャルピング":
         sh = max(1, int(round(base_sh * 1.5)))
-        return {"algo_name": f"⚡ [{st_prefix}] 1分足モメンタム一気貫通型", "risk_posture": f"🚀 スキャル全開（ <b>{sh:,}株</b> で一気に抜く）", "core_logic": f"OFIとLULD引力が急加速している特異点で即座にエントリー。", "adj_shares": sh, "trade_duration": "数秒 〜 5分以内", "step_plan": f"① 朝イチ <b>{sh:,}株</b> 成行突撃 → ② <b>{tp_str}</b> 到達で利確", "beginner_html": (f"<b>🔰 超初心者向け！スキャルピングのやり方（数分でサクッと稼ぐ）</b><br><b>【ステップ1：買う準備】</b><br>朝9時の市場オープンと同時に、思い切って<b>{sh:,}株</b>を「成行（なりゆき）」で買います。<br><b>【ステップ2：利益と損切りの予約】</b><br>買えたらすぐに、<b>{tp_str}</b>で「利益確定」の売り注文、もし下がってしまった場合に備えて<b>{sl_str}</b>で「損切り（逆指値）」の注文を入れておきましょう。<br><b>💡 ポイント：</b> 短期決戦なので、上がったら欲張らずにすぐ利益を確定させるのがコツです！")}
-    elif st_prefix == "スイングトレード":
-        sh = max(1, int(round(base_sh * 1.2))); l1, l2 = max(1, int(round(sh * 0.6))), max(0, sh - max(1, int(round(sh * 0.6))))
-        return {"algo_name": f"📈 [{st_prefix}] トレンドフォロー・押し目型", "risk_posture": f"🏛️ スイング本玉買い（初回 <b>{l1:,}株</b> ＋ 追加 <b>{l2:,}株</b>）", "core_logic": f"Hurst指数がトレンド継続を示唆。数日間かけて上値を追う王道フォーメーション。", "adj_shares": sh, "trade_duration": "2日 〜 2週間程度", "step_plan": f"① 初回 <b>{l1:,}株</b> 取得 → ② 押し目で <b>{l2:,}株</b> を追加", "beginner_html": (f"<b>🔰 超初心者向け！スイングトレードのやり方（数日〜1週間かけて育てる）</b><br><b>【ステップ1：まずは半分買う】</b><br>初日は焦らず、予定している資金の半分くらい（<b>{l1:,}株</b>）を買います。<br><b>【ステップ2：下がったら買い増し】</b><br>数日後に少し株価が下がって「お買い得（押し目）」になったら、残りの<b>{l2:,}株</b>を追加で買います。<br><b>【ステップ3：目標まで待つ】</b><br>あとは目標の<b>{tp_str}</b>までゆっくり持ち続けます。（※危なくなったら<b>{sl_str}</b>で逃げましょう）")}
-    sh = max(1, int(round(base_sh * 1.65)))
-    return {"algo_name": f"🔥 [{st_prefix}] 情報精度S級・一括特攻型", "risk_posture": f"👑 全ツッパ・フルベット（ <b>{sh:,}株一括投入</b> ）", "core_logic": f"期待値と量子スコアが極大。寄り付き一括で最高期待値を抜き取る戦術。", "adj_shares": sh, "trade_duration": "30分 〜 前場終了まで", "step_plan": f"① 寄付き <b>全ロット {sh:,}株</b> 成行一括投入 → ② 逆指値（{sl_str}）をセット", "beginner_html": (f"<b>🔰 超初心者向け！デイトレードのやり方（その日のうちに勝負を決める）</b><br><b>【ステップ1：朝イチで一気に買う】</b><br>AIが「今がチャンス！」と判定しています。朝9時のオープン時に、<b>{sh:,}株</b>をまとめて買います。<br><b>【ステップ2：安全装置をセット】</b><br>買えたらすぐ、絶対に大損しないように<b>「{sl_str}」</b>で損切りの設定（逆指値）をしてください。<br><b>【ステップ3：目標達成でゴール】</b><br>あとは目標の<b>{tp_str}</b>まで上がったら自動で利益確定。その日のうちにサクッと手仕舞いします！")}
-
-def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=True, b5=True, bal=True, bms=True, bagi_q=False, bhft=False):
-    try:
-        if df_raw is None or df_raw.empty: return None
-        df = df_raw.dropna(subset=["Close", "Open", "High", "Low", "Volume"]).copy()
-        if len(df) < 30: return None
-        c, o, h, l, v = df["Close"].values.astype(float), df["Open"].values.astype(float), df["High"].values.astype(float), df["Low"].values.astype(float), df["Volume"].values.astype(float)
-
-        df["Prev_Close"] = df["Close"].shift(1)
-        df["Day_Return"] = (df["Close"] - df["Prev_Close"]) / df["Prev_Close"] * 100
-        df["ATR"] = pd.concat([df["High"] - df["Low"], (df["High"] - df["Prev_Close"]).abs(), (df["Low"] - df["Prev_Close"]).abs()], axis=1).max(axis=1).rolling(14).mean().fillna(df["Close"] * 0.02)
-        df["VWAP20"] = (((df["High"] + df["Low"] + df["Close"]) / 3.0 * df["Volume"]).rolling(20).sum() / df["Volume"].rolling(20).sum().replace(0, np.nan)).fillna(df["Close"])
-
-        qm, ms = compute_quantum_wave_metrics(c, h, l, v), compute_inst_microstructure(c, h, l, v)
-        lat = df.iloc[-1]
-        cv, atrv = float(lat["Close"]), float(lat["ATR"])
-
-        tot_win, expect_pct, edge = 65.5, 78.5, 4.5
-        hl_r = np.maximum(h - l, 1e-4)
-        sf = ((2.0 * c - h - l) / hl_r) * v
-        ofi_z = float((np.mean(sf[-5:]) - np.mean(sf[-20:])) / max(float(np.std(sf[-20:])) , 1.0))
-
-        if bagi_q and qm["q_tunnel"] > 75.0:
-            expect_pct = min(99.6, expect_pct + (qm["q_tunnel"] - 75.0) * 0.45); qm["q_score"] = min(99, qm["q_score"] + 6); qm["q_state"] = "🧠 AGI×量子トンネル超連鎖"
-        if bhft and ofi_z > 0.5:
-            expect_pct = min(99.9, expect_pct + ofi_z * 4.5); tot_win = min(99.0, tot_win + ofi_z * 2.5); edge = edge + ofi_z * 1.5; ms["ms_score"] = min(99, ms["ms_score"] + 8); ms["ms_regime"] = "⚠️ 極秘HFTステルス大口吸収"
-
-        pgap = 1.2
-        pest = cv * (1.0 + pgap / 100.0)
-        tpv = max(pest, cv) + (atrv * 0.95)
-        slv = cv - (atrv * 0.55)
-
-        rmoney = 1000000 * 0.02
-        base_sh = max(1, int(rmoney / max(cv - slv, cv * 0.005)))
-        fp = lambda val: f"{val:,.0f}円" if ".T" in code else f"${val:,.2f}"
-
-        strat = select_dynamic_strategy(code.replace(".T", ""), style, tot_win, round(expect_pct, 1), ofi_z, 0.5, 0.4, 3.5, 60.0, 0.8, base_sh, fp(pest), fp(float(lat["VWAP20"])), f"{fp(tpv)}(+{round((tpv-cv)/cv*100,1)}%)", f"{fp(slv)}({round((slv-cv)/cv*100,1)}%)", 15.0, qm, ms)
-        t_lbl, t_col, t_bg = "【Lv.7：⭕押し目買い】", "#e2e8f0", "linear-gradient(90deg,#334155,#1e293b)"
-        if expect_pct > 92: t_lbl, t_col, t_bg = "【Lv.10：🔥S級・全ツッパ】", "#fff", "linear-gradient(90deg,#7e22ce,#dc2626)"
-        elif expect_pct > 85: t_lbl, t_col, t_bg = "【Lv.9：⚡超強気買い】", "#fff", "linear-gradient(90deg,#0369a1,#1d4ed8)"
-
-        return {
-            "full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, 
-            "price": fp(cv), "raw_close": cv,
-            "tp_price": fp(tpv), "tp_pct": round((tpv - cv) / cv * 100, 1), "sl_price": fp(slv), "sl_pct": round((slv - cv) / cv * 100, 1), "vwap_price": fp(float(lat["VWAP20"])),
-            "inst_score": 85, "ofi_z": round(ofi_z, 2), 
-            "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_state": qm["q_state"],
-            "ms_score": ms["ms_score"], "kyle_stealth": ms["kyle_stealth"], "ms_regime": ms["ms_regime"],
-            "expect_pct": round(expect_pct, 1), "board5ch_score": 75, "pts_est_price": fp(pest), "pts_gap_pct": pgap, "diff": round(float(lat["Day_Return"]), 2),
-            "prob": 60.0, "intraday_win_rate": 55.0, "total_win_rate": round(tot_win, 1), "ai_score": 85,
-            "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg,
-            "lot_info": {"shares": strat["adj_shares"], "position_value": strat["adj_shares"] * cv},
-            "strat": strat
-        }
-    except Exception: return None
-
-@st.cache_data(ttl=1800)
-def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
-    codes = list({s["code"] for sts in STOCK_POOL.values() for s in sts})
-    raw = yf.download(codes, period="6mo", group_by="ticker", threads=True, progress=False, timeout=9)
-    gmap, alist, seen = {g: [] for g in STOCK_POOL.keys()}, [], set()
-    def _analyze_wrapper(g, s, df): return g, s["code"], analyze_df(df, s["code"], s["name"], s["theme"], g, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
-
-    with ThreadPoolExecutor(max_workers=min(len(codes), 12)) as ex:
-        for f in as_completed([ex.submit(_analyze_wrapper, g, s, raw[s["code"]] if len(codes)>1 else raw) for g, sts in STOCK_POOL.items() for s in sts]):
-            try:
-                g, c, r = f.result()
-                if r:
-                    gmap[g].append(r)
-                    if c not in seen: alist.append(r); seen.add(c)
-            except Exception: continue
-    return gmap, alist
-
-@st.cache_data(ttl=300)
-def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
-    inf = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
-    return analyze_df(yf.Ticker(code).history(period="6mo"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
-
-
-# ==========================================
-# 13. ヘッダー / マクロ指標の描画
-# ==========================================
-macro_info = fetch_macro(); b5_live_map = fetch_5ch_live(); all_impact_news = fetch_global_impact_news()
-
-mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
-st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;"><div class="brand-luxury">YAMASHISHI LAB</div></div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
-
-with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場を並列ディープスキャン中..."):
-    g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
-
-
-# ==========================================
-# 14. 画面レンダリング 
-# ==========================================
-focused_item = st.session_state.get("focused_stock_item")
-if focused_item:
-    st.markdown("### ⚛️ 銘柄詳細・買い方合議フォーカスモード")
-    render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True)
-    
-    st.markdown("<br><hr style='border-color:rgba(56,189,248,0.3);'><br>", unsafe_allow_html=True)
-    if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", use_container_width=True, type="primary"):
-        st.session_state["focused_stock_item"] = None
-        # Return to the previous view position
-        st.session_state["scroll_target_id"] = f"card_anchor_{focused_item['code']}"
-        st.rerun()
-else:
-    if st.session_state.get("navigation_page") == "NEWS_DETAIL":
-        tn = st.session_state.get("selected_news_item") or all_impact_news[0]
-        st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><span class="pill-badge" style="background:#ef4444;color:#fff;">🚨 重大ニュース深掘り</span><div style="font-size:18px;font-weight:800;margin-top:8px;">{tn["title"]}</div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;color:#e9d5ff;">🧠 波及メカニズム</div><div style="font-size:12.5px;">{tn["detail"]["mechanism"]}</div><div class="beginner-action-box" style="margin-top:10px;"><b>⚡ {investment_style.split(" ")[1]} 実践トレード立ち回り</b><br>{tn["detail"]["action_guide"].replace(chr(10), "<br>")}</div></div>', unsafe_allow_html=True)
-        st.markdown("### 🔗 連動注目銘柄")
-        for idx, r_item in enumerate(sorted(all_res, key=lambda x: x["expect_pct"], reverse=True)[:3], 1): render_card(r_item, rank=idx, kp=f"nr_{tn['id']}")
-        if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.rerun()
-    else:
-        c1, c2 = st.columns([3.4, 1])
-        cin = c1.text_input("🔍 銘柄検索", placeholder="コード入力 (例: 6920)", label_visibility="collapsed")
-        if c2.button("🔍 診断", use_container_width=True) and cin: st.session_state["custom_search_code"] = cin
-
-        if st.session_state.get("custom_search_code"):
-            cr = fetch_one(st.session_state["custom_search_code"], macro_info, b5_live_map, investment_style, True, True, True, True, "agi_q" in ac_b, "hft_front" in ac_b)
-            if cr:
-                render_card(cr, is_custom=True, kp="custom")
-                if st.button("✖️ 閉じる", use_container_width=True): st.session_state["custom_search_code"] = ""; st.rerun()
-
-        def cut_stocks(slist, pct): return slist[:max(3, int(round(len(slist) * (pct / 100.0))))] if slist else []
-        cats = ["🏆 総合TOP5", "⚛️ 量子トンネル突破TOP10", "🏛️ 機関最新ミクロ構造TOP10", "🚨 重大ニュース＆連動株", "🎟️ IPO募集・新規上場", "🏦 機関VPIN・OFI", "🔥 5ch＆短期モメンタム", "📋 監視シート"] + [f"📂 {g}" for g in STOCK_POOL.keys()]
-        st.markdown(f'<div class="compact-bar-label"><span>📂 QUANTUM STRATEGY ({investment_style.split(" ")[1]})</span></div>', unsafe_allow_html=True)
-
-        if st.session_state.get("active_category") not in cats: st.session_state["active_category"] = "🏆 総合TOP5"
-
-        def _on_cat_change():
-            nw = st.session_state.get("active_category_selector")
-            if nw and nw != st.session_state.get("last_cat"): 
-                st.session_state["nav_history"].append(st.session_state["last_cat"])
-                st.session_state["last_cat"], st.session_state["active_category"] = nw, nw
-
-        if hasattr(st, "pills"): st.pills("カテゴリ", cats, default=cats[cats.index(st.session_state["active_category"])], selection_mode="single", label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
-        else: st.radio("カテゴリ", cats, index=cats.index(st.session_state["active_category"]), horizontal=True, label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
-
-        sel_cat = st.session_state.get("active_category")
-        surv = cut_stocks(sorted(all_res, key=lambda x: x["expect_pct"], reverse=True), 75)
-
-        if sel_cat == "🏆 総合TOP5":
-            for i, r in enumerate(surv[:5], 1): render_card(r, rank=i, kp="top5")
-        elif sel_cat == "⚛️ 量子トンネル突破TOP10":
-            for i, r in enumerate(sorted(all_res, key=lambda x: x["q_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="qtop")
-        elif sel_cat == "🏛️ 機関最新ミクロ構造TOP10":
-            for i, r in enumerate(sorted(all_res, key=lambda x: x["ms_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mstop")
-        elif sel_cat == "🚨 重大ニュース＆連動株":
-            for n in all_impact_news:
-                st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="font-size:11px;color:#f87171;font-weight:800;">🚨 {n["cat"]}</div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-bottom:4px;">{n["title"]}</div></div>', unsafe_allow_html=True)
-                if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True): 
-                    st.session_state["selected_news_item"] = n; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.rerun()
-        elif sel_cat == "🎟️ IPO募集・新規上場":
-            st.markdown('<div class="glass-header"><div style="font-size:15px;font-weight:800;color:#f8fafc;">🎟️ 新規上場 (IPO) ブックビルディング募集</div></div>', unsafe_allow_html=True)
-            for ipo in IPO_OFFERINGS:
-                links_html = "".join([f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">🔗 {lbl}</a>' for lbl, url in ipo["links"]])
-                st.markdown(f'<div class="rank-card" style="border-left-color:#f59e0b;"><div><span style="font-size:16px;font-weight:800;">{ipo["name"]}</span></div><div style="margin-top:7px;">{links_html}</div></div>', unsafe_allow_html=True)
-        elif sel_cat == "🏦 機関VPIN・OFI":
-            for i, r in enumerate(sorted(all_res, key=lambda x: x["inst_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
-        elif sel_cat == "🔥 5ch＆短期モメンタム":
-            for i, r in enumerate(sorted(all_res, key=lambda x: x["board5ch_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
-        elif sel_cat == "📋 監視シート":
-            if st.button("⚡ 総合TOP3を一括登録", use_container_width=True):
-                for it in surv[:3]: st.session_state["watchlist"][it["code"]] = it
-                st.rerun()
-            for wc, wi in list(st.session_state["watchlist"].items()): render_card(wi, kp=f"wl_{wc}")
-        elif sel_cat.startswith("📂 "):
-            for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), 75), 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
-
-
-# JSから叩かせる用の隠しボタントリガー群（MutationObserverでDOM構築直後に非表示になります）
-if st.button("HID_TOP", key="hidden_top_trigger"):
-    st.session_state["navigation_page"] = "TOP"
-    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-    st.session_state["focused_stock_item"] = None
-    st.rerun()
-
-if st.button("HID_CLS", key="hidden_close_trigger"):
-    if st.session_state.get("focused_stock_item"):
-        # 合議が開いている場合は、合議状態を解除し、元のカード要素へのスクロールIDをセット
-        st.session_state["scroll_target_id"] = f"card_anchor_{st.session_state['focused_stock_item']['code']}"
-        st.session_state["focused_stock_item"] = None
-    else:
-        st.session_state["active_debates"] = {}
-        st.session_state["focused_stock_item"] = None
-        if st.session_state.get("navigation_page") != "TOP":
-            st.session_state["navigation_page"] = "TOP"
-            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-        elif st.session_state.get("custom_search_code"):
-            st.session_state["custom_search_code"] = ""
-        elif st.session_state.get("nav_history") and len(st.session_state["nav_history"]) > 0:
-            popped = st.session_state["nav_history"].pop()
-            st.session_state["active_category"] = popped
-            st.session_state["last_cat"] = popped
-        else:
-            st.session_state["active_category"] = "🏆 総合TOP5"
-            st.session_state["last_cat"] = "🏆 総合TOP5"
-    st.rerun()
+        return {"algo_name": f"⚡ [{st_prefix}] 1分足モメンタム一気貫通型", "risk_posture": f"🚀 スキャル全開（ <b>{sh:,}株
