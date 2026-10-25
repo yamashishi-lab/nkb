@@ -193,7 +193,7 @@ def get_active_ai_providers() -> list:
     return act
 
 # ==========================================
-# 4. UI と CSS / JS 注入 (透明・発光トップボタン対応)
+# 4. UI と CSS / JS 注入 (サイドバー開閉・透明ボタン完全修正)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -236,6 +236,7 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
+    /* サイドバーカスタムCSS */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 9999999 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
@@ -256,7 +257,6 @@ def inject_css():
         margin-left: 0 !important; width: 100% !important; max-width: 100% !important;
     }
 
-    /* サイドバー整理用スタイル */
     .sidebar-section-card {
         background: rgba(15, 23, 42, 0.65);
         border: 1px solid rgba(56, 189, 248, 0.18);
@@ -278,8 +278,8 @@ def inject_css():
 
     /* トップに戻る：完全透明＆タップ時発光スタイル */
     .fixed-top-nav-bar {
-        position: fixed !important; top: 12px !important; left: 50% !important; transform: translateX(-50%) !important;
-        z-index: 999980 !important; width: min(180px, calc(100vw - 4rem)) !important; background: transparent !important;
+        position: fixed !important; top: 10px !important; left: 50% !important; transform: translateX(-50%) !important;
+        z-index: 999980 !important; width: min(170px, calc(100vw - 4rem)) !important; background: transparent !important;
         border: none !important; margin: 0 !important; padding: 0 !important; pointer-events: auto !important;
     }
     div[data-testid="stElementContainer"]:has(div.top-nav-marker), div.element-container:has(div.top-nav-marker) {
@@ -289,8 +289,8 @@ def inject_css():
         background: transparent !important; border: none !important; width: 100% !important; display: flex !important; justify-content: center !important;
     }
     .fixed-top-nav-bar button {
-        width: 100% !important; height: 32px !important; min-height: 32px !important; max-height: 32px !important;
-        background: transparent !important; color: rgba(226, 232, 240, 0.8) !important;
+        width: 100% !important; height: 30px !important; min-height: 30px !important; max-height: 30px !important;
+        background: transparent !important; color: rgba(226, 232, 240, 0.75) !important;
         border: 1px solid transparent !important; border-radius: 20px !important;
         box-shadow: none !important; font-size: 11.5px !important; font-weight: 700 !important;
         letter-spacing: 0.5px !important; cursor: pointer !important; transition: all 0.25s ease !important;
@@ -339,7 +339,6 @@ def inject_css():
         background: rgba(2,6,23,0.7) !important; padding: 6px 4px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.15); text-align: center;
     }
     
-    /* 管理画面用テーブルスタイル */
     .admin-table-container {
         width: 100%; overflow-x: auto; background: #0b0f19; border: 1px solid rgba(56,189,248,0.25); border-radius: 10px; margin-top: 10px;
     }
@@ -464,7 +463,6 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
-# 常時10人のエージェント定義
 DEFAULT_AGENTS = {
     "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "age": 24, "score": 98, "good": "直感的な相場の裏読み、量子トンネル特異点の発見", "bad": "論理の飛躍が多く説明が抽象的になりがち"},
     "AEGIS": {"name": "AEGIS", "icon": "🛡️", "age": 32, "score": 95, "good": "CVaRに基づく鉄壁の資金管理と規律", "bad": "慎重すぎて機会損失を生むことがある"},
@@ -480,7 +478,6 @@ DEFAULT_AGENTS = {
 if "agent_roster" not in st.session_state:
     st.session_state["agent_roster"] = dict(DEFAULT_AGENTS)
 
-# 監視員3名定義
 DEFAULT_INSPECTORS = {
     "INSP_A": {"name": "JUDGE-ALPHA", "icon": "⚖️", "score": 96, "role": "数理整合性・リスク許容度監査"},
     "INSP_B": {"name": "JUDGE-BETA", "icon": "🔍", "score": 94, "role": "市場ファンダ・ニュース整合性監査"},
@@ -490,7 +487,7 @@ if "inspector_roster" not in st.session_state:
     st.session_state["inspector_roster"] = dict(DEFAULT_INSPECTORS)
 
 # ==========================================
-# 7. トップナビゲーション（透明＆発光）
+# 7. トップナビゲーションとサイドバー開閉JS (完全動作修正版)
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -511,60 +508,105 @@ components.html(
     <script>
     (function(){{
         const doc = window.parent.document;
-        let isSidebarOpen = false;
-        
-        function updateSidebarState() {{
+        const pWin = window.parent;
+
+        if (typeof pWin._yamashishi_sidebar_open === 'undefined') {{
+            pWin._yamashishi_sidebar_open = false;
+        }}
+
+        function applySidebarState() {{
             const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
             const overlay = doc.getElementById('yamashishi-sidebar-overlay');
-            if(sidebar && overlay) {{
-                if(isSidebarOpen) {{
+            if (sidebar) {{
+                if (pWin._yamashishi_sidebar_open) {{
                     sidebar.classList.add('yamashishi-sidebar-open');
-                    overlay.classList.add('active');
                 }} else {{
                     sidebar.classList.remove('yamashishi-sidebar-open');
+                }}
+            }}
+            if (overlay) {{
+                if (pWin._yamashishi_sidebar_open) {{
+                    overlay.classList.add('active');
+                }} else {{
                     overlay.classList.remove('active');
                 }}
             }}
         }}
-        
-        function installCustomSidebarToggle(){{
+
+        function setupCustomSidebar() {{
             try {{
-                if(doc.getElementById('yamashishi-floating-sidebar-btn')) return;
-                
-                const style = doc.createElement('style');
-                style.textContent = `
-                    #yamashishi-floating-sidebar-btn {{ position: fixed !important; top: 8px !important; left: 9px !important; z-index: 2147483647 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 3px !important; height: 26px !important; padding: 0 8px 0 6px !important; background: rgba(11, 15, 25, 0.95) !important; backdrop-filter: blur(16px) !important; border: 1.5px solid rgba(56, 189, 248, 0.6) !important; border-radius: 8px !important; cursor: pointer !important; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.3) !important; user-select: none !important; transition: all 0.2s ease !important; color: #38bdf8 !important; }}
-                    #yamashishi-floating-sidebar-btn:hover {{ border-color: #fde047 !important; color: #fde047 !important; box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important; }}
-                    #yamashishi-floating-sidebar-btn:active {{ transform: scale(0.95) !important; }}
-                    #yamashishi-floating-sidebar-btn svg {{ width: 14px !important; height: 14px !important; }}
-                    #yamashishi-floating-sidebar-btn span {{ font-family: 'JetBrains Mono', monospace !important; font-size: 10px !important; font-weight: 800 !important; }}
-                    
-                    #yamashishi-sidebar-overlay {{ position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); backdrop-filter: blur(3px); z-index: 9999998 !important; opacity: 0; visibility: hidden; transition: all 0.35s ease; }}
-                    #yamashishi-sidebar-overlay.active {{ opacity: 1; visibility: visible; }}
-                `;
-                doc.head.appendChild(style);
+                if (!doc.getElementById('yamashishi-custom-sidebar-styles')) {{
+                    const style = doc.createElement('style');
+                    style.id = 'yamashishi-custom-sidebar-styles';
+                    style.textContent = `
+                        #yamashishi-floating-sidebar-btn {{
+                            position: fixed !important; top: 8px !important; left: 10px !important;
+                            z-index: 2147483647 !important; display: flex !important; align-items: center !important;
+                            justify-content: center !important; gap: 4px !important; height: 28px !important;
+                            padding: 0 10px 0 8px !important; background: rgba(11, 15, 25, 0.95) !important;
+                            backdrop-filter: blur(16px) !important; border: 1.5px solid rgba(56, 189, 248, 0.7) !important;
+                            border-radius: 8px !important; cursor: pointer !important;
+                            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.3) !important;
+                            user-select: none !important; transition: all 0.2s ease !important; color: #38bdf8 !important;
+                            pointer-events: auto !important;
+                        }}
+                        #yamashishi-floating-sidebar-btn:hover {{
+                            border-color: #fde047 !important; color: #fde047 !important;
+                            box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important;
+                        }}
+                        #yamashishi-floating-sidebar-btn:active {{ transform: scale(0.95) !important; }}
+                        #yamashishi-floating-sidebar-btn svg {{ width: 15px !important; height: 15px !important; }}
+                        #yamashishi-floating-sidebar-btn span {{ font-family: 'JetBrains Mono', monospace !important; font-size: 11px !important; font-weight: 800 !important; }}
+                        
+                        #yamashishi-sidebar-overlay {{
+                            position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important;
+                            background: rgba(0,0,0,0.7) !important; backdrop-filter: blur(4px) !important;
+                            z-index: 9999998 !important; opacity: 0 !important; visibility: hidden !important;
+                            transition: all 0.35s ease !important; pointer-events: none !important;
+                        }}
+                        #yamashishi-sidebar-overlay.active {{
+                            opacity: 1 !important; visibility: visible !important; pointer-events: auto !important;
+                        }}
+                    `;
+                    doc.head.appendChild(style);
+                }}
 
-                const btn = doc.createElement('div'); btn.id = 'yamashishi-floating-sidebar-btn';
-                btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span>MENU</span>`;
-                
-                const overlay = doc.createElement('div');
-                overlay.id = 'yamashishi-sidebar-overlay';
-                
-                doc.body.appendChild(overlay);
-                doc.body.appendChild(btn);
+                let overlay = doc.getElementById('yamashishi-sidebar-overlay');
+                if (!overlay) {{
+                    overlay = doc.createElement('div');
+                    overlay.id = 'yamashishi-sidebar-overlay';
+                    doc.body.appendChild(overlay);
+                }}
 
-                btn.addEventListener('click', function(e){{
-                    e.preventDefault(); e.stopPropagation();
-                    isSidebarOpen = !isSidebarOpen; 
-                    updateSidebarState();
-                }});
-                
-                overlay.addEventListener('click', function(e){{
-                    e.preventDefault(); e.stopPropagation();
-                    isSidebarOpen = false; 
-                    updateSidebarState();
-                }});
-            }} catch(e){{}}
+                let btn = doc.getElementById('yamashishi-floating-sidebar-btn');
+                if (!btn) {{
+                    btn = doc.createElement('div');
+                    btn.id = 'yamashishi-floating-sidebar-btn';
+                    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span>MENU</span>`;
+                    doc.body.appendChild(btn);
+                }}
+
+                btn.onclick = function(e) {{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    pWin._yamashishi_sidebar_open = !pWin._yamashishi_sidebar_open;
+                    applySidebarState();
+
+                    const nativeCollapsed = doc.querySelector('[data-testid="collapsedControl"] button') || doc.querySelector('[data-testid="stSidebarCollapsedControl"] button');
+                    if (nativeCollapsed) {{
+                        try {{ nativeCollapsed.click(); }} catch(err) {{}}
+                    }}
+                }};
+
+                overlay.onclick = function(e) {{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    pWin._yamashishi_sidebar_open = false;
+                    applySidebarState();
+                }};
+
+                applySidebarState();
+            }} catch(e) {{}}
         }}
 
         function fixTopNav(){{
@@ -576,9 +618,9 @@ components.html(
             }} catch(e){{}}
         }}
 
-        installCustomSidebarToggle();
+        setupCustomSidebar();
         fixTopNav();
-        setInterval(updateSidebarState, 100);
+        setInterval(applySidebarState, 150);
         setTimeout(fixTopNav, 100);
 
         function scrollToTopAbsolute(){{
@@ -598,7 +640,7 @@ components.html(
     </script>""", height=0)
 
 # ==========================================
-# 8. サイドバー構築（整理・監査＆管理画面完備）
+# 8. サイドバー構築
 # ==========================================
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
@@ -611,7 +653,6 @@ with st.sidebar:
         )
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
     
-    # 管理者用コントロールパネル
     if cu == ADMIN_EMAIL.strip().lower():
         st.markdown('<div class="sidebar-section-card" style="border-color:#eab308;">', unsafe_allow_html=True)
         st.markdown('<div class="sidebar-header-badge" style="color:#fde047;">👑 管理者コントロール</div>', unsafe_allow_html=True)
@@ -620,7 +661,6 @@ with st.sidebar:
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # 1. 投資スタイル＆アルゴリズム
     with st.expander("🎯 投資スタイル ＆ アルゴリズム", expanded=False):
         investment_style = st.selectbox("トレードスタイル", [
             "⚡ デイトレード (前場・後場の波及を狙う)", 
@@ -645,7 +685,6 @@ with st.sidebar:
             if st.checkbox(label, value=True, key=f"chk_{key}"):
                 ac_b.add(key)
 
-    # 2. AIプロバイダー設定
     with st.expander("🧠 7大AI ＆ 量子エンジン設定", expanded=False):
         llm_cfg = load_llm()
         cur_prov = st.selectbox("AIプロバイダー", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
@@ -659,13 +698,11 @@ with st.sidebar:
         st.session_state[f"rt_key_{cur_prov}"] = in_k; st.session_state[f"rt_mod_{cur_prov}"] = in_m
         st.caption(f"🟢 現在稼働可能AI: **{len(get_active_ai_providers())} / 7社**")
 
-    # 3. 資金管理
     with st.expander("💰 資金管理＆選抜フィルタ", expanded=False):
         total_capital = st.number_input("総投資資金 (円)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
         risk_tolerance_pct = st.slider("1トレード許容リスク (%)", 0.5, 5.0, 2.0, 0.5)
         survival_cut_pct = st.slider("選抜合格率 (%)", 40, 100, 75, 5)
 
-    # 4. AGI 鬼監査センター（3名監視員 ＋ 常時10名エージェント ＋ SYSTEM-ZERO）
     with st.expander("🏢 AGI鬼監査センター (監視3名・10名常時)", expanded=True):
         st.markdown(
             '<div style="background:rgba(168,85,247,0.12);border:1px solid #c084fc;padding:6px 8px;border-radius:6px;font-size:11px;margin-bottom:8px;">'
@@ -674,14 +711,12 @@ with st.sidebar:
             '</div>', unsafe_allow_html=True
         )
 
-        # 鬼監査＆自律交代ロジック
         if "last_audit_trig" not in st.session_state or random.random() < 0.25:
             st.session_state["last_audit_trig"] = time.time()
             inspectors = st.session_state["inspector_roster"]
             agents = st.session_state["agent_roster"]
             now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            # 監視員自身の審査（SYSTEM-ZEROによる監査員パージ）
             if st.session_state.get("system_zero_active", True) and random.random() < 0.08:
                 insp_k = random.choice(list(inspectors.keys()))
                 old_insp = inspectors[insp_k]
@@ -696,12 +731,10 @@ with st.sidebar:
                     "role": f"SYSTEM-ZERO直属 厳格監査プロトコル v{new_num}.0"
                 }
 
-            # 監視員によるエージェント10名の審査
             if len(agents) > 0 and random.random() < 0.20:
                 target_k = random.choice(list(agents.keys()))
                 target_agent = agents[target_k]
                 
-                # ペナルティ判定
                 audit_reasons = [
                     ("損切ロジックの甘さ（リスク許容度の逸脱）", 30),
                     ("抽象論・一般論の回答による分析サボり", 28),
@@ -712,7 +745,6 @@ with st.sidebar:
                 target_agent["score"] -= pen
                 acting_insp = random.choice(list(inspectors.values()))["name"]
 
-                # 基準点割れで解雇・即交代
                 if target_agent["score"] < 75:
                     st.session_state["fired_agents"].insert(0, {
                         "time": now_time,
@@ -721,7 +753,6 @@ with st.sidebar:
                         "reason": reason,
                         "fired_by": acting_insp
                     })
-                    # 解雇されたエージェントの弱点を克服した優秀な新人を即時雇用
                     new_agent_name = target_agent["name"] + ("-Superior" if "-" not in target_agent["name"] else "X")
                     agents[target_k] = {
                         "name": new_agent_name,
@@ -731,10 +762,8 @@ with st.sidebar:
                         "good": f"前任の解雇理由『{reason}』をアルゴリズムレベルで完全克服。極限の最適化済み",
                         "bad": "実践ログ蓄積中"
                     }
-                    # 合議スレッドをクリアして新体制へ
                     st.session_state["council_threads"] = {}
 
-        # 監視員3名の表示
         st.markdown("<div style='font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:4px;'>⚖️ 稼働中・特命監査員 (3名)</div>", unsafe_allow_html=True)
         for ik, iv in st.session_state["inspector_roster"].items():
             st.markdown(
@@ -744,7 +773,6 @@ with st.sidebar:
                 f'</div>', unsafe_allow_html=True
             )
 
-        # エージェント10名の表示（コンパクト一覧）
         st.markdown("<div style='font-size:11px;font-weight:700;color:#10b981;margin:8px 0 4px 0;'>🟢 厳選合議エージェント (常時10名)</div>", unsafe_allow_html=True)
         for ak, av in st.session_state["agent_roster"].items():
             st.markdown(
@@ -829,7 +857,7 @@ def analyze_news_impact_and_links(title: str, cat: str) -> dict:
     }
 
 # ==========================================
-# 10. AI合議と並列Web検索ロジック (10名エージェント対応)
+# 10. AI合議と並列Web検索ロジック
 # ==========================================
 def search_single_query(query: str, max_results: int) -> list:
     ctx = ssl.create_default_context()
@@ -863,7 +891,6 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
         web_snippets = search_web_knowledge_parallel(user_query, f"{r['name']} {user_query}")
     web_context_str = "\n".join([f"・{s}" for s in web_snippets]) if web_snippets else ""
     
-    # 稼働中の最新10名エージェントからダイナミック合議を生成
     roster = st.session_state.get("agent_roster", DEFAULT_AGENTS)
     active_keys = list(roster.keys())
     lead_ag = roster.get("NEXUS", list(roster.values())[0])
@@ -1196,7 +1223,7 @@ with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場を並�
     g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
 
 # ==========================================
-# 14. 画面レンダリング（ADMIN管理画面 ＆ フォーカスモード ＆ リスト）
+# 14. 画面レンダリング
 # ==========================================
 
 # ■ ADMIN（統合管理コントロールセンター）
@@ -1208,13 +1235,11 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
 
     tab_users, tab_employment, tab_apply_wait = st.tabs(["👥 会員情報管理", "🏢 AGI雇用・監視情報", "📩 会員申し込み審査"])
 
-    # 1. 会員情報管理（表形式・ステータス変更・BAN・削除）
     with tab_users:
         st.markdown("#### 📋 登録済み会員一覧 (データベース同期中)")
         db_m = load_mem()
         sec_m = load_sec()
         
-        # テーブルヘッダーと各行の描画
         st.markdown(
             """
             <div class="admin-table-container">
@@ -1278,11 +1303,9 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                 del db_m[target_em]
                 save_j(FILES["mem"], db_m); st.warning(f"{target_em} のデータを抹消しました"); st.rerun()
 
-    # 2. AGI雇用・監視情報パネル（解雇一覧・SYSTEM-ZERO操作）
     with tab_employment:
         st.markdown("#### 🏢 SYSTEM-ZERO & AGI雇用・解雇統括パネル")
         
-        # 管理者専用：SYSTEM-ZERO解雇/再起動ボタン
         c_sz1, c_sz2 = st.columns([3, 1])
         sz_status = "🟢 稼働中 (超越監視作動中)" if st.session_state.get("system_zero_active", True) else "🔴 解雇・停止中"
         c_sz1.markdown(f"**SYSTEM-ZERO 状態:** {sz_status}")
@@ -1328,7 +1351,6 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         else:
             st.caption("現在、解雇履歴はありません。全10名のエージェントが優秀に稼働しています。")
 
-    # 3. 会員申し込み審査（標タイプ ＋ 認証/拒否ボタン）
     with tab_apply_wait:
         st.markdown("#### 📩 新規会員登録 審査待ちリスト")
         db_all = load_mem()
