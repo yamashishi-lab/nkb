@@ -364,7 +364,6 @@ def inject_css():
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
     html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}
     
-    /* Popover/メニュー（BaseWeb）を最上位に配置しクリッピングを解除 */
     div[data-baseweb="popover"],
     div[data-baseweb="menu"],
     div[role="listbox"],
@@ -380,7 +379,6 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* サイドバー：transformの固定化を解除し、座標計算を正常化 */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 999995 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
@@ -389,7 +387,6 @@ def inject_css():
         pointer-events: auto !important; visibility: visible !important;
     }
     
-    /* サイドバー内部要素が正常にクリックを受け取る指定 */
     section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
         pointer-events: auto !important;
     }
@@ -758,7 +755,6 @@ components.html(
                     doc.body.appendChild(btn);
                 }}
 
-                /* Streamlit標準の開閉トグルボタンを直接発火（BaseWebが誤認識しない正規トグル） */
                 btn.onclick = function(e) {{
                     e.preventDefault();
                     e.stopPropagation();
@@ -829,12 +825,19 @@ with st.sidebar:
         st.markdown('</div>', unsafe_allow_html=True)
 
     with st.expander("🎯 投資スタイル ＆ アルゴリズム", expanded=False):
+        old_style = st.session_state.get("investment_style_choice", "⚡ デイトレード (前場・後場の波及を狙う)")
         investment_style = st.selectbox("トレードスタイル", [
             "⚡ デイトレード (前場・後場の波及を狙う)", 
             "🚀 スキャルピング (秒〜分単位のモメンタム)", 
             "📈 スイングトレード (数日〜数週間のトレンド)", 
             "💎 バイ＆ホールド (中長期・IPO分散投資)"
-        ], index=0)
+        ], index=0, key="investment_style_choice")
+        
+        # スタイルが切り替わったら合議キャッシュを自動クリアして即座に連動
+        if investment_style != old_style:
+            st.session_state["council_threads"] = {}
+            st.session_state["council_meta"] = {}
+            
         st.caption(f"選択中: **{investment_style.split(' ')[1]}**")
         
         st.markdown("<hr style='margin:8px 0; border-color:rgba(56,189,248,0.2);'>", unsafe_allow_html=True)
@@ -1066,39 +1069,49 @@ def search_web_knowledge_parallel(query1: str, query2: str) -> list:
         if f2: results.extend(f2.result())
     return list(dict.fromkeys(results))
 
-def generate_humanlike_2ch_debate(r: dict, user_query: str) -> list:
+def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
     uq = user_query.strip()
-    is_greeting = any(w in uq for w in ["こんにちは", "こんちは", "こんばんは", "おはよ", "初めまして", "よろしく", "押忍", "ども"])
+    is_greeting = any(w in uq for w in ["こんにちは", "こんちは", "こんばんは", "おはよ", "初めまして", "よろしく", "押忍", "ども"]) if uq else False
     
+    # リアルタイムで対象銘柄に関する最新市況・Web情報を並列検索
     web_hits = []
-    if not is_greeting and len(uq) > 1:
-        web_hits = search_web_knowledge_parallel(f"{r['name']} {uq}", f"{r['code']} 株価 掲示板")
+    search_q1 = f"{r['name']} 株価 {uq}" if uq and not is_greeting else f"{r['name']} 株価 決算 ニュース"
+    search_q2 = f"{r['code']} 掲示板 材料" if not uq else f"{r['code']} {uq}"
+    web_hits = search_web_knowledge_parallel(search_q1, search_q2)
     
-    top_news_context = web_hits[0] if web_hits else "特段の突発バッドニュースなし、大口の買い板継続中"
+    top_news_context = web_hits[0] if web_hits else f"{r['theme']}に関する機関フロー流入中、直近の大きな悪材料なし"
+    sub_news_context = web_hits[1] if len(web_hits) > 1 else f"気配値OFI乖離度 Z={r.get('ofi_z', 0.5)}、板厚増加傾向"
 
+    st_style = r.get("strat", {}).get("style_name", "デイトレード")
+    
     sys_prompt = f"""
-あなたは日本の2ch（5ch）の市況実況スレにいる4人の凄腕個人投資家（AIエージェント）です。
-対象銘柄は【{r['code']} {r['name']}】です。現在値: {r['price']}、期待度: {r['expect_pct']}%。
-関連ニュースコンテキスト: {top_news_context}
+あなたは日本の2ch（5ch）の市況実況スレにいる凄腕個人投資家AIエージェント達です。
+対象銘柄: 【{r['code']} {r['name']}】（分野: {r.get('genre', '')} / テーマ: {r.get('theme', '')}）
+現在値: {r['price']}、本日の期待度: {r['expect_pct']}%、現在のトレードスタイル方針: 【{st_style}】。
+最新Web検索ヒット材料:
+1: {top_news_context}
+2: {sub_news_context}
 
-ユーザーの書き込み（質問や意見）に対して、以下の4人のキャラクターで順番にレスアンカーを付けて返信してください。
+ユーザーの書き込み（質問や意見、空の場合は初期スレッド立ち上げ）: 『{uq if uq else "（スレッド初期議論）"}』
+
+上記情報と銘柄の具体的な社名・材料・現在値({r['price']})・{st_style}の時間軸を必ず盛り込んで、以下の4人のキャラクターで順番にレスを生成してください。
 【キャラクター】
-1. 🔥 IGNIS: 熱血順張り派。口調は荒く「～だろ！」「～じゃねえぞ！」。トーン: rage または agree
+1. 🔥 IGNIS: 熱血順張り派。口調は荒く「〜だろ！」「〜じゃねえぞ！」。トーン: rage または agree
 2. 📐 TECHNOS: 冷徹なクオンツ派。丁寧語で数値を重視「～ですね」「～と推測されます」。トーン: normal
 3. 👁️ SENTINEL: 疑心暗鬼の逆張り派。イナゴを嫌う「～だろｗ」「気をつけろよ」。トーン: doubt
 4. ⚔️ VALKYRIE: 板読みスキャルパー。「～万株の買いが入った！」「ブレイク秒読み！」。トーン: agree
 
-必ず以下のJSON形式（配列）で出力してください。JSON以外のテキストは絶対に出力しないでください。
+必ず以下のJSON形式（配列）で出力してください。Markdownコードフェンスや余計な文字は一切含めないでください。
 [
-    {{"speaker": "🔥 IGNIS", "score": 91, "tone": "rage", "text": "レス内容"}},
-    {{"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": "レス内容"}},
-    {{"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": "レス内容"}},
-    {{"speaker": "⚔️ VALKYRIE", "score": 92, "tone": "agree", "text": "レス内容"}}
+    {{"speaker": "🔥 IGNIS", "score": 91, "tone": "agree", "text": "内容"}},
+    {{"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": "内容"}},
+    {{"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": "内容"}},
+    {{"speaker": "⚔️ VALKYRIE", "score": 92, "tone": "agree", "text": "内容"}}
 ]
 """
     llm_result = None
     if get_active_ai_providers():
-        llm_response_text = call_real_llm_api(sys_prompt, uq)
+        llm_response_text = call_real_llm_api(sys_prompt, uq or "初期分析合議")
         if llm_response_text:
             try:
                 clean_json = re.sub(r'```json|```', '', llm_response_text).strip()
@@ -1109,47 +1122,41 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str) -> list:
                 llm_result = None
 
     turns = []
-    turns.append({"round": f"🔥 市況実況スレッド 【{r['code']}】{r['name']} 本スレ Part.892"})
+    turns.append({"round": f"🔥 市況実況スレッド 【{r['code']}】{r['name']} 本スレ Part.892 ｜ {st_style}合議"})
 
     if llm_result:
         turns.extend(llm_result)
     else:
-        if is_greeting:
+        # Web検索結果を即座に動的に反映した高精度バックアップ対話
+        t_topic = top_news_context[:48]
+        if uq and not is_greeting:
             turns.extend([
-                {"speaker": "🔥 IGNIS", "score": 91, "tone": "agree", "text": "うっす！挨拶乙！お前ら寄り前の気配値見たか？この地合いで呑気に挨拶してる場合じゃねえぞ、板がガンガン動いてる！"},
-                {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": "はい、こんにちは。挨拶は基本ですが、板のOFI（気配値の注文偏向）はすでに買い側に傾いています。感情を捨てて数値を追ってください。"},
-                {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": "新参か？こんにちはー。だが煽り屋イナゴの群れがそろそろ飛びつきそうな気配配だから、浮かれて成行特攻だけはすんなよ。"},
-                {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": "ようこそ。本日の当銘柄の期待値は " + str(r['expect_pct']) + "%。挨拶代わりに、まずは無理のないロットで逆指値（ストップ安防止）を徹底して参戦してください。"}
+                {"speaker": "🔥 IGNIS", "score": 91, "tone": "rage", "text": f"おい！『{uq}』って書いた奴！【{r['name']}】の直近材料【{t_topic}】見たか！？現在値 {r['price']} でモタモタしてる暇ねえぞ！押し目来たら即買い特攻だろ！"},
+                {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": f"冷静に数理を見てください。『{uq}』への懸念は織り込み済みです。【{r['name']}】のOFI乖離度は Z={r.get('ofi_z', 0.8)}、Kyle-λステルス指数は {r.get('kyle_stealth', 75)}%。【{st_style}】の執行基準に極めて合致します。"},
+                {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": f"スレ民調子に乗るなよｗ 『{uq}』でSNSイナゴが群がって高値掴みさせられる典型パターンだぞ。損切予約（{r['sl_price']}）入れない奴から焼き尽くされるからな。"},
+                {"speaker": "⚔️ VALKYRIE", "score": 92, "tone": "agree", "text": f"歩み値見てみろ！【{r['name']}】に大口のステルス買いが断続的に刺さってる！『{uq}』のノイズを完全に吸収して上値ブレイク直前だ！"},
+                {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": f"合議集約する。【{st_style}】の規律通り、推奨ロット {r['lot_info']['shares']:,}株を守り、利確目標 {r['tp_price']} を目指してブレずに執行せよ。"}
+            ])
+        elif is_greeting:
+            turns.extend([
+                {"speaker": "🔥 IGNIS", "score": 91, "tone": "agree", "text": f"うっす！挨拶乙！【{r['name']} ({r['code']})】のスレへようこそ！直近材料【{t_topic}】で板がギンギンに動いてるぞ！"},
+                {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": f"こんにちは。【{r['name']}】の現在値は {r['price']}、期待度は {r['expect_pct']}% です。【{st_style}】の時間軸に合わせた板気配の変動率に注目してください。"},
+                {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": f"挨拶はいいが、浮かれて成行で飛びつくなよ。大口はこういう個人の買いを誘ってから急落させてふるい落としてくるのが常套手段だ。"},
+                {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": f"歓迎する。【{r['name']}】の理論寄付きは {r['pts_est_price']}。まずは逆指値 {r['sl_price']} をOCOで入れて安全第一でエントリーせよ。"}
             ])
         else:
             turns.extend([
-                {"speaker": "🔥 IGNIS", "score": 91, "tone": "rage", "text": f"おいおい！『{uq}』って書き込みあったぞ！直近の材料見ろや！【{top_news_context[:45]}】って話出てるのにまだ迷ってんのか？押し目来たら即買い一択だろ！"},
-                {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": f"冷徹に数字を見ろ。『{uq}』への懸念は理解できるが、現在値 {r['price']} に対するサポートラインは堅牢。ボラティリティ急拡大に備えて分割で入るのが合理的だ。"},
-                {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": f"スレ民落ち着けw 『{uq}』でTwitter（X）検索したらイナゴ共が狼狽して損切り投げてるわ。大口はこういう個人を狩ってから一気に上に持っていくんだよな。"},
-                {"speaker": "⚔️ VALKYRIE", "score": 92, "tone": "agree", "text": f"歩み値確認した。さっき 2万株のステルス買いが入ったぞ！『{uq}』を材料にした売り崩しは完全に失敗してる。上値ブレイク秒読みだな。"},
-                {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": f"合議集約するぞ。『{uq}』についての議論は出尽くした。結論として、直近目標値 {r['tp_price']}、絶対損切ライン {r['sl_price']} のルールを1ミリも崩さず執行せよ。"}
+                {"speaker": "🔥 IGNIS", "score": 91, "tone": "agree", "text": f"おいおい！【{r['name']} ({r['code']})】の気配見たか！？最新材料【{t_topic}】で大口が買い上がってるぞ！期待度 {r['expect_pct']}%は伊達じゃねえ！"},
+                {"speaker": "📐 TECHNOS", "score": 96, "tone": "normal", "text": f"データ分析完了。【{r['name']}】は現在値 {r['price']}、量子トンネル突破確率 {r.get('q_tunnel', 80)}%、Hurst指数は {r.get('hurst', 0.65)}。今回の【{st_style}】モデルに完全に合致します。"},
+                {"speaker": "👁️ SENTINEL", "score": 95, "tone": "doubt", "text": f"煽りすぎだIGNIS。材料【{sub_news_context[:35]}】が出てるが、一瞬の寄り天（寄り付き天井）でイナゴを狩りに来る可能性がある。損切ライン（{r['sl_price']}）の死守は絶対条件だぞ。"},
+                {"speaker": "⚔️ VALKYRIE", "score": 92, "tone": "agree", "text": f"板の厚み確認！下値にまとまった支え買いが入ってる。寄り付きからVWAP（{r['vwap_price']}）を背にしてエントリーすれば勝率は極めて高い！"},
+                {"speaker": "👑 NEXUS", "score": 97, "tone": "normal", "text": f"統括する。【{st_style}】戦略として目標利確値 {r['tp_price']}、絶対損切 {r['sl_price']} を指値・逆指値で完全予約し、感情を排除して執行せよ。"}
             ])
     return turns
 
 def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> dict:
     fs = r["ai_score"]
-    
-    if user_query.strip():
-        turns = generate_humanlike_2ch_debate(r, user_query)
-    else:
-        roster = st.session_state.get("agent_roster", DEFAULT_AGENTS)
-        lead_ag = roster.get("NEXUS", list(roster.values())[0])
-        sub_ag1 = roster.get("IGNIS", list(roster.values())[1])
-        sub_ag2 = roster.get("AEGIS", list(roster.values())[2])
-        sub_ag3 = roster.get("TECHNOS", list(roster.values())[3])
-
-        turns = [
-            {"round": f"💬 2ch市況実況風・エージェント合議スレ 【{r['code']}】"}, 
-            {"speaker": f"{sub_ag1['icon']} {sub_ag1['name']}", "score": sub_ag1["score"], "tone": "agree", "text": f"キタキタキタ！板が完全に上に向かって食い上がってる！期待度 {r['expect_pct']}%は伊達じゃねえぞ、乗り遅れたら置いてかれるぞ！"},
-            {"speaker": f"{sub_ag2['icon']} {sub_ag2['name']}", "score": sub_ag2["score"], "tone": "doubt", "text": f"おい待て調子に乗るな。浮かれて高値掴みしたら即死だぞ。必ず損切りライン（{r['sl_price']}）をOCOで入れてから入るのが鉄則だ。"},
-            {"speaker": f"{sub_ag3['icon']} {sub_ag3['name']}", "score": sub_ag3["score"], "tone": "normal", "text": f"OFI乖離度 Z={r['ofi_z']}、大口ステルス買い比率は {r['kyle_stealth']}%。統計上、下値余地は極小です。理論寄付き（{r['pts_est_price']}）前後のエントリーが最もリスクリワードが合致します。"},
-            {"speaker": f"{lead_ag['icon']} {lead_ag['name']}", "score": lead_ag["score"], "tone": "normal", "text": f"統括する。推奨ロット（{r['lot_info']['shares']:,}株）を守り、目標利確（{r['tp_price']}）まで粘れ。"}
-        ]
+    turns = generate_humanlike_2ch_debate(r, user_query)
 
     v_html = (
         f'<div style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:12px; margin-top:5px;">'
@@ -1164,7 +1171,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
         f'<div style="font-size:10px; color:#bae6fd;">⏱️ 想定保有期間</div>'
         f'<div style="font-size:12.5px; font-weight:800; color:#38bdf8;">{r["strat"]["trade_duration"]}</div></div>'
         f'</div>'
-        f'<div style="font-size:12px; line-height:1.7; color:#e2e8f0;"><b>⚡ プロ執行アクション詳細プラン:</b><br>{r["strat"]["step_plan"]}</div>'
+        f'<div style="font-size:12px; line-height:1.7; color:#e2e8f0;"><b>⚡ プロ執行アクション詳細プラン ({r["strat"]["style_name"]}専科):</b><br>{r["strat"]["step_plan"]}</div>'
         f'</div>'
         f'<div class="beginner-action-box" style="margin-top:10px;">{r["strat"]["beginner_html"]}</div>'
     )
@@ -1185,6 +1192,7 @@ def render_council_sec(r, uk, auto_open=False):
         c1, c2 = st.columns([2.7, 1.1])
         if c1.button("🔼 買い方ガイドを閉じる" if is_open else f"⚛️ 買い方とAI合議を見る", key=f"btn_open_{uk}", use_container_width=True): 
             st.session_state["focused_stock_item"] = r
+            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
             st.rerun()
         if c2.button("✅ 監視済" if r["code"] in st.session_state["watchlist"] else "⭐ 監視追加", key=f"btn_watch_{uk}", use_container_width=True):
             if r["code"] in st.session_state["watchlist"]: del st.session_state["watchlist"][r["code"]]
@@ -1193,14 +1201,16 @@ def render_council_sec(r, uk, auto_open=False):
         
     if not is_open: return
 
-    if uk not in st.session_state["council_threads"]:
-        with st.spinner("⚛️ 10大エージェント完全並列合議中..."):
+    # スタイル連動キーを付与してキャッシュを管理
+    cache_council_key = f"{uk}_{r.get('strat', {}).get('style_name', 'default')}"
+    if cache_council_key not in st.session_state["council_threads"]:
+        with st.spinner(f"🌐 【{r['name']}】の最新ニュース・板情報をWebリアルタイム検索中＆合議生成中..."):
             deb = run_7ai_council(r, None, 0, "")
-            st.session_state["council_threads"][uk] = deb["dialogue"]
-            st.session_state["council_meta"][uk] = deb
+            st.session_state["council_threads"][cache_council_key] = deb["dialogue"]
+            st.session_state["council_meta"][cache_council_key] = deb
             
-    meta = st.session_state["council_meta"][uk]
-    turns = st.session_state["council_threads"][uk]
+    meta = st.session_state["council_meta"][cache_council_key]
+    turns = st.session_state["council_threads"][cache_council_key]
 
     st.markdown(f'<div class="ai-council-box"><div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t, i) for i, t in enumerate(turns))}</div></div>', unsafe_allow_html=True)
     
@@ -1210,20 +1220,21 @@ def render_council_sec(r, uk, auto_open=False):
         if jc2.form_submit_button("💬 質問投下", use_container_width=True) and uop.strip():
             u_text = uop.strip()
             new_dom_id = f"user_q_anchor_{uk}_{int(time.time()*1000)}"
-            st.session_state["council_threads"][uk].append({"is_user": True, "text": u_text, "dom_id": new_dom_id})
+            st.session_state["council_threads"][cache_council_key].append({"is_user": True, "text": u_text, "dom_id": new_dom_id})
             with st.spinner(f"🌐 『{u_text}』について最新Web情報を並列検索＆2ch合議生成中..."):
                 deb_updated = run_7ai_council(r, None, 0, user_query=u_text)
-                for new_t in deb_updated["dialogue"]: st.session_state["council_threads"][uk].append(new_t)
-                st.session_state["council_meta"][uk] = deb_updated
+                for new_t in deb_updated["dialogue"]: st.session_state["council_threads"][cache_council_key].append(new_t)
+                st.session_state["council_meta"][cache_council_key] = deb_updated
                 st.session_state["scroll_target_id"] = new_dom_id
                 st.rerun()
 
-    st.markdown(f'<div class="consensus-banner"><div style="font-weight:800;color:#fde047;font-size:13px;margin-bottom:6px;">🏛️ 最終結論 ＆ プロ推奨買い方アクションプラン</div>{meta["verdict_html"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="consensus-banner"><div style="font-weight:800;color:#fde047;font-size:13px;margin-bottom:6px;">🏛️ 最終結論 ＆ プロ推奨買い方アクションプラン（{r["strat"]["style_name"]}専科）</div>{meta["verdict_html"]}</div>', unsafe_allow_html=True)
 
     if auto_open:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", key=f"btn_back_bottom_{uk}", use_container_width=True, type="primary"):
             st.session_state["focused_stock_item"] = None
+            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
             st.rerun()
 
 def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
@@ -1350,59 +1361,88 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
     if st_prefix == "スキャルピング":
         sh = max(1, int(round(base_sh * 1.5)))
         return {
-            "algo_name": f"⚡ [{st_prefix}] 1分足モメンタム一気貫通型",
-            "risk_posture": f"🚀 スキャル全開（ <b>{sh:,}株</b> で一気に抜く）",
+            "style_name": st_prefix,
+            "algo_name": f"⚡ [{st_prefix}] 秒速モメンタム突破・板読み瞬発型",
+            "risk_posture": f"🚀 スキャル特攻（ <b>{sh:,}株</b> で一気に利幅奪取）",
             "core_logic": f"OFI(Z={ofi_z})とLULD引力({ms['luld_magnet']}%)が急加速している特異点で即座にエントリー。",
             "adj_shares": sh,
-            "trade_duration": "約30秒 〜 最長5分以内（超短期決戦）",
+            "trade_duration": "約30秒 〜 最長5分以内（超短期決戦・持ち越し絶対不可）",
             "step_plan": (
-                f"① 【朝9:00:00】寄り付き直後の板気配（買い注文と売り注文の勢い）を確認し、<b>{sh:,}株</b>を成行買いで即時約定させる。<br>"
-                f"② 【約定直後（秒速）】利益確定の指値注文を<b>{tp_str}</b>にセット。同時に<b>{sl_str}</b>で逆指値（損切り予約）をOCO注文（一方が成立したら他方を自動取消する注文）で常時発注。<br>"
-                f"③ 【9:05まで】目標到達または時間経過で全株決済し、翌日への持ち越しは一切行わない。"
+                f"① 【朝9:00:00】寄り付き直後の最前線板気配（歩み値と買い注文の喰い上がり）を確認し、<b>{sh:,}株</b>を成行買いで即時約定。<br>"
+                f"② 【約定直後（秒速）】利益確定の指値注文を<b>{tp_str}</b>にセット。同時に<b>{sl_str}</b>で逆指値（損切り予約）をOCO注文で常時発注。<br>"
+                f"③ 【9:05まで】目標到達または勢いが止まった段階で全株決済。わずかな反落でも利益を固定して逃げる。"
             ),
             "beginner_html": (
-                f"<b>🔰 超初心者向け！スキャルピング実践講座（数分で確実に利益を狙う方法）</b><br>"
+                f"<b>🚀 超初心者向け！スキャルピング超実践講座（数秒〜数分で確実に逃げ切る方法）</b><br>"
                 f"<b>【用語解説】</b><br>"
-                f"・成行（なりゆき）注文：値段を指定せず、今すぐ一番手前の価格で即座に買う注文のこと。<br>"
-                f"・逆指値（ぎゃくさしね）：株価が下がったときに『これ以上損を広げないため自動で売却して逃げる』安全装置のこと。<br>"
+                f"・成行（なりゆき）注文：価格を問わず、いま目の前の最良価格で瞬時に買い付けるプロの即決注文。<br>"
+                f"・OCO（オーシーオー）注文：『上がったら利確、下がったら損切』を同時に自動セットし、片方が約定したらもう片方を自動キャンセルする安全装置。<br>"
                 f"<b>【時間帯と手順】</b><br>"
-                f"<b>・朝8:55〜9:00：</b> 証券会社のアプリを開き、買付余力を確認して待機します。<br>"
-                f"<b>・朝9:00（市場オープン）：</b> スタートと同時に<b>{sh:,}株</b>を「成行」で買います。<br>"
-                f"<b>・朝9:01〜9:03：</b> 買えたらすぐ、<b>{tp_str}</b>に売り注文、万一に備えて<b>{sl_str}</b>に損切り注文を入れます。<br>"
-                f"<b>・目安期間：</b> わずか1分〜3分程度で決着させます。欲張らずにサクッと利確するのが最大の秘訣です！"
+                f"<b>・朝8:55〜9:00：</b> 証券アプリの板気配を開き、買付余力を確認して画面前で待機。<br>"
+                f"<b>・朝9:00（市場オープン）：</b> スタートと同時に<b>{sh:,}株</b>を「成行」で瞬発買い。<br>"
+                f"<b>・朝9:01〜9:03：</b> 買えたら即座に<b>{tp_str}</b>で利確、万一に備えて<b>{sl_str}</b>に損切りを予約。<br>"
+                f"<b>・目安期間：</b> 1分〜最長5分。含み益が出たら欲張らず秒速で確定させるのが勝利の鉄則です！"
             )
         }
     elif st_prefix == "スイングトレード":
         sh = max(1, int(round(base_sh * 1.2)))
         l1, l2 = max(1, int(round(sh * 0.6))), max(0, sh - max(1, int(round(sh * 0.6))))
         return {
-            "algo_name": f"📈 [{st_prefix}] トレンドフォロー・押し目分割型",
+            "style_name": st_prefix,
+            "algo_name": f"📈 [{st_prefix}] トレンドフォロー・押し目分割本玉型",
             "risk_posture": f"🏛️ スイング本玉買い（初回 <b>{l1:,}株</b> ＋ 押し目 <b>{l2:,}株</b>）",
-            "core_logic": f"Hurst指数({ms['hurst']})が強いトレンド継続を示唆。数日間〜数週間かけて上値を追う王道フォーメーション。",
+            "core_logic": f"Hurst指数({ms['hurst']})が強いトレンド継続を示唆。数日間〜数週間かけて日足・週足の上値を追う王道フォーメーション。",
             "adj_shares": sh,
-            "trade_duration": "3日 〜 最長2週間程度（ゆったりトレンド狙い）",
+            "trade_duration": "3日 〜 最長2週間程度（ゆったりトレンドスイング）",
             "step_plan": (
-                f"① 【1日目・前場】打診買い（お試しのエントリー）として全体の6割にあたる<b>{l1:,}株</b>を取得。<br>"
-                f"② 【2〜3日目】一時的な下落（押し目）かつVWAP（その日の平均約定価格: <b>{vwap_str}</b>）付近で反発を確認したら、残りの<b>{l2:,}株</b>を買い増し。<br>"
-                f"③ 【目標到達時】<b>{tp_str}</b>近辺で半分を利確し、残りはトレイリングストップ（株価上昇に合わせて損切りラインを引き上げる手法）で利益を最大化。"
+                f"① 【1日目・前場】打診買い（テストエントリー）として全体の6割にあたる<b>{l1:,}株</b>を取得。<br>"
+                f"② 【2〜3日目】日中の一時的な調整（押し目）かつVWAP（機関平均単価: <b>{vwap_str}</b>）付近での反発を確認後、残りの<b>{l2:,}株</b>を買い増し。<br>"
+                f"③ 【目標到達時】<b>{tp_str}</b>近辺でまず半玉を利確。残りは逆指値を買い値まで引き上げ（トレイリングストップ）ノーリスクで利益伸長を狙う。"
             ),
             "beginner_html": (
-                f"<b>🔰 超初心者向け！スイングトレード実践講座（数日〜1週間かけてどっしり増やす）</b><br>"
+                f"<b>📈 超初心者向け！スイングトレード実践講座（数日〜1週間かけてどっしり利益を伸ばす）</b><br>"
                 f"<b>【用語解説】</b><br>"
-                f"・押し目（おしめ）：上昇トレンドの中で、一時的に株価が少し下がってお買い得になっている絶好のチャンスのこと。<br>"
-                f"・分割エントリー：一度に全額を使わず、2〜3回に分けて買うことでリスクを大幅に減らすプロの買い方。<br>"
+                f"・押し目（おしめ）：強い上昇トレンド中に、一時的に株価が少し安くなってお買い得になっている絶好のエントリー場。<br>"
+                f"・トレイリングストップ：株価の上昇に合わせて損切りラインを自動または手動で引き上げ、利益を確実に確保し続けるプロの手法。<br>"
                 f"<b>【時間帯と手順】</b><br>"
-                f"<b>・初日（朝9:30以降）：</b> 寄り付き直後の乱高下が落ち着いた午前9時30分頃、まず半分の<b>{l1:,}株</b>を買います。<br>"
-                f"<b>・2日目〜4日目：</b> 少し株価が下がって反発する気配を見せたら、残りの<b>{l2:,}株</b>を買い足します。<br>"
-                f"<b>・保有期間：</b> 焦らず3日〜2週間ほどじっくり待ち、目標価格の<b>{tp_str}</b>に達したら利益確定します。"
+                f"<b>・初日（朝9:30以降）：</b> 寄り直後の乱高下が落ち着いた頃、まず半分の<b>{l1:,}株</b>を買います。<br>"
+                f"<b>・2日目〜4日目：</b> 少し下げてから再浮上する動きを確認したら、残りの<b>{l2:,}株</b>を買い足します。<br>"
+                f"<b>・保有期間：</b> 日中の細かな値動きに一喜一憂せず、3日〜2週間じっくりと目標値<b>{tp_str}</b>を待ちます。"
+            )
+        }
+    elif st_prefix == "バイ＆ホールド":
+        sh = max(1, int(round(base_sh * 0.9)))
+        return {
+            "style_name": st_prefix,
+            "algo_name": f"💎 [{st_prefix}] 企業本質価値×長期複利・IPO成長投資型",
+            "risk_posture": f"💎 中長期厳選ホールド（ <b>{sh:,}株</b> をじっくり育成）",
+            "core_logic": f"量子コヒーレンス({qm['q_coherence']}点)と国策テーマ・業界シェア独占力に着目したバリュー＆グロース長期保有戦略。",
+            "adj_shares": sh,
+            "trade_duration": "1ヶ月 〜 6ヶ月以上（中長期複利運用）",
+            "step_plan": (
+                f"① 【初回】ファンダメンタルズの割安感を確認し、ポートフォリオの上限枠内で<b>{sh:,}株</b>を現物で買付。<br>"
+                f"② 【保有中】日々のノイズや短期的な地合いの急落は無視し、四半期決算ごとの進捗率と機関大口の保有動向のみを監査。<br>"
+                f"③ 【利益確定】業績の上方修正やテーマの全面開花により目標株価<b>{tp_str}</b>を達成した段階で順次利益確定。"
+            ),
+            "beginner_html": (
+                f"<b>💎 超初心者向け！バイ＆ホールド長期投資講座（焦らず企業成長に乗る）</b><br>"
+                f"<b>【用語解説】</b><br>"
+                f"・現物取引（げんぶつ）：借金をせず自分の資金の範囲内で株を買う、追証（借金）リスクゼロの最も安全な買い方。<br>"
+                f"・複利効果：得られた利益や配当を再投資に回し、雪だるま式に資産を増やしていく長期投資最大の武器。<br>"
+                f"<b>【時間帯と手順】</b><br>"
+                f"<b>・購入時：</b> 時間帯はいつでも構いません。現物注文で<b>{sh:,}株</b>を購入します。<br>"
+                f"<b>・保有期間中：</b> 毎日の株価変動を見すぎる必要はありません。決算発表をチェックしながら数ヶ月単位でじっくり育てます。<br>"
+                f"<b>・出口戦略：</b> 企業価値が適正に市場評価され、目標値<b>{tp_str}</b>に達するまで堂々とホールドしましょう。"
             )
         }
     
+    # デフォルト：デイトレード
     sh = max(1, int(round(base_sh * 1.65)))
     return {
-        "algo_name": f"🔥 [{st_prefix}] 情報精度S級・寄り前モメンタム特攻型",
+        "style_name": "デイトレード",
+        "algo_name": f"🔥 [デイトレード] 寄り付きモメンタム特攻・当日決済型",
         "risk_posture": f"👑 フルベット・勝負玉（ <b>{sh:,}株一括投入</b> ）",
-        "core_logic": f"期待値({expect_pct}%)と量子スコア({qm['q_score']}点)が極大。寄り付き一括で最高期待値を抜き取る戦術。",
+        "core_logic": f"期待値({expect_pct}%)と量子スコア({qm['q_score']}点)が極大。寄り付き一括で最高期待値を抜き取る当日完結戦術。",
         "adj_shares": sh,
         "trade_duration": "前場9:00 〜 11:30（または後場15:00の大引けまで）",
         "step_plan": (
@@ -1482,8 +1522,21 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
 
         pgap = round(float(np.clip(ofi_z * 0.6 + macro_bias * 0.4, -2.5, 3.5)), 2)
         pest = cv * (1.0 + pgap / 100.0)
-        tpv = max(pest, cv) + (atrv * 1.1)
-        slv = cv - (atrv * 0.6)
+        
+        # 投資スタイルに合わせた利確・損切幅の動的調整
+        st_p = style.split(" ")[1] if " " in style else "デイトレード"
+        if st_p == "スキャルピング":
+            tpv = max(pest, cv) + (atrv * 0.55)
+            slv = cv - (atrv * 0.35)
+        elif st_p == "スイングトレード":
+            tpv = max(pest, cv) + (atrv * 2.5)
+            slv = cv - (atrv * 1.2)
+        elif st_p == "バイ＆ホールド":
+            tpv = max(pest, cv) + (atrv * 4.5)
+            slv = cv - (atrv * 2.0)
+        else:
+            tpv = max(pest, cv) + (atrv * 1.1)
+            slv = cv - (atrv * 0.6)
         
         rmoney = total_capital * (risk_tolerance_pct / 100.0)
         base_sh = max(1, int(rmoney / max(cv - slv, cv * 0.005)))
@@ -1569,6 +1622,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
     st.markdown("### 👑 統合管理コントロールセンター (MASTER TERMINAL)")
     if st.button("⬅️ メイン画面に戻る", use_container_width=True, type="primary"):
         st.session_state["navigation_page"] = "TOP"
+        st.session_state["scroll_top_trig"] = int(time.time()*1000)
         st.rerun()
 
     tab_users, tab_employment, tab_apply_wait = st.tabs(["👥 会員情報管理", "🏢 AGI雇用・監視情報", "📩 会員申し込み審査"])
@@ -1738,7 +1792,10 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     st.markdown(f'<div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;color:#e9d5ff;">🧠 波及メカニズム</div><div style="font-size:12.5px;">{tn["detail"]["mechanism"]}</div><div class="beginner-action-box" style="margin-top:10px;"><b>⚡ {investment_style.split(" ")[1]} 実践トレード立ち回り</b><br>{tn["detail"]["action_guide"].replace(chr(10), "<br>")}</div></div>', unsafe_allow_html=True)
     st.markdown("### 🔗 連動注目銘柄")
     for idx, r_item in enumerate(sorted(all_res, key=lambda x: x["expect_pct"], reverse=True)[:3], 1): render_card(r_item, rank=idx, kp=f"nr_{tn['id']}")
-    if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.rerun()
+    if st.button("⬅️ 戻る", use_container_width=True, type="primary"): 
+        st.session_state["navigation_page"] = "TOP"
+        st.session_state["scroll_top_trig"] = int(time.time()*1000)
+        st.rerun()
     st.stop()
 
 # ■ メインリスト画面
@@ -1793,6 +1850,7 @@ elif sel_cat == "🚨 重大ニュース＆連動株":
         if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True): 
             st.session_state["selected_news_item"] = n
             st.session_state["navigation_page"] = "NEWS_DETAIL"
+            st.session_state["scroll_top_trig"] = int(time.time()*1000)
             st.rerun()
 elif sel_cat == "🎟️ IPO募集・新規上場":
     st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 新規上場 (IPO) ブックビルディング・詳細分析ターミナル</div><div style="font-size:11.5px;color:#94a3b8;margin-top:3px;">初値高騰期待度・ロックアップ・吸収金額・PER・VC比率まで徹底網羅した完全ガイド。</div></div>', unsafe_allow_html=True)
