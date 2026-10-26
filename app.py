@@ -1060,7 +1060,6 @@ def _render_realtime_audit_center():
 
     st.markdown("<div style='font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:4px;'>⚖️ 稼働中・特命監査員 (3名)</div>", unsafe_allow_html=True)
     for ik, iv in inspectors.items():
-        # 微小なリアルタイムVitalジッター
         vital_score = min(99, max(90, iv["score"] + (jitter_seed % 3 - 1)))
         st.markdown(
             f'<div style="background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;padding:4px 8px;margin-bottom:4px;border-radius:4px;font-size:10.5px;">'
@@ -1393,8 +1392,11 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
     return {"final_score": fs, "dialogue": turns, "verdict_html": v_html}
 
 def _fmt_turn(t: dict, idx: int = 0) -> str:
-    if "round" in t: return f'<div class="round-divider">{html.escape(t["round"])}</div>'
-    if t.get("is_user"): return f'<div class="chat-bubble-user" id="{html.escape(t.get("dom_id", ""))}'><b>🗣️ あなた (レス):</b><br>{html.escape(t["text"])}</div>'
+    if "round" in t:
+        return f'<div class="round-divider">{html.escape(t["round"])}</div>'
+    if t.get("is_user"):
+        dom_id_attr = f' id="{html.escape(t.get("dom_id", ""))}"' if t.get("dom_id") else ""
+        return f'<div class="chat-bubble-user"{dom_id_attr}><b>🗣️ あなた (レス):</b><br>{html.escape(t["text"])}</div>'
     b_cls = {"doubt": "chat-bubble-doubt", "rage": "chat-bubble-rage", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{html.escape(t["speaker"])} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{html.escape(t["text"])}</div></div>'
 
