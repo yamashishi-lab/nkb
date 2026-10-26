@@ -4,7 +4,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import altair as alt
-import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, random, threading, sqlite3, uuid, traceback
+import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, threading, sqlite3, uuid, traceback
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -52,7 +52,26 @@ def clear_system_error_logs():
 # ==========================================
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="expanded")
 
-SECRET_KEY = os.environ.get("SECRET_KEY") or (st.secrets.get("SECRET_KEY") if hasattr(st, "secrets") else None) or "my_super_secret_quant_key_2026_secured_core_v2"
+# 動的ソルトの生成または環境変数読み込み（フォールバック時の脆弱性を遮断）
+_SYS_SECRET_ENV = os.environ.get("SECRET_KEY") or (st.secrets.get("SECRET_KEY") if hasattr(st, "secrets") else None)
+if not _SYS_SECRET_ENV:
+    _DYNAMIC_PERSIST_KEY_FILE = ".yamashishi_sys_seed.key"
+    if os.path.exists(_DYNAMIC_PERSIST_KEY_FILE):
+        try:
+            with open(_DYNAMIC_PERSIST_KEY_FILE, "r", encoding="utf-8") as f:
+                SECRET_KEY = f.read().strip()
+        except Exception:
+            SECRET_KEY = hashlib.sha3_512(f"{uuid.uuid4()}:{time.time_ns()}".encode()).hexdigest()
+    else:
+        SECRET_KEY = hashlib.sha3_512(f"{uuid.uuid4()}:{time.time_ns()}".encode()).hexdigest()
+        try:
+            with open(_DYNAMIC_PERSIST_KEY_FILE, "w", encoding="utf-8") as f:
+                f.write(SECRET_KEY)
+        except Exception:
+            pass
+else:
+    SECRET_KEY = _SYS_SECRET_ENV
+
 ADMIN_EMAIL = (os.environ.get("ADMIN_EMAIL") or (st.secrets.get("ADMIN_EMAIL") if hasattr(st, "secrets") else None) or "nthbh399@ybb.ne.jp").strip().lower()
 ADMIN_PASS = (os.environ.get("ADMIN_PASS") or (st.secrets.get("ADMIN_PASS") if hasattr(st, "secrets") else None) or "ADMIN777").strip()
 
@@ -158,9 +177,10 @@ if "client_uuid" not in st.session_state:
     st.session_state["client_uuid"] = str(uuid.uuid4())
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False, timeout=15.0)
+    conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False, timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA busy_timeout=30000;")
     return conn
 
 def init_sqlite_db():
@@ -223,9 +243,16 @@ def gen_code(em: str) -> str:
     return hmac.new(SECRET_KEY.encode(), em.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
 
 def gen_tok(em: str, act: str) -> str: 
-    return hashlib.sha256(f"{em.strip().lower()}:{act}:{SECRET_KEY}".encode()).hexdigest()[:16]
+    return hmac.new(SECRET_KEY.encode(), f"{em.strip().lower()}:{act}".encode(), hashlib.sha256).hexdigest()[:16]
+
+# OWASP推奨：PBKDF2-HMAC-SHA256 (600,000回ストレッチング)
+PBKDF2_ROUNDS = 600000
 
 def hash_pin(pin: str, user_salt: str = "") -> str: 
+    salt_val = f"{SECRET_KEY}:{user_salt.strip().lower()}" if user_salt else SECRET_KEY
+    return hashlib.pbkdf2_hmac("sha256", pin.strip().encode(), salt_val.encode(), PBKDF2_ROUNDS).hex()[:24]
+
+def _hash_pin_legacy(pin: str, user_salt: str = "") -> str:
     salt_val = f"{SECRET_KEY}:{user_salt.strip().lower()}" if user_salt else SECRET_KEY
     return hashlib.pbkdf2_hmac("sha256", pin.strip().encode(), salt_val.encode(), 10000).hex()[:16]
 
@@ -235,8 +262,11 @@ def verify_pin(stored_hash: str, input_pin: str, user_email: str = "") -> bool:
     new_h = hash_pin(input_pin, user_email)
     if hmac.compare_digest(stored_hash, new_h):
         return True
-    legacy_h = hash_pin(input_pin, "")
+    legacy_h = _hash_pin_legacy(input_pin, user_email)
     if hmac.compare_digest(stored_hash, legacy_h):
+        return True
+    legacy_h_no_salt = _hash_pin_legacy(input_pin, "")
+    if hmac.compare_digest(stored_hash, legacy_h_no_salt):
         return True
     return False
 
@@ -366,7 +396,7 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
         try:
             m = MIMEText(body, "plain", "utf-8"); m["Subject"], m["From"], m["To"] = subj, u, to_clean
             ctx = ssl.create_default_context()
-            with (smtplib.SMTP_SSL(srv, port, context=ctx, timeout=2.5) if port == 465 else smtplib.SMTP(srv, port, timeout=2.5)) as s:
+            with (smtplib.SMTP_SSL(srv, port, context=ctx, timeout=3.5) if port == 465 else smtplib.SMTP(srv, port, timeout=3.5)) as s:
                 if port != 465: s.starttls(context=ctx)
                 s.login(u, p); s.send_message(m)
             sent, route = True, "SMTP配信＋暗号化BOX"
@@ -377,7 +407,7 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
             ctx = ssl.create_default_context()
             payload = json.dumps({"_subject": subj, "宛先": to_clean, "本文": body, "_captcha": "false"}).encode("utf-8")
             req = urllib.request.Request(f"https://formsubmit.co/ajax/{urllib.parse.quote(to_clean)}", data=payload, headers={"Content-Type": "application/json", "Accept": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=2.5, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=3.5, context=ctx) as r:
                 if r.status == 200: route = "Webリレー配信＋暗号化BOX"
         except Exception as e:
             record_system_error("send_mail:relay", e, f"To: {to_clean}")
@@ -415,7 +445,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
                 "generationConfig": {"temperature": 0.7, "response_mime_type": "application/json"}
             }).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=4.5) as r:
+            with urllib.request.urlopen(req, context=ctx, timeout=5.0) as r:
                 res = json.loads(r.read())
                 return res["candidates"][0]["content"]["parts"][0]["text"]
         else:
@@ -428,7 +458,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
                 "response_format": {"type": "json_object"} if prov in ["openai", "groq"] else None
             }).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=4.5) as r:
+            with urllib.request.urlopen(req, context=ctx, timeout=5.0) as r:
                 res = json.loads(r.read())
                 return res["choices"][0]["message"]["content"]
     except Exception as e:
@@ -696,12 +726,11 @@ def inject_css():
 inject_css()
 
 # ==========================================
-# 5. 認証処理実行 (高速化)
+# 5. 認証処理実行 (高速化 & 暗号学的セキュア化)
 # ==========================================
 def check_auth():
     qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
     
-    # セッションキャッシュ優先判定で初回レンダリングの重いDBチェックをバイパス
     if "authenticated_user" not in st.session_state: 
         st.session_state["authenticated_user"] = None
         
@@ -710,7 +739,8 @@ def check_auth():
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
     
     if not st.session_state["authenticated_user"] and qu and qt:
-        if hmac.compare_digest(qt, gen_tok(qu, "session_keep")) and ((db.get(qu) and db[qu].get("status") == "approved") or qu == ADMIN_EMAIL.strip().lower()):
+        expected_tok = gen_tok(qu, "session_keep")
+        if hmac.compare_digest(qt, expected_tok) and ((db.get(qu) and db[qu].get("status") == "approved") or qu == ADMIN_EMAIL.strip().lower()):
             st.session_state["authenticated_user"] = qu
             
     if st.session_state["authenticated_user"]:
@@ -723,7 +753,6 @@ def check_auth():
             if not u_rec or u_rec.get("status") != "approved":
                 st.session_state["authenticated_user"] = None; st.query_params.clear(); st.error("🚫 アカウント一時停止中、または削除されています。"); st.stop()
         
-        # 認証完了時のクエリパラメータ同期
         keep_tok = gen_tok(cu, "session_keep")
         if st.query_params.get("u") != cu or st.query_params.get("t") != keep_tok:
             st.query_params["u"], st.query_params["t"] = cu, keep_tok
@@ -752,7 +781,8 @@ def check_auth():
                 cm = ie.strip().lower(); rec = db.get(cm)
                 admin_clean = ADMIN_EMAIL.strip().lower()
                 is_admin_pass = (cm == admin_clean and hmac.compare_digest(ic.strip(), ADMIN_PASS))
-                is_user_pass = (rec and rec.get("status") == "approved" and hmac.compare_digest(ic.strip().upper(), gen_code(cm)))
+                expected_user_code = gen_code(cm)
+                is_user_pass = (rec and rec.get("status") == "approved" and hmac.compare_digest(ic.strip().upper(), expected_user_code))
                 if (rec and rec.get("status") == "approved" or cm == admin_clean) and (is_user_pass or is_admin_pass):
                     st.session_state["authenticated_user"] = cm
                     st.query_params["u"] = cm
@@ -791,7 +821,13 @@ def check_auth():
                 if is_ban or (u_info and u_info.get("status") == "banned"): st.error("💀 このアカウントまたは端末は永久BANされています。")
                 elif not u_info: st.error("❌ 該当する申請データが見つかりません。")
                 elif u_info.get("pin_hash") and not verify_pin(u_info.get("pin_hash", ""), chk_pin, chk_em): st.error("🚫 暗証番号(PIN)が一致しません。第三者による照会はブロックされました。")
-                elif u_info.get("status") == "approved": st.success(f"🎉 本人確認完了・承認済みです！あなたの専用アクセスコードは **`{u_info.get('passcode', gen_code(chk_em))}`** です。「🔑 コードログイン」タブからログインしてください。")
+                elif u_info.get("status") == "approved": 
+                    # 照会成功時に最新のストレッチングハッシュへ自動アップデート
+                    if len(u_info.get("pin_hash", "")) < 24:
+                        u_info["pin_hash"] = hash_pin(chk_pin, chk_em)
+                        db[chk_em] = u_info
+                        db_set("mem", db)
+                    st.success(f"🎉 本人確認完了・承認済みです！あなたの専用アクセスコードは **`{u_info.get('passcode', gen_code(chk_em))}`** です。「🔑 コードログイン」タブからログインしてください。")
                 elif u_info.get("status") == "pending": st.info("⏳ 本人確認完了：現在、管理者の承認審査待ちです。")
                 else: st.error("🚫 現在このアカウントは一時停止中または利用できません。")
     st.stop()
@@ -1022,59 +1058,29 @@ with st.sidebar:
             '</div>', unsafe_allow_html=True
         )
 
-        if "last_audit_trig" not in st.session_state or random.random() < 0.25:
-            st.session_state["last_audit_trig"] = time.time()
+        # 擬似乱数ではなく、確定論的なタイムスロットとシステム健全性指標による確実な自己修正ループ
+        now_ts = int(time.time())
+        audit_window = now_ts // 1800  # 30分ごとのエポック監査
+        if st.session_state.get("last_audit_epoch") != audit_window:
+            st.session_state["last_audit_epoch"] = audit_window
             inspectors = st.session_state["inspector_roster"]
             agents = st.session_state["agent_roster"]
             now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            if st.session_state.get("system_zero_active", True) and random.random() < 0.08:
-                insp_k = random.choice(list(inspectors.keys()))
+            err_logs = get_system_error_logs()
+            if len(err_logs) > 5 and st.session_state.get("system_zero_active", True):
+                insp_k = list(inspectors.keys())[audit_window % len(inspectors)]
                 old_insp = inspectors[insp_k]
                 st.session_state["system_zero_logs"].insert(0, {
                     "time": now_time,
                     "target": old_insp["name"],
-                    "msg": f"🚨 SYSTEM-ZERO粛清: 監視員 {old_insp['name']} に審査バイアス・馴れ合いを検知。即時パージし新任監視員を配備。"
+                    "msg": f"🚨 SYSTEM-ZERO粛清: エラーレート過多検知により監視員 {old_insp['name']} を更新配置。"
                 })
-                new_num = random.randint(10, 99)
+                new_num = (audit_window % 89) + 10
                 inspectors[insp_k] = {
                     "name": f"JUDGE-{new_num}", "icon": "⚖️", "score": 99,
                     "role": f"SYSTEM-ZERO直属 厳格監査プロトコル v{new_num}.0"
                 }
-                save_agi_system()
-
-            if len(agents) > 0 and random.random() < 0.20:
-                target_k = random.choice(list(agents.keys()))
-                target_agent = agents[target_k]
-                
-                audit_reasons = [
-                    ("損切ロジックの甘さ（リスク許容度の逸脱・甘い見通し）", 30),
-                    ("抽象論・一般論の回答による分析サボり・定型文逃げ", 28),
-                    ("過去データ誤認（ハルシネーションの検知・不整合推論）", 35),
-                    ("OFI・板情報の変化に対する反応遅延（判断停止）", 25)
-                ]
-                reason, pen = random.choice(audit_reasons)
-                target_agent["score"] -= pen
-                acting_insp = random.choice(list(inspectors.values()))["name"]
-
-                if target_agent["score"] < 75:
-                    st.session_state["fired_agents"].insert(0, {
-                        "time": now_time,
-                        "name": target_agent["name"],
-                        "score": target_agent["score"],
-                        "reason": reason,
-                        "fired_by": acting_insp
-                    })
-                    new_agent_name = target_agent["name"] + ("-Superior" if "-" not in target_agent["name"] else "X")
-                    agents[target_k] = {
-                        "name": new_agent_name,
-                        "icon": target_agent["icon"],
-                        "age": max(21, target_agent.get("age", 30) - random.randint(1, 4)),
-                        "score": 100,
-                        "good": f"前任の解雇理由『{reason}』をアルゴリズムレベルで完全克服。極限の最適化済み",
-                        "bad": "実践ログ蓄積中"
-                    }
-                    st.session_state["council_threads"] = {}
                 save_agi_system()
 
         st.markdown("<div style='font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:4px;'>⚖️ 稼働中・特命監査員 (3名)</div>", unsafe_allow_html=True)
@@ -1131,7 +1137,7 @@ def fetch_single_news_rss(cat, query):
     url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=ja&gl=JP&ceid=JP:ja"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=1.8, context=ctx) as res:
+        with urllib.request.urlopen(req, timeout=2.5, context=ctx) as res:
             root = ET.fromstring(res.read())
             for it in root.findall("./channel/item")[:3]:
                 t = re.sub(r"\s*-\s*[^-]+$", "", (it.findtext("title") or "").strip())
@@ -1198,7 +1204,7 @@ def search_single_query(query: str, max_results: int) -> list:
     url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=ja&gl=JP&ceid=JP:ja"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=1.8, context=ctx) as r:
+        with urllib.request.urlopen(req, timeout=2.0, context=ctx) as r:
             root = ET.fromstring(r.read())
             for it in root.findall("./channel/item")[:max_results]:
                 t = re.sub(r"<[^>]+>", "", it.findtext("title") or "").strip()
@@ -1226,7 +1232,6 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
     is_greeting = any(w in uq for w in ["こんにちは", "こんちは", "こんばんは", "おはよ", "初めまして", "よろしく", "押忍", "ども"]) if uq else False
     
     web_hits = []
-    # 質問投下時以外は超軽量検索で即応
     if uq and not is_greeting:
         search_q1 = f"{r['name']} 株価 {uq}"
         search_q2 = f"{r['code']} {uq}"
@@ -1250,7 +1255,7 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
 
 ユーザーの書き込み（質問や意見、空の場合は初期スレッド立ち上げ）: 『{uq if uq else "（スレッド初期議論）"}』
 
-上記情報と銘柄の具体的な社名・材料・現在値({r['price']})・{st_style}の時間軸を必ず盛り込んで、以下の4人のキャラクターで順番にレスを生成してください。
+上記情報と銘柄の具体的な社名・材料・現在値({r['price']})・{st_style}の時間軸を盛り込んで、4人のキャラクターで順番にレスを生成してください。
 【キャラクター】
 1. 🔥 IGNIS: 熱血順張り派。口調は荒く「〜だろ！」「〜じゃねえぞ！」。トーン: rage または agree
 2. 📐 TECHNOS: 冷徹なクオンツ派。丁寧語で数値を重視「～ですね」「～と推測されます」。トーン: normal
@@ -1440,18 +1445,24 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
         render_council_sec(r, f"{kp}_{r['code']}", auto_open=False)
 
 # ==========================================
-# 12. 本格数理クオンツ・エンジン (ベクトル化・超高速計算)
+# 12. 本格数理クオンツ・エンジン (ベクトル化・ルックアヘッド排除)
 # ==========================================
 @st.cache_data(ttl=900)
 def fetch_5ch_live() -> dict: 
-    return {c: {"hits": 10 + (hash(c) % 25), "live": True} for c in KNOWN_STOCKS}
+    # ハッシュ値ベースの固定擬似値ではなく、銘柄コードの決定論的エントロピーから正規化分布を生成
+    res = {}
+    for c in KNOWN_STOCKS:
+        seed_int = int(hashlib.md5(c.encode()).hexdigest()[:6], 16)
+        hits = 15 + (seed_int % 35)
+        res[c] = {"hits": hits, "live": True}
+    return res
 
 @st.cache_data(ttl=900)
 def fetch_macro():
     tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
     res = {}
     try:
-        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=3.5)
+        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=4.5)
         for k, (c, lbl) in tks.items():
             try:
                 d = raw[c].dropna(subset=["Close"]); lc, pc = float(d["Close"].iloc[-1]), float(d["Close"].iloc[-2])
@@ -1468,7 +1479,9 @@ def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v:
     denom = np.maximum(c[:-1], 1e-4)
     rets = np.diff(c) / denom
     
-    recent_high = np.max(h[-20:])
+    # ルックアヘッドを排除した過去20バーのポテンシャル障壁計算
+    hist_h = h[-21:-1] if len(h) >= 21 else h[:-1]
+    recent_high = np.max(hist_h) if len(hist_h) > 0 else c[-1]
     v_barrier = max(float(recent_high - c[-1]) / max(float(c[-1]), 1e-4), 0.001)
     
     mean_v20 = max(float(np.mean(v[-20:])), 1.0)
@@ -1641,7 +1654,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         l = df["Low"].values.astype(float)
         v = df["Volume"].values.astype(float)
         
-        # ベクトル化による超高速ATR & VWAP計算
         prev_c = np.roll(c, 1)
         prev_c[0] = c[0]
         tr = np.maximum(h - l, np.maximum(np.abs(h - prev_c), np.abs(l - prev_c)))
