@@ -577,26 +577,27 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* サイドバー初期位置：端の隙間すら完全に消えるよう左側へ大幅オフセット移動 */
+    /* サイドバー初期待機位置：端からの見切れ・隙間がゼロになるよう完全に画面左外側へオフセット */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 999995 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
         background: rgba(8, 12, 22, 0.98) !important; backdrop-filter: blur(25px) !important;
         border-right: 1px solid rgba(56, 189, 248, 0.35) !important;
         pointer-events: auto !important; visibility: visible !important;
-        transform: translateX(-105%) !important;
+        transform: translateX(-110%) !important;
         transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
 
     /* 開いた時のみ自然にスライドイン */
     section[data-testid="stSidebar"][aria-expanded="true"] {
         transform: translateX(0) !important;
+        left: 0 !important;
     }
 
-    /* 閉じた状態：確実に完全に画面外へ退避 */
+    /* 閉じた状態：確実に完全に画面外へ退避させて視認不能に移動 */
     section[data-testid="stSidebar"][aria-expanded="false"] {
-        transform: translateX(-110%) !important;
-        left: -380px !important;
+        transform: translateX(-120%) !important;
+        left: -400px !important;
     }
     
     section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
@@ -830,7 +831,7 @@ def check_auth():
             st.query_params["u"], st.query_params["t"] = cu, keep_tok
         return True
 
-    # ログイン画面表示（ログイン時はサイドバーが完全非表示となるようDOM制御）
+    # ログイン画面表示時：サイドバーおよび浮動ボタンを完全に画面外へ退避
     st.markdown(
         """
         <style>
@@ -1043,15 +1044,15 @@ components.html(
                         const sb = doc.querySelector('section[data-testid="stSidebar"]');
                         if (sb) {{
                             const isExpanded = (sb.getAttribute('aria-expanded') === 'true');
-                            if (isExpanded) {
+                            if (isExpanded) {{
                                 sb.setAttribute('aria-expanded', 'false');
-                                sb.style.transform = 'translateX(-110%)';
-                                sb.style.left = '-380px';
-                            } else {
+                                sb.style.transform = 'translateX(-120%)';
+                                sb.style.left = '-400px';
+                            }} else {{
                                 sb.setAttribute('aria-expanded', 'true');
                                 sb.style.left = '0px';
                                 sb.style.transform = 'translateX(0)';
-                            }
+                            }}
                         }}
                     }}
                 }};
@@ -1999,6 +2000,7 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
                 record_system_error("fetch_pool_batch:future_result", e)
                 continue
 
+    # 【弱肉強食ソート】期待度とモメンタム順で動的ソート
     for g in gmap:
         gmap[g] = sorted(gmap[g], key=lambda x: x["expect_pct"], reverse=True)
     alist = sorted(alist, key=lambda x: x["expect_pct"], reverse=True)
@@ -2175,7 +2177,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             for p_em, p_u in list(pending_users.items()):
                 st.markdown(
                     f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 14px;margin-bottom:8px;">'
-                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:gap:8px;">'
                     f'<div>'
                     f'<span style="font-size:13.5px;font-weight:800;color:#f8fafc;">{html.escape(p_u.get("name","未入力"))}</span> '
                     f'<span style="font-size:11.5px;color:#94a3b8;">({html.escape(p_em)})</span><br>'
