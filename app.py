@@ -52,7 +52,6 @@ def clear_system_error_logs():
 # ==========================================
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="expanded")
 
-# シークレット管理 (環境変数最優先。存在しない場合はシステムフォールバックキーを使用)
 SECRET_KEY = os.environ.get("SECRET_KEY") or (st.secrets.get("SECRET_KEY") if hasattr(st, "secrets") else None) or "my_super_secret_quant_key_2026_secured_core_v2"
 ADMIN_EMAIL = (os.environ.get("ADMIN_EMAIL") or (st.secrets.get("ADMIN_EMAIL") if hasattr(st, "secrets") else None) or "nthbh399@ybb.ne.jp").strip().lower()
 ADMIN_PASS = (os.environ.get("ADMIN_PASS") or (st.secrets.get("ADMIN_PASS") if hasattr(st, "secrets") else None) or "ADMIN777").strip()
@@ -150,15 +149,15 @@ STOCK_POOL = {
 KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": g} for g, its in STOCK_POOL.items() for it in its}
 
 # ==========================================
-# 2. データベース・堅牢化 (WAL / トランザクション / 個別ソルトPIN)
+# 2. データベース・高速インメモリキャッシュ・堅牢化
 # ==========================================
 _DB_LOCK = threading.RLock()
+_MEM_CACHE = {}
 
 if "client_uuid" not in st.session_state:
     st.session_state["client_uuid"] = str(uuid.uuid4())
 
 def get_db_connection():
-    """安全な接続オブジェクトを生成 (WALモード、ビジータムアウト設定)"""
     conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False, timeout=15.0)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
@@ -183,6 +182,8 @@ def init_sqlite_db():
 init_sqlite_db()
 
 def db_get(key: str, default_val):
+    if key in _MEM_CACHE:
+        return _MEM_CACHE[key]
     with _DB_LOCK:
         try:
             conn = get_db_connection()
@@ -191,12 +192,15 @@ def db_get(key: str, default_val):
             row = cur.fetchone()
             conn.close()
             if row:
-                return json.loads(row[0])
+                val = json.loads(row[0])
+                _MEM_CACHE[key] = val
+                return val
         except Exception as e:
             record_system_error(f"db_get:{key}", e)
         return default_val
 
 def db_set(key: str, val):
+    _MEM_CACHE[key] = val
     with _DB_LOCK:
         try:
             conn = get_db_connection()
@@ -222,19 +226,15 @@ def gen_tok(em: str, act: str) -> str:
     return hashlib.sha256(f"{em.strip().lower()}:{act}:{SECRET_KEY}".encode()).hexdigest()[:16]
 
 def hash_pin(pin: str, user_salt: str = "") -> str: 
-    """個別のメール/ソルトに基づくダイナミックPBKDF2ハッシュ（既存レガシーハッシュとも後方互換検証可能）"""
     salt_val = f"{SECRET_KEY}:{user_salt.strip().lower()}" if user_salt else SECRET_KEY
     return hashlib.pbkdf2_hmac("sha256", pin.strip().encode(), salt_val.encode(), 10000).hex()[:16]
 
 def verify_pin(stored_hash: str, input_pin: str, user_email: str = "") -> bool:
-    """新旧両方のPINハッシュを互換検証し、ログイン不能事故を完全防御"""
     if not stored_hash or not input_pin:
         return False
-    # 新仕様：ユーザー固有ソルト
     new_h = hash_pin(input_pin, user_email)
     if hmac.compare_digest(stored_hash, new_h):
         return True
-    # 旧仕様：SECRET_KEY単体ソルト互換
     legacy_h = hash_pin(input_pin, "")
     if hmac.compare_digest(stored_hash, legacy_h):
         return True
@@ -250,13 +250,11 @@ def get_raw_header_fp() -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
 
 def get_client_fp() -> str:
-    """動的変化に強く、かつワンタップログインが外れない不変端末バインド指紋"""
     raw = get_raw_header_fp()
     qf = st.query_params.get("dfp", "")
     if qf: 
         st.session_state["client_dfp"] = qf
     dfp = st.session_state.get("client_dfp", "")
-    # dfpまたはセッションキーを組み合わせ、ヘッダーのマイナー更新でも認証状態が吹き飛ばない強固なフォールバックを形成
     return hashlib.sha256(f"{raw}|{dfp}".encode()).hexdigest()[:12].upper() if dfp else raw
 
 def load_smtp(): 
@@ -368,7 +366,7 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
         try:
             m = MIMEText(body, "plain", "utf-8"); m["Subject"], m["From"], m["To"] = subj, u, to_clean
             ctx = ssl.create_default_context()
-            with (smtplib.SMTP_SSL(srv, port, context=ctx, timeout=3.0) if port == 465 else smtplib.SMTP(srv, port, timeout=3.0)) as s:
+            with (smtplib.SMTP_SSL(srv, port, context=ctx, timeout=2.5) if port == 465 else smtplib.SMTP(srv, port, timeout=2.5)) as s:
                 if port != 465: s.starttls(context=ctx)
                 s.login(u, p); s.send_message(m)
             sent, route = True, "SMTP配信＋暗号化BOX"
@@ -379,7 +377,7 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
             ctx = ssl.create_default_context()
             payload = json.dumps({"_subject": subj, "宛先": to_clean, "本文": body, "_captcha": "false"}).encode("utf-8")
             req = urllib.request.Request(f"https://formsubmit.co/ajax/{urllib.parse.quote(to_clean)}", data=payload, headers={"Content-Type": "application/json", "Accept": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=3.0, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=2.5, context=ctx) as r:
                 if r.status == 200: route = "Webリレー配信＋暗号化BOX"
         except Exception as e:
             record_system_error("send_mail:relay", e, f"To: {to_clean}")
@@ -417,7 +415,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
                 "generationConfig": {"temperature": 0.7, "response_mime_type": "application/json"}
             }).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=8) as r:
+            with urllib.request.urlopen(req, context=ctx, timeout=4.5) as r:
                 res = json.loads(r.read())
                 return res["candidates"][0]["content"]["parts"][0]["text"]
         else:
@@ -430,7 +428,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
                 "response_format": {"type": "json_object"} if prov in ["openai", "groq"] else None
             }).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=8) as r:
+            with urllib.request.urlopen(req, context=ctx, timeout=4.5) as r:
                 res = json.loads(r.read())
                 return res["choices"][0]["message"]["content"]
     except Exception as e:
@@ -441,7 +439,6 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
 # 4. UI と CSS / JS 注入 (BaseWeb Popoverと完全調和)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
-    """ワンタップ認証の動的締め出しを完全防御する堅牢バインド機構"""
     db, sec = load_mem(), load_sec()
     raw_hfp, cur_fp = get_raw_header_fp(), get_client_fp()
     
@@ -451,7 +448,6 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
             if user_email in db: 
                 db[user_email].update({"bio_enabled": True, "fp": cur_fp, "raw_hfp": raw_hfp})
                 db_set("mem", db)
-            # 端末指紋の複数経路を重複バインドしてブラウザの微小な動的変化に対応
             sec.setdefault("device_bio_map", {})[raw_hfp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
             sec["device_bio_map"][cur_fp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
             db_set("sec", sec)
@@ -700,13 +696,18 @@ def inject_css():
 inject_css()
 
 # ==========================================
-# 5. 認証処理実行
+# 5. 認証処理実行 (高速化)
 # ==========================================
 def check_auth():
-    db, sec = load_mem(), load_sec()
-    cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
-    if "authenticated_user" not in st.session_state: st.session_state["authenticated_user"] = None
     qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
+    
+    # セッションキャッシュ優先判定で初回レンダリングの重いDBチェックをバイパス
+    if "authenticated_user" not in st.session_state: 
+        st.session_state["authenticated_user"] = None
+        
+    db = load_mem()
+    sec = load_sec()
+    cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
     
     if not st.session_state["authenticated_user"] and qu and qt:
         if hmac.compare_digest(qt, gen_tok(qu, "session_keep")) and ((db.get(qu) and db[qu].get("status") == "approved") or qu == ADMIN_EMAIL.strip().lower()):
@@ -721,14 +722,11 @@ def check_auth():
                 st.session_state["authenticated_user"] = None; st.query_params.clear(); st.error("💀 このアカウントまたは端末は永久BANされています。"); st.stop()
             if not u_rec or u_rec.get("status") != "approved":
                 st.session_state["authenticated_user"] = None; st.query_params.clear(); st.error("🚫 アカウント一時停止中、または削除されています。"); st.stop()
+        
+        # 認証完了時のクエリパラメータ同期
         keep_tok = gen_tok(cu, "session_keep")
-        if cu in db:
-            db[cu].update({"last_seen_ts": time.time(), "last_seen_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": True})
-            db_set("mem", db)
-            sec.setdefault("device_bio_map", {})[raw_hfp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
-            sec["device_bio_map"][cur_fp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
-            db_set("sec", sec)
-        st.query_params["u"], st.query_params["t"] = cu, keep_tok
+        if st.query_params.get("u") != cu or st.query_params.get("t") != keep_tok:
+            st.query_params["u"], st.query_params["t"] = cu, keep_tok
         return True
 
     st.markdown(
@@ -756,7 +754,10 @@ def check_auth():
                 is_admin_pass = (cm == admin_clean and hmac.compare_digest(ic.strip(), ADMIN_PASS))
                 is_user_pass = (rec and rec.get("status") == "approved" and hmac.compare_digest(ic.strip().upper(), gen_code(cm)))
                 if (rec and rec.get("status") == "approved" or cm == admin_clean) and (is_user_pass or is_admin_pass):
-                    st.session_state["authenticated_user"] = cm; st.rerun()
+                    st.session_state["authenticated_user"] = cm
+                    st.query_params["u"] = cm
+                    st.query_params["t"] = gen_tok(cm, "session_keep")
+                    st.rerun()
                 else:
                     st.warning("⚠️ 未承認または専用アクセスコードが異なります。")
     with tab_apply:
@@ -1122,7 +1123,7 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 9. 高速並列データ収集
+# 9. 高速並列データ収集 (短縮タイムアウト & キャッシュ)
 # ==========================================
 def fetch_single_news_rss(cat, query):
     ctx = ssl.create_default_context()
@@ -1130,7 +1131,7 @@ def fetch_single_news_rss(cat, query):
     url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=ja&gl=JP&ceid=JP:ja"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=3.5, context=ctx) as res:
+        with urllib.request.urlopen(req, timeout=1.8, context=ctx) as res:
             root = ET.fromstring(res.read())
             for it in root.findall("./channel/item")[:3]:
                 t = re.sub(r"\s*-\s*[^-]+$", "", (it.findtext("title") or "").strip())
@@ -1146,7 +1147,7 @@ def fetch_single_news_rss(cat, query):
         record_system_error("fetch_single_news_rss", e, f"Query: {query}")
     return out
 
-@st.cache_data(ttl=180)
+@st.cache_data(ttl=300)
 def fetch_global_impact_news() -> list:
     qs = [
         ("半導体・AIサプライズ", "半導体 OR エヌビディア OR TSMC OR アドバンテスト 株価"), 
@@ -1188,15 +1189,16 @@ def analyze_news_impact_and_links(title: str, cat: str) -> dict:
     }
 
 # ==========================================
-# 10. AI合議と並列Web検索ロジック (2ch風リアル対話エンジン)
+# 10. AI合議と並列Web検索ロジック (超高速キャッシュ & 即時展開)
 # ==========================================
+@st.cache_data(ttl=600)
 def search_single_query(query: str, max_results: int) -> list:
     ctx = ssl.create_default_context()
     results = []
     url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=ja&gl=JP&ceid=JP:ja"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=3.5, context=ctx) as r:
+        with urllib.request.urlopen(req, timeout=1.8, context=ctx) as r:
             root = ET.fromstring(r.read())
             for it in root.findall("./channel/item")[:max_results]:
                 t = re.sub(r"<[^>]+>", "", it.findtext("title") or "").strip()
@@ -1224,9 +1226,14 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
     is_greeting = any(w in uq for w in ["こんにちは", "こんちは", "こんばんは", "おはよ", "初めまして", "よろしく", "押忍", "ども"]) if uq else False
     
     web_hits = []
-    search_q1 = f"{r['name']} 株価 {uq}" if uq and not is_greeting else f"{r['name']} 株価 決算 ニュース"
-    search_q2 = f"{r['code']} 掲示板 材料" if not uq else f"{r['code']} {uq}"
-    web_hits = search_web_knowledge_parallel(search_q1, search_q2)
+    # 質問投下時以外は超軽量検索で即応
+    if uq and not is_greeting:
+        search_q1 = f"{r['name']} 株価 {uq}"
+        search_q2 = f"{r['code']} {uq}"
+        web_hits = search_web_knowledge_parallel(search_q1, search_q2)
+    else:
+        search_q1 = f"{r['name']} 株価 ニュース"
+        web_hits = search_single_query(search_q1, 2)
     
     top_news_context = web_hits[0] if web_hits else f"{r['theme']}に関する機関フロー流入中、直近の大きな悪材料なし"
     sub_news_context = web_hits[1] if len(web_hits) > 1 else f"気配値OFI乖離度 Z={r.get('ofi_z', 0.5)}、板厚増加傾向"
@@ -1333,7 +1340,7 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
 
 # ==========================================
-# 11. レンダリング関数群
+# 11. レンダリング関数群 (超高速レスポンス)
 # ==========================================
 def render_council_sec(r, uk, auto_open=False):
     is_open = auto_open or st.session_state["active_debates"].get(uk, False)
@@ -1352,10 +1359,9 @@ def render_council_sec(r, uk, auto_open=False):
 
     cache_council_key = f"{uk}_{r.get('strat', {}).get('style_name', 'default')}"
     if cache_council_key not in st.session_state["council_threads"]:
-        with st.spinner(f"🌐 【{r['name']}】の最新ニュース・板情報をWebリアルタイム検索中＆合議生成中..."):
-            deb = run_7ai_council(r, None, 0, "")
-            st.session_state["council_threads"][cache_council_key] = deb["dialogue"]
-            st.session_state["council_meta"][cache_council_key] = deb
+        deb = run_7ai_council(r, None, 0, "")
+        st.session_state["council_threads"][cache_council_key] = deb["dialogue"]
+        st.session_state["council_meta"][cache_council_key] = deb
             
     meta = st.session_state["council_meta"][cache_council_key]
     turns = st.session_state["council_threads"][cache_council_key]
@@ -1369,12 +1375,11 @@ def render_council_sec(r, uk, auto_open=False):
             u_text = uop.strip()
             new_dom_id = f"user_q_anchor_{uk}_{int(time.time()*1000)}"
             st.session_state["council_threads"][cache_council_key].append({"is_user": True, "text": u_text, "dom_id": new_dom_id})
-            with st.spinner(f"🌐 『{u_text}』について最新Web情報を並列検索＆2ch合議生成中..."):
-                deb_updated = run_7ai_council(r, None, 0, user_query=u_text)
-                for new_t in deb_updated["dialogue"]: st.session_state["council_threads"][cache_council_key].append(new_t)
-                st.session_state["council_meta"][cache_council_key] = deb_updated
-                st.session_state["scroll_target_id"] = new_dom_id
-                st.rerun()
+            deb_updated = run_7ai_council(r, None, 0, user_query=u_text)
+            for new_t in deb_updated["dialogue"]: st.session_state["council_threads"][cache_council_key].append(new_t)
+            st.session_state["council_meta"][cache_council_key] = deb_updated
+            st.session_state["scroll_target_id"] = new_dom_id
+            st.rerun()
 
     st.markdown(f'<div class="consensus-banner"><div style="font-weight:800;color:#fde047;font-size:13px;margin-bottom:6px;">🏛️ 最終結論 ＆ プロ推奨買い方アクションプラン（{r["strat"]["style_name"]}専科）</div>{meta["verdict_html"]}</div>', unsafe_allow_html=True)
 
@@ -1435,7 +1440,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
         render_council_sec(r, f"{kp}_{r['code']}", auto_open=False)
 
 # ==========================================
-# 12. 本格数理クオンツ・エンジン (Schrödinger透過率・Kyle-λ・Hurst厳密化)
+# 12. 本格数理クオンツ・エンジン (ベクトル化・超高速計算)
 # ==========================================
 @st.cache_data(ttl=900)
 def fetch_5ch_live() -> dict: 
@@ -1446,7 +1451,7 @@ def fetch_macro():
     tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
     res = {}
     try:
-        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=6)
+        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=3.5)
         for k, (c, lbl) in tks.items():
             try:
                 d = raw[c].dropna(subset=["Close"]); lc, pc = float(d["Close"].iloc[-1]), float(d["Close"].iloc[-2])
@@ -1460,21 +1465,16 @@ def fetch_macro():
     return res
 
 def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
-    """Schrödinger波動関数のポテンシャル障壁透過モデルに基づく厳密クオンツ指標"""
     denom = np.maximum(c[:-1], 1e-4)
     rets = np.diff(c) / denom
     
-    # ポテンシャル障壁 V: 過去20期間高値ブレイクへの抵抗ポテンシャル
     recent_high = np.max(h[-20:])
     v_barrier = max(float(recent_high - c[-1]) / max(float(c[-1]), 1e-4), 0.001)
     
-    # 運動エネルギー E: 出来高加重実効ボラティリティ
     mean_v20 = max(float(np.mean(v[-20:])), 1.0)
     vol_weight = np.clip(v[-5:] / mean_v20, 0.2, 5.0)
     e_kinetic = max(float(np.mean(np.abs(rets[-5:]) * vol_weight)) * 2.5, 1e-4)
     
-    # 量子トンネル透過係数 T = exp(-2 * k * a)
-    # k = sqrt(2m(V - E)) / hbar に相似させた減衰パラメータ
     if e_kinetic >= v_barrier:
         qt = 95.0 + min(float((e_kinetic - v_barrier) / v_barrier) * 4.0, 4.5)
     else:
@@ -1482,7 +1482,6 @@ def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v:
         qt = float(100.0 * np.exp(-k_decay))
     qt = float(np.clip(qt, 48.0, 98.8))
     
-    # 波動コヒーレンス: 価格リターンのシャノン情報エントロピー
     pos_count = np.sum(rets[-14:] > 0)
     p_up = float(np.clip(pos_count / 14.0, 1e-4, 1.0 - 1e-4))
     shannon_entropy = float(-(p_up * np.log2(p_up) + (1.0 - p_up) * np.log2(1.0 - p_up)))
@@ -1497,26 +1496,22 @@ def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v:
     }
 
 def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
-    """機関投資家の価格インパクトモデル (Kyle's Lambda & R/S Hurst Exponent)"""
     denom = np.maximum(c[:-1], 1e-4)
     rets = np.diff(c) / denom
     n = min(len(rets), 30)
     sub_rets = rets[-n:]
     
-    # Hurst指数 (R/S解析法)
     mean_r = np.mean(sub_rets)
     dev = np.cumsum(sub_rets - mean_r)
     r_val = float(np.max(dev) - np.min(dev))
     s_val = float(np.std(sub_rets))
     hurst = float(np.clip(np.log(r_val / s_val) / np.log(n), 0.35, 0.85)) if (s_val > 1e-6 and r_val > 1e-6) else 0.52
 
-    # Kyle's Lambda: ΔPrice / Volume による流動性消費および大口ステルス吸収率
     dp = np.abs(np.diff(c[-10:]))
     mean_v20 = max(float(np.mean(v[-20:])), 1.0)
     dv = v[-9:] / mean_v20
     kyle_lambda = float(np.mean(dp / np.maximum(dv, 0.1)))
     
-    # 機関ステルス吸収スコア
     ks = float(np.clip(55.0 + (hurst - 0.5) * 55.0 + min(kyle_lambda * 4.5, 22.0), 48.0, 97.5))
     luld = float(np.clip(68.0 + (hurst - 0.5) * 42.0, 50.0, 96.0))
 
@@ -1646,21 +1641,23 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         l = df["Low"].values.astype(float)
         v = df["Volume"].values.astype(float)
         
-        df["Prev_Close"] = df["Close"].shift(1)
-        df["Day_Return"] = (df["Close"] - df["Open"].iloc[0]) / max(float(df["Open"].iloc[0]), 1e-4) * 100 if len(df) > 0 else 0
-        tr = pd.concat([df["High"] - df["Low"], (df["High"] - df["Prev_Close"]).abs(), (df["Low"] - df["Prev_Close"]).abs()], axis=1).max(axis=1)
-        df["ATR"] = tr.rolling(14).mean().fillna(df["Close"] * 0.02)
-        vol_sum = df["Volume"].rolling(20).sum().replace(0, np.nan)
-        df["VWAP20"] = (((df["High"] + df["Low"] + df["Close"]) / 3.0 * df["Volume"]).rolling(20).sum() / vol_sum).fillna(df["Close"])
+        # ベクトル化による超高速ATR & VWAP計算
+        prev_c = np.roll(c, 1)
+        prev_c[0] = c[0]
+        tr = np.maximum(h - l, np.maximum(np.abs(h - prev_c), np.abs(l - prev_c)))
+        atrv = float(np.mean(tr[-14:])) if len(tr) >= 14 else float(c[-1] * 0.02)
+        
+        v_sub = v[-20:]
+        v_sum = np.sum(v_sub)
+        vwap20 = float(np.sum(((h[-20:] + l[-20:] + c[-20:]) / 3.0) * v_sub) / v_sum) if v_sum > 0 else float(c[-1])
+        day_ret = float((c[-1] - o[0]) / max(o[0], 1e-4) * 100) if len(o) > 0 else 0.0
         
         qm = compute_quantum_wave_metrics(c, h, l, v)
         ms = compute_inst_microstructure(c, h, l, v)
         
-        lat = df.iloc[-1]
-        cv = float(lat["Close"])
-        atrv = float(lat["ATR"])
+        cv = float(c[-1])
         
-        recent_20_wins = np.sum(df["Close"].diff().iloc[-20:] > 0)
+        recent_20_wins = np.sum(np.diff(c[-21:]) > 0) if len(c) >= 21 else 10
         tot_win = float(np.clip(recent_20_wins / 20.0 * 100.0 * 0.4 + qm["q_tunnel"] * 0.35 + ms["kyle_stealth"] * 0.25, 48.0, 96.5))
         
         hl_r = np.maximum(h - l, 1e-4)
@@ -1714,7 +1711,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
 
         strat = select_dynamic_strategy(
             code.replace(".T", ""), style, tot_win, round(expect_pct, 1), ofi_z, 0.5, 0.4, 3.5, 60.0, 0.8, 
-            base_sh, fp(pest), fp(float(lat["VWAP20"])), 
+            base_sh, fp(pest), fp(vwap20), 
             f"{fp(tpv)}(+{round((tpv-cv)/max(cv,1e-4)*100,1)}%)", f"{fp(slv)}({round((slv-cv)/max(cv,1e-4)*100,1)}%)", 15.0, qm, ms
         )
 
@@ -1727,11 +1724,11 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         return {
             "full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, 
             "price": fp(cv), "raw_close": cv,
-            "tp_price": fp(tpv), "tp_pct": round((tpv - cv) / max(cv, 1e-4) * 100, 1), "sl_price": fp(slv), "sl_pct": round((slv - cv) / max(cv, 1e-4) * 100, 1), "vwap_price": fp(float(lat["VWAP20"])),
+            "tp_price": fp(tpv), "tp_pct": round((tpv - cv) / max(cv, 1e-4) * 100, 1), "sl_price": fp(slv), "sl_pct": round((slv - cv) / max(cv, 1e-4) * 100, 1), "vwap_price": fp(vwap20),
             "inst_score": int(np.clip(ms["ms_score"] + ofi_z * 5, 50, 99)), "vpin": 0.52, "ofi_z": round(ofi_z, 2), "yz_vol": 0.38, "cvar95": 3.2, "eff_pct": 82, "kelly_pct": 16.5,
             "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"],
             "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_stealth": ms["kyle_stealth"], "luld_magnet": ms["luld_magnet"], "ms_regime": ms["ms_regime"],
-            "expect_pct": round(expect_pct, 1), "board5ch_score": 75, "b5_hits": 10, "pts_est_price": fp(pest), "pts_gap_pct": pgap, "diff": round(float(lat["Day_Return"]), 2),
+            "expect_pct": round(expect_pct, 1), "board5ch_score": 75, "b5_hits": 10, "pts_est_price": fp(pest), "pts_gap_pct": pgap, "diff": round(day_ret, 2),
             "prob": round(float(np.clip(50.0 + pgap * 10.0, 30.0, 85.0)), 1), 
             "intraday_win_rate": round(float(np.clip(tot_win * 0.95, 40.0, 95.0)), 1), 
             "trend_win_rate": round(float(np.clip(tot_win * 1.05, 45.0, 98.0)), 1), 
@@ -1749,7 +1746,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
 def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     codes = list({s["code"] for sts in STOCK_POOL.values() for s in sts})
     try:
-        raw = yf.download(codes, period="5d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=12)
+        raw = yf.download(codes, period="5d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=8.0)
     except Exception as e:
         record_system_error("fetch_pool_batch:download", e)
         raw = {}
@@ -1758,7 +1755,7 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     def _analyze_wrapper(g, s, df): 
         return g, s["code"], analyze_df(df, s["code"], s["name"], s["theme"], g, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
         
-    with ThreadPoolExecutor(max_workers=min(len(codes), 16)) as ex:
+    with ThreadPoolExecutor(max_workers=min(len(codes), 20)) as ex:
         futs = []
         for g, sts in STOCK_POOL.items():
             for s in sts:
@@ -1790,7 +1787,7 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
         return None
 
 # ==========================================
-# 13. ヘッダー / マクロ指標
+# 13. ヘッダー / マクロ指標 (再計算・キャッシュ最適化)
 # ==========================================
 macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
@@ -1799,8 +1796,14 @@ all_impact_news = fetch_global_impact_news()
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;"><div class="brand-luxury">YAMASHISHI LAB</div></div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
 
-with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場全銘柄を並列ディープスキャン中..."):
-    g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
+# セッションステート保持で画面内クリック時のスピナーループを徹底抑制
+_cache_pool_key = f"pool_{investment_style}_{sorted(list(ac_b))}"
+if _cache_pool_key not in st.session_state:
+    with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場全銘柄を並列ディープスキャン中..."):
+        g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
+        st.session_state[_cache_pool_key] = (g_res, all_res)
+else:
+    g_res, all_res = st.session_state[_cache_pool_key]
 
 # ==========================================
 # 14. 画面レンダリング
@@ -1814,7 +1817,6 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         st.session_state["scroll_top_trig"] = int(time.time()*1000)
         st.rerun()
 
-    # タブ構成（エラーログタブ完備）
     tab_users, tab_employment, tab_apply_wait, tab_error_logs = st.tabs([
         "👥 会員情報管理", "🏢 AGI雇用・監視情報", "📩 会員申し込み審査", "⚠️ システムエラーログ"
     ])
@@ -1970,7 +1972,6 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         else:
             st.info("現在、承認待ちの新規申請はありません。")
 
-    # システムエラーログ専用管理画面
     with tab_error_logs:
         st.markdown("#### ⚠️ システムエラーログ管理 & ダウンロードセンター")
         err_list = get_system_error_logs()
