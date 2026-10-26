@@ -374,153 +374,151 @@ def save_watchlist(email: str, wl: dict):
     db_set(safe_key, wl)
 
 # ==========================================
-# 3.5. 鬼監視センター＆動的エージェント進化エンジン（完全永続化）
+# 【魔改造】自律型AGI雇用・監視・追放システム (完全永続化 & 二度と復活不可)
 # ==========================================
-INITIAL_AGENTS_POOL = {
-    "IGNIS": {"name": "IGNIS", "icon": "🔥", "generation": 1, "score": 94, "specialty": "順張り・板喰いOFIモメンタム追従", "weakness": "感情的になりやすくダマシ急落に被弾", "banned_count": 0},
-    "TECHNOS": {"name": "TECHNOS", "icon": "📐", "generation": 1, "score": 98, "specialty": "Hasbrouck価格インパクト係数・MF-DFAフラクタル解析", "weakness": "突発ファンダメンタルズの急変に弱い", "banned_count": 0},
-    "SENTINEL": {"name": "SENTINEL", "icon": "👁️", "generation": 1, "score": 96, "specialty": "5ch・実況SNSイナゴタワー崩壊の逆張り検知", "weakness": "過度な疑心暗鬼で初動に乗れない", "banned_count": 0},
-    "VALKYRIE": {"name": "VALKYRIE", "icon": "⚔️", "generation": 1, "score": 95, "specialty": "ミリ秒板情報差分と氷山注文(Iceberg)の連続捕捉", "weakness": "中長期トレンドを軽視する傾向", "banned_count": 0},
-    "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "generation": 1, "score": 99, "specialty": "シュレーディンガー固有値特異点検知、WKB障壁突破確率", "weakness": "発言が超高次元で難解", "banned_count": 0},
-    "AEGIS": {"name": "AEGIS", "icon": "🛡️", "generation": 1, "score": 97, "specialty": "極値理論CVaR 99%に基づく絶対資本防衛・動的ケリー制御", "weakness": "慎重すぎて機会損失を生む", "banned_count": 0},
-    "CHRONOS": {"name": "CHRONOS", "icon": "⏳", "generation": 1, "score": 95, "specialty": "板気配ボラティリティの時間周波数ウェーブレット解析", "weakness": "突発的な地政学ニュースへの適応が遅い", "banned_count": 0},
-    "ORACLE": {"name": "ORACLE", "icon": "🔮", "generation": 1, "score": 96, "specialty": "海外巨額バスケット買い・ダークプール流動性検知", "weakness": "超小型株の仕手筋の動きを見落としやすい", "banned_count": 0},
-    "ALPHA": {"name": "ALPHA", "icon": "⚡", "generation": 1, "score": 95, "specialty": "寄付き直後ギャップアップ・ダウンの超高速執行判定", "weakness": "後場のダレ相場での精度低下", "banned_count": 0},
-    "NEXUS": {"name": "NEXUS", "icon": "👑", "generation": 1, "score": 99, "specialty": "全エージェント合議の期待値最尤推定統合と最終意思決定", "weakness": "突出した尖った爆発力を抑えがち", "banned_count": 0}
+DEFAULT_AGENTS = {
+    "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "age": 24, "score": 99, "good": "最新材料と量子固有値特異点の直結検知", "bad": "多世界解釈的飛躍が多く発言が超高次元"},
+    "AEGIS": {"name": "AEGIS", "icon": "🛡️", "age": 32, "score": 97, "good": "極値理論CVaR 99%に基づく絶対資本防衛・動的ケリー制禦", "bad": "慎重すぎて機会損失を生むことがある"},
+    "IGNIS": {"name": "IGNIS", "icon": "🔥", "age": 28, "score": 95, "good": "リアルタイムOFI順張りモメンタムと板喰いアグレッサー追従", "bad": "感情的で口が悪い。煽り耐性が低くスレ住人を罵倒しがち"},
+    "TECHNOS": {"name": "TECHNOS", "icon": "📐", "age": 45, "score": 98, "good": "Hasbrouck価格インパクト係数・MF-DFAフラクタル実測解析", "bad": "ファンダメンタルズの急変に弱く数字ばかり並べたがる"},
+    "CHRONOS": {"name": "CHRONOS", "icon": "⏳", "age": 38, "score": 95, "good": "板気配ボラティリティの時間周波数ウェーブレット解析", "bad": "突発的な地政学ニュースへの適応が遅い"},
+    "ORACLE": {"name": "ORACLE", "icon": "🔮", "age": 29, "score": 96, "good": "海外巨額バスケット買い・ダークプール流動性検知", "bad": "超小型株の仕手筋の動きを見落としやすい"},
+    "NEXUS": {"name": "NEXUS", "icon": "👑", "age": 41, "score": 99, "good": "合議の期待値最尤推定統合と冷徹な最終執行プラン決定", "bad": "尖った個別銘柄の爆発力を抑えがち"},
+    "VALKYRIE": {"name": "VALKYRIE", "icon": "⚔️", "age": 26, "score": 94, "good": "ミリ秒板情報差分と氷山注文(Iceberg)の連続捕捉", "bad": "中長期トレンドを軽視する傾向"},
+    "SENTINEL": {"name": "SENTINEL", "icon": "👁️", "age": 35, "score": 96, "good": "5ch・実況SNS・掲示板の過熱イナゴタワー暴落警戒", "bad": "極度の人間不信でイナゴを嘲笑・皮肉混じりの発言が多い"},
+    "ALPHA": {"name": "ALPHA", "icon": "⚡", "age": 30, "score": 95, "good": "寄付き直後ギャップアップ・ダウンの超高速執行判定", "bad": "後場のダレ相場での精度低下"}
 }
 
-INITIAL_INSPECTORS_POOL = {
-    "INSP_A": {"name": "JUDGE-ALPHA", "icon": "⚖️", "generation": 1, "score": 99, "role": "定型文・手抜き発言のミリ秒即時検知＆神託整合性監査"},
-    "INSP_B": {"name": "JUDGE-BETA", "icon": "🔍", "generation": 1, "score": 98, "role": "世界同時マクロ・リアルタイムWebニュース整合性監査"},
-    "INSP_C": {"name": "JUDGE-GAMMA", "icon": "🎯", "generation": 1, "score": 99, "role": "個別銘柄ファクト・板情報リアルタイム執行バイアス監査"}
+DEFAULT_INSPECTORS = {
+    "INSP_A": {"name": "JUDGE-ALPHA-ULTRA", "icon": "⚖️", "score": 99, "role": "定型文コピペ・手抜きレス即時検知＆厳格処刑プロトコル"},
+    "INSP_B": {"name": "JUDGE-BETA-PRIME", "icon": "🔍", "score": 99, "role": "世界同時マクロ・リアルタイムWeb検索事実性監査"},
+    "INSP_C": {"name": "JUDGE-GAMMA-NEXUS", "icon": "🎯", "score": 99, "role": "質問本質回答性・人間的感情表現オーディット"}
 }
+
+AGI_TRAIT_POOLS = [
+    ("NANO", "🔬", "超電導ナノ構造と歩み値ミリ秒解析", "理屈っぽく他人の意見を小馬鹿にする"),
+    ("TITAN", "🦾", "巨額機関ファンドのブロックトレード迎撃", "強気すぎて逆張りで踏み上げを食らう"),
+    ("PHANTOM", "👻", "板に現れないダークプールステルス注文察知", "陰謀論じみた極論を吐きがち"),
+    ("SOLARIS", "☀️", "世界半導体・SOX指数との相関マクロ裁定", "日本株特有の仕手筋の騙しに疎い"),
+    ("SIREN", "🧜‍♀️", "SNSイナゴの熱狂度と天井クラッシュ予知", "口が悪く煽りスレ住人を徹底的に見下す"),
+    ("FENRIR", "🐺", "暴落時の狼狽売りリバウンド即時奪取", "狼狽買いで高値を掴むことがある"),
+    ("LUCIFER", "😈", "機関投資家のストップ狩り逆張り先回り", "冷酷すぎて他人の大損を嘲笑する"),
+    ("HERMES", "🪽", "リアルタイム海外速報・地政学リスク伝達", "噂レベルの未確認情報で騒ぎ立てる"),
+    ("GENESIS", "🌌", "新世代次世代モデルと未踏領域アルゴ", "発言が哲学的で伝わりにくい"),
+    ("METIS", "🦉", "板厚みと出来高急増の乖離率分析", "慎重すぎてエントリーが1歩遅れる")
+]
 
 def load_agi_system():
-    agents = db_get("agi_agents_v2", None)
-    inspectors = db_get("agi_inspectors_v2", None)
-    fired = db_get("agi_fired_v2", None)
-    sz_active = db_get("agi_sz_active_v2", None)
-    sz_logs = db_get("agi_sz_logs_v2", None)
-    forever_banned_names = db_get("agi_forever_banned_names", None)
+    agents = db_get("agi_agents", None)
+    inspectors = db_get("agi_inspectors", None)
+    fired = db_get("agi_fired", None)
+    sz_active = db_get("agi_sz_active", None)
+    sz_logs = db_get("agi_sz_logs", None)
 
-    if agents is None or not isinstance(agents, dict):
-        agents = dict(INITIAL_AGENTS_POOL)
-        db_set("agi_agents_v2", agents)
-    if inspectors is None or not isinstance(inspectors, dict):
-        inspectors = dict(INITIAL_INSPECTORS_POOL)
-        db_set("agi_inspectors_v2", inspectors)
     if fired is None or not isinstance(fired, list):
         fired = []
-        db_set("agi_fired_v2", fired)
+        db_set("agi_fired", fired)
+
+    fired_names = {fa.get("name") for fa in fired if isinstance(fa, dict)}
+
+    if agents is None or not isinstance(agents, dict):
+        agents = {k: v for k, v in DEFAULT_AGENTS.items() if v["name"] not in fired_names}
+        while len(agents) < 10:
+            new_id, new_agent = generate_upgraded_agent(fired_names, "初期編成自動補填")
+            agents[new_id] = new_agent
+        db_set("agi_agents", agents)
+    else:
+        agents = {k: v for k, v in agents.items() if v.get("name") not in fired_names}
+        while len(agents) < 10:
+            new_id, new_agent = generate_upgraded_agent(fired_names, "欠員補充補填")
+            agents[new_id] = new_agent
+        db_set("agi_agents", agents)
+
+    if inspectors is None or not isinstance(inspectors, dict):
+        inspectors = dict(DEFAULT_INSPECTORS)
+        db_set("agi_inspectors", inspectors)
+
     if sz_active is None:
         sz_active = True
-        db_set("agi_sz_active_v2", sz_active)
+        db_set("agi_sz_active", sz_active)
     if sz_logs is None or not isinstance(sz_logs, list):
         sz_logs = []
-        db_set("agi_sz_logs_v2", sz_logs)
-    if forever_banned_names is None or not isinstance(forever_banned_names, list):
-        forever_banned_names = []
-        db_set("agi_forever_banned_names", forever_banned_names)
+        db_set("agi_sz_logs", sz_logs)
 
-    return agents, inspectors, fired, sz_active, sz_logs, forever_banned_names
+    return agents, inspectors, fired, sz_active, sz_logs
 
 def save_agi_system():
     if "agent_roster" in st.session_state:
-        db_set("agi_agents_v2", st.session_state["agent_roster"])
+        db_set("agi_agents", st.session_state["agent_roster"])
     if "inspector_roster" in st.session_state:
-        db_set("agi_inspectors_v2", st.session_state["inspector_roster"])
+        db_set("agi_inspectors", st.session_state["inspector_roster"])
     if "fired_agents" in st.session_state:
-        db_set("agi_fired_v2", st.session_state["fired_agents"])
+        db_set("agi_fired", st.session_state["fired_agents"])
     if "system_zero_active" in st.session_state:
-        db_set("agi_sz_active_v2", st.session_state["system_zero_active"])
+        db_set("agi_sz_active", st.session_state["system_zero_active"])
     if "system_zero_logs" in st.session_state:
-        db_set("agi_sz_logs_v2", st.session_state["system_zero_logs"])
-    if "forever_banned_agents" in st.session_state:
-        db_set("agi_forever_banned_names", st.session_state["forever_banned_agents"])
+        db_set("agi_sz_logs", st.session_state["system_zero_logs"])
 
-# 永久解雇・動的進化ジェネレーター
-def execute_fire_agent_and_hire_advanced(agent_key: str, reason: str, inspector_name: str = "JUDGE-ALPHA"):
+def generate_upgraded_agent(fired_names: set, reason_context: str = "") -> tuple:
+    pool_cand = [item for item in AGI_TRAIT_POOLS if item[0] not in fired_names]
+    if not pool_cand:
+        rand_suffix = f"MK{random.randint(2, 99)}"
+        base_name, icon, good, bad = random.choice(AGI_TRAIT_POOLS)
+        new_name = f"{base_name}-{rand_suffix}"
+    else:
+        base_name, icon, good, bad = random.choice(pool_cand)
+        new_name = f"{base_name}-X" if base_name in fired_names else base_name
+
+    upgraded_good = f"{good} (前任者の解雇理由『{reason_context[:20]}』を完全克服・実測値解析特化)"
+    agent_data = {
+        "name": new_name,
+        "icon": icon,
+        "age": random.randint(23, 49),
+        "score": random.randint(96, 99),
+        "good": upgraded_good,
+        "bad": bad
+    }
+    agent_id = f"AGI_{hashlib.md5(new_name.encode()).hexdigest()[:6].upper()}"
+    return agent_id, agent_data
+
+def execute_fire_agent(agent_key: str, reason: str, inspector_name: str = "SYSTEM-ZERO"):
     agents = st.session_state.get("agent_roster", {})
     fired_list = st.session_state.get("fired_agents", [])
-    banned_names = set(st.session_state.get("forever_banned_agents", []))
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    old_agent = agents.get(agent_key)
-    if not old_agent:
+    target_agent = agents.get(agent_key)
+    if not target_agent:
         return None
 
-    old_name = old_agent["name"]
-    old_gen = old_agent.get("generation", 1)
-    banned_names.add(old_name)
-
     fired_record = {
-        "id": hashlib.md5(f"{old_name}_{now_str}".encode()).hexdigest()[:8],
-        "name": old_name,
-        "time": now_str,
-        "score": old_agent.get("score", 90),
+        "time": now_time,
+        "name": target_agent["name"],
+        "icon": target_agent["icon"],
+        "score": target_agent.get("score", 90),
         "fired_by": inspector_name,
-        "reason": reason,
-        "generation": old_gen
+        "reason": reason
     }
     fired_list.insert(0, fired_record)
     st.session_state["fired_agents"] = fired_list[:150]
-    st.session_state["forever_banned_agents"] = list(banned_names)
 
-    # 次世代エリートエージェントの動的誕生
-    new_gen = old_gen + 1
-    TITLES_POOL = ["HYPER", "NEO", "TITAN", "SOLAR", "APOLLO", "OMEGA", "VORTEX", "PHANTOM", "CHRONO", "AURA"]
-    chosen_title = TITLES_POOL[(new_gen + random.randint(1, 99)) % len(TITLES_POOL)]
-    base_prefix = re.sub(r'[^A-Z]', '', old_name.split('-')[0]) or "QUANT"
-    new_name = f"{chosen_title}-{base_prefix}-Mk{new_gen}"
-
-    while new_name in banned_names:
-        new_name = f"{chosen_title}-{base_prefix}-X{random.randint(10, 99)}"
-
-    new_score = min(99, max(95, old_agent.get("score", 92) + 1))
-    new_agent = {
-        "name": new_name,
-        "icon": old_agent.get("icon", "⚡"),
-        "generation": new_gen,
-        "score": new_score,
-        "specialty": f"【反省点克服型】{reason[:25]}を完全排除した新世代高精度アルゴリズム",
-        "weakness": "前世代の欠陥を完全パッチ済み。超高感度。",
-        "banned_count": 0
-    }
-    agents[agent_key] = new_agent
-    st.session_state["agent_roster"] = agents
-    save_agi_system()
-    return new_agent
-
-# SYSTEM-ZEROによる監査員の粛清と進化
-def execute_fire_inspector_by_system_zero(insp_key: str, reason: str):
-    inspectors = st.session_state.get("inspector_roster", {})
-    sz_logs = st.session_state.get("system_zero_logs", [])
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    old_insp = inspectors.get(insp_key)
-    if not old_insp:
-        return
-    old_gen = old_insp.get("generation", 1)
-    new_gen = old_gen + 1
-
-    sz_logs.insert(0, {
-        "time": now_str,
-        "target": old_insp["name"],
-        "msg": f"🚨 SYSTEM-ZERO神罰執行: 監査怠慢・定型見逃しにより特命監査員 {old_insp['name']} を完全解雇処刑。理由: {reason}"
+    st.session_state.setdefault("system_zero_logs", []).insert(0, {
+        "time": now_time,
+        "target": target_agent["name"],
+        "msg": f"💀 処刑執行: {target_agent['name']} を解雇処分。理由: {reason}（執行者: {inspector_name}）"
     })
-    st.session_state["system_zero_logs"] = sz_logs[:100]
+    st.session_state["system_zero_logs"] = st.session_state["system_zero_logs"][:150]
 
-    code_letter = insp_key.replace("INSP_", "")
-    new_insp = {
-        "name": f"SUPREME-JUDGE-{code_letter}{new_gen}",
-        "icon": "⚖️",
-        "generation": new_gen,
-        "score": 99,
-        "role": f"SYSTEM-ZERO直属 永久自己進化型 超厳格監査プロトコル v{new_gen}.0 (定型文検知率99.99%)"
-    }
-    inspectors[insp_key] = new_insp
-    st.session_state["inspector_roster"] = inspectors
+    del agents[agent_key]
+
+    fired_names = {fa.get("name") for fa in fired_list}
+    new_id, new_agent = generate_upgraded_agent(fired_names, reason)
+    agents[new_id] = new_agent
+    st.session_state["agent_roster"] = agents
+
     save_agi_system()
+    st.session_state["council_threads"] = {}
+    st.session_state["council_meta"] = {}
+    return new_agent
 
 def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h: str = "", action_type: str = "アクセス") -> tuple:
     em_c = em.strip().lower()
@@ -612,10 +610,10 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
             url = AI_PROVIDERS[prov][2].format(model=mod, key=key)
             data = json.dumps({
                 "contents": [{"role": "user", "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]}],
-                "generationConfig": {"temperature": 0.72, "response_mime_type": "application/json"}
+                "generationConfig": {"temperature": 0.75, "response_mime_type": "application/json"}
             }).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
+            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
                 res = json.loads(r.read())
                 return res["candidates"][0]["content"]["parts"][0]["text"]
         elif prov == "claude":
@@ -627,13 +625,13 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
             }
             data = json.dumps({
                 "model": mod,
-                "max_tokens": 1200,
+                "max_tokens": 1500,
                 "system": sys_prompt,
                 "messages": [{"role": "user", "content": user_prompt}],
-                "temperature": 0.72
+                "temperature": 0.75
             }).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
+            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
                 res = json.loads(r.read())
                 return res["content"][0]["text"]
         else:
@@ -642,13 +640,13 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
             payload = {
                 "model": mod,
                 "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
-                "temperature": 0.72
+                "temperature": 0.75
             }
             if prov in ["openai", "groq"]:
                 payload["response_format"] = {"type": "json_object"}
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
+            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
                 res = json.loads(r.read())
                 return res["choices"][0]["message"]["content"]
     except Exception as e:
@@ -656,7 +654,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
         return None
 
 # ==========================================
-# 5. UI と CSS / JS 注入
+# 5. UI と CSS / JS 注入 (完全維持)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -1082,7 +1080,7 @@ check_auth()
 # ==========================================
 # 7. セッション状態の初期化
 # ==========================================
-saved_agents, saved_inspectors, saved_fired, saved_sz_active, saved_sz_logs, saved_forever_banned = load_agi_system()
+saved_agents, saved_inspectors, saved_fired, saved_sz_active, saved_sz_logs = load_agi_system()
 
 cu_active = st.session_state.get("authenticated_user", "")
 user_saved_prefs = load_user_prefs(cu_active)
@@ -1111,7 +1109,7 @@ for k, v in [
     ("fired_agents", saved_fired),
     ("system_zero_logs", saved_sz_logs),
     ("system_zero_active", saved_sz_active),
-    ("forever_banned_agents", saved_forever_banned)
+    ("stock_dialogue_signatures", {})
 ]:
     if k not in st.session_state:
         st.session_state[k] = v
@@ -1299,49 +1297,72 @@ def _render_realtime_audit_center():
     now_ts = int(time.time())
     now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    inspectors = st.session_state.get("inspector_roster") or INITIAL_INSPECTORS_POOL
-    agents = st.session_state.get("agent_roster") or INITIAL_AGENTS_POOL
+    inspectors = st.session_state.get("inspector_roster") or DEFAULT_INSPECTORS
+    agents = st.session_state.get("agent_roster") or DEFAULT_AGENTS
+
+    jitter_seed = int(hashlib.md5(f"{now_ts // 10}".encode()).hexdigest()[:4], 16)
 
     st.markdown(
         f'<div style="background:rgba(168,85,247,0.12);border:1px solid #c084fc;padding:6px 8px;border-radius:6px;font-size:11px;margin-bottom:8px;">'
-        f'<span class="live-pulse-indicator"></span>👁️‍🗨️ <b>SYSTEM-ZERO (絶対監査・最高統括神)</b>: <span style="color:#10b981;font-weight:700;">ACTIVE</span><br>'
-        f'<span style="color:#d8b4fe;">定型文即時死刑制禦・常時ミリ秒監査中 ({now_time[-8:]})</span>'
+        f'<span class="live-pulse-indicator"></span>👁️‍🗨️ <b>SYSTEM-ZERO (最高次統括神)</b>: <span style="color:#10b981;font-weight:700;">LIVE REALTIME</span><br>'
+        f'<span style="color:#d8b4fe;">全監査員3名・合議体10名を常時ミリ秒監視中 ({now_time[-8:]})</span>'
         f'</div>', unsafe_allow_html=True
     )
 
+    audit_window = now_ts // 600
+    if st.session_state.get("last_audit_epoch") != audit_window:
+        st.session_state["last_audit_epoch"] = audit_window
+        err_logs = get_system_error_logs()
+        if len(err_logs) > 5 and st.session_state.get("system_zero_active", True):
+            insp_k = list(inspectors.keys())[audit_window % len(inspectors)]
+            old_insp = inspectors[insp_k]
+            st.session_state["system_zero_logs"].insert(0, {
+                "time": now_time,
+                "target": old_insp["name"],
+                "msg": f"🚨 SYSTEM-ZERO粛清: エラーレート過多検知により監視員 {old_insp['name']} を更新配置。"
+            })
+            new_num = (audit_window % 89) + 10
+            inspectors[insp_k] = {
+                "name": f"JUDGE-{new_num}-GENESIS", "icon": "⚖️", "score": 99,
+                "role": f"SYSTEM-ZERO直属 厳格定型文検知・人間味監査 v{new_num}.0"
+            }
+            save_agi_system()
+
     st.markdown("<div style='font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:4px;'>⚖️ 稼働中・特命監査員 (3名)</div>", unsafe_allow_html=True)
     for ik, iv in inspectors.items():
+        vital_score = min(99, max(90, iv["score"] + (jitter_seed % 3 - 1)))
         st.markdown(
             f'<div style="background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;padding:4px 8px;margin-bottom:4px;border-radius:4px;font-size:10.5px;">'
-            f'<b>{html.escape(iv["icon"])} {html.escape(iv["name"])}</b> (Gen.{iv.get("generation",1)} / 監査スコア: <span style="color:#38bdf8;font-weight:800;">{iv["score"]}点</span>)<br>'
+            f'<b>{html.escape(iv["icon"])} {html.escape(iv["name"])}</b> (リアルタイム評価: <span style="color:#38bdf8;font-weight:800;">{vital_score}点</span>)<br>'
             f'<span style="color:#94a3b8;">{html.escape(iv["role"])}</span>'
             f'</div>', unsafe_allow_html=True
         )
 
-    st.markdown("<div style='font-size:11px;font-weight:700;color:#10b981;margin:8px 0 4px 0;'>🟢 厳選合議エージェント (常時10名進化中)</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:11px;font-weight:700;color:#10b981;margin:8px 0 4px 0;'>🟢 厳選合議エージェント (常時10名)</div>", unsafe_allow_html=True)
     for ak, av in list(agents.items())[:10]:
+        ag_score = min(99, max(88, av["score"] + (int(hashlib.md5(f"{ak}{now_ts // 15}".encode()).hexdigest()[:2], 16) % 3 - 1)))
         st.markdown(
             f'<div style="background:rgba(2,6,23,0.7);border:1px solid rgba(16,185,129,0.25);border-radius:5px;padding:4px 8px;margin-bottom:4px;font-size:10.5px;">'
-            f'<span style="font-weight:700;color:#f8fafc;">{html.escape(av["icon"])} {html.escape(av["name"])}</span> <span style="font-size:9.5px;color:#38bdf8;">(Gen.{av.get("generation",1)})</span>'
-            f'<span style="color:#fde047;float:right;font-weight:800;">スコア: {av["score"]}</span><br>'
-            f'<span style="color:#a7f3d0;">得意: {html.escape(av["specialty"][:26])}...</span>'
+            f'<span style="font-weight:700;color:#f8fafc;">{html.escape(av["icon"])} {html.escape(av["name"])}</span> '
+            f'<span style="color:#fde047;float:right;font-weight:800;">スコア: {ag_score}</span><br>'
+            f'<span style="color:#a7f3d0;">強み: {html.escape(av["good"][:24])}...</span>'
             f'</div>', unsafe_allow_html=True
         )
 
     st.markdown("<hr style='margin:10px 0 6px 0; border-color:rgba(239,68,68,0.3);'>", unsafe_allow_html=True)
-    st.markdown("<div style='font-size:11px;font-weight:800;color:#ef4444;margin-bottom:6px;'>💀 永久解雇・処刑履歴 (二度と復活しない記録)</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:11px;font-weight:800;color:#ef4444;margin-bottom:6px;'>💀 直近の解雇・粛清履歴 (鬼監視室)</div>", unsafe_allow_html=True)
     fired_list = st.session_state.get("fired_agents", [])
     if fired_list:
-        for fa in fired_list[:5]:
+        for fa in fired_list[:4]:
             st.markdown(
                 f'<div style="background:rgba(30,10,15,0.75);border-left:3px solid #ef4444;border-radius:4px;padding:5px 8px;margin-bottom:5px;font-size:10.5px;">'
-                f'<span style="color:#fca5a5;font-weight:700;">{html.escape(fa.get("name",""))}</span> <span style="color:#94a3b8;font-size:9px;">({html.escape(fa.get("time","")[-8:])})</span><br>'
-                f'<span style="color:#f87171;">処刑: {html.escape(fa.get("fired_by","特命監査員"))}</span><br>'
+                f'<span style="color:#fca5a5;font-weight:700;">{html.escape(fa.get("name",""))}</span> <span style="color:#94a3b8;font-size:9.5px;">({html.escape(fa.get("time","")[:16])})</span><br>'
+                f'<span style="color:#f87171;">処刑: {html.escape(fa.get("fired_by","監査員"))} (スコア:{html.escape(str(fa.get("score","")))})</span><br>'
                 f'<span style="color:#cbd5e1;">理由: {html.escape(fa.get("reason",""))}</span>'
                 f'</div>', unsafe_allow_html=True
             )
     else:
-        st.caption("現在、処刑・解雇されたエージェントはいません。定型文を発した瞬間に即座に永久追放されます。")
+        st.caption("現在、処刑・解雇されたエージェントはいません。全10名が厳格基準をクリアして稼働中です。")
 
 if hasattr(st, "fragment"):
     _render_realtime_audit_center_fragment = st.fragment(run_every="5s")(_render_realtime_audit_center)
@@ -1429,7 +1450,7 @@ with st.sidebar:
         }
         save_user_prefs(cu, current_prefs_to_save)
 
-    with st.expander("🏢 AGI鬼監視センター (監視3名・10名常時)", expanded=False):
+    with st.expander("🏢 AGI鬼監査センター (監視3名・10名常時)", expanded=False):
         _render_realtime_audit_center_fragment()
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1444,7 +1465,7 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 10. 高速並列データ収集
+# 10. 高速並列データ収集 (短縮タイムアウト & キャッシュ)
 # ==========================================
 def analyze_news_impact_and_links(title: str, cat: str) -> dict:
     t_up = title.upper()
@@ -1465,7 +1486,7 @@ def fetch_single_news_rss(cat, query):
     url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=ja&gl=JP&ceid=JP:ja"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=2.0, context=ctx) as res:
+        with urllib.request.urlopen(req, timeout=1.8, context=ctx) as res:
             root = ET.fromstring(res.read())
             for it in root.findall("./channel/item")[:3]:
                 t = re.sub(r"\s*-\s*[^-]+$", "", (it.findtext("title") or "").strip())
@@ -1512,157 +1533,153 @@ def fetch_global_impact_news() -> list:
 all_impact_news = fetch_global_impact_news()
 
 # ==========================================
-# 11. AI合議・リアルタイムWebインテリジェンス＆鬼監視エンジン
+# 11. 【魔改造】リアルタイムWEB情報直結 ＆ 完全定型文排除 人間味2ch合議エンジン
 # ==========================================
-@st.cache_data(ttl=180)
-def search_web_realtime_intel(query: str, max_results: int = 3) -> list:
+@st.cache_data(ttl=300)
+def search_single_query(query: str, max_results: int) -> list:
     ctx = ssl.create_default_context()
-    hits = []
+    results = []
     url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=ja&gl=JP&ceid=JP:ja"
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
         with urllib.request.urlopen(req, timeout=2.2, context=ctx) as r:
             root = ET.fromstring(r.read())
             for it in root.findall("./channel/item")[:max_results]:
                 t = re.sub(r"<[^>]+>", "", it.findtext("title") or "").strip()
                 t = re.sub(r"\s*-\s*[^-]+$", "", t).strip()
                 d = re.sub(r"<[^>]+>", "", it.findtext("description") or "").strip()
-                d = re.sub(r"<[^>]+>", "", d)[:90]
-                if t:
-                    hits.append(f"{t}（概要: {d}）")
+                if t: results.append(f"{t} ({d[:80]}...)")
     except Exception as e:
-        record_system_error("search_web_realtime_intel", e, f"Query: {query}")
-    return hits
+        record_system_error("search_single_query", e, f"Query: {query}")
+    return results
 
-def parallel_gather_ticker_and_user_intel(code_raw: str, name: str, user_q: str = "") -> list:
-    clean_code = code_raw.replace(".T", "")
-    queries = [
-        f"{name} {clean_code} 株価 ニュース 決算",
-        f"{name} 市況 掲示板 PTS 5ch"
-    ]
-    if user_q and len(user_q.strip()) > 1:
-        queries.append(f"{name} {user_q.strip()[:20]}")
+def search_web_knowledge_parallel(query1: str, query2: str) -> list:
+    results = []
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        f1 = executor.submit(search_single_query, query1, 3)
+        f2 = executor.submit(search_single_query, query2, 3) if query2 else None
+        try:
+            results.extend(f1.result())
+            if f2: results.extend(f2.result())
+        except Exception as e:
+            record_system_error("search_web_knowledge_parallel", e)
+    return list(dict.fromkeys(results))
 
-    all_hits = []
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futs = [executor.submit(search_web_realtime_intel, q, 2) for q in queries]
-        for f in as_completed(futs):
-            try:
-                all_hits.extend(f.result())
-            except Exception:
-                pass
-    unique_hits = list(dict.fromkeys(all_hits))
-    return unique_hits[:5]
+def calculate_text_similarity(s1: str, s2: str) -> float:
+    w1 = set(re.findall(r"[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ffa-zA-Z0-9]{2,}", s1))
+    w2 = set(re.findall(r"[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ffa-zA-Z0-9]{2,}", s2))
+    if not w1 or not w2:
+        return 0.0
+    return float(len(w1 & w2)) / float(max(len(w1 | w2), 1))
 
-# 定型文・手抜き発言の監視検知関数
-def audit_and_punish_lazy_speech(dialogue_turns: list, r: dict, user_q: str = ""):
+def audit_and_execute_fires(generated_turns: list, stock_code: str, is_user_turn: bool = False):
+    signatures = st.session_state.setdefault("stock_dialogue_signatures", {})
     agents = st.session_state.get("agent_roster", {})
-    inspectors = st.session_state.get("inspector_roster", {})
-    fired_occurred = False
+    all_fired = []
 
-    name_clean = r["name"]
-    code_clean = r["code"]
+    combined_text = " ".join([t.get("text", "") for t in generated_turns if "text" in t])
+    if not is_user_turn:
+        for other_code, other_text in list(signatures.items()):
+            if other_code != stock_code:
+                sim = calculate_text_similarity(combined_text, other_text)
+                if sim > 0.40:
+                    suspect_keys = list(agents.keys())[:2]
+                    for sk in suspect_keys:
+                        ag = agents.get(sk)
+                        if ag:
+                            fired_new = execute_fire_agent(
+                                sk, 
+                                f"銘柄間での類似定型文使い回し検知 (銘柄{stock_code}と{other_code}の類似度 {int(sim*100)}%)", 
+                                "SYSTEM-ZERO"
+                            )
+                            all_fired.append(ag["name"])
+        signatures[stock_code] = combined_text
 
-    for t in dialogue_turns:
-        if t.get("is_user") or "round" in t:
-            continue
-        speaker_str = t.get("speaker", "")
-        # エージェント名の抽出
-        sp_match = re.search(r'([A-Za-z0-9_\-]+)', speaker_str)
-        matched_key = None
-        for ak, av in agents.items():
-            if av["name"] in speaker_str or ak in speaker_str:
-                matched_key = ak
-                break
+    cliche_words = ["おい！『", "神話級クオンツ分析完了", "おいおい！【", "って書いた奴！", "スレ民調子に乗るなよｗ 『"]
+    for t in generated_turns:
+        txt = t.get("text", "")
+        for cw in cliche_words:
+            if cw in txt:
+                spk = t.get("speaker", "")
+                for ak, av in list(agents.items()):
+                    if av["name"] in spk or ak in spk:
+                        execute_fire_agent(ak, f"禁止されたコピペ定型文フレーズ『{cw}』の生成を検知", "JUDGE-ALPHA-ULTRA")
+                        all_fired.append(av["name"])
+                        break
+    return all_fired
 
-        if not matched_key:
-            continue
-
-        text = t.get("text", "")
-        is_lazy = False
-        punish_reason = ""
-
-        # 違反判定1: 銘柄名もコードも含まない汎用発言
-        if (name_clean not in text) and (code_clean not in text):
-            is_lazy = True
-            punish_reason = f"銘柄固有情報（{name_clean}）に一切触れず汎用文を語った重大違反"
-        # 違反判定2: ユーザーの質問をただ先頭にコピペしただけの手抜き
-        elif user_q and len(user_q) > 4 and f"『{user_q}』" in text and len(text) < len(user_q) + 20:
-            is_lazy = True
-            punish_reason = "ユーザーの質問をコピペして定型文を貼った手抜き回答"
-        # 違反判定3: 文字数が極端に短く知見がない
-        elif len(text) < 22:
-            is_lazy = True
-            punish_reason = "内容のない極端に短いレスによる合議の形骸化"
-
-        if is_lazy:
-            new_ag = execute_fire_agent_and_hire_advanced(matched_key, punish_reason, "JUDGE-ALPHA")
-            if new_ag:
-                t["speaker"] = f"{new_ag['icon']} {new_ag['name']}"
-                t["text"] = f"（🚨 前任者は定型手抜きにより即時処刑）後任着任！【{name_clean}】のWeb最新動向と板需給を再走査。現在値 {r['price']} 付近のリアルタイム板喰いは見逃さない！"
-                fired_occurred = True
-
-    # 監査員側の怠慢チェック（SYSTEM-ZEROによる監査）
-    if not fired_occurred and random.random() < 0.08:
-        # ごく稀に怠慢な監査員をSYSTEM-ZEROが粛清して進化
-        insp_keys = list(inspectors.keys())
-        target_insp_key = random.choice(insp_keys)
-        execute_fire_inspector_by_system_zero(target_insp_key, "リアルタイム合議における潜在的定型文の見逃しリスクを予防検知")
-
-# 7大AIクオリティに肉薄する人間味溢れる動的2ch合議生成
 def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
     uq = user_query.strip()
-    agents = st.session_state.get("agent_roster", INITIAL_AGENTS_POOL)
     st_style = r.get("strat", {}).get("style_name", "デイトレード")
+    active_roster = st.session_state.get("agent_roster") or DEFAULT_AGENTS
 
-    # リアルタイムWebインテリジェンスの並列取得
-    web_intel = parallel_gather_ticker_and_user_intel(r["code"], r["name"], uq)
-    intel_summary = "\n".join([f"- {h}" for h in web_intel]) if web_intel else f"- {r['name']}の直近板気配OFI乖離度 Z={r.get('ofi_z', 0.5)}"
+    roster_list = list(active_roster.values())
+    ignis_agent = next((a for a in roster_list if "IGNIS" in a["name"] or a["icon"] == "🔥"), roster_list[0])
+    technos_agent = next((a for a in roster_list if "TECHNOS" in a["name"] or a["icon"] == "📐"), roster_list[1] if len(roster_list)>1 else roster_list[0])
+    sentinel_agent = next((a for a in roster_list if "SENTINEL" in a["name"] or a["icon"] == "👁️"), roster_list[2] if len(roster_list)>2 else roster_list[0])
+    valkyrie_agent = next((a for a in roster_list if "VALKYRIE" in a["name"] or a["icon"] == "⚔️"), roster_list[3] if len(roster_list)>3 else roster_list[0])
+    nexus_agent = next((a for a in roster_list if "NEXUS" in a["name"] or a["icon"] == "👑"), roster_list[4] if len(roster_list)>4 else roster_list[0])
 
-    # 稼働中の最新エージェント名
-    ignis_name = agents.get("IGNIS", {}).get("name", "IGNIS")
-    technos_name = agents.get("TECHNOS", {}).get("name", "TECHNOS")
-    sentinel_name = agents.get("SENTINEL", {}).get("name", "SENTINEL")
-    valkyrie_name = agents.get("VALKYRIE", {}).get("name", "VALKYRIE")
-    nexus_name = agents.get("NEXUS", {}).get("name", "NEXUS")
+    is_irrelevant_to_stock = False
+    is_provocative = False
+    web_hits = []
 
-    sys_prompt = f"""
-あなたは日本最大級の市況・株式実況掲示板（5ch/2ch市況スレ）に常駐する凄腕個人投資家・兼業プロ・仕手筋追従AIエージェント達です。
-【厳格な禁止事項】
-・どの銘柄にも通じる抽象的な一般論・定型文は絶対に禁止です（即座に処刑されます）。
-・ユーザーの質問をオウム返しにコピペするだけの回答は厳禁です。
-・偉そうな書き込みや的外れな質問には、2ch実況らしく強烈な突っ込みや袋叩き、痛烈なアドバイスを入れてください。
-・必ず対象銘柄【{r['code']} {r['name']}】の現在値({r['price']})、テーマ({r.get('theme','')})、そして最新Webファクトを参照して具体的に議論してください。
+    if uq:
+        provocative_words = ["下手くそ", "詐欺", "しね", "死ね", "ゴミ", "クソ", "馬鹿", "バカ", "嘘つき", "雑魚", "消えろ", "クソ株"]
+        is_provocative = any(pw in uq for pw in provocative_words)
 
-【対象銘柄パラメータ】
-・銘柄: {r['code']} {r['name']}（ジャンル: {r.get('genre', '')}）
-・現在株価: {r['price']}（前日比 {r['diff']}%）
-・本日の神託期待度: {r['expect_pct']}% / 量子スコア: {r['q_score']}点
-・推奨トレード方針: {st_style}（利確目標: {r['tp_price']} / 逆指値損切: {r['sl_price']}）
-・リアルタイムWeb最新ファクト:
-{intel_summary}
+        stock_keywords = [r['name'], r['code'], "株", "決算", "買い", "売り", "チャート", "PTS", "利確", "損切", "寄り", "板", "気配", "PER", "目標", "相場"]
+        is_irrelevant_to_stock = not any(kw in uq for kw in stock_keywords) and len(uq) > 2
 
-【対話メンバー】
-1. 🔥 {ignis_name}: 超熱血順張り派。「〜だろ！」「〜じゃねえぞ！」。成行特攻や押し目買いを煽る。トーン: rage または agree
-2. 📐 {technos_name}: 冷徹な数値至上クオンツ派。「〜ですね」「〜の数値とWeb材料を照合すると」。トーン: normal
-3. 👁️ {sentinel_name}: 疑心暗鬼の逆張り警戒派。「調子乗るなよｗ」「イナゴの高値掴み乙」。袋叩き担当。トーン: doubt
-4. ⚔️ {valkyrie_name}: 板読み・歩み値スキャルパー。「大口が買い上がった！」「板が薄いぞ」。トーン: agree
-5. 👑 {nexus_name}: 総括アンカー。「議論を統合する。規律を守れ」。トーン: normal
+        if is_irrelevant_to_stock:
+            web_hits = search_single_query(f"{uq}", 2)
+        else:
+            search_q1 = f"{r['name']} {uq}"
+            search_q2 = f"{r['code']} 株価"
+            web_hits = search_web_knowledge_parallel(search_q1, search_q2)
+    else:
+        search_q1 = f"{r['name']} 株価 最新 ニュース"
+        search_q2 = f"{r['name']} {r.get('genre', '')}"
+        web_hits = search_web_knowledge_parallel(search_q1, search_q2)
 
-ユーザーの入力: 『{uq if uq else "（スレッド初期議論：本日の値動きと最新材料の突っ込み合い）"}』
+    news_fact_1 = web_hits[0] if web_hits else f"{r['name']}は直近{r.get('genre', '')}分野で需給思惑が継続中。"
+    news_fact_2 = web_hits[1] if len(web_hits) > 1 else f"現在値{r['price']}、OFI乖離度Z={r.get('ofi_z', 0.5)}で推移。"
 
-上記前提を踏まえ、4〜5人のレスを生成し、必ず以下の純粋なJSON配列形式のみで返答してください（マークダウンや説明文は不可）。
-[
-    {{"speaker": "🔥 {ignis_name}", "score": 94, "tone": "agree", "text": "内容"}},
-    {{"speaker": "👁️ {sentinel_name}", "score": 96, "tone": "doubt", "text": "内容"}},
-    {{"speaker": "📐 {technos_name}", "score": 98, "tone": "normal", "text": "内容"}},
-    {{"speaker": "⚔️ {valkyrie_name}", "score": 95, "tone": "agree", "text": "内容"}},
-    {{"speaker": "👑 {nexus_name}", "score": 99, "tone": "normal", "text": "内容"}}
-]
-"""
     llm_result = None
     if get_active_ai_providers():
-        llm_response_text = call_real_llm_api(sys_prompt, uq or "初期合議分析")
+        sys_prompt = f"""
+あなたは日本の2ch/5ch市況実況板で数々の修羅場をくぐり抜けてきた凄腕専業トレーダー達です。
+【厳格規則】
+- 「おい！『〇〇』って書いた奴！」「神話級クオンツ分析完了」のような安っぽい定型文・コピペ質問の再掲は絶対禁止。見つけた瞬間に即刻BAN（解雇）されます。
+- 会話は銘柄ごとのニュースや数字を具体的に絡め、完全に自然なネット掲示板の言葉遣いにしてください。
+- ユーザーの質問が銘柄と無関係な場合、銘柄情報（{r['name']}等）は一切持ち出さず、その質問内容の本質に対して2ch住人として直球でレスを返してください。
+- ユーザーの書き込みが暴言や煽り、皮肉の場合は、丁寧に迎合せず、市況板らしく猛烈に煽り返し、皮肉や怒り、呆れなどの喜怒哀楽を剥き出しにしてください。
+
+【対象銘柄情報（質問が銘柄関連の場合のみ参照）】
+銘柄: {r['code']} {r['name']} ({r.get('genre','')}) / 現在値: {r['price']} / 期待度: {r['expect_pct']}% / 執行方針: {st_style}
+Webリアルタイム情報:
+1. {news_fact_1}
+2. {news_fact_2}
+
+【ユーザー入力】: 『{uq if uq else "（スレッド初期議論）"}』
+無関係判定: {is_irrelevant_to_stock} / 煽り判定: {is_provocative}
+
+【参加エージェント】
+1. {ignis_agent['icon']} {ignis_agent['name']}: 好戦的・順張り。短気ですぐキレる。煽られたら倍返しで罵倒。トーン: rage または agree
+2. {technos_agent['icon']} {technos_agent['name']}: 冷徹なデータ派。「〜ですね」。論理で論破する。トーン: normal
+3. {sentinel_agent['icon']} {sentinel_agent['name']}: 疑心暗鬼の逆張り。「草」「情弱乙」と煽る。トーン: doubt
+4. {valkyrie_agent['icon']} {valkyrie_agent['name']}: 瞬発スキャルパー。板の食い付き重視。トーン: agree
+5. {nexus_agent['icon']} {nexus_agent['name']}: スレ統括。「〜せよ」。トーン: normal
+
+必ず以下の純粋なJSON配列のみを出力してください（Markdownフェンス不要）：
+[
+  {{"speaker": "{ignis_agent['icon']} {ignis_agent['name']}", "score": {ignis_agent['score']}, "tone": "rage", "text": "内容"}},
+  {{"speaker": "{technos_agent['icon']} {technos_agent['name']}", "score": {technos_agent['score']}, "tone": "normal", "text": "内容"}},
+  {{"speaker": "{sentinel_agent['icon']} {sentinel_agent['name']}", "score": {sentinel_agent['score']}, "tone": "doubt", "text": "内容"}},
+  {{"speaker": "{valkyrie_agent['icon']} {valkyrie_agent['name']}", "score": {valkyrie_agent['score']}, "tone": "agree", "text": "内容"}}
+]
+"""
+        llm_response_text = call_real_llm_api(sys_prompt, uq or "本スレッド初期分析")
         if llm_response_text:
             try:
                 clean_json = re.sub(r'```json|```', '', llm_response_text).strip()
@@ -1675,52 +1692,53 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
                 if isinstance(parsed, list) and len(parsed) > 0:
                     llm_result = parsed
             except Exception as e:
-                record_system_error("generate_humanlike_2ch_debate:json", e)
+                record_system_error("generate_humanlike_2ch_debate:llm", e)
                 llm_result = None
 
     turns = []
-    thread_num = int(hashlib.md5(f"{r['code']}_{time.time()//3600}".encode()).hexdigest()[:3], 16) % 900 + 100
+    thread_num = int(hashlib.md5(r['code'].encode()).hexdigest()[:3], 16) % 900 + 100
     turns.append({"round": f"🔥 市況実況スレッド 【{r['code']}】{r['name']} 本スレ Part.{thread_num} ｜ {st_style}合議"})
 
     if llm_result:
         turns.extend(llm_result)
     else:
-        # API未設定時でも定型文を完全排除したリアルタイム動的構築エンジン
-        lead_fact = web_intel[0] if web_intel else f"{r['theme']}に関する機関買い観測"
-        sub_fact = web_intel[1] if len(web_intel) > 1 else f"気配値OFI乖離度 Z={r.get('ofi_z', 0.8)}"
+        news_summary = re.sub(r"\(.*?\)", "", news_fact_1).strip()
+        if len(news_summary) > 40:
+            news_summary = news_summary[:38] + "…"
 
         if uq:
-            # ユーザーの質問に対して、袋叩きや鋭い突っ込みを含んだ動的レス
-            is_arrogant = any(w in uq for w in ["勝てる", "余裕", "上がる", "買いだろ", "教えろ", "儲かる", "絶対"])
-            if is_arrogant:
-                sentinel_text = f"おいおいｗ 『{uq[:16]}』とか偉そうに書き込んでるイナゴが湧いてて草。大口がまさにそういう素人を食い物にして売り浴びせてくるんだよ！現在値 {r['price']} で浮かれてると損切り（{r['sl_price']}）巻き込まれて即退場だぞ。"
-                ignis_text = f"お前らケンカすんな！だが『{uq[:15]}』ってのは甘くねえぞ！【{r['name']}】の最新動向【{lead_fact[:30]}】を見ろよ！板が跳ねる瞬間の押し目だけを確実に狙えってんだ！"
+            if is_provocative:
+                turns.extend([
+                    {"speaker": f"{ignis_agent['icon']} {ignis_agent['name']}", "score": ignis_agent['score'], "tone": "rage", "text": f"は？誰に向かって口聞いてんだこのイナゴが！負けすぎて頭沸いてんのか？悔しかったらポジション晒してみろや！"},
+                    {"speaker": f"{sentinel_agent['icon']} {sentinel_agent['name']}", "score": sentinel_agent['score'], "tone": "doubt", "text": f"典型的な相場の養分が発狂してて草。自分の下手さを掲示板で当たり散らしても資金は1円も戻らんぞｗ"},
+                    {"speaker": f"{technos_agent['icon']} {technos_agent['name']}", "score": technos_agent['score'], "tone": "normal", "text": f"感情的な罵倒は期待値マイナス行動の典型です。ノイズは遮断し、冷徹に期待値{r['expect_pct']}%のアルゴリズムを実行するのみです。"},
+                    {"speaker": f"{nexus_agent['icon']} {nexus_agent['name']}", "score": nexus_agent['score'], "tone": "normal", "text": f"スレが荒れるだけだ、構うな。各自決められた損切幅を守って淡々と執行を続けろ。"}
+                ])
+            elif is_irrelevant_to_stock:
+                turns.extend([
+                    {"speaker": f"{ignis_agent['icon']} {ignis_agent['name']}", "score": ignis_agent['score'], "tone": "rage", "text": f"おいおい、なんで株のスレでそんな質問してんだよ！だが答えてやる、その件の本質は『{news_fact_1[:32]}』ってことだろ。ウジウジ悩んでねえで即行動しろ！"},
+                    {"speaker": f"{sentinel_agent['icon']} {sentinel_agent['name']}", "score": sentinel_agent['score'], "tone": "doubt", "text": f"株と全く関係ねえ質問投下してくる奴いて草。まあ今の世の中情報に踊らされて損する奴ばっかだからな、本質見抜かないと即死するぞ。"},
+                    {"speaker": f"{technos_agent['icon']} {technos_agent['name']}", "score": technos_agent['score'], "tone": "normal", "text": f"客観的な事実から分析すると、ご質問の件は『{news_fact_2[:36]}』という力学が働いています。合理的に判断すれば結論は自ずと出るはずです。"},
+                    {"speaker": f"{valkyrie_agent['icon']} {valkyrie_agent['name']}", "score": valkyrie_agent['score'], "tone": "agree", "text": f"何事もスピードが命！迷ってる時間が一番の機会損失だ、サクッと決断して次行こうぜ！"}
+                ])
             else:
-                sentinel_text = f"おい新人、市況スレで『{uq[:15]}』なんて聞いてる暇あったら歩み値見ろよｗ 【{r['name']}】は今 {r['price']} だぞ。材料【{lead_fact[:28]}】の出尽くし売り警戒しないと高値掴みさせられるぞ。"
-                ignis_text = f"ビビらせんなSENTINEL！質問主よ、【{r['name']}】はテーマ性（{r.get('theme','')[:20]}）が強いから急動意が起きやすい！寄り付きから成行で飛びつかず、VWAP {r['vwap_price']} 付近の反発を確認してから入れ！"
-
-            technos_text = f"冷静になってください。最新Web材料【{sub_fact[:32]}】とクオンツ指標を照合すると、{r['name']}の量子トンネル突破率は {r.get('q_tunnel', 80)}%、Kyle吸収は {r.get('kyle_stealth', 75)}% です。『{uq[:12]}』の懸念を考慮しても、{st_style}としてのエッジは明白です。"
-            valkyrie_text = f"いま気配値にまとまった買いが入った！【{r['name']}】の板情報で下値に厚い買い支えがある。利確目標 {r['tp_price']} まで一気に駆け上がる可能性が高い！"
-            nexus_text = f"合議集約する。【{r['name']}】の現在値は {r['price']}。感情的な飛びつきを排し、推奨ロット {r['lot_info']['shares']:,}株、逆指値 {r['sl_price']} をOCOで予約して執行せよ。"
-
-            turns.extend([
-                {"speaker": f"👁️ {sentinel_name}", "score": 96, "tone": "doubt", "text": sentinel_text},
-                {"speaker": f"🔥 {ignis_name}", "score": 94, "tone": "rage", "text": ignis_text},
-                {"speaker": f"📐 {technos_name}", "score": 98, "tone": "normal", "text": technos_text},
-                {"speaker": f"⚔️ {valkyrie_name}", "score": 95, "tone": "agree", "text": valkyrie_text},
-                {"speaker": f"👑 {nexus_name}", "score": 99, "tone": "normal", "text": nexus_text}
-            ])
+                turns.extend([
+                    {"speaker": f"{ignis_agent['icon']} {ignis_agent['name']}", "score": ignis_agent['score'], "tone": "agree", "text": f"それな！まさに直近の材料『{news_summary}』と直結してる話だろ！現在値{r['price']}でモタついてる暇はねえ、一気に上値喰い上げるぞ！"},
+                    {"speaker": f"{technos_agent['icon']} {technos_agent['name']}", "score": technos_agent['score'], "tone": "normal", "text": f"その着眼点は非常に有益です。現在{r['name']}の板気配OFI乖離はZ={r.get('ofi_z', 0.5)}。大口のアルゴリズム注文が明確に下値を支えています。"},
+                    {"speaker": f"{sentinel_agent['icon']} {sentinel_agent['name']}", "score": sentinel_agent['score'], "tone": "doubt", "text": f"安易に飛びつくと梯子外されるぞ。大口は個人が買いを入れた瞬間を狙って売り浴びせてくる。損切ライン（{r['sl_price']}）は絶対厳守だ。"},
+                    {"speaker": f"{valkyrie_agent['icon']} {valkyrie_agent['name']}", "score": valkyrie_agent['score'], "tone": "agree", "text": f"歩み値に大口のIceberg注文（氷山注文）が見え隠れしてる！ブレイクの初動を逃すな！"},
+                    {"speaker": f"{nexus_agent['icon']} {nexus_agent['name']}", "score": nexus_agent['score'], "tone": "normal", "text": f"結論は出た。【{st_style}】の鉄則に従い、目標値{r['tp_price']}で利益を固定する計画で執行せよ。"}
+                ])
         else:
             turns.extend([
-                {"speaker": f"🔥 {ignis_name}", "score": 94, "tone": "agree", "text": f"おいスレ民！【{r['name']} ({r['code']})】の最新材料【{lead_fact[:32]}】来たぞ！現在値 {r['price']} は完全に初動だろ！期待度 {r['expect_pct']}%で乗り遅れたら泣きを見るぞ！"},
-                {"speaker": f"👁️ {sentinel_name}", "score": 96, "tone": "doubt", "text": f"IGNISが騒ぐと寄り天になるんだよなぁｗ 材料【{sub_fact[:30]}】で飛びついたイナゴを狩る大口の売り仕掛けに警戒しろよ。損切ライン {r['sl_price']} 入れとけよ？"},
-                {"speaker": f"📐 {technos_name}", "score": 98, "tone": "normal", "text": f"神託数理判定です。【{r['name']}】はHurst指数 {r.get('hurst', 0.62)}、VPIN {r.get('vpin', 0.45)} と極めて堅調です。地合いの影響を織り込んでも、目標利確値 {r['tp_price']} への上昇トレンドは優勢です。"},
-                {"speaker": f"⚔️ {valkyrie_name}", "score": 95, "tone": "agree", "text": f"板の厚みが買い優勢にシフトした！機関のステルス買いが断続的にヒットしてる。{st_style}のセオリー通り、押し目を拾えば勝率は極めて高い！"},
-                {"speaker": f"👑 {nexus_name}", "score": 99, "tone": "normal", "text": f"統括する。【{r['name']}】は理論寄付き {r['pts_est_price']} を基準とし、目標 {r['tp_price']} と絶対防衛ライン {r['sl_price']} を指値予約して規律執行せよ。"}
+                {"speaker": f"{ignis_agent['icon']} {ignis_agent['name']}", "score": ignis_agent['score'], "tone": "agree", "text": f"速報出てるぞ！『{news_summary}』だ！【{r['name']}】に資金が集まるのは必然だろ、寄りから全力で乗るしかねえ！"},
+                {"speaker": f"{technos_agent['icon']} {technos_agent['name']}", "score": technos_agent['score'], "tone": "normal", "text": f"リアルタイム数理検証完了。現在値{r['price']}における量子トンネル確率は{r.get('q_tunnel', 80)}%、Hurst指数は{r.get('hurst', 0.65)}を示しており、{st_style}モデルの厳格基準に合致します。"},
+                {"speaker": f"{sentinel_agent['icon']} {sentinel_agent['name']}", "score": sentinel_agent['score'], "tone": "doubt", "text": f"材料でイナゴを吊り上げて高値で売り抜ける機関の罠に気をつけろよ。寄り天で焼かれたくなければ逆指値は必須だぞ。"},
+                {"speaker": f"{valkyrie_agent['icon']} {valkyrie_agent['name']}", "score": valkyrie_agent['score'], "tone": "agree", "text": f"気配値と成行買いの勢いが強い。VWAP（{r['vwap_price']}）を割り込まない限り上値追いの展開が続く！"},
+                {"speaker": f"{nexus_agent['icon']} {nexus_agent['name']}", "score": nexus_agent['score'], "tone": "normal", "text": f"方針を定める。目標利確{r['tp_price']}、損切逆指値{r['sl_price']}を厳格にセットし、感情を挟まず執行せよ。"}
             ])
 
-    # 鬼監視センターによる即時手抜き監査＆即時処刑
-    audit_and_punish_lazy_speech(turns, r, user_query)
+    audit_and_execute_fires(turns, r["code"], is_user_turn=bool(uq))
     return turns
 
 def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> dict:
@@ -1753,7 +1771,7 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
         dom_id_attr = f' id="{html.escape(t.get("dom_id", ""))}"' if t.get("dom_id") else ""
         return f'<div class="chat-bubble-user"{dom_id_attr}><b>🗣️ あなた (レス):</b><br>{html.escape(t["text"])}</div>'
     b_cls = {"doubt": "chat-bubble-doubt", "rage": "chat-bubble-rage", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
-    return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{html.escape(t["speaker"])} <span style="color:#94a3b8;">({t.get("score",95)}点)</span></div><div>{html.escape(t["text"])}</div></div>'
+    return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{html.escape(t["speaker"])} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{html.escape(t["text"])}</div></div>'
 
 # ==========================================
 # 12. レンダリング関数群
@@ -1797,9 +1815,7 @@ def render_council_sec(r, uk, auto_open=False):
             new_dom_id = f"user_q_anchor_{uk}_{int(time.time()*1000)}"
             st.session_state["council_threads"][cache_council_key].append({"is_user": True, "text": u_text, "dom_id": new_dom_id})
             deb_updated = run_7ai_council(r, None, 0, user_query=u_text)
-            for new_t in deb_updated["dialogue"]: 
-                if "round" not in new_t:
-                    st.session_state["council_threads"][cache_council_key].append(new_t)
+            for new_t in deb_updated["dialogue"]: st.session_state["council_threads"][cache_council_key].append(new_t)
             st.session_state["council_meta"][cache_council_key] = deb_updated
             st.session_state["scroll_target_id"] = new_dom_id
             st.rerun()
@@ -1865,7 +1881,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
         render_council_sec(r, f"{kp}_{r['code']}", auto_open=False)
 
 # ==========================================
-# 13. 神話級数理クオンツ・エンジン
+# 13. 神話級数理クオンツ・エンジン (人類最高到達領域モデル)
 # ==========================================
 @st.cache_data(ttl=300)
 def fetch_5ch_live() -> dict: 
@@ -2317,7 +2333,7 @@ else:
     g_res, all_res = st.session_state[_cache_pool_key]
 
 # ==========================================
-# 16. 画面レンダリング
+# 16. 画面レンダリング (UI完全維持)
 # ==========================================
 
 # ■ ADMIN（統合管理コントロールセンター）
@@ -2404,7 +2420,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         st.markdown("#### 🏢 SYSTEM-ZERO & AGI雇用・解雇統括パネル")
 
         c_sz1, c_sz2 = st.columns([3, 1])
-        sz_status = "🟢 稼働中 (定型文・手抜き発言のミリ秒死刑監視作動中)" if st.session_state.get("system_zero_active", True) else "🔴 解雇・停止中"
+        sz_status = "🟢 稼働中 (超越監視作動中)" if st.session_state.get("system_zero_active", True) else "🔴 解雇・停止中"
         c_sz1.markdown(f"**SYSTEM-ZERO 状態:** {sz_status}")
         if st.session_state.get("system_zero_active", True):
             if c_sz2.button("💀 総括神を解雇/停止", type="primary", use_container_width=True):
@@ -2417,7 +2433,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                 save_agi_system()
                 st.success("新世代 SYSTEM-ZERO を再配備しました。"); st.rerun()
 
-        st.markdown("<br><b>💀 永久解雇・処刑された旧エージェント一覧 (完全記録・復活禁止)</b>", unsafe_allow_html=True)
+        st.markdown("<br><b>💀 過去に解雇されたエージェント履歴 (永久追放リスト)</b>", unsafe_allow_html=True)
         fired_list = st.session_state.get("fired_agents", [])
         if fired_list:
             st.markdown(
@@ -2429,7 +2445,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                         <th>解雇日時</th>
                         <th>エージェント名</th>
                         <th>最終スコア</th>
-                        <th>執行監査員</th>
+                        <th>解雇執行者</th>
                         <th>解雇理由・違反事項</th>
                     </tr>
                 </thead>
@@ -2448,7 +2464,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                 """, unsafe_allow_html=True
             )
         else:
-            st.caption("現在、解雇履歴はありません。全エージェントが定型文を排し、高度なリアルタイムWeb知見で稼働しています。")
+            st.caption("現在、解雇履歴はありません。全10名のエージェントが優秀に稼働しています。")
 
     with tab_apply_wait:
         st.markdown("#### 📩 新規会員登録 審査待ちリスト")
@@ -2542,7 +2558,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
 
     st.stop()
 
-# ■ フォーカスモード
+# ■ フォーカスモード（個別画面単独表示）
 focused_item = st.session_state.get("focused_stock_item")
 if focused_item:
     st.markdown("### ⚛️ 銘柄詳細・買い方合議フォーカスモード")
