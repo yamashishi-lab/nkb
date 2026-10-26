@@ -51,7 +51,8 @@ def clear_system_error_logs():
 # ==========================================
 # 1. 初期設定とセキュリティ (機密情報防壁 & 環境変数バインド)
 # ==========================================
-st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="expanded")
+# ログイン時にサイドバーが開いていないよう collapsed に設定
+st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 
 # 動的暗号シードのインメモリ・フォールバックセキュア化（ファイル流出脆弱性の排除）
 _SYS_SECRET_ENV = os.environ.get("SECRET_KEY") or (st.secrets.get("SECRET_KEY") if hasattr(st, "secrets") else None)
@@ -339,6 +340,27 @@ def load_mem():
         }
         db_set("mem", db)
     return db
+
+def load_user_prefs(email: str) -> dict:
+    """会員ごとの投資スタイル・アルゴリズム設定を永続DBから復元"""
+    default_prefs = {
+        "investment_style": "⚡ デイトレード (前場・後場の波及を狙う)",
+        "active_boosts": ["algo", "ms", "inst", "mom", "agi_q", "hft_front"],
+        "total_capital": 1000000,
+        "risk_tolerance_pct": 2.0,
+        "survival_cut_pct": 75
+    }
+    if not email:
+        return default_prefs
+    safe_key = f"user_prefs_{hashlib.md5(email.strip().lower().encode()).hexdigest()[:16]}"
+    return db_get(safe_key, default_prefs)
+
+def save_user_prefs(email: str, prefs: dict):
+    """会員ごとの投資スタイル・アルゴリズム設定を永続DBへ保存"""
+    if not email:
+        return
+    safe_key = f"user_prefs_{hashlib.md5(email.strip().lower().encode()).hexdigest()[:16]}"
+    db_set(safe_key, prefs)
 
 def load_agi_system():
     agents = db_get("agi_agents", None)
@@ -895,6 +917,21 @@ DEFAULT_INSPECTORS = {
 
 saved_agents, saved_inspectors, saved_fired, saved_sz_active, saved_sz_logs = load_agi_system()
 
+# 現在ログイン中ユーザーの設定を読み込みセッションへ永続復元
+cu_active = st.session_state.get("authenticated_user", "")
+user_saved_prefs = load_user_prefs(cu_active)
+
+if "user_prefs_loaded" not in st.session_state or st.session_state.get("last_loaded_user") != cu_active:
+    st.session_state["investment_style_choice"] = user_saved_prefs.get("investment_style", "⚡ デイトレード (前場・後場の波及を狙う)")
+    st.session_state["total_capital_val"] = int(user_saved_prefs.get("total_capital", 1000000))
+    st.session_state["risk_tolerance_val"] = float(user_saved_prefs.get("risk_tolerance_pct", 2.0))
+    st.session_state["survival_cut_val"] = int(user_saved_prefs.get("survival_cut_pct", 75))
+    saved_boosts = set(user_saved_prefs.get("active_boosts", ["algo", "ms", "inst", "mom", "agi_q", "hft_front"]))
+    for b_key in ["algo", "ms", "inst", "mom", "agi_q", "hft_front"]:
+        st.session_state[f"chk_{b_key}"] = (b_key in saved_boosts)
+    st.session_state["user_prefs_loaded"] = True
+    st.session_state["last_loaded_user"] = cu_active
+
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
     ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"),
@@ -1018,7 +1055,7 @@ components.html(
     </script>""", height=0)
 
 # ==========================================
-# 8. サイドバー構築 (監視センターのリアルタイム化)
+# 8. サイドバー構築 (監視センターのリアルタイム化 & 全アコーディオンデフォルト閉じ & 設定永続化)
 # ==========================================
 def _render_realtime_audit_center():
     """リアルタイムにパトロール・Vitalを自動更新する鬼監視センター"""
@@ -1119,16 +1156,20 @@ with st.sidebar:
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # 1. 投資スタイル ＆ アルゴリズム (expanded=False で閉じた状態に設定 & 変更時はDB永続保存)
     with st.expander("🎯 投資スタイル ＆ アルゴリズム", expanded=False):
-        old_style = st.session_state.get("investment_style_choice", "⚡ デイトレード (前場・後場の波及を狙う)")
-        investment_style = st.selectbox("トレードスタイル", [
+        style_list = [
             "⚡ デイトレード (前場・後場の波及を狙う)", 
             "🚀 スキャルピング (秒〜分単位のモメンタム)", 
             "📈 スイングトレード (数日〜数週間のトレンド)", 
             "💎 バイ＆ホールド (中長期・IPO分散投資)"
-        ], index=0, key="investment_style_choice")
+        ]
+        cur_style_saved = st.session_state.get("investment_style_choice", style_list[0])
+        style_idx = style_list.index(cur_style_saved) if cur_style_saved in style_list else 0
+
+        investment_style = st.selectbox("トレードスタイル", style_list, index=style_idx, key="investment_style_choice")
         
-        if investment_style != old_style:
+        if investment_style != cur_style_saved:
             st.session_state["council_threads"] = {}
             st.session_state["council_meta"] = {}
             
@@ -1146,9 +1187,11 @@ with st.sidebar:
         }
         ac_b = set()
         for label, key in BOOST_MAP.items():
-            if st.checkbox(label, value=True, key=f"chk_{key}"):
+            default_val = st.session_state.get(f"chk_{key}", True)
+            if st.checkbox(label, value=default_val, key=f"chk_{key}"):
                 ac_b.add(key)
 
+    # 2. 7大AI ＆ 量子エンジン設定 (expanded=False で閉じた状態)
     with st.expander("🧠 7大AI ＆ 量子エンジン設定", expanded=False):
         llm_cfg = load_llm()
         cur_prov = st.selectbox("AIプロバイダー", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
@@ -1162,12 +1205,25 @@ with st.sidebar:
         st.session_state[f"rt_key_{cur_prov}"] = in_k; st.session_state[f"rt_mod_{cur_prov}"] = in_m
         st.caption(f"🟢 現在稼働可能AI: **{len(get_active_ai_providers())} / 7社**")
 
+    # 3. 資金管理＆選抜フィルタ (expanded=False で閉じた状態 & 変更時はDB永続保存)
     with st.expander("💰 資金管理＆選抜フィルタ", expanded=False):
-        total_capital = st.number_input("総投資資金 (円)", min_value=10000, max_value=1000000000, value=1000000, step=50000)
-        risk_tolerance_pct = st.slider("1トレード許容リスク (%)", 0.5, 5.0, 2.0, 0.5)
-        survival_cut_pct = st.slider("選抜合格率 (%)", 40, 100, 75, 5)
+        total_capital = st.number_input("総投資資金 (円)", min_value=10000, max_value=1000000000, value=int(st.session_state.get("total_capital_val", 1000000)), step=50000, key="total_capital_input")
+        risk_tolerance_pct = st.slider("1トレード許容リスク (%)", 0.5, 5.0, float(st.session_state.get("risk_tolerance_val", 2.0)), 0.5, key="risk_tolerance_input")
+        survival_cut_pct = st.slider("選抜合格率 (%)", 40, 100, int(st.session_state.get("survival_cut_val", 75)), 5, key="survival_cut_input")
 
-    with st.expander("🏢 AGI鬼監査センター (監視3名・10名常時)", expanded=True):
+    # 会員の投資設定を即座にDBへ永続保存（再ログイン後も完全に記憶）
+    if cu:
+        current_prefs_to_save = {
+            "investment_style": investment_style,
+            "active_boosts": list(ac_b),
+            "total_capital": total_capital,
+            "risk_tolerance_pct": risk_tolerance_pct,
+            "survival_cut_pct": survival_cut_pct
+        }
+        save_user_prefs(cu, current_prefs_to_save)
+
+    # 4. AGI鬼監査センター (expanded=False で閉じた状態に統一)
+    with st.expander("🏢 AGI鬼監査センター (監視3名・10名常時)", expanded=False):
         _render_realtime_audit_center_fragment()
 
     st.markdown("<br>", unsafe_allow_html=True)
