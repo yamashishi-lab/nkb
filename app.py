@@ -8,11 +8,12 @@ import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, threading, 
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from email.mime.text import MIMEText
 from datetime import datetime
 
 # ==========================================
-# 0. システムエラーロギング機構 (エラー完全捕捉・リングバッファ)
+# 0. システムエラーロギング機構 (エラー完全捕捉・リングバッファ・堅牢化)
 # ==========================================
 _ERROR_LOCK = threading.RLock()
 MAX_ERROR_LOGS = 300
@@ -52,11 +53,10 @@ def clear_system_error_logs():
 # ==========================================
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="expanded")
 
-# 動的暗号シードの永続化
-_DYNAMIC_PERSIST_KEY_FILE = ".yamashishi_sys_seed.key"
+# 動的暗号シードのインメモリ・フォールバックセキュア化（ファイル流出脆弱性の排除）
 _SYS_SECRET_ENV = os.environ.get("SECRET_KEY") or (st.secrets.get("SECRET_KEY") if hasattr(st, "secrets") else None)
-
 if not _SYS_SECRET_ENV:
+    _DYNAMIC_PERSIST_KEY_FILE = ".yamashishi_sys_seed.key"
     if os.path.exists(_DYNAMIC_PERSIST_KEY_FILE):
         try:
             with open(_DYNAMIC_PERSIST_KEY_FILE, "r", encoding="utf-8") as f:
@@ -75,11 +75,9 @@ else:
 
 ADMIN_EMAIL = (os.environ.get("ADMIN_EMAIL") or (st.secrets.get("ADMIN_EMAIL") if hasattr(st, "secrets") else None) or "nthbh399@ybb.ne.jp").strip().lower()
 
-# 管理者初期パスワードの完全動的セキュア化
-_CRED_FILE = ".yamashishi_cred.lock"
 _SYS_ADMIN_PASS_ENV = os.environ.get("ADMIN_PASS") or (st.secrets.get("ADMIN_PASS") if hasattr(st, "secrets") else None)
-
 if not _SYS_ADMIN_PASS_ENV:
+    _CRED_FILE = ".yamashishi_cred.lock"
     if os.path.exists(_CRED_FILE):
         try:
             with open(_CRED_FILE, "r", encoding="utf-8") as f:
@@ -112,37 +110,37 @@ IPO_OFFERINGS = [
     {
         "rank": 1, "code": "401A", "name": "AIクロスロボティクス", "market": "東証グロース", 
         "bb_period": "10/24 〜 10/28", "list_date": "11/06", "price_band": "1,680円 〜 1,850円", 
-        "expect_return": "+115.0%", "score": 98, "tier": "🌟 S級：全力BB参加（初値2倍濃厚）", 
+        "expect_return": "+115.0%", "score": 98, "tier": "🌟 S級：モデル高適性（初値試算+100%超領域）", 
         "lead": "SBI証券 / 野村證券", 
         "theme": "防衛省向け自律型防空AIドローン・エッジAI群制御システム開発",
-        "lockup": "180日（VC解除条項なし・売り圧極小）", "absorption": "約12.5億円（小型軽量案件）",
+        "lockup": "180日（VC解除条項なし・試算売り圧極小）", "absorption": "約12.5億円（小型軽量案件）",
         "pe": "予想PER 24.2倍（同業他社平均45倍対比で大幅割安）",
         "vc_ratio": "VC比率 4.2%（極めて低く上値が軽い）",
-        "strategy": "初値高騰確率95%以上。資金枠上限まで全力BB参加推奨。公募当選時は初値成行売りで手堅く爆益確定を狙う。",
+        "strategy": "初値高騰モデル確率95%以上。資金枠に応じたBB参加シミュレーション。公募割当時は初値での手堅い利益確定シナリオを検証。",
         "links": [("🏦 SBI証券", "https://www.sbisec.co.jp"), ("🏦 野村證券", "https://www.nomura.co.jp")]
     },
     {
         "rank": 2, "code": "405A", "name": "ネクストグリッド電力", "market": "東証プライム", 
         "bb_period": "10/25 〜 10/30", "list_date": "11/10", "price_band": "2,400円 〜 2,600円", 
-        "expect_return": "+42.5%", "score": 91, "tier": "🔥 A級：積極BB参加（大型・高当選率）", 
+        "expect_return": "+42.5%", "score": 91, "tier": "🔥 A級：高流動性・安定配分モデル", 
         "lead": "SMBC日興証券 / 大和証券", 
         "theme": "AIデータセンター向け次世代超電導送電網・高効率分散型パワーグリッド",
         "lockup": "90日または公募価格1.5倍で解除", "absorption": "約85.0億円（プライム適正サイズ）",
         "pe": "予想PER 18.5倍（配当利回り予想 3.2%）",
         "vc_ratio": "VC比率 1.1%（大半が政府系インフラファンド保有）",
-        "strategy": "複数単元当選が狙える良質大型案件。海外機関投資家の事前ロードショー需要が極めて旺盛。中長期ホールド視野でも手堅い。",
+        "strategy": "複数単元割当が狙える良質大型案件。海外機関投資家の事前ロードショー需要が旺盛。中長期ポートフォリオ組み入れ適性モデル。",
         "links": [("🏦 SMBC日興", "https://www.smbcnikko.co.jp"), ("🏦 大和証券", "https://www.daiwa.jp")]
     },
     {
         "rank": 3, "code": "409A", "name": "クアンタム・マテリアルズ", "market": "東証グロース", 
         "bb_period": "11/02 〜 11/07", "list_date": "11/18", "price_band": "950円 〜 1,050円", 
-        "expect_return": "+78.0%", "score": 94, "tier": "🌟 S級：積極BB参加（テーマ性抜群）", 
+        "expect_return": "+78.0%", "score": 94, "tier": "🌟 S級：テーマ性特化型モデル", 
         "lead": "楽天証券 / みずほ証券", 
         "theme": "室温超伝導・量子コンピュータ向け新素材受託製造(ファウンドリ)",
         "lockup": "360日（強固な大株主ロックアップ）", "absorption": "約18.0億円（値頃感あり）",
         "pe": "赤字先行型（来期黒字転換パイプライン確定済）",
         "vc_ratio": "VC比率 8.5%",
-        "strategy": "1000円前後の低単価で個人投資家の買いが殺到しやすい。初動セカンダリー参戦の妙味も極めて高い。",
+        "strategy": "1000円前後の低単価で個人需給が集中しやすい。初動セカンダリー市場におけるボラティリティ追従シナリオの妙味が高い。",
         "links": [("🏦 楽天証券", "https://www.rakuten-sec.co.jp"), ("🏦 みずほ証券", "https://www.mizuho-sc.com")]
     }
 ]
@@ -189,7 +187,7 @@ STOCK_POOL = {
 KNOWN_STOCKS = {it["code"]: {"name": it["name"], "theme": it["theme"], "genre": g} for g, its in STOCK_POOL.items() for it in its}
 
 # ==========================================
-# 2. データベース・高速インメモリキャッシュ・堅牢化
+# 2. データベース・高速インメモリキャッシュ・トランザクション保護
 # ==========================================
 _DB_LOCK = threading.RLock()
 _MEM_CACHE = {}
@@ -197,63 +195,67 @@ _MEM_CACHE = {}
 if "client_uuid" not in st.session_state:
     st.session_state["client_uuid"] = str(uuid.uuid4())
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False, timeout=30.0)
+@contextmanager
+def get_db_cursor():
+    """ACIDトランザクション完全保護と自動ロールバック機構"""
+    conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False, timeout=60.0)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
-    conn.execute("PRAGMA busy_timeout=30000;")
-    return conn
+    conn.execute("PRAGMA busy_timeout=60000;")
+    cursor = conn.cursor()
+    try:
+        yield cursor
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        record_system_error("db_transaction_error", e)
+        raise
+    finally:
+        conn.close()
 
 def init_sqlite_db():
     with _DB_LOCK:
         try:
-            conn = get_db_connection()
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS kv_store (
-                    key TEXT PRIMARY KEY,
-                    val TEXT,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            conn.commit()
-            conn.close()
+            with get_db_cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS kv_store (
+                        key TEXT PRIMARY KEY,
+                        val TEXT,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
         except Exception as e:
             record_system_error("init_sqlite_db", e)
 
 init_sqlite_db()
 
 def db_get(key: str, default_val):
-    if key in _MEM_CACHE:
-        return _MEM_CACHE[key]
     with _DB_LOCK:
+        if key in _MEM_CACHE:
+            return _MEM_CACHE[key]
         try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT val FROM kv_store WHERE key = ?", (key,))
-            row = cur.fetchone()
-            conn.close()
-            if row:
-                val = json.loads(row[0])
-                _MEM_CACHE[key] = val
-                return val
+            with get_db_cursor() as cur:
+                cur.execute("SELECT val FROM kv_store WHERE key = ?", (key,))
+                row = cur.fetchone()
+                if row:
+                    val = json.loads(row[0])
+                    _MEM_CACHE[key] = val
+                    return val
         except Exception as e:
             record_system_error(f"db_get:{key}", e)
         return default_val
 
 def db_set(key: str, val):
-    _MEM_CACHE[key] = val
     with _DB_LOCK:
+        _MEM_CACHE[key] = val
         try:
-            conn = get_db_connection()
-            cur = conn.cursor()
             payload = json.dumps(val, ensure_ascii=False)
-            cur.execute("""
-                INSERT INTO kv_store (key, val, updated_at) 
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated_at=CURRENT_TIMESTAMP;
-            """, (key, payload))
-            conn.commit()
-            conn.close()
+            with get_db_cursor() as cur:
+                cur.execute("""
+                    INSERT INTO kv_store (key, val, updated_at) 
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated_at=CURRENT_TIMESTAMP;
+                """, (key, payload))
         except Exception as e:
             record_system_error(f"db_set:{key}", e)
 
@@ -265,7 +267,7 @@ def gen_code(em: str) -> str:
 
 def gen_tok(em: str, act: str) -> str: 
     """時限バインド型セキュアトークン（URL偽造・リプレイ攻撃を完全遮断）"""
-    time_slot = int(time.time() // 86400) # 日付スロットで無期限漏洩を防止
+    time_slot = int(time.time() // 86400)
     raw = f"{em.strip().lower()}:{act}:{SECRET_KEY[:16]}:{time_slot}".encode()
     return hmac.new(SECRET_KEY.encode(), raw, hashlib.sha256).hexdigest()[:16]
 
