@@ -511,7 +511,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
         return None
 
 # ==========================================
-# 5. UI と CSS / JS 注入 (開閉連動最適化)
+# 5. UI と CSS / JS 注入 (ログイン直後の見切れを完全解消)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -577,23 +577,23 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* サイドバー基本定義：閉じた時は完全に画面外へ退避、開いた時は即座に表示 */
+    /* サイドバー基本定義 */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 999995 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
         background: rgba(8, 12, 22, 0.98) !important; backdrop-filter: blur(25px) !important;
         border-right: 1px solid rgba(56, 189, 248, 0.35) !important;
-        pointer-events: auto !important; visibility: visible !important;
+        visibility: visible !important;
         transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
 
-    /* 閉じた状態（待機時）：画面端からのはみ出し・隙間を完全に消すため画面外に退避 */
-    section[data-testid="stSidebar"][aria-expanded="false"] {
+    /* ログイン直後・待機時：aria-expanded="true" でない全状態において完全に画面外へ退避（見切れ防止） */
+    section[data-testid="stSidebar"]:not([aria-expanded="true"]) {
         transform: translateX(-120%) !important;
         pointer-events: none !important;
     }
 
-    /* 開いた状態：元の位置にスムーズに表示 */
+    /* MENUボタンで明示的に開いた状態 */
     section[data-testid="stSidebar"][aria-expanded="true"] {
         transform: translateX(0) !important;
         pointer-events: auto !important;
