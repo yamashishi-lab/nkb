@@ -373,6 +373,26 @@ def save_watchlist(email: str, wl: dict):
     safe_key = f"watchlist_{hashlib.md5(email.strip().lower().encode()).hexdigest()[:16]}"
     db_set(safe_key, wl)
 
+# 【修正】load_agi_system より前に定義を移動して NameError を回避
+DEFAULT_AGENTS = {
+    "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "age": 24, "score": 99, "good": "シュレーディンガー固有値特異点検知、WKB障壁崩壊予知", "bad": "多世界解釈的飛躍が多く発言が超高次元"},
+    "AEGIS": {"name": "AEGIS", "icon": "🛡️", "age": 32, "score": 97, "good": "極値理論CVaR 99%に基づく絶対資本防衛・動的ケリー制禦", "bad": "慎重すぎて機会損失を生むことがある"},
+    "IGNIS": {"name": "IGNIS", "icon": "🔥", "age": 28, "score": 93, "good": "爆発的OFI順張りモメンタムと板喰いアグレッサー追従", "bad": "感情的でダマシに引っかかりやすい"},
+    "TECHNOS": {"name": "TECHNOS", "icon": "📐", "age": 45, "score": 98, "good": "Hasbrouck価格インパクト係数・MF-DFAフラクタル解析", "bad": "ファンダメンタルズの急変に弱い"},
+    "CHRONOS": {"name": "CHRONOS", "icon": "⏳", "age": 38, "score": 95, "good": "板気配ボラティリティの時間周波数ウェーブレット解析", "bad": "突発的な地政学ニュースへの適応が遅い"},
+    "ORACLE": {"name": "ORACLE", "icon": "🔮", "age": 29, "score": 96, "good": "海外巨額バスケット買い・ダークプール流動性検知", "bad": "超小型株の仕手筋の動きを見落としやすい"},
+    "NEXUS": {"name": "NEXUS", "icon": "👑", "age": 41, "score": 99, "good": "10体AGI合議の期待値最尤推定統合と最終意思決定", "bad": "尖った個別銘柄の爆発力を抑えがち"},
+    "VALKYRIE": {"name": "VALKYRIE", "icon": "⚔️", "age": 26, "score": 94, "good": "ミリ秒板情報差分と氷山注文(Iceberg)の連続捕捉", "bad": "中長期トレンドを軽視する傾向"},
+    "SENTINEL": {"name": "SENTINEL", "icon": "👁️", "age": 35, "score": 96, "good": "5ch・実況SNS・掲示板の過熱イナゴタワー暴落警戒", "bad": "過度な疑心暗鬼で初動に乗れない"},
+    "ALPHA": {"name": "ALPHA", "icon": "⚡", "age": 30, "score": 95, "good": "寄付き直後ギャップアップ・ダウンの超高速執行判定", "bad": "後場のダレ相場での精度低下"}
+}
+
+DEFAULT_INSPECTORS = {
+    "INSP_A": {"name": "JUDGE-ALPHA", "icon": "⚖️", "score": 99, "role": "神託数理整合性・動的ケリー許容度監査"},
+    "INSP_B": {"name": "JUDGE-BETA", "icon": "🔍", "score": 98, "role": "世界同時マクロ・ニュース整合性監査"},
+    "INSP_C": {"name": "JUDGE-GAMMA", "icon": "🎯", "score": 99, "role": "超高頻度OFI執行・板情報バイアス監査"}
+}
+
 def load_agi_system():
     agents = db_get("agi_agents", None)
     inspectors = db_get("agi_inspectors", None)
@@ -503,20 +523,40 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
                 "generationConfig": {"temperature": 0.65, "response_mime_type": "application/json"}
             }).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=3.5) as r:
+            with urllib.request.urlopen(req, context=ctx, timeout=5.0) as r:
                 res = json.loads(r.read())
                 return res["candidates"][0]["content"]["parts"][0]["text"]
+        elif prov == "claude":
+            url = AI_PROVIDERS[prov][2]
+            headers = {
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json"
+            }
+            data = json.dumps({
+                "model": mod,
+                "max_tokens": 1024,
+                "system": sys_prompt,
+                "messages": [{"role": "user", "content": user_prompt}],
+                "temperature": 0.65
+            }).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=5.0) as r:
+                res = json.loads(r.read())
+                return res["content"][0]["text"]
         else:
             url = AI_PROVIDERS[prov][2]
             headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-            data = json.dumps({
+            payload = {
                 "model": mod,
                 "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
-                "temperature": 0.65,
-                "response_format": {"type": "json_object"} if prov in ["openai", "groq"] else None
-            }).encode("utf-8")
+                "temperature": 0.65
+            }
+            if prov in ["openai", "groq"]:
+                payload["response_format"] = {"type": "json_object"}
+            data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=3.5) as r:
+            with urllib.request.urlopen(req, context=ctx, timeout=5.0) as r:
                 res = json.loads(r.read())
                 return res["choices"][0]["message"]["content"]
     except Exception as e:
@@ -590,7 +630,6 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
-    /* サイドバー基本定義 */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 999995 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
@@ -600,13 +639,11 @@ def inject_css():
         transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
 
-    /* ログイン直後・待機時：aria-expanded="true" でない全状態において完全に画面外へ退避（見切れ防止） */
     section[data-testid="stSidebar"]:not([aria-expanded="true"]) {
         transform: translateX(-120%) !important;
         pointer-events: none !important;
     }
 
-    /* MENUボタンで明示的に開いた状態 */
     section[data-testid="stSidebar"][aria-expanded="true"] {
         transform: translateX(0) !important;
         pointer-events: auto !important;
@@ -616,7 +653,6 @@ def inject_css():
         pointer-events: auto !important;
     }
 
-    /* ネイティブ開閉コントロールおよび開いた時に右側に出る矢印ボタンを完全非表示化 */
     [data-testid="collapsedControl"], 
     [data-testid="stSidebarCollapsedControl"], 
     [data-testid="stSidebarCollapseButton"],
@@ -657,7 +693,6 @@ def inject_css():
         gap: 5px;
     }
 
-    /* トップに戻る固定ナビゲーションバー（最初から暗く光り、タップで明るく光る） */
     .fixed-top-nav-bar {
         position: fixed !important; top: 10px !important; left: 50% !important; transform: translateX(-50%) !important;
         z-index: 999980 !important; width: min(170px, calc(100vw - 4rem)) !important; background: transparent !important;
@@ -862,7 +897,6 @@ def check_auth():
             st.query_params["u"], st.query_params["t"] = cu, keep_tok
         return True
 
-    # ログイン画面表示時：サイドバーおよび浮動ボタンを非表示
     st.markdown(
         """
         <style>
@@ -956,25 +990,6 @@ check_auth()
 # ==========================================
 # 7. セッション状態の初期化
 # ==========================================
-DEFAULT_AGENTS = {
-    "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "age": 24, "score": 99, "good": "シュレーディンガー固有値特異点検知、WKB障壁崩壊予知", "bad": "多世界解釈的飛躍が多く発言が超高次元"},
-    "AEGIS": {"name": "AEGIS", "icon": "🛡️", "age": 32, "score": 97, "good": "極値理論CVaR 99%に基づく絶対資本防衛・動的ケリー制禦", "bad": "慎重すぎて機会損失を生むことがある"},
-    "IGNIS": {"name": "IGNIS", "icon": "🔥", "age": 28, "score": 93, "good": "爆発的OFI順張りモメンタムと板喰いアグレッサー追従", "bad": "感情的でダマシに引っかかりやすい"},
-    "TECHNOS": {"name": "TECHNOS", "icon": "📐", "age": 45, "score": 98, "good": "Hasbrouck価格インパクト係数・MF-DFAフラクタル解析", "bad": "ファンダメンタルズの急変に弱い"},
-    "CHRONOS": {"name": "CHRONOS", "icon": "⏳", "age": 38, "score": 95, "good": "板気配ボラティリティの時間周波数ウェーブレット解析", "bad": "突発的な地政学ニュースへの適応が遅い"},
-    "ORACLE": {"name": "ORACLE", "icon": "🔮", "age": 29, "score": 96, "good": "海外巨額バスケット買い・ダークプール流動性検知", "bad": "超小型株の仕手筋の動きを見落としやすい"},
-    "NEXUS": {"name": "NEXUS", "icon": "👑", "age": 41, "score": 99, "good": "10体AGI合議の期待値最尤推定統合と最終意思決定", "bad": "尖った個別銘柄の爆発力を抑えがち"},
-    "VALKYRIE": {"name": "VALKYRIE", "icon": "⚔️", "age": 26, "score": 94, "good": "ミリ秒板情報差分と氷山注文(Iceberg)の連続捕捉", "bad": "中長期トレンドを軽視する傾向"},
-    "SENTINEL": {"name": "SENTINEL", "icon": "👁️", "age": 35, "score": 96, "good": "5ch・実況SNS・掲示板の過熱イナゴタワー暴落警戒", "bad": "過度な疑心暗鬼で初動に乗れない"},
-    "ALPHA": {"name": "ALPHA", "icon": "⚡", "age": 30, "score": 95, "good": "寄付き直後ギャップアップ・ダウンの超高速執行判定", "bad": "後場のダレ相場での精度低下"}
-}
-
-DEFAULT_INSPECTORS = {
-    "INSP_A": {"name": "JUDGE-ALPHA", "icon": "⚖️", "score": 99, "role": "神託数理整合性・動的ケリー許容度監査"},
-    "INSP_B": {"name": "JUDGE-BETA", "icon": "🔍", "score": 98, "role": "世界同時マクロ・ニュース整合性監査"},
-    "INSP_C": {"name": "JUDGE-GAMMA", "icon": "🎯", "score": 99, "role": "超高頻度OFI執行・板情報バイアス監査"}
-}
-
 saved_agents, saved_inspectors, saved_fired, saved_sz_active, saved_sz_logs = load_agi_system()
 
 cu_active = st.session_state.get("authenticated_user", "")
@@ -1080,13 +1095,11 @@ components.html(
                             outline: none !important;
                             -webkit-tap-highlight-color: transparent !important;
                         }}
-                        /* ホバーによる色の変化を無効化（枠や色はそのまま維持） */
                         #yamashishi-floating-sidebar-btn:hover {{
                             border-color: rgba(56, 189, 248, 0.7) !important;
                             color: #38bdf8 !important;
                             box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.3) !important;
                         }}
-                        /* タップ・押下している瞬間のみ色を変え、指・クリックを離せば即元通り */
                         #yamashishi-floating-sidebar-btn:active {{
                             border-color: #fde047 !important;
                             color: #fde047 !important;
@@ -1193,8 +1206,8 @@ def _render_realtime_audit_center():
     now_ts = int(time.time())
     now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    inspectors = st.session_state["inspector_roster"]
-    agents = st.session_state["agent_roster"]
+    inspectors = st.session_state.get("inspector_roster") or DEFAULT_INSPECTORS
+    agents = st.session_state.get("agent_roster") or DEFAULT_AGENTS
 
     jitter_seed = int(hashlib.md5(f"{now_ts // 10}".encode()).hexdigest()[:4], 16)
 
@@ -1363,6 +1376,19 @@ with st.sidebar:
 # ==========================================
 # 10. 高速並列データ収集 (短縮タイムアウト & キャッシュ)
 # ==========================================
+def analyze_news_impact_and_links(title: str, cat: str) -> dict:
+    t_up = title.upper()
+    if any(w in t_up for w in ["半導体", "エヌビディア", "NVDA", "TSMC", "AI"]): 
+        codes, sf, mech = ["6857.T", "8035.T", "6146.T", "5803.T", "NVDA"], "AI半導体・データセンター", "米SOX指数とNVIDIAの動きに連動。機関投資家がバスケット買いを仕掛けやすい状況です。"
+    elif any(w in t_up for w in ["防衛", "三菱重", "宇宙", "衛星"]): 
+        codes, sf, mech = ["7011.T", "7012.T", "5595.T", "186A.T", "PLTR"], "防衛国策・航空宇宙", "地政学リスクや国策防衛予算の拡大を背景に、主力大型株へ資金が流入しています。"
+    else: 
+        codes, sf, mech = ["9984.T", "6857.T", "5803.T"], "日米主力・モメンタム", "市場全体のセンチメントを押し上げる材料です。指数寄与度の高い銘柄から動意づきます。"
+    return {
+        "sector_focus": sf, "mechanism": mech, "related_codes": codes, 
+        "action_guide": "① 朝の気配値とギャップを確認。\n② 主力株がギャップアップした場合、出遅れている周辺銘柄の押し目を狙うのが勝率の高い手口です。"
+    }
+
 def fetch_single_news_rss(cat, query):
     ctx = ssl.create_default_context()
     out = []
@@ -1413,18 +1439,8 @@ def fetch_global_impact_news() -> list:
         })
     return out_all[:4]
 
-def analyze_news_impact_and_links(title: str, cat: str) -> dict:
-    t_up = title.upper()
-    if any(w in t_up for w in ["半導体", "エヌビディア", "NVDA", "TSMC", "AI"]): 
-        codes, sf, mech = ["6857.T", "8035.T", "6146.T", "5803.T", "NVDA"], "AI半導体・データセンター", "米SOX指数とNVIDIAの動きに連動。機関投資家がバスケット買いを仕掛けやすい状況です。"
-    elif any(w in t_up for w in ["防衛", "三菱重", "宇宙", "衛星"]): 
-        codes, sf, mech = ["7011.T", "7012.T", "5595.T", "186A.T", "PLTR"], "防衛国策・航空宇宙", "地政学リスクや国策防衛予算の拡大を背景に、主力大型株へ資金が流入しています。"
-    else: 
-        codes, sf, mech = ["9984.T", "6857.T", "5803.T"], "日米主力・モメンタム", "市場全体のセンチメントを押し上げる材料です。指数寄与度の高い銘柄から動意づきます。"
-    return {
-        "sector_focus": sf, "mechanism": mech, "related_codes": codes, 
-        "action_guide": "① 朝の気配値とギャップを確認。\n② 主力株がギャップアップした場合、出遅れている周辺銘柄の押し目を狙うのが勝率の高い手口です。"
-    }
+# 【修正】render_card より前に初期化して NameError を回避
+all_impact_news = fetch_global_impact_news()
 
 # ==========================================
 # 11. AI合議と並列Web検索ロジック (超高速キャッシュ)
@@ -1508,9 +1524,13 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
         if llm_response_text:
             try:
                 clean_json = re.sub(r'```json|```', '', llm_response_text).strip()
-                llm_result = json.loads(clean_json)
-                if not isinstance(llm_result, list) or len(llm_result) == 0:
-                    llm_result = None
+                parsed = json.loads(clean_json)
+                if isinstance(parsed, dict):
+                    for v in parsed.values():
+                        if isinstance(v, list):
+                            parsed = v
+                            break
+                llm_result = parsed if (isinstance(parsed, list) and len(parsed) > 0) else None
             except Exception as e:
                 record_system_error("generate_humanlike_2ch_debate:json_parse", e, f"Raw: {llm_response_text[:100]}")
                 llm_result = None
@@ -1954,17 +1974,18 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
         )
     }
 
-def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=True, b5=True, bal=True, bms=True, bagi_q=False, bhft=False):
+# 【修正】total_capital, risk_tolerance_pct を引数として受け取るよう修正
+def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=True, b5=True, bal=True, bms=True, bagi_q=False, bhft=False, total_capital=1000000, risk_tolerance_pct=2.0):
     try:
         if df_raw is None or df_raw.empty: return None
         df = df_raw.dropna(subset=["Close", "Open", "High", "Low", "Volume"]).copy()
         if len(df) < 25: return None
 
-        c = df["Close"].values.astype(float)
-        o = df["Open"].values.astype(float)
-        h = df["High"].values.astype(float)
-        l = df["Low"].values.astype(float)
-        v = df["Volume"].values.astype(float)
+        c = np.asarray(df["Close"].values, dtype=float).reshape(-1)
+        o = np.asarray(df["Open"].values, dtype=float).reshape(-1)
+        h = np.asarray(df["High"].values, dtype=float).reshape(-1)
+        l = np.asarray(df["Low"].values, dtype=float).reshape(-1)
+        v = np.asarray(df["Volume"].values, dtype=float).reshape(-1)
 
         prev_c = np.roll(c, 1)
         prev_c[0] = c[0]
@@ -2071,7 +2092,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
 # 14. 弱肉強食・リアルタイム市場データスキャン (超並列 & 即時更新)
 # ==========================================
 @st.cache_data(ttl=90)
-def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
+def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, total_cap=1000000, risk_pct=2.0):
     all_codes = [c for c, _, _, _ in GLOBAL_MARKET_TICKERS]
     try:
         raw = yf.download(all_codes, period="5d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=4.0)
@@ -2087,7 +2108,7 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
             df = raw[c] if (len(all_codes) > 1 and c in raw) else raw
         except Exception:
             df = None
-        return g, c, analyze_df(df, c, n, t, g, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
+        return g, c, analyze_df(df, c, n, t, g, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_tolerance_pct=risk_pct)
 
     with ThreadPoolExecutor(max_workers=min(len(GLOBAL_MARKET_TICKERS), 24)) as ex:
         futs = [ex.submit(_worker, c, n, g, t) for c, n, g, t in GLOBAL_MARKET_TICKERS]
@@ -2110,10 +2131,13 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     return gmap, alist
 
 @st.cache_data(ttl=120)
-def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
+def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, total_cap=1000000, risk_pct=2.0):
     try:
+        code = code.strip().upper()
+        if re.match(r"^[0-9]{3}[0-9A-Z]$", code):
+            code = f"{code}.T"
         inf = STOCK_METADATA_CACHE.get(code, {"name": code.replace(".T", ""), "theme": "動的スキャン対象銘柄", "genre": "個別検索"})
-        return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
+        return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_tolerance_pct=risk_pct)
     except Exception as e:
         record_system_error("fetch_one", e, f"Code: {code}")
         return None
@@ -2123,15 +2147,14 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
 # ==========================================
 macro_info = fetch_macro()
 b5_live_map = fetch_5ch_live()
-all_impact_news = fetch_global_impact_news()
 
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;"><div class="brand-luxury">YAMASHISHI LAB</div></div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
 
-_cache_pool_key = f"pool_{investment_style}_{sorted(list(ac_b))}"
+_cache_pool_key = f"pool_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
 if _cache_pool_key not in st.session_state:
     with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】弱肉強食・全市場動的ユニバースを並列スキャン中..."):
-        g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
+        g_res, all_res = fetch_pool_batch(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b, total_cap=total_capital, risk_pct=risk_tolerance_pct)
         st.session_state[_cache_pool_key] = (g_res, all_res)
 else:
     g_res, all_res = st.session_state[_cache_pool_key]
@@ -2389,7 +2412,7 @@ if c2.button("🔍 診断", use_container_width=True) and cin:
     st.session_state["custom_search_code"] = clean_k(cin)
 
 if st.session_state.get("custom_search_code"):
-    cr = fetch_one(st.session_state["custom_search_code"], macro_info, b5_live_map, investment_style, True, True, True, True, "agi_q" in ac_b, "hft_front" in ac_b)
+    cr = fetch_one(st.session_state["custom_search_code"], macro_info, b5_live_map, investment_style, True, True, True, True, "agi_q" in ac_b, "hft_front" in ac_b, total_cap=total_capital, risk_pct=risk_tolerance_pct)
     if cr:
         render_card(cr, is_custom=True, kp="custom")
         if st.button("✖️ 閉じる", use_container_width=True): 
