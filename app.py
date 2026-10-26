@@ -1,4 +1,4 @@
-import streamlit as st
+Import streamlit as st
 import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
@@ -603,8 +603,22 @@ def inject_css():
         pointer-events: auto !important;
     }
 
-    [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], header button[kind="headerNoPadding"] {
-        opacity: 0 !important; position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; z-index: -1 !important;
+    /* ネイティブ開閉コントロールおよび開いた時に右側に出る矢印ボタンを完全非表示化 */
+    [data-testid="collapsedControl"], 
+    [data-testid="stSidebarCollapsedControl"], 
+    [data-testid="stSidebarCollapseButton"],
+    header button[kind="headerNoPadding"],
+    section[data-testid="stSidebar"] button[aria-label*="Close"],
+    section[data-testid="stSidebar"] button[aria-label*="閉じる"],
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+        opacity: 0 !important; 
+        position: absolute !important; 
+        width: 0 !important; 
+        height: 0 !important; 
+        overflow: hidden !important; 
+        pointer-events: none !important;
+        z-index: -1 !important;
     }
     
     section[data-testid="stSidebar"] + div, section.main, .stApp > header + div > div {
@@ -996,6 +1010,37 @@ components.html(
     <script>
     (function(){{
         const doc = window.parent.document;
+
+        function closeCustomSidebar() {{
+            try {{
+                const sb = doc.querySelector('section[data-testid="stSidebar"]');
+                const overlay = doc.getElementById('yamashishi-sidebar-backdrop');
+                if (sb) {{
+                    sb.setAttribute('aria-expanded', 'false');
+                    sb.style.setProperty('transform', 'translateX(-120%)', 'important');
+                    sb.style.setProperty('pointer-events', 'none', 'important');
+                }}
+                if (overlay) {{
+                    overlay.style.display = 'none';
+                }}
+            }} catch(e) {{}}
+        }}
+
+        function openCustomSidebar() {{
+            try {{
+                const sb = doc.querySelector('section[data-testid="stSidebar"]');
+                const overlay = doc.getElementById('yamashishi-sidebar-backdrop');
+                if (sb) {{
+                    sb.setAttribute('aria-expanded', 'true');
+                    sb.style.setProperty('transform', 'translateX(0)', 'important');
+                    sb.style.setProperty('pointer-events', 'auto', 'important');
+                }}
+                if (overlay) {{
+                    overlay.style.display = 'block';
+                }}
+            }} catch(e) {{}}
+        }}
+
         function setupCustomSidebar() {{
             try {{
                 if (!doc.getElementById('yamashishi-custom-sidebar-styles')) {{
@@ -1020,8 +1065,29 @@ components.html(
                         #yamashishi-floating-sidebar-btn:active {{ transform: scale(0.95) !important; }}
                         #yamashishi-floating-sidebar-btn svg {{ width: 15px !important; height: 15px !important; }}
                         #yamashishi-floating-sidebar-btn span {{ font-family: 'JetBrains Mono', monospace !important; font-size: 11px !important; font-weight: 800 !important; }}
+
+                        #yamashishi-sidebar-backdrop {{
+                            position: fixed !important; top: 0 !important; left: 0 !important;
+                            width: 100vw !important; height: 100vh !important;
+                            background: rgba(0, 0, 0, 0.4) !important;
+                            backdrop-filter: blur(2px) !important;
+                            z-index: 999990 !important;
+                            display: none;
+                        }}
                     `;
                     doc.head.appendChild(style);
+                }}
+
+                let overlay = doc.getElementById('yamashishi-sidebar-backdrop');
+                if (!overlay) {{
+                    overlay = doc.createElement('div');
+                    overlay.id = 'yamashishi-sidebar-backdrop';
+                    doc.body.appendChild(overlay);
+                    overlay.addEventListener('click', function(e) {{
+                        e.preventDefault();
+                        e.stopPropagation();
+                        closeCustomSidebar();
+                    }});
                 }}
 
                 let btn = doc.getElementById('yamashishi-floating-sidebar-btn');
@@ -1036,24 +1102,28 @@ components.html(
                     e.preventDefault();
                     e.stopPropagation();
                     const sb = doc.querySelector('section[data-testid="stSidebar"]');
-                    const nativeBtn = doc.querySelector('[data-testid="collapsedControl"] button, [data-testid="stSidebarCollapseButton"] button, header button[kind="headerNoPadding"]');
-                    
                     if (sb) {{
                         const isExpanded = (sb.getAttribute('aria-expanded') === 'true');
                         if (isExpanded) {{
-                            sb.setAttribute('aria-expanded', 'false');
-                            sb.style.setProperty('transform', 'translateX(-120%)', 'important');
-                            sb.style.setProperty('pointer-events', 'none', 'important');
+                            closeCustomSidebar();
                         }} else {{
-                            sb.setAttribute('aria-expanded', 'true');
-                            sb.style.setProperty('transform', 'translateX(0)', 'important');
-                            sb.style.setProperty('pointer-events', 'auto', 'important');
+                            openCustomSidebar();
                         }}
                     }}
-                    if (nativeBtn) {{
-                        try {{ nativeBtn.click(); }} catch(err){{}}
-                    }}
                 }};
+
+                if (!doc._yamashishiGlobalOutsideBound) {{
+                    doc.addEventListener('click', function(e) {{
+                        const sb = doc.querySelector('section[data-testid="stSidebar"]');
+                        const btnEl = doc.getElementById('yamashishi-floating-sidebar-btn');
+                        if (sb && sb.getAttribute('aria-expanded') === 'true') {{
+                            if (!sb.contains(e.target) && (!btnEl || !btnEl.contains(e.target))) {{
+                                closeCustomSidebar();
+                            }}
+                        }}
+                    }}, true);
+                    doc._yamashishiGlobalOutsideBound = true;
+                }}
             }} catch(e) {{}}
         }}
 
