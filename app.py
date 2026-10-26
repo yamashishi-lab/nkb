@@ -644,6 +644,7 @@ def inject_css():
         gap: 5px;
     }
 
+    /* トップに戻る固定ナビゲーションバー（最初から暗く光り、タップで明るく光る） */
     .fixed-top-nav-bar {
         position: fixed !important; top: 10px !important; left: 50% !important; transform: translateX(-50%) !important;
         z-index: 999980 !important; width: min(170px, calc(100vw - 4rem)) !important; background: transparent !important;
@@ -657,22 +658,26 @@ def inject_css():
     }
     .fixed-top-nav-bar button {
         width: 100% !important; height: 30px !important; min-height: 30px !important; max-height: 30px !important;
-        background: transparent !important; color: rgba(226, 232, 240, 0.75) !important;
-        border: 1px solid transparent !important; border-radius: 20px !important;
-        box-shadow: none !important; font-size: 11.5px !important; font-weight: 700 !important;
-        letter-spacing: 0.5px !important; cursor: pointer !important; transition: all 0.25s ease !important;
+        background: rgba(15, 23, 42, 0.75) !important;
+        color: #93c5fd !important;
+        border: 1px solid rgba(56, 189, 248, 0.35) !important;
+        border-radius: 20px !important;
+        box-shadow: 0 0 8px rgba(56, 189, 248, 0.25) !important;
+        font-size: 11.5px !important; font-weight: 700 !important;
+        letter-spacing: 0.5px !important; cursor: pointer !important;
+        transition: box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease !important;
     }
     .fixed-top-nav-bar button:hover {
-        background: rgba(56, 189, 248, 0.08) !important;
-        border-color: rgba(56, 189, 248, 0.4) !important;
-        color: #38bdf8 !important;
-        box-shadow: 0 0 15px rgba(56, 189, 248, 0.45) !important;
+        background: rgba(15, 23, 42, 0.8) !important;
+        border-color: rgba(56, 189, 248, 0.45) !important;
+        color: #93c5fd !important;
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.3) !important;
     }
     .fixed-top-nav-bar button:active {
         background: rgba(56, 189, 248, 0.25) !important;
         border-color: #38bdf8 !important;
         color: #ffffff !important;
-        box-shadow: 0 0 25px rgba(56, 189, 248, 0.9), inset 0 0 10px rgba(56, 189, 248, 0.5) !important;
+        box-shadow: 0 0 25px rgba(56, 189, 248, 0.95), inset 0 0 12px rgba(56, 189, 248, 0.6) !important;
         transform: scale(0.96) !important;
     }
 
@@ -993,7 +998,7 @@ for k, v in [
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
-    if st.button("⬆️ トップに戻る", key="top_nav_top", use_container_width=True):
+    if st.button("トップに戻る", key="top_nav_top", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
         st.session_state["focused_stock_item"] = None
@@ -1055,14 +1060,24 @@ components.html(
                             backdrop-filter: blur(16px) !important; border: 1.5px solid rgba(56, 189, 248, 0.7) !important;
                             border-radius: 8px !important; cursor: pointer !important;
                             box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.3) !important;
-                            user-select: none !important; transition: all 0.2s ease !important; color: #38bdf8 !important;
+                            user-select: none !important; transition: transform 0.1s ease !important; color: #38bdf8 !important;
                             pointer-events: auto !important;
+                            outline: none !important;
+                            -webkit-tap-highlight-color: transparent !important;
                         }}
+                        /* ホバーによる色の変化を無効化（枠や色はそのまま維持） */
                         #yamashishi-floating-sidebar-btn:hover {{
-                            border-color: #fde047 !important; color: #fde047 !important;
-                            box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important;
+                            border-color: rgba(56, 189, 248, 0.7) !important;
+                            color: #38bdf8 !important;
+                            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 12px rgba(56, 189, 248, 0.3) !important;
                         }}
-                        #yamashishi-floating-sidebar-btn:active {{ transform: scale(0.95) !important; }}
+                        /* タップ・押下している瞬間のみ色を変え、指・クリックを離せば即元通り */
+                        #yamashishi-floating-sidebar-btn:active {{
+                            border-color: #fde047 !important;
+                            color: #fde047 !important;
+                            box-shadow: 0 6px 22px rgba(0,0,0,0.9), 0 0 18px rgba(253, 224, 71, 0.4) !important;
+                            transform: scale(0.95) !important;
+                        }}
                         #yamashishi-floating-sidebar-btn svg {{ width: 15px !important; height: 15px !important; }}
                         #yamashishi-floating-sidebar-btn span {{ font-family: 'JetBrains Mono', monospace !important; font-size: 11px !important; font-weight: 800 !important; }}
 
