@@ -135,7 +135,7 @@ def init_sqlite_db():
 
 init_sqlite_db()
 
-def db_get(key: str, default_val: dict) -> dict:
+def db_get(key: str, default_val):
     with _DB_LOCK:
         try:
             conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False)
@@ -149,7 +149,7 @@ def db_get(key: str, default_val: dict) -> dict:
             pass
         return default_val
 
-def db_set(key: str, val: dict):
+def db_set(key: str, val):
     with _DB_LOCK:
         try:
             conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False)
@@ -213,6 +213,44 @@ def load_mem():
         }
         db_set("mem", db)
     return db
+
+# AGI 監視・雇用・解雇情報の永続化ロード/セーブ関数
+def load_agi_system():
+    agents = db_get("agi_agents", None)
+    inspectors = db_get("agi_inspectors", None)
+    fired = db_get("agi_fired", None)
+    sz_active = db_get("agi_sz_active", None)
+    sz_logs = db_get("agi_sz_logs", None)
+
+    if agents is None:
+        agents = dict(DEFAULT_AGENTS)
+        db_set("agi_agents", agents)
+    if inspectors is None:
+        inspectors = dict(DEFAULT_INSPECTORS)
+        db_set("agi_inspectors", inspectors)
+    if fired is None:
+        fired = []
+        db_set("agi_fired", fired)
+    if sz_active is None:
+        sz_active = True
+        db_set("agi_sz_active", sz_active)
+    if sz_logs is None:
+        sz_logs = []
+        db_set("agi_sz_logs", sz_logs)
+
+    return agents, inspectors, fired, sz_active, sz_logs
+
+def save_agi_system():
+    if "agent_roster" in st.session_state:
+        db_set("agi_agents", st.session_state["agent_roster"])
+    if "inspector_roster" in st.session_state:
+        db_set("agi_inspectors", st.session_state["inspector_roster"])
+    if "fired_agents" in st.session_state:
+        db_set("agi_fired", st.session_state["fired_agents"])
+    if "system_zero_active" in st.session_state:
+        db_set("agi_sz_active", st.session_state["system_zero_active"])
+    if "system_zero_logs" in st.session_state:
+        db_set("agi_sz_logs", st.session_state["system_zero_logs"])
 
 def check_and_log_ban_spoof(em: str, name: str, cur_fp: str, raw_hfp: str, pin_h: str = "", action_type: str = "アクセス") -> tuple:
     em_c = em.strip().lower()
@@ -661,17 +699,6 @@ check_auth()
 # ==========================================
 # 6. セッション状態の初期化
 # ==========================================
-for k, v in [
-    ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
-    ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"),
-    ("selected_news_item", None), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
-    ("last_cat", "🏆 総合TOP5"), ("nav_history", []), ("scroll_top_trig", 0),
-    ("scroll_target_id", ""), ("focused_stock_item", None),
-    ("fired_agents", []), ("system_zero_logs", []), ("system_zero_active", True)
-]:
-    if k not in st.session_state:
-        st.session_state[k] = v
-
 DEFAULT_AGENTS = {
     "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "age": 24, "score": 98, "good": "直感的な相場の裏読み、量子トンネル特異点の発見", "bad": "論理の飛躍が多く説明が抽象的になりがち"},
     "AEGIS": {"name": "AEGIS", "icon": "🛡️", "age": 32, "score": 95, "good": "CVaRに基づく鉄壁の資金管理と規律", "bad": "慎重すぎて機会損失を生むことがある"},
@@ -684,16 +711,30 @@ DEFAULT_AGENTS = {
     "SENTINEL": {"name": "SENTINEL", "icon": "👁️", "age": 35, "score": 95, "good": "5ch・SNS・掲示板の過熱感とイナゴタワー警戒", "bad": "過度な疑心暗鬼で初動に乗れない"},
     "ALPHA": {"name": "ALPHA", "icon": "⚡", "age": 30, "score": 94, "good": "寄付き直後のギャップアップ・ダウン瞬発判断", "bad": "後場のダレ相場での精度低下"}
 }
-if "agent_roster" not in st.session_state:
-    st.session_state["agent_roster"] = dict(DEFAULT_AGENTS)
 
 DEFAULT_INSPECTORS = {
     "INSP_A": {"name": "JUDGE-ALPHA", "icon": "⚖️", "score": 96, "role": "数理整合性・リスク許容度監査"},
     "INSP_B": {"name": "JUDGE-BETA", "icon": "🔍", "score": 94, "role": "市場ファンダ・ニュース整合性監査"},
     "INSP_C": {"name": "JUDGE-GAMMA", "icon": "🎯", "score": 95, "role": "執行速度・板情報バイアス監査"}
 }
-if "inspector_roster" not in st.session_state:
-    st.session_state["inspector_roster"] = dict(DEFAULT_INSPECTORS)
+
+# DBから永続化されたAGIデータをロード
+saved_agents, saved_inspectors, saved_fired, saved_sz_active, saved_sz_logs = load_agi_system()
+
+for k, v in [
+    ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
+    ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"),
+    ("selected_news_item", None), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
+    ("last_cat", "🏆 総合TOP5"), ("nav_history", []), ("scroll_top_trig", 0),
+    ("scroll_target_id", ""), ("focused_stock_item", None),
+    ("agent_roster", saved_agents),
+    ("inspector_roster", saved_inspectors),
+    ("fired_agents", saved_fired),
+    ("system_zero_logs", saved_sz_logs),
+    ("system_zero_active", saved_sz_active)
+]:
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 # ==========================================
 # 7. トップナビゲーションとサイドバー開閉JS (競合を根絶)
@@ -900,6 +941,7 @@ with st.sidebar:
                     "name": f"JUDGE-{new_num}", "icon": "⚖️", "score": 99,
                     "role": f"SYSTEM-ZERO直属 厳格監査プロトコル v{new_num}.0"
                 }
+                save_agi_system()
 
             if len(agents) > 0 and random.random() < 0.20:
                 target_k = random.choice(list(agents.keys()))
@@ -933,6 +975,7 @@ with st.sidebar:
                         "bad": "実践ログ蓄積中"
                     }
                     st.session_state["council_threads"] = {}
+                save_agi_system()
 
         st.markdown("<div style='font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:4px;'>⚖️ 稼働中・特命監査員 (3名)</div>", unsafe_allow_html=True)
         for ik, iv in st.session_state["inspector_roster"].items():
@@ -1704,10 +1747,12 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         if st.session_state.get("system_zero_active", True):
             if c_sz2.button("💀 総括神を解雇/停止", type="primary", use_container_width=True):
                 st.session_state["system_zero_active"] = False
+                save_agi_system()
                 st.warning("管理者権限により SYSTEM-ZERO を解雇・停止させました。"); st.rerun()
         else:
             if c_sz2.button("⚡ 総括神を新任再起動", use_container_width=True):
                 st.session_state["system_zero_active"] = True
+                save_agi_system()
                 st.success("新世代 SYSTEM-ZERO を再配備しました。"); st.rerun()
 
         st.markdown("<br><b>💀 過去に解雇されたエージェント履歴 (標タイプ)</b>", unsafe_allow_html=True)
