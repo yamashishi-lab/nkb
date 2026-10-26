@@ -4,12 +4,45 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import altair as alt
-import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, random, threading, sqlite3, uuid
+import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, random, threading, sqlite3, uuid, traceback
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.text import MIMEText
 from datetime import datetime
+
+# ==========================================
+# 0. システムエラーロギング機構 (新規追加・エラー握り潰し撲滅)
+# ==========================================
+_ERROR_LOCK = threading.RLock()
+MAX_ERROR_LOGS = 300
+
+def record_system_error(module_name: str, error_obj: Exception, context_info: str = ""):
+    """システム全体のエラーを捕捉し、スタックトレース付きで安全に保持する"""
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    tb_str = traceback.format_exc()
+    entry = {
+        "id": hashlib.md5(f"{now_str}_{module_name}_{str(error_obj)}".encode()).hexdigest()[:8],
+        "time": now_str,
+        "module": module_name,
+        "error_type": type(error_obj).__name__,
+        "message": str(error_obj),
+        "context": context_info,
+        "traceback": tb_str
+    }
+    with _ERROR_LOCK:
+        try:
+            cur_logs = db_get("system_error_logs", [])
+            cur_logs.insert(0, entry)
+            db_set("system_error_logs", cur_logs[:MAX_ERROR_LOGS])
+        except Exception:
+            pass
+
+def get_system_error_logs() -> list:
+    return db_get("system_error_logs", [])
+
+def clear_system_error_logs():
+    db_set("system_error_logs", [])
 
 # ==========================================
 # 1. 初期設定とセキュリティ
@@ -122,43 +155,46 @@ if "client_uuid" not in st.session_state:
 
 def init_sqlite_db():
     with _DB_LOCK:
-        conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS kv_store (
-                key TEXT PRIMARY KEY,
-                val TEXT
-            );
-        """)
-        conn.commit()
-        conn.close()
+        try:
+            conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False, timeout=10.0)
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS kv_store (
+                    key TEXT PRIMARY KEY,
+                    val TEXT
+                );
+            """)
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            record_system_error("init_sqlite_db", e)
 
 init_sqlite_db()
 
 def db_get(key: str, default_val):
     with _DB_LOCK:
         try:
-            conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False)
+            conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False, timeout=10.0)
             cur = conn.cursor()
             cur.execute("SELECT val FROM kv_store WHERE key = ?", (key,))
             row = cur.fetchone()
             conn.close()
             if row:
                 return json.loads(row[0])
-        except Exception:
-            pass
+        except Exception as e:
+            record_system_error(f"db_get:{key}", e)
         return default_val
 
 def db_set(key: str, val):
     with _DB_LOCK:
         try:
-            conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False)
+            conn = sqlite3.connect(DB_SQLITE_PATH, check_same_thread=False, timeout=10.0)
             cur = conn.cursor()
             cur.execute("INSERT OR REPLACE INTO kv_store (key, val) VALUES (?, ?)", (key, json.dumps(val, ensure_ascii=False)))
             conn.commit()
             conn.close()
-        except Exception:
-            pass
+        except Exception as e:
+            record_system_error(f"db_set:{key}", e)
 
 def clean_k(k: str) -> str: 
     return re.sub(r"\s+", "", unicodedata.normalize("NFKC", str(k or "")).strip().strip("\"'"))
@@ -176,7 +212,8 @@ def get_raw_header_fp() -> str:
     try:
         h = {str(k).lower(): str(v) for k, v in dict(getattr(st.context, "headers", {}) or {}).items()}
         raw = f"{h.get('user-agent','')}|{h.get('accept-language','')}|{h.get('sec-ch-ua-platform','')}"
-    except Exception:
+    except Exception as e:
+        record_system_error("get_raw_header_fp", e)
         raw = "default_env"
     return hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
 
@@ -214,7 +251,6 @@ def load_mem():
         db_set("mem", db)
     return db
 
-# AGI 監視・雇用・解雇情報の永続化ロード/セーブ関数
 def load_agi_system():
     agents = db_get("agi_agents", None)
     inspectors = db_get("agi_inspectors", None)
@@ -300,7 +336,8 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
                 if port != 465: s.starttls(context=ctx)
                 s.login(u, p); s.send_message(m)
             sent, route = True, "SMTP配信＋暗号化BOX"
-        except Exception: pass
+        except Exception as e:
+            record_system_error("send_mail:smtp", e, f"To: {to_clean}")
     if not sent:
         try:
             ctx = ssl.create_default_context()
@@ -308,7 +345,8 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
             req = urllib.request.Request(f"https://formsubmit.co/ajax/{urllib.parse.quote(to_clean)}", data=payload, headers={"Content-Type": "application/json", "Accept": "application/json"}, method="POST")
             with urllib.request.urlopen(req, timeout=3.0, context=ctx) as r:
                 if r.status == 200: route = "Webリレー配信＋暗号化BOX"
-        except Exception: pass
+        except Exception as e:
+            record_system_error("send_mail:relay", e, f"To: {to_clean}")
     mdb = load_mail_db()
     mdb.setdefault("logs", []).insert(0, {"id": hashlib.md5(f"{to_clean}_{now_str}".encode()).hexdigest()[:8], "time": now_str, "to": to_clean, "from": ADMIN_EMAIL, "subject": subj, "body": body, "category": category, "route": route})
     mdb["logs"] = mdb["logs"][:120]
@@ -360,6 +398,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
                 res = json.loads(r.read())
                 return res["choices"][0]["message"]["content"]
     except Exception as e:
+        record_system_error("call_real_llm_api", e, f"Provider: {prov}, Model: {mod}")
         return None
 
 # ==========================================
@@ -367,14 +406,15 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
-    raw_hfp, cur_fp = get_client_fp(), get_raw_header_fp()
+    raw_hfp, cur_fp = get_raw_header_fp(), get_client_fp()
     if mode == "register":
         lbl = "✅ 生体・ワンタップ認証 登録済" if db.get(user_email, {}).get("bio_enabled") else "🧬 この端末をワンタップ登録"
         if st.button(lbl, key=f"bio_{user_email}", use_container_width=True):
             if user_email in db: 
                 db[user_email].update({"bio_enabled": True, "fp": cur_fp, "raw_hfp": raw_hfp})
                 db_set("mem", db)
-            sec.setdefault("device_bio_map", {})[raw_hfp] = sec["device_bio_map"][cur_fp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
+            sec.setdefault("device_bio_map", {})[raw_hfp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
+            sec["device_bio_map"][cur_fp] = {"email": user_email, "token": bio_token, "fp": cur_fp}
             db_set("sec", sec)
             st.success("✅ 端末認証を登録しました")
         return
@@ -625,7 +665,8 @@ def check_auth():
         if cu in db:
             db[cu].update({"last_seen_ts": time.time(), "last_seen_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "fp": cur_fp, "raw_hfp": raw_hfp, "bio_enabled": True})
             db_set("mem", db)
-            sec.setdefault("device_bio_map", {})[raw_hfp] = sec["device_bio_map"][cur_fp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
+            sec.setdefault("device_bio_map", {})[raw_hfp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
+            sec["device_bio_map"][cur_fp] = {"email": cu, "token": keep_tok, "fp": cur_fp}
             db_set("sec", sec)
         st.query_params["u"], st.query_params["t"] = cu, keep_tok
         return True
@@ -718,7 +759,6 @@ DEFAULT_INSPECTORS = {
     "INSP_C": {"name": "JUDGE-GAMMA", "icon": "🎯", "score": 95, "role": "執行速度・板情報バイアス監査"}
 }
 
-# DBから永続化されたAGIデータをロード
 saved_agents, saved_inspectors, saved_fired, saved_sz_active, saved_sz_logs = load_agi_system()
 
 for k, v in [
@@ -874,7 +914,6 @@ with st.sidebar:
             "💎 バイ＆ホールド (中長期・IPO分散投資)"
         ], index=0, key="investment_style_choice")
         
-        # スタイルが切り替わったら合議キャッシュを自動クリアして即座に連動
         if investment_style != old_style:
             st.session_state["council_threads"] = {}
             st.session_state["council_meta"] = {}
@@ -1031,7 +1070,7 @@ def fetch_single_news_rss(cat, query):
     url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=ja&gl=JP&ceid=JP:ja"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=3.0, context=ctx) as res:
+        with urllib.request.urlopen(req, timeout=3.5, context=ctx) as res:
             root = ET.fromstring(res.read())
             for it in root.findall("./channel/item")[:3]:
                 t = re.sub(r"\s*-\s*[^-]+$", "", (it.findtext("title") or "").strip())
@@ -1043,7 +1082,8 @@ def fetch_single_news_rss(cat, query):
                         "pub_date": (it.findtext("pubDate") or "")[:25], 
                         "impact_score": 92
                     })
-    except Exception: pass
+    except Exception as e:
+        record_system_error("fetch_single_news_rss", e, f"Query: {query}")
     return out
 
 @st.cache_data(ttl=180)
@@ -1057,11 +1097,14 @@ def fetch_global_impact_news() -> list:
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = [executor.submit(fetch_single_news_rss, cat, q) for cat, q in qs]
         for f in as_completed(futures):
-            for item in f.result():
-                if item["title"] not in seen:
-                    item["detail"] = analyze_news_impact_and_links(item["title"], item["cat"])
-                    out_all.append(item)
-                    seen.add(item["title"])
+            try:
+                for item in f.result():
+                    if item["title"] not in seen:
+                        item["detail"] = analyze_news_impact_and_links(item["title"], item["cat"])
+                        out_all.append(item)
+                        seen.add(item["title"])
+            except Exception as e:
+                record_system_error("fetch_global_impact_news:futures", e)
     if not out_all:
         t_fb = "AI半導体・次世代データセンター光配線および防衛分野に機関の大型資金流入が加速"
         out_all.append({
@@ -1093,14 +1136,15 @@ def search_single_query(query: str, max_results: int) -> list:
     url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=ja&gl=JP&ceid=JP:ja"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=3.0, context=ctx) as r:
+        with urllib.request.urlopen(req, timeout=3.5, context=ctx) as r:
             root = ET.fromstring(r.read())
             for it in root.findall("./channel/item")[:max_results]:
                 t = re.sub(r"<[^>]+>", "", it.findtext("title") or "").strip()
                 t = re.sub(r"\s*-\s*[^-]+$", "", t).strip()
                 d = re.sub(r"<[^>]+>", "", it.findtext("description") or "").strip()
                 if t: results.append(f"{t} ({d[:70]}...)")
-    except Exception: pass
+    except Exception as e:
+        record_system_error("search_single_query", e, f"Query: {query}")
     return results
 
 def search_web_knowledge_parallel(query1: str, query2: str) -> list:
@@ -1108,15 +1152,17 @@ def search_web_knowledge_parallel(query1: str, query2: str) -> list:
     with ThreadPoolExecutor(max_workers=2) as executor:
         f1 = executor.submit(search_single_query, query1, 3)
         f2 = executor.submit(search_single_query, query2, 3) if query2 else None
-        results.extend(f1.result())
-        if f2: results.extend(f2.result())
+        try:
+            results.extend(f1.result())
+            if f2: results.extend(f2.result())
+        except Exception as e:
+            record_system_error("search_web_knowledge_parallel", e)
     return list(dict.fromkeys(results))
 
 def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
     uq = user_query.strip()
     is_greeting = any(w in uq for w in ["こんにちは", "こんちは", "こんばんは", "おはよ", "初めまして", "よろしく", "押忍", "ども"]) if uq else False
     
-    # リアルタイムで対象銘柄に関する最新市況・Web情報を並列検索
     web_hits = []
     search_q1 = f"{r['name']} 株価 {uq}" if uq and not is_greeting else f"{r['name']} 株価 決算 ニュース"
     search_q2 = f"{r['code']} 掲示板 材料" if not uq else f"{r['code']} {uq}"
@@ -1161,7 +1207,8 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
                 llm_result = json.loads(clean_json)
                 if not isinstance(llm_result, list) or len(llm_result) == 0:
                     llm_result = None
-            except Exception:
+            except Exception as e:
+                record_system_error("generate_humanlike_2ch_debate:json_parse", e, f"Raw: {llm_response_text[:100]}")
                 llm_result = None
 
     turns = []
@@ -1170,7 +1217,6 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
     if llm_result:
         turns.extend(llm_result)
     else:
-        # Web検索結果を即座に動的に反映した高精度バックアップ対話
         t_topic = top_news_context[:48]
         if uq and not is_greeting:
             turns.extend([
@@ -1244,7 +1290,6 @@ def render_council_sec(r, uk, auto_open=False):
         
     if not is_open: return
 
-    # スタイル連動キーを付与してキャッシュを管理
     cache_council_key = f"{uk}_{r.get('strat', {}).get('style_name', 'default')}"
     if cache_council_key not in st.session_state["council_threads"]:
         with st.spinner(f"🌐 【{r['name']}】の最新ニュース・板情報をWebリアルタイム検索中＆合議生成中..."):
@@ -1341,31 +1386,36 @@ def fetch_macro():
     tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
     res = {}
     try:
-        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=5)
+        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=6)
         for k, (c, lbl) in tks.items():
             try:
                 d = raw[c].dropna(subset=["Close"]); lc, pc = float(d["Close"].iloc[-1]), float(d["Close"].iloc[-2])
                 res[k] = {"price": lc, "diff": round((lc - pc) / pc * 100, 2), "label": lbl}
-            except Exception: res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
-    except Exception:
+            except Exception as e_tick:
+                record_system_error(f"fetch_macro:{k}", e_tick)
+                res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
+    except Exception as e:
+        record_system_error("fetch_macro", e)
         for k, (_, lbl) in tks.items(): res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
     return res
 
 def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
-    rets = np.diff(c) / np.maximum(c[:-1], 1e-4)
+    denom = np.maximum(c[:-1], 1e-4)
+    rets = np.diff(c) / denom
     recent_high = np.max(h[-20:])
     v_barrier = max(float(recent_high - c[-1]) / max(float(c[-1]), 1e-4), 0.001)
     
-    vol_weight = v[-5:] / max(float(np.mean(v[-20:])), 1.0)
+    mean_v20 = max(float(np.mean(v[-20:])), 1.0)
+    vol_weight = v[-5:] / mean_v20
     e_kinetic = max(float(np.mean(np.abs(rets[-5:]) * vol_weight)) * 2.0, 1e-4)
     
     barrier_diff = max(v_barrier - e_kinetic, 0.0)
     decay = np.exp(-1.8 * barrier_diff / max(e_kinetic, 1e-4))
-    qt = np.clip(decay * 100.0, 45.0, 98.5)
+    qt = float(np.clip(decay * 100.0, 45.0, 98.5))
     
-    p_up = np.clip(np.sum(rets[-10:] > 0) / 10.0, 1e-4, 1.0 - 1e-4)
-    shannon_entropy = -(p_up * np.log2(p_up) + (1.0 - p_up) * np.log2(1.0 - p_up))
-    coherence = np.clip((1.0 - shannon_entropy) * 100.0, 30.0, 95.0)
+    p_up = float(np.clip(np.sum(rets[-10:] > 0) / 10.0, 1e-4, 1.0 - 1e-4))
+    shannon_entropy = float(-(p_up * np.log2(p_up) + (1.0 - p_up) * np.log2(1.0 - p_up)))
+    coherence = float(np.clip((1.0 - shannon_entropy) * 100.0, 30.0, 95.0))
 
     q_score = int(np.clip(qt * 0.7 + coherence * 0.3, 50, 99))
     q_state = "⚛️ 量子トンネル突破・超伝導モード" if qt > 80.0 else "🌊 量子重ね合わせ干渉モード"
@@ -1376,21 +1426,23 @@ def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v:
     }
 
 def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
-    rets = np.diff(c) / np.maximum(c[:-1], 1e-4)
+    denom = np.maximum(c[:-1], 1e-4)
+    rets = np.diff(c) / denom
     n = min(len(rets), 30)
     sub_rets = rets[-n:]
     
     mean_r = np.mean(sub_rets)
     dev = np.cumsum(sub_rets - mean_r)
-    r_val = np.max(dev) - np.min(dev)
-    s_val = np.std(sub_rets)
-    hurst = np.clip(np.log(r_val / s_val) / np.log(n), 0.30, 0.85) if (s_val > 1e-6 and r_val > 1e-6) else 0.50
+    r_val = float(np.max(dev) - np.min(dev))
+    s_val = float(np.std(sub_rets))
+    hurst = float(np.clip(np.log(r_val / s_val) / np.log(n), 0.30, 0.85)) if (s_val > 1e-6 and r_val > 1e-6) else 0.50
 
     dp = np.abs(np.diff(c[-10:]))
-    dv = v[-9:] / max(float(np.mean(v[-20:])), 1.0)
+    mean_v20 = max(float(np.mean(v[-20:])), 1.0)
+    dv = v[-9:] / mean_v20
     kyle_lambda = float(np.mean(dp / np.maximum(dv, 0.1)))
-    ks = np.clip(60.0 + (hurst - 0.5) * 60.0 + min(kyle_lambda * 5.0, 20.0), 45.0, 97.0)
-    luld = np.clip(70.0 + (hurst - 0.5) * 40.0, 50.0, 95.0)
+    ks = float(np.clip(60.0 + (hurst - 0.5) * 60.0 + min(kyle_lambda * 5.0, 20.0), 45.0, 97.0))
+    luld = float(np.clip(70.0 + (hurst - 0.5) * 40.0, 50.0, 95.0))
 
     return {
         "ms_score": int(np.clip(ks, 50, 99)), "hurst": round(hurst, 2), 
@@ -1479,7 +1531,6 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
             )
         }
     
-    # デフォルト：デイトレード
     sh = max(1, int(round(base_sh * 1.65)))
     return {
         "style_name": "デイトレード",
@@ -1520,10 +1571,11 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         v = df["Volume"].values.astype(float)
         
         df["Prev_Close"] = df["Close"].shift(1)
-        df["Day_Return"] = (df["Close"] - df["Open"].iloc[0]) / df["Open"].iloc[0] * 100 if len(df) > 0 else 0
+        df["Day_Return"] = (df["Close"] - df["Open"].iloc[0]) / max(float(df["Open"].iloc[0]), 1e-4) * 100 if len(df) > 0 else 0
         tr = pd.concat([df["High"] - df["Low"], (df["High"] - df["Prev_Close"]).abs(), (df["Low"] - df["Prev_Close"]).abs()], axis=1).max(axis=1)
         df["ATR"] = tr.rolling(14).mean().fillna(df["Close"] * 0.02)
-        df["VWAP20"] = (((df["High"] + df["Low"] + df["Close"]) / 3.0 * df["Volume"]).rolling(20).sum() / df["Volume"].rolling(20).sum().replace(0, np.nan)).fillna(df["Close"])
+        vol_sum = df["Volume"].rolling(20).sum().replace(0, np.nan)
+        df["VWAP20"] = (((df["High"] + df["Low"] + df["Close"]) / 3.0 * df["Volume"]).rolling(20).sum() / vol_sum).fillna(df["Close"])
         
         qm = compute_quantum_wave_metrics(c, h, l, v)
         ms = compute_inst_microstructure(c, h, l, v)
@@ -1566,7 +1618,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         pgap = round(float(np.clip(ofi_z * 0.6 + macro_bias * 0.4, -2.5, 3.5)), 2)
         pest = cv * (1.0 + pgap / 100.0)
         
-        # 投資スタイルに合わせた利確・損切幅の動的調整
         st_p = style.split(" ")[1] if " " in style else "デイトレード"
         if st_p == "スキャルピング":
             tpv = max(pest, cv) + (atrv * 0.55)
@@ -1588,7 +1639,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         strat = select_dynamic_strategy(
             code.replace(".T", ""), style, tot_win, round(expect_pct, 1), ofi_z, 0.5, 0.4, 3.5, 60.0, 0.8, 
             base_sh, fp(pest), fp(float(lat["VWAP20"])), 
-            f"{fp(tpv)}(+{round((tpv-cv)/cv*100,1)}%)", f"{fp(slv)}({round((slv-cv)/cv*100,1)}%)", 15.0, qm, ms
+            f"{fp(tpv)}(+{round((tpv-cv)/max(cv,1e-4)*100,1)}%)", f"{fp(slv)}({round((slv-cv)/max(cv,1e-4)*100,1)}%)", 15.0, qm, ms
         )
 
         t_lbl, t_col, t_bg = "【Lv.7：⭕押し目買い】", "#e2e8f0", "linear-gradient(90deg,#334155,#1e293b)"
@@ -1600,7 +1651,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         return {
             "full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, 
             "price": fp(cv), "raw_close": cv,
-            "tp_price": fp(tpv), "tp_pct": round((tpv - cv) / cv * 100, 1), "sl_price": fp(slv), "sl_pct": round((slv - cv) / cv * 100, 1), "vwap_price": fp(float(lat["VWAP20"])),
+            "tp_price": fp(tpv), "tp_pct": round((tpv - cv) / max(cv, 1e-4) * 100, 1), "sl_price": fp(slv), "sl_pct": round((slv - cv) / max(cv, 1e-4) * 100, 1), "vwap_price": fp(float(lat["VWAP20"])),
             "inst_score": int(np.clip(ms["ms_score"] + ofi_z * 5, 50, 99)), "vpin": 0.52, "ofi_z": round(ofi_z, 2), "yz_vol": 0.38, "cvar95": 3.2, "eff_pct": 82, "kelly_pct": 16.5,
             "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"],
             "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_stealth": ms["kyle_stealth"], "luld_magnet": ms["luld_magnet"], "ms_regime": ms["ms_regime"],
@@ -1614,19 +1665,32 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
             "lot_info": {"shares": strat["adj_shares"], "position_value": strat["adj_shares"] * cv, "risk_amount": rmoney},
             "strat": strat
         }
-    except Exception: return None
+    except Exception as e:
+        record_system_error("analyze_df", e, f"Code: {code}")
+        return None
 
 @st.cache_data(ttl=1800)
 def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     codes = list({s["code"] for sts in STOCK_POOL.values() for s in sts})
-    raw = yf.download(codes, period="5d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=9)
+    try:
+        raw = yf.download(codes, period="5d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=12)
+    except Exception as e:
+        record_system_error("fetch_pool_batch:download", e)
+        raw = {}
     gmap, alist, seen = {g: [] for g in STOCK_POOL.keys()}, [], set()
     
     def _analyze_wrapper(g, s, df): 
         return g, s["code"], analyze_df(df, s["code"], s["name"], s["theme"], g, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
         
     with ThreadPoolExecutor(max_workers=min(len(codes), 16)) as ex:
-        futs = [ex.submit(_analyze_wrapper, g, s, raw[s["code"]] if len(codes)>1 else raw) for g, sts in STOCK_POOL.items() for s in sts]
+        futs = []
+        for g, sts in STOCK_POOL.items():
+            for s in sts:
+                try:
+                    target_df = raw[s["code"]] if (len(codes) > 1 and s["code"] in raw) else raw
+                except Exception:
+                    target_df = None
+                futs.append(ex.submit(_analyze_wrapper, g, s, target_df))
         for f in as_completed(futs):
             try:
                 g, c, r = f.result()
@@ -1635,13 +1699,19 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
                     if c not in seen: 
                         alist.append(r)
                         seen.add(c)
-            except Exception: continue
+            except Exception as e:
+                record_system_error("fetch_pool_batch:future_result", e)
+                continue
     return gmap, alist
 
 @st.cache_data(ttl=300)
 def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
-    inf = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
-    return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
+    try:
+        inf = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
+        return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
+    except Exception as e:
+        record_system_error("fetch_one", e, f"Code: {code}")
+        return None
 
 # ==========================================
 # 13. ヘッダー / マクロ指標
@@ -1668,7 +1738,10 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         st.session_state["scroll_top_trig"] = int(time.time()*1000)
         st.rerun()
 
-    tab_users, tab_employment, tab_apply_wait = st.tabs(["👥 会員情報管理", "🏢 AGI雇用・監視情報", "📩 会員申し込み審査"])
+    # タブに「⚠️ システムエラーログ」を追加
+    tab_users, tab_employment, tab_apply_wait, tab_error_logs = st.tabs([
+        "👥 会員情報管理", "🏢 AGI雇用・監視情報", "📩 会員申し込み審査", "⚠️ システムエラーログ"
+    ])
 
     with tab_users:
         st.markdown("#### 📋 登録済み会員一覧 (データベース同期中)")
@@ -1820,6 +1893,64 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                     st.warning(f"{p_em} の申請を却下しました"); st.rerun()
         else:
             st.info("現在、承認待ちの新規申請はありません。")
+
+    # 新設：システムエラーログ専用管理画面
+    with tab_error_logs:
+        st.markdown("#### ⚠️ システムエラーログ管理 & ダウンロードセンター")
+        err_list = get_system_error_logs()
+        
+        c_err1, c_err2 = st.columns([3, 1])
+        c_err1.caption(f"蓄積されたエラー件数: **{len(err_list)} 件** (最大 {MAX_ERROR_LOGS} 件まで自動リングバッファ保持)")
+        
+        col_down, col_clear = st.columns([2, 2])
+        if err_list:
+            json_str = json.dumps(err_list, ensure_ascii=False, indent=2)
+            col_down.download_button(
+                label="📥 エラーログ全件をJSONでエクスポート",
+                data=json_str,
+                file_name=f"yamashishi_error_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json",
+                use_container_width=True
+            )
+            if col_clear.button("🗑️ エラーログをすべて消去", use_container_width=True):
+                clear_system_error_logs()
+                st.success("すべてのエラーログを消去しました。")
+                st.rerun()
+
+            st.markdown(
+                """
+                <div class="admin-table-container">
+                <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>発生日時</th>
+                        <th>モジュール名</th>
+                        <th>例外タイプ</th>
+                        <th>メッセージ</th>
+                        <th>補足情報</th>
+                    </tr>
+                </thead>
+                <tbody>
+                """ + "".join([
+                    f"<tr><td>{e.get('time','-')}</td>"
+                    f"<td style='color:#38bdf8;font-weight:700;'>{e.get('module','-')}</td>"
+                    f"<td style='color:#ef4444;font-family:monospace;'>{e.get('error_type','-')}</td>"
+                    f"<td>{e.get('message','-')[:60]}</td>"
+                    f"<td style='color:#94a3b8;'>{e.get('context','-')}</td></tr>"
+                    for e in err_list[:30]
+                ]) + """
+                </tbody>
+                </table>
+                </div>
+                """, unsafe_allow_html=True
+            )
+
+            st.markdown("<br><b>🔍 スタックトレース詳細ビューア (直近10件)</b>", unsafe_allow_html=True)
+            for idx, err_item in enumerate(err_list[:10]):
+                with st.expander(f"🔴 [{err_item['time']}] {err_item['module']} - {err_item['error_type']}: {err_item['message'][:40]}..."):
+                    st.code(err_item.get("traceback") or "スタックトレースなし", language="python")
+        else:
+            st.success("🎉 現在システム上に記録されたエラー・警告はありません。全モジュールが極めて正常に動作しています。")
 
     st.stop()
 
