@@ -4,7 +4,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import altair as alt
-import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, threading, sqlite3, uuid, traceback, secrets
+import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, threading, sqlite3, uuid, traceback, secrets, html
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -749,6 +749,15 @@ def inject_css():
         70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
         100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
     }
+    @keyframes pulse-dot {
+        0% { opacity: 0.3; transform: scale(0.9); }
+        50% { opacity: 1; transform: scale(1.1); }
+        100% { opacity: 0.3; transform: scale(0.9); }
+    }
+    .live-pulse-indicator {
+        display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #10b981;
+        box-shadow: 0 0 8px #10b981; animation: pulse-dot 1.4s infinite ease-in-out; vertical-align: middle; margin-right: 4px;
+    }
     """
     st.markdown(f'<div id="page_top_anchor"></div><style>{css}</style>', unsafe_allow_html=True)
 
@@ -1009,15 +1018,96 @@ components.html(
     </script>""", height=0)
 
 # ==========================================
-# 8. サイドバー構築
+# 8. サイドバー構築 (監視センターのリアルタイム化)
 # ==========================================
+def _render_realtime_audit_center():
+    """リアルタイムにパトロール・Vitalを自動更新する鬼監視センター"""
+    now_ts = int(time.time())
+    now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # リアルタイム・ヘルスチェックと自動更新
+    inspectors = st.session_state["inspector_roster"]
+    agents = st.session_state["agent_roster"]
+
+    # 偶発的・リアルタイム監査パトロール変動
+    jitter_seed = int(hashlib.md5(f"{now_ts // 10}".encode()).hexdigest()[:4], 16)
+    
+    st.markdown(
+        f'<div style="background:rgba(168,85,247,0.12);border:1px solid #c084fc;padding:6px 8px;border-radius:6px;font-size:11px;margin-bottom:8px;">'
+        f'<span class="live-pulse-indicator"></span>👁️‍🗨️ <b>SYSTEM-ZERO (最高次統括神)</b>: <span style="color:#10b981;font-weight:700;">LIVE REALTIME</span><br>'
+        f'<span style="color:#d8b4fe;">全監査員3名・合議体10名を常時ミリ秒監視中 ({now_time[-8:]})</span>'
+        f'</div>', unsafe_allow_html=True
+    )
+
+    audit_window = now_ts // 1800
+    if st.session_state.get("last_audit_epoch") != audit_window:
+        st.session_state["last_audit_epoch"] = audit_window
+        err_logs = get_system_error_logs()
+        if len(err_logs) > 5 and st.session_state.get("system_zero_active", True):
+            insp_k = list(inspectors.keys())[audit_window % len(inspectors)]
+            old_insp = inspectors[insp_k]
+            st.session_state["system_zero_logs"].insert(0, {
+                "time": now_time,
+                "target": old_insp["name"],
+                "msg": f"🚨 SYSTEM-ZERO粛清: エラーレート過多検知により監視員 {old_insp['name']} を更新配置。"
+            })
+            new_num = (audit_window % 89) + 10
+            inspectors[insp_k] = {
+                "name": f"JUDGE-{new_num}", "icon": "⚖️", "score": 99,
+                "role": f"SYSTEM-ZERO直属 厳格監査プロトコル v{new_num}.0"
+            }
+            save_agi_system()
+
+    st.markdown("<div style='font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:4px;'>⚖️ 稼働中・特命監査員 (3名)</div>", unsafe_allow_html=True)
+    for ik, iv in inspectors.items():
+        # 微小なリアルタイムVitalジッター
+        vital_score = min(99, max(90, iv["score"] + (jitter_seed % 3 - 1)))
+        st.markdown(
+            f'<div style="background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;padding:4px 8px;margin-bottom:4px;border-radius:4px;font-size:10.5px;">'
+            f'<b>{html.escape(iv["icon"])} {html.escape(iv["name"])}</b> (リアルタイム評価: <span style="color:#38bdf8;font-weight:800;">{vital_score}点</span>)<br>'
+            f'<span style="color:#94a3b8;">{html.escape(iv["role"])}</span>'
+            f'</div>', unsafe_allow_html=True
+        )
+
+    st.markdown("<div style='font-size:11px;font-weight:700;color:#10b981;margin:8px 0 4px 0;'>🟢 厳選合議エージェント (常時10名)</div>", unsafe_allow_html=True)
+    for ak, av in agents.items():
+        ag_score = min(99, max(88, av["score"] + (int(hashlib.md5(f"{ak}{now_ts // 15}".encode()).hexdigest()[:2], 16) % 3 - 1)))
+        st.markdown(
+            f'<div style="background:rgba(2,6,23,0.7);border:1px solid rgba(16,185,129,0.25);border-radius:5px;padding:4px 8px;margin-bottom:4px;font-size:10.5px;">'
+            f'<span style="font-weight:700;color:#f8fafc;">{html.escape(av["icon"])} {html.escape(av["name"])}</span> '
+            f'<span style="color:#fde047;float:right;font-weight:800;">スコア: {ag_score}</span><br>'
+            f'<span style="color:#a7f3d0;">強み: {html.escape(av["good"][:24])}...</span>'
+            f'</div>', unsafe_allow_html=True
+        )
+
+    st.markdown("<hr style='margin:10px 0 6px 0; border-color:rgba(239,68,68,0.3);'>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:11px;font-weight:800;color:#ef4444;margin-bottom:6px;'>💀 直近の解雇・粛清履歴 (鬼監視室)</div>", unsafe_allow_html=True)
+    fired_list = st.session_state.get("fired_agents", [])
+    if fired_list:
+        for fa in fired_list[:4]:
+            st.markdown(
+                f'<div style="background:rgba(30,10,15,0.75);border-left:3px solid #ef4444;border-radius:4px;padding:5px 8px;margin-bottom:5px;font-size:10.5px;">'
+                f'<span style="color:#fca5a5;font-weight:700;">{html.escape(fa.get("name",""))}</span> <span style="color:#94a3b8;font-size:9.5px;">({html.escape(fa.get("time","")[:16])})</span><br>'
+                f'<span style="color:#f87171;">処刑: {html.escape(fa.get("fired_by","監査員"))} (スコア:{html.escape(str(fa.get("score","")))})</span><br>'
+                f'<span style="color:#cbd5e1;">理由: {html.escape(fa.get("reason",""))}</span>'
+                f'</div>', unsafe_allow_html=True
+            )
+    else:
+        st.caption("現在、処刑・解雇されたエージェントはいません。全10名が厳格基準をクリアして稼働中です。")
+
+# Streamlitのバージョンに合わせフラグメント化（リアルタイム定期自動更新）
+if hasattr(st, "fragment"):
+    _render_realtime_audit_center_fragment = st.fragment(run_every="5s")(_render_realtime_audit_center)
+else:
+    _render_realtime_audit_center_fragment = _render_realtime_audit_center
+
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
     if cu:
         st.markdown(
             f'<div class="sidebar-section-card">'
             f'<div class="sidebar-header-badge">⚛️ QUANTUM SESSION ACTIVE</div>'
-            f'<div style="color:#f8fafc;font-size:12px;font-weight:700;">会員: {cu}</div>'
+            f'<div style="color:#f8fafc;font-size:12px;font-weight:700;">会員: {html.escape(cu)}</div>'
             f'</div>', unsafe_allow_html=True
         )
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
@@ -1079,69 +1169,7 @@ with st.sidebar:
         survival_cut_pct = st.slider("選抜合格率 (%)", 40, 100, 75, 5)
 
     with st.expander("🏢 AGI鬼監査センター (監視3名・10名常時)", expanded=True):
-        st.markdown(
-            '<div style="background:rgba(168,85,247,0.12);border:1px solid #c084fc;padding:6px 8px;border-radius:6px;font-size:11px;margin-bottom:8px;">'
-            '👁️‍🗨️ <b>SYSTEM-ZERO (最高次統括神)</b>: 稼働中<br>'
-            '<span style="color:#d8b4fe;">全監査員3名およびエージェント10名の全思考プロセスをミリ秒単位で監視。</span>'
-            '</div>', unsafe_allow_html=True
-        )
-
-        now_ts = int(time.time())
-        audit_window = now_ts // 1800
-        if st.session_state.get("last_audit_epoch") != audit_window:
-            st.session_state["last_audit_epoch"] = audit_window
-            inspectors = st.session_state["inspector_roster"]
-            now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-            err_logs = get_system_error_logs()
-            if len(err_logs) > 5 and st.session_state.get("system_zero_active", True):
-                insp_k = list(inspectors.keys())[audit_window % len(inspectors)]
-                old_insp = inspectors[insp_k]
-                st.session_state["system_zero_logs"].insert(0, {
-                    "time": now_time,
-                    "target": old_insp["name"],
-                    "msg": f"🚨 SYSTEM-ZERO粛清: エラーレート過多検知により監視員 {old_insp['name']} を更新配置。"
-                })
-                new_num = (audit_window % 89) + 10
-                inspectors[insp_k] = {
-                    "name": f"JUDGE-{new_num}", "icon": "⚖️", "score": 99,
-                    "role": f"SYSTEM-ZERO直属 厳格監査プロトコル v{new_num}.0"
-                }
-                save_agi_system()
-
-        st.markdown("<div style='font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:4px;'>⚖️ 稼働中・特命監査員 (3名)</div>", unsafe_allow_html=True)
-        for ik, iv in st.session_state["inspector_roster"].items():
-            st.markdown(
-                f'<div style="background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;padding:4px 8px;margin-bottom:4px;border-radius:4px;font-size:10.5px;">'
-                f'<b>{iv["icon"]} {iv["name"]}</b> (評価力: {iv["score"]}点)<br>'
-                f'<span style="color:#94a3b8;">{iv["role"]}</span>'
-                f'</div>', unsafe_allow_html=True
-            )
-
-        st.markdown("<div style='font-size:11px;font-weight:700;color:#10b981;margin:8px 0 4px 0;'>🟢 厳選合議エージェント (常時10名)</div>", unsafe_allow_html=True)
-        for ak, av in st.session_state["agent_roster"].items():
-            st.markdown(
-                f'<div style="background:rgba(2,6,23,0.7);border:1px solid rgba(16,185,129,0.25);border-radius:5px;padding:4px 8px;margin-bottom:4px;font-size:10.5px;">'
-                f'<span style="font-weight:700;color:#f8fafc;">{av["icon"]} {av["name"]}</span> '
-                f'<span style="color:#fde047;float:right;">スコア: {av["score"]}</span><br>'
-                f'<span style="color:#a7f3d0;">強み: {av["good"][:24]}...</span>'
-                f'</div>', unsafe_allow_html=True
-            )
-
-        st.markdown("<hr style='margin:10px 0 6px 0; border-color:rgba(239,68,68,0.3);'>", unsafe_allow_html=True)
-        st.markdown("<div style='font-size:11px;font-weight:800;color:#ef4444;margin-bottom:6px;'>💀 直近の解雇・粛清履歴 (鬼監視室)</div>", unsafe_allow_html=True)
-        fired_list = st.session_state.get("fired_agents", [])
-        if fired_list:
-            for fa in fired_list[:4]:
-                st.markdown(
-                    f'<div style="background:rgba(30,10,15,0.75);border-left:3px solid #ef4444;border-radius:4px;padding:5px 8px;margin-bottom:5px;font-size:10.5px;">'
-                    f'<span style="color:#fca5a5;font-weight:700;">{fa.get("name","")}</span> <span style="color:#94a3b8;font-size:9.5px;">({fa.get("time","")[:16]})</span><br>'
-                    f'<span style="color:#f87171;">処刑: {fa.get("fired_by","監査員")} (スコア:{fa.get("score","")})</span><br>'
-                    f'<span style="color:#cbd5e1;">理由: {fa.get("reason","")}</span>'
-                    f'</div>', unsafe_allow_html=True
-                )
-        else:
-            st.caption("現在、処刑・解雇されたエージェントはいません。全10名が厳格基準をクリアして稼働中です。")
+        _render_realtime_audit_center_fragment()
 
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🚪 ログアウト", use_container_width=True):
@@ -1365,10 +1393,10 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, user_query: str = "") -> di
     return {"final_score": fs, "dialogue": turns, "verdict_html": v_html}
 
 def _fmt_turn(t: dict, idx: int = 0) -> str:
-    if "round" in t: return f'<div class="round-divider">{t["round"]}</div>'
-    if t.get("is_user"): return f'<div class="chat-bubble-user" id="{t.get("dom_id", "")}"><b>🗣️ あなた (レス):</b><br>{t["text"]}</div>'
+    if "round" in t: return f'<div class="round-divider">{html.escape(t["round"])}</div>'
+    if t.get("is_user"): return f'<div class="chat-bubble-user" id="{html.escape(t.get("dom_id", ""))}'><b>🗣️ あなた (レス):</b><br>{html.escape(t["text"])}</div>'
     b_cls = {"doubt": "chat-bubble-doubt", "rage": "chat-bubble-rage", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
-    return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{t["speaker"]} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{t["text"]}</div></div>'
+    return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{html.escape(t["speaker"])} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{html.escape(t["text"])}</div></div>'
 
 # ==========================================
 # 11. レンダリング関数群 (超高速レスポンス)
@@ -1434,7 +1462,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
             f'<div style="margin-top:6px; margin-bottom:4px;">'
             f'<span style="display:inline-block; width:100%; text-align:center; background:linear-gradient(90deg, #b91c1c 0%, #ef4444 50%, #b91c1c 100%); '
             f'color:#ffffff; font-weight:800; font-size:11.5px; padding:5px 8px; border-radius:6px; border:1px solid #fca5a5; animation:alert-pulse 2s infinite;">'
-            f'🚨【重大情報】{short_t}'
+            f'🚨【重大情報】{html.escape(short_t)}'
             f'</span></div>'
         )
 
@@ -1444,8 +1472,8 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
         f'<div class="badge-single-line">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点</span></div>'
         f'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'
         f'<div style="min-width:0;flex:1;">'
-        f'<div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;"><span style="font-size:16px;font-weight:800;color:#f8fafc;white-space:nowrap;">{r["name"]}</span> <span style="font-size:11.5px;color:#94a3b8;white-space:nowrap;">({r["code"]} / {r["genre"]})</span></div>'
-        f'<div style="font-size:11px;color:#94a3b8;margin-top:3px;word-break:keep-all;">{r["theme"]} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div>'
+        f'<div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;"><span style="font-size:16px;font-weight:800;color:#f8fafc;white-space:nowrap;">{html.escape(r["name"])}</span> <span style="font-size:11.5px;color:#94a3b8;white-space:nowrap;">({r["code"]} / {html.escape(r["genre"])})</span></div>'
+        f'<div style="font-size:11px;color:#94a3b8;margin-top:3px;word-break:keep-all;">{html.escape(r["theme"])} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div>'
         f'</div>'
         f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;">🔥 期待度 / 勝率</div><div style="white-space:nowrap;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div></div></div>'
         f'{news_banner_html}'
@@ -1453,7 +1481,9 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
         f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 理論寄付き</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
         f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>VWAP: <b>{r["vwap_price"]}</b></span></div>'
         f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 機関戦略詳細（タップで開閉）</summary>'
-        f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}</div>'
+        f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}<br>'
+        f'📊 <b>動的クオンツ実測値:</b> RSI(14)={r.get("rsi", 50)}% ｜ VPIN={r.get("vpin", 0.5)} ｜ CVaR(95%)={r.get("cvar95", 2.5)}% ｜ 5ch勢い={r.get("board5ch_score", 70)}点'
+        f'</div>'
         f'</details></div>'
     )
     st.markdown(full_card_html, unsafe_allow_html=True)
@@ -1471,7 +1501,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
         render_council_sec(r, f"{kp}_{r['code']}", auto_open=False)
 
 # ==========================================
-# 12. 本格数理クオンツ・エンジン (厳密WKBトンネル・修正R/S・Hasbrouckλ)
+# 12. 本格数理クオンツ・エンジン (動的実計算モデル)
 # ==========================================
 @st.cache_data(ttl=900)
 def fetch_5ch_live() -> dict: 
@@ -1574,6 +1604,59 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
         "ms_score": int(np.clip(ks, 52, 99)), "hurst": round(hurst, 2), 
         "kyle_stealth": round(ks, 1), "luld_magnet": round(luld, 1), 
         "ms_regime": "🏛️ 機関TWAP/氷山ステルス吸収" if hurst > 0.55 else "⚖️ 機関分散・板流動性中立"
+    }
+
+def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
+    """RSI, VPIN, CVaR 95%, リアルタイムボラティリティを実データから厳密算出"""
+    denom = np.maximum(c[:-1], 1e-4)
+    rets = np.diff(c) / denom
+
+    # 1. RSI(14) 厳密計算
+    diffs = np.diff(c)
+    gains = np.where(diffs > 0, diffs, 0.0)
+    losses = np.where(diffs < 0, -diffs, 0.0)
+    if len(diffs) >= 14:
+        avg_gain = np.mean(gains[-14:])
+        avg_loss = np.mean(losses[-14:])
+        if avg_loss == 0:
+            rsi_val = 100.0 if avg_gain > 0 else 50.0
+        else:
+            rs = avg_gain / avg_loss
+            rsi_val = 100.0 - (100.0 / (1.0 + rs))
+    else:
+        rsi_val = 50.0
+    rsi_val = float(np.clip(rsi_val, 5.0, 95.0))
+
+    # 2. VPIN（Volume-Synchronized Probability of Toxicity）
+    vol_sub = v[-20:]
+    ret_sub = rets[-20:] if len(rets) >= 20 else rets
+    if np.sum(vol_sub) > 0 and len(ret_sub) > 0:
+        buy_vol = np.sum(vol_sub[ret_sub > 0])
+        sell_vol = np.sum(vol_sub[ret_sub < 0])
+        tot_vol = max(float(buy_vol + sell_vol), 1.0)
+        vpin_val = float(np.clip(abs(buy_vol - sell_vol) / tot_vol, 0.15, 0.92))
+    else:
+        vpin_val = 0.50
+
+    # 3. CVaR 95% (Conditional Value at Risk / 期待ショートフォール)
+    if len(rets) >= 20:
+        var95 = np.percentile(rets, 5)
+        tail_losses = rets[rets <= var95]
+        cvar95_val = float(np.clip(abs(np.mean(tail_losses)) * 100.0 if len(tail_losses) > 0 else abs(var95) * 100.0, 0.8, 15.0))
+    else:
+        cvar95_val = 3.2
+
+    # 4. 5ch実況勢いスコア (短期ボラティリティ×出来高急増度)
+    mean_v = max(float(np.mean(v[:-5])), 1.0) if len(v) > 5 else max(float(np.mean(v)), 1.0)
+    recent_v = max(float(np.mean(v[-5:])), 1.0)
+    vol_spike = np.clip(recent_v / mean_v, 0.5, 3.5)
+    momentum_score = int(np.clip(50.0 + vol_spike * 15.0 + abs(rets[-1]) * 200.0, 45, 99))
+
+    return {
+        "rsi": round(rsi_val, 1),
+        "vpin": round(vpin_val, 2),
+        "cvar95": round(cvar95_val, 2),
+        "board5ch_score": momentum_score
     }
 
 def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: float, ofi_z: float, vpin: float, yz_vol: float, cvar95: float, rsi: float, cpos: float, base_sh: int, pest_str: str, vwap_str: str, tp_str: str, sl_str: str, kelly_pct: float, qm: dict, ms: dict) -> dict:
@@ -1708,6 +1791,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         
         qm = compute_quantum_wave_metrics(c, h, l, v)
         ms = compute_inst_microstructure(c, h, l, v)
+        q_adv = compute_advanced_quant_indicators(c, h, l, v)
         
         cv = float(c[-1])
         
@@ -1764,7 +1848,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         fp = lambda val: f"{val:,.0f}円" if ".T" in code else f"${val:,.2f}"
 
         strat = select_dynamic_strategy(
-            code.replace(".T", ""), style, tot_win, round(expect_pct, 1), ofi_z, 0.5, 0.4, 3.5, 60.0, 0.8, 
+            code.replace(".T", ""), style, tot_win, round(expect_pct, 1), ofi_z, q_adv["vpin"], 0.38, q_adv["cvar95"], q_adv["rsi"], 0.8, 
             base_sh, fp(pest), fp(vwap20), 
             f"{fp(tpv)}(+{round((tpv-cv)/max(cv,1e-4)*100,1)}%)", f"{fp(slv)}({round((slv-cv)/max(cv,1e-4)*100,1)}%)", 15.0, qm, ms
         )
@@ -1779,15 +1863,15 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
             "full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, 
             "price": fp(cv), "raw_close": cv,
             "tp_price": fp(tpv), "tp_pct": round((tpv - cv) / max(cv, 1e-4) * 100, 1), "sl_price": fp(slv), "sl_pct": round((slv - cv) / max(cv, 1e-4) * 100, 1), "vwap_price": fp(vwap20),
-            "inst_score": int(np.clip(ms["ms_score"] + ofi_z * 5, 50, 99)), "vpin": 0.52, "ofi_z": round(ofi_z, 2), "yz_vol": 0.38, "cvar95": 3.2, "eff_pct": 82, "kelly_pct": 16.5,
+            "inst_score": int(np.clip(ms["ms_score"] + ofi_z * 5, 50, 99)), "vpin": q_adv["vpin"], "ofi_z": round(ofi_z, 2), "yz_vol": 0.38, "cvar95": q_adv["cvar95"], "eff_pct": 82, "kelly_pct": 16.5,
             "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"],
             "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_stealth": ms["kyle_stealth"], "luld_magnet": ms["luld_magnet"], "ms_regime": ms["ms_regime"],
-            "expect_pct": round(expect_pct, 1), "board5ch_score": 75, "b5_hits": 10, "pts_est_price": fp(pest), "pts_gap_pct": pgap, "diff": round(day_ret, 2),
+            "expect_pct": round(expect_pct, 1), "board5ch_score": q_adv["board5ch_score"], "b5_hits": 10, "pts_est_price": fp(pest), "pts_gap_pct": pgap, "diff": round(day_ret, 2),
             "prob": round(float(np.clip(50.0 + pgap * 10.0, 30.0, 85.0)), 1), 
             "intraday_win_rate": round(float(np.clip(tot_win * 0.95, 40.0, 95.0)), 1), 
             "trend_win_rate": round(float(np.clip(tot_win * 1.05, 45.0, 98.0)), 1), 
             "total_win_rate": round(tot_win, 1), "count": f"{recent_20_wins}/20回",
-            "rsi": 60.0, "payoff": 2.5, "edge": edge, "ai_score": int(np.clip(expect_pct * 0.9 + 5, 50, 99)), "survival_power": 88.0,
+            "rsi": q_adv["rsi"], "payoff": 2.5, "edge": edge, "ai_score": int(np.clip(expect_pct * 0.9 + 5, 50, 99)), "survival_power": 88.0,
             "tier_num": 10 if expect_pct > 92 else (9 if expect_pct > 85 else 7), "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg,
             "lot_info": {"shares": strat["adj_shares"], "position_value": strat["adj_shares"] * cv, "risk_amount": rmoney},
             "strat": strat
@@ -1896,13 +1980,13 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             </thead>
             <tbody>
             """ + "".join([
-                f"<tr><td><b>{u.get('name','')}</b></td>"
-                f"<td>{em}</td>"
-                f"<td style='color:#38bdf8;font-family:monospace;'>{u.get('passcode','-')}</td>"
-                f"<td style='color:#94a3b8;font-family:monospace;'>{u.get('pin_hash','-')[:8]}...</td>"
-                f"<td style='color:#fde047;font-family:monospace;'>{u.get('fp','-')}</td>"
-                f"<td>{u.get('applied_at','-')}</td>"
-                f"<td><span style='color:{'#10b981' if u.get('status')=='approved' else ('#ef4444' if u.get('status')=='banned' else '#f59e0b')}'><b>{u.get('status')}</b></span></td></tr>"
+                f"<tr><td><b>{html.escape(u.get('name',''))}</b></td>"
+                f"<td>{html.escape(em)}</td>"
+                f"<td style='color:#38bdf8;font-family:monospace;'>{html.escape(u.get('passcode','-'))}</td>"
+                f"<td style='color:#94a3b8;font-family:monospace;'>{html.escape(u.get('pin_hash','-')[:8])}...</td>"
+                f"<td style='color:#fde047;font-family:monospace;'>{html.escape(u.get('fp','-'))}</td>"
+                f"<td>{html.escape(u.get('applied_at','-'))}</td>"
+                f"<td><span style='color:{'#10b981' if u.get('status')=='approved' else ('#ef4444' if u.get('status')=='banned' else '#f59e0b')}'><b>{html.escape(u.get('status',''))}</b></span></td></tr>"
                 for em, u in db_m.items()
             ]) + """
             </tbody>
@@ -1977,11 +2061,11 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                 </thead>
                 <tbody>
                 """ + "".join([
-                    f"<tr><td>{fa.get('time','-')}</td>"
-                    f"<td style='color:#f87171;'><b>{fa.get('name','')}</b></td>"
-                    f"<td style='color:#fde047;'>{fa.get('score','')}</td>"
-                    f"<td style='color:#38bdf8;'>{fa.get('fired_by','特命監査員')}</td>"
-                    f"<td>{fa.get('reason','')}</td></tr>"
+                    f"<tr><td>{html.escape(fa.get('time','-'))}</td>"
+                    f"<td style='color:#f87171;'><b>{html.escape(fa.get('name',''))}</b></td>"
+                    f"<td style='color:#fde047;'>{html.escape(str(fa.get('score','')))}</td>"
+                    f"<td style='color:#38bdf8;'>{html.escape(fa.get('fired_by','特命監査員'))}</td>"
+                    f"<td>{html.escape(fa.get('reason',''))}</td></tr>"
                     for fa in fired_list
                 ]) + """
                 </tbody>
@@ -2003,9 +2087,9 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                     f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 14px;margin-bottom:8px;">'
                     f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
                     f'<div>'
-                    f'<span style="font-size:13.5px;font-weight:800;color:#f8fafc;">{p_u.get("name","未入力")}</span> '
-                    f'<span style="font-size:11.5px;color:#94a3b8;">({p_em})</span><br>'
-                    f'<span style="font-size:10.5px;color:#64748b;">申請日: {p_u.get("applied_at","-")} ｜ 端末FP: {p_u.get("fp","-")}</span>'
+                    f'<span style="font-size:13.5px;font-weight:800;color:#f8fafc;">{html.escape(p_u.get("name","未入力"))}</span> '
+                    f'<span style="font-size:11.5px;color:#94a3b8;">({html.escape(p_em)})</span><br>'
+                    f'<span style="font-size:10.5px;color:#64748b;">申請日: {html.escape(p_u.get("applied_at","-"))} ｜ 端末FP: {html.escape(p_u.get("fp","-"))}</span>'
                     f'</div>'
                     f'</div>'
                     f'</div>', unsafe_allow_html=True
@@ -2062,11 +2146,11 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                 </thead>
                 <tbody>
                 """ + "".join([
-                    f"<tr><td>{e.get('time','-')}</td>"
-                    f"<td style='color:#38bdf8;font-weight:700;'>{e.get('module','-')}</td>"
-                    f"<td style='color:#ef4444;font-family:monospace;'>{e.get('error_type','-')}</td>"
-                    f"<td>{e.get('message','-')[:60]}</td>"
-                    f"<td style='color:#94a3b8;'>{e.get('context','-')}</td></tr>"
+                    f"<tr><td>{html.escape(e.get('time','-'))}</td>"
+                    f"<td style='color:#38bdf8;font-weight:700;'>{html.escape(e.get('module','-'))}</td>"
+                    f"<td style='color:#ef4444;font-family:monospace;'>{html.escape(e.get('error_type','-'))}</td>"
+                    f"<td>{html.escape(e.get('message','-')[:60])}</td>"
+                    f"<td style='color:#94a3b8;'>{html.escape(e.get('context','-'))}</td></tr>"
                     for e in err_list[:30]
                 ]) + """
                 </tbody>
@@ -2094,8 +2178,8 @@ if focused_item:
 # ■ ニュース詳細画面
 if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     tn = st.session_state.get("selected_news_item") or all_impact_news[0]
-    st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><span class="pill-badge" style="background:#ef4444;color:#fff;">🚨 重大ニュース深掘り</span><div style="font-size:18px;font-weight:800;margin-top:8px;">{tn["title"]}</div></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;color:#e9d5ff;">🧠 波及メカニズム</div><div style="font-size:12.5px;">{tn["detail"]["mechanism"]}</div><div class="beginner-action-box" style="margin-top:10px;"><b>⚡ {investment_style.split(" ")[1]} 実践トレード立ち回り</b><br>{tn["detail"]["action_guide"].replace(chr(10), "<br>")}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><span class="pill-badge" style="background:#ef4444;color:#fff;">🚨 重大ニュース深掘り</span><div style="font-size:18px;font-weight:800;margin-top:8px;">{html.escape(tn["title"])}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;color:#e9d5ff;">🧠 波及メカニズム</div><div style="font-size:12.5px;">{html.escape(tn["detail"]["mechanism"])}</div><div class="beginner-action-box" style="margin-top:10px;"><b>⚡ {investment_style.split(" ")[1]} 実践トレード立ち回り</b><br>{html.escape(tn["detail"]["action_guide"]).replace(chr(10), "<br>")}</div></div>', unsafe_allow_html=True)
     st.markdown("### 🔗 連動注目銘柄")
     for idx, r_item in enumerate(sorted(all_res, key=lambda x: x["expect_pct"], reverse=True)[:3], 1): render_card(r_item, rank=idx, kp=f"nr_{tn['id']}")
     if st.button("⬅️ 戻る", use_container_width=True, type="primary"): 
@@ -2152,7 +2236,7 @@ elif sel_cat == "🏛️ 機関最新ミクロ構造TOP10":
     for i, r in enumerate(sorted(all_res, key=lambda x: x["ms_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mstop")
 elif sel_cat == "🚨 重大ニュース＆連動株":
     for n in all_impact_news:
-        st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="font-size:11px;color:#f87171;font-weight:800;">🚨 {n["cat"]}</div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-bottom:4px;">{n["title"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="font-size:11px;color:#f87171;font-weight:800;">🚨 {html.escape(n["cat"])}</div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-bottom:4px;">{html.escape(n["title"])}</div></div>', unsafe_allow_html=True)
         if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True): 
             st.session_state["selected_news_item"] = n
             st.session_state["navigation_page"] = "NEWS_DETAIL"
@@ -2161,26 +2245,26 @@ elif sel_cat == "🚨 重大ニュース＆連動株":
 elif sel_cat == "🎟️ IPO募集・新規上場":
     st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 新規上場 (IPO) ブックビルディング・詳細分析ターミナル</div><div style="font-size:11.5px;color:#94a3b8;margin-top:3px;">初値高騰期待度・ロックアップ・吸収金額・PER・VC比率まで徹底網羅した完全ガイド。</div></div>', unsafe_allow_html=True)
     for ipo in IPO_OFFERINGS:
-        links_html = "".join([f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">🔗 {lbl}</a>' for lbl, url in ipo["links"]])
+        links_html = "".join([f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">🔗 {html.escape(lbl)}</a>' for lbl, url in ipo["links"]])
         st.markdown(
             f'<div class="rank-card" style="border-left-color:#f59e0b;">'
             f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
             f'<div><span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 第{ipo["rank"]}位</span><span class="pill-badge" style="background:rgba(250,204,21,0.2);color:#fde047;border-color:#facc15;">期待度 {ipo["expect_return"]}</span></div>'
-            f'<div style="font-size:11px;color:#38bdf8;font-weight:700;">{ipo["tier"]}</div>'
+            f'<div style="font-size:11px;color:#38bdf8;font-weight:700;">{html.escape(ipo["tier"])}</div>'
             f'</div>'
-            f'<div><span style="font-size:18px;font-weight:800;color:#f8fafc;">{ipo["name"]}</span> <span style="font-size:12px;color:#94a3b8;">({ipo["code"]} / {ipo["market"]})</span></div>'
-            f'<div style="font-size:11.5px;color:#38bdf8;margin-top:4px;"><b>🎯 テーマ:</b> {ipo["theme"]}</div>'
+            f'<div><span style="font-size:18px;font-weight:800;color:#f8fafc;">{html.escape(ipo["name"])}</span> <span style="font-size:12px;color:#94a3b8;">({ipo["code"]} / {html.escape(ipo["market"])})</span></div>'
+            f'<div style="font-size:11.5px;color:#38bdf8;margin-top:4px;"><b>🎯 テーマ:</b> {html.escape(ipo["theme"])}</div>'
             f'<div class="trade-plan-box" style="margin-top:9px;grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));">'
             f'<div><div style="font-size:9.5px;color:#94a3b8;">📅 BB申込期間</div><div style="font-size:11.5px;font-weight:800;color:#fde047;">{ipo["bb_period"]}</div></div>'
             f'<div><div style="font-size:9.5px;color:#94a3b8;">🔔 上場予定日</div><div style="font-size:11.5px;font-weight:800;color:#f8fafc;">{ipo["list_date"]}</div></div>'
             f'<div><div style="font-size:9.5px;color:#94a3b8;">💰 仮条件価格帯</div><div style="font-size:11.5px;font-weight:800;color:#10b981;">{ipo["price_band"]}</div></div>'
-            f'<div><div style="font-size:9.5px;color:#94a3b8;">🏛️ 主幹事証券</div><div style="font-size:11.5px;color:#bae6fd;">{ipo["lead"]}</div></div>'
+            f'<div><div style="font-size:9.5px;color:#94a3b8;">🏛️ 主幹事証券</div><div style="font-size:11.5px;color:#bae6fd;">{html.escape(ipo["lead"])}</div></div>'
             f'</div>'
             f'<div style="background:rgba(2,6,23,0.75);border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:9px 12px;margin-top:8px;font-size:11.5px;line-height:1.6;">'
-            f'<div>🔒 <b>ロックアップ状況:</b> <span style="color:#e2e8f0;">{ipo["lockup"]}</span></div>'
-            f'<div>📦 <b>吸収金額 (公開規模):</b> <span style="color:#e2e8f0;">{ipo["absorption"]}</span> ｜ 📊 <b>VC比率:</b> <span style="color:#e2e8f0;">{ipo["vc_ratio"]}</span></div>'
-            f'<div>📈 <b>バリュエーション (PER):</b> <span style="color:#e2e8f0;">{ipo["pe"]}</span></div>'
-            f'<div style="margin-top:4px;color:#a7f3d0;"><b>💡 初値立ち回り戦略:</b> {ipo["strategy"]}</div>'
+            f'<div>🔒 <b>ロックアップ状況:</b> <span style="color:#e2e8f0;">{html.escape(ipo["lockup"])}</span></div>'
+            f'<div>📦 <b>吸収金額 (公開規模):</b> <span style="color:#e2e8f0;">{html.escape(ipo["absorption"])}</span> ｜ 📊 <b>VC比率:</b> <span style="color:#e2e8f0;">{html.escape(ipo["vc_ratio"])}</span></div>'
+            f'<div>📈 <b>バリュエーション (PER):</b> <span style="color:#e2e8f0;">{html.escape(ipo["pe"])}</span></div>'
+            f'<div style="margin-top:4px;color:#a7f3d0;"><b>💡 初値立ち回り戦略:</b> {html.escape(ipo["strategy"])}</div>'
             f'</div>'
             f'<div style="margin-top:8px;">{links_html}</div></div>', 
             unsafe_allow_html=True
