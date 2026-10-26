@@ -209,7 +209,7 @@ def _get_sqlite_conn():
 
 @contextmanager
 def get_db_cursor():
-    """超高速トランザクション管理（常時接続再利用）"""
+    """超高速トランザクション管理"""
     conn = _get_sqlite_conn()
     cursor = conn.cursor()
     try:
@@ -286,7 +286,6 @@ def gen_tok(em: str, act: str) -> str:
     raw = f"{em.strip().lower()}:{act}:{SECRET_KEY[:16]}:{time_slot}".encode()
     return hmac.new(SECRET_KEY.encode(), raw, hashlib.sha256).hexdigest()[:16]
 
-# UIをブロックさせない適正かつ高セキュアなハッシュ反復回数
 PBKDF2_ROUNDS = 20000
 
 def hash_pin(pin: str, user_salt: str = "") -> str: 
@@ -309,7 +308,6 @@ def verify_pin(stored_hash: str, input_pin: str, user_email: str = "") -> bool:
     legacy_h_no_salt = _hash_pin_legacy(input_pin, "")
     if hmac.compare_digest(stored_hash, legacy_h_no_salt):
         return True
-    # 旧60万回ハッシュとの後方互換
     try:
         salt_val = f"{SECRET_KEY}:{user_email.strip().lower()}" if user_email else SECRET_KEY
         super_h = hashlib.pbkdf2_hmac("sha256", input_pin.strip().encode(), salt_val.encode(), 600000).hex()[:24]
@@ -532,7 +530,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
         return None
 
 # ==========================================
-# 4. UI と CSS / JS 注入 (BaseWeb Popoverと完全調和)
+# 4. UI と CSS / JS 注入
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
@@ -805,7 +803,7 @@ def inject_css():
 inject_css()
 
 # ==========================================
-# 5. 認証処理実行 (超高速判定・セキュア検証)
+# 5. 認証処理実行
 # ==========================================
 def check_auth():
     qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
@@ -1246,7 +1244,7 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 9. 高速・リアルタイム非同期並列データ収集 (キャッシュなし完全リアルタイム)
+# 9. 高速リアルタイム非同期並列データ収集
 # ==========================================
 def fetch_single_news_rss(cat, query):
     out = []
@@ -1270,7 +1268,6 @@ def fetch_single_news_rss(cat, query):
     return out
 
 def fetch_global_impact_news_realtime() -> list:
-    """キャッシュなし・リアルタイム取得（ミリ秒単位で非同期分散）"""
     qs = [
         ("半導体・AIサプライズ", "半導体 OR エヌビディア OR TSMC OR アドバンテスト 株価"), 
         ("急騰・上方修正", "ストップ高 OR 上方修正 OR 防衛 OR 量子 株")
@@ -1311,7 +1308,7 @@ def analyze_news_impact_and_links(title: str, cat: str) -> dict:
     }
 
 # ==========================================
-# 10. AI合議と並列Web検索ロジック (ゼロレイテンシ高速化)
+# 10. AI合議と並列Web検索ロジック
 # ==========================================
 def search_single_query(query: str, max_results: int) -> list:
     results = []
@@ -1462,7 +1459,7 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{html.escape(t["speaker"])} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{html.escape(t["text"])}</div></div>'
 
 # ==========================================
-# 11. レンダリング関数群 (爆速レスポンス化)
+# 11. レンダリング関数群
 # ==========================================
 def render_council_sec(r, uk, auto_open=False):
     is_open = auto_open or st.session_state["active_debates"].get(uk, False)
@@ -1564,7 +1561,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
         render_council_sec(r, f"{kp}_{r['code']}", auto_open=False)
 
 # ==========================================
-# 12. 本格数理クオンツ・エンジン (動的実計算モデル)
+# 12. 本格数理クオンツ・エンジン
 # ==========================================
 def fetch_5ch_live_realtime() -> dict: 
     res = {}
@@ -1813,7 +1810,7 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
         )
     }
 
-def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=True, b5=True, bal=True, bms=True, bagi_q=False, bhft=False):
+def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=True, b5=True, bal=True, bms=True, bagi_q=False, bhft=False, cap_val=1000000, risk_pct_val=2.0):
     try:
         if df_raw is None or df_raw.empty: return None
         df = df_raw.dropna(subset=["Close", "Open", "High", "Low", "Volume"]).copy()
@@ -1889,7 +1886,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
             tpv = max(pest, cv) + (atrv * 1.1)
             slv = cv - (atrv * 0.6)
         
-        rmoney = total_capital * (risk_tolerance_pct / 100.0)
+        rmoney = float(cap_val) * (float(risk_pct_val) / 100.0)
         base_sh = max(1, int(rmoney / max(cv - slv, cv * 0.005)))
         fp = lambda val: f"{val:,.0f}円" if ".T" in code else f"${val:,.2f}"
 
@@ -1926,8 +1923,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         record_system_error("analyze_df", e, f"Code: {code}")
         return None
 
-def fetch_pool_batch_realtime(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
-    """キャッシュを使わず完全リアルタイム・高スループット並列処理"""
+def fetch_pool_batch_realtime(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, cap_val=1000000, risk_pct_val=2.0):
     codes = list({s["code"] for sts in STOCK_POOL.values() for s in sts})
     try:
         raw = yf.download(codes, period="5d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=4.0)
@@ -1937,7 +1933,7 @@ def fetch_pool_batch_realtime(macro, b5_live_map, style, bi, b5, bal, bms, bagi_
     gmap, alist, seen = {g: [] for g in STOCK_POOL.keys()}, [], set()
     
     def _analyze_wrapper(g, s, df): 
-        return g, s["code"], analyze_df(df, s["code"], s["name"], s["theme"], g, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
+        return g, s["code"], analyze_df(df, s["code"], s["name"], s["theme"], g, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, cap_val, risk_pct_val)
         
     with ThreadPoolExecutor(max_workers=min(len(codes), 24)) as ex:
         futs = []
@@ -1961,16 +1957,16 @@ def fetch_pool_batch_realtime(macro, b5_live_map, style, bi, b5, bal, bms, bagi_
                 continue
     return gmap, alist
 
-def fetch_one_realtime(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
+def fetch_one_realtime(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, cap_val=1000000, risk_pct_val=2.0):
     try:
         inf = KNOWN_STOCKS.get(code, {"name": code.replace(".T", ""), "theme": "個別指定銘柄", "genre": "個別検索"})
-        return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft)
+        return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, cap_val, risk_pct_val)
     except Exception as e:
         record_system_error("fetch_one", e, f"Code: {code}")
         return None
 
 # ==========================================
-# 13. ヘッダー / マクロ指標 (キャッシュなし超高速並列フェッチ)
+# 13. ヘッダー / マクロ指標
 # ==========================================
 with ThreadPoolExecutor(max_workers=3) as init_exec:
     f_macro = init_exec.submit(fetch_macro_realtime)
@@ -1985,7 +1981,11 @@ mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px sol
 st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;"><div class="brand-luxury">YAMASHISHI LAB</div></div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
 
 with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場リアルタイム並列スキャン中..."):
-    g_res, all_res = fetch_pool_batch_realtime(macro_info, b5_live_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b)
+    g_res, all_res = fetch_pool_batch_realtime(
+        macro_info, b5_live_map, investment_style, 
+        "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b,
+        cap_val=total_capital, risk_pct_val=risk_tolerance_pct
+    )
 
 # ==========================================
 # 14. 画面レンダリング
@@ -2240,7 +2240,11 @@ if c2.button("🔍 診断", use_container_width=True) and cin:
     st.session_state["custom_search_code"] = clean_k(cin)
 
 if st.session_state.get("custom_search_code"):
-    cr = fetch_one_realtime(st.session_state["custom_search_code"], macro_info, b5_live_map, investment_style, True, True, True, True, "agi_q" in ac_b, "hft_front" in ac_b)
+    cr = fetch_one_realtime(
+        st.session_state["custom_search_code"], macro_info, b5_live_map, investment_style, 
+        True, True, True, True, "agi_q" in ac_b, "hft_front" in ac_b,
+        cap_val=total_capital, risk_pct_val=risk_tolerance_pct
+    )
     if cr:
         render_card(cr, is_custom=True, kp="custom")
         if st.button("✖️ 閉じる", use_container_width=True): 
