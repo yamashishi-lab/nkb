@@ -1,4 +1,4 @@
-import streamlit as st
+Import streamlit as st
 import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
@@ -359,6 +359,19 @@ def save_user_prefs(email: str, prefs: dict):
         return
     safe_key = f"user_prefs_{hashlib.md5(email.strip().lower().encode()).hexdigest()[:16]}"
     db_set(safe_key, prefs)
+
+def load_watchlist(email: str) -> dict:
+    if not email:
+        return {}
+    safe_key = f"watchlist_{hashlib.md5(email.strip().lower().encode()).hexdigest()[:16]}"
+    wl = db_get(safe_key, {})
+    return wl if isinstance(wl, dict) else {}
+
+def save_watchlist(email: str, wl: dict):
+    if not email:
+        return
+    safe_key = f"watchlist_{hashlib.md5(email.strip().lower().encode()).hexdigest()[:16]}"
+    db_set(safe_key, wl)
 
 def load_agi_system():
     agents = db_get("agi_agents", None)
@@ -966,6 +979,7 @@ saved_agents, saved_inspectors, saved_fired, saved_sz_active, saved_sz_logs = lo
 
 cu_active = st.session_state.get("authenticated_user", "")
 user_saved_prefs = load_user_prefs(cu_active)
+user_saved_watchlist = load_watchlist(cu_active)
 
 if "user_prefs_loaded" not in st.session_state or st.session_state.get("last_loaded_user") != cu_active:
     st.session_state["investment_style_choice"] = user_saved_prefs.get("investment_style", "⚡ デイトレード (前場・後場の波及を狙う)")
@@ -975,12 +989,13 @@ if "user_prefs_loaded" not in st.session_state or st.session_state.get("last_loa
     saved_boosts = set(user_saved_prefs.get("active_boosts", ["algo", "ms", "inst", "mom", "agi_q", "hft_front"]))
     for b_key in ["algo", "ms", "inst", "mom", "agi_q", "hft_front"]:
         st.session_state[f"chk_{b_key}"] = (b_key in saved_boosts)
+    st.session_state["watchlist"] = user_saved_watchlist
     st.session_state["user_prefs_loaded"] = True
     st.session_state["last_loaded_user"] = cu_active
 
 for k, v in [
     ("active_debates", {}), ("council_threads", {}), ("council_meta", {}),
-    ("debate_round_seed", {}), ("watchlist", {}), ("navigation_page", "TOP"),
+    ("debate_round_seed", {}), ("watchlist", user_saved_watchlist), ("navigation_page", "TOP"),
     ("selected_news_item", None), ("custom_search_code", ""), ("active_category", "🏆 総合TOP5"),
     ("last_cat", "🏆 総合TOP5"), ("nav_history", []), ("scroll_top_trig", 0),
     ("scroll_target_id", ""), ("focused_stock_item", None),
@@ -1576,8 +1591,13 @@ def render_council_sec(r, uk, auto_open=False):
             st.session_state["scroll_top_trig"] = int(time.time() * 1000)
             st.rerun()
         if c2.button("✅ 監視済" if r["code"] in st.session_state["watchlist"] else "⭐ 監視追加", key=f"btn_watch_{uk}", use_container_width=True):
-            if r["code"] in st.session_state["watchlist"]: del st.session_state["watchlist"][r["code"]]
-            else: st.session_state["watchlist"][r["code"]] = r
+            if r["code"] in st.session_state["watchlist"]: 
+                del st.session_state["watchlist"][r["code"]]
+            else: 
+                st.session_state["watchlist"][r["code"]] = r
+            cu_target = st.session_state.get("authenticated_user", "")
+            if cu_target:
+                save_watchlist(cu_target, st.session_state["watchlist"])
             st.rerun()
 
     if not is_open: return
@@ -2451,6 +2471,9 @@ elif sel_cat == "📋 監視シート":
     wl = st.session_state["watchlist"]
     if st.button("⚡ 総合TOP3を一括登録", use_container_width=True):
         for it in surv[:3]: wl[it["code"]] = it
+        cu_target = st.session_state.get("authenticated_user", "")
+        if cu_target:
+            save_watchlist(cu_target, wl)
         st.rerun()
     for wc, wi in list(wl.items()): render_card(wi, kp=f"wl_{wc}")
 elif sel_cat.startswith("📂 "):
