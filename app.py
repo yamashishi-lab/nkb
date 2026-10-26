@@ -648,11 +648,11 @@ def inject_css():
     .expect-badge { font-family: 'JetBrains Mono',monospace; font-size: clamp(14px,3.8vw,16.5px); font-weight: 900; color: #fde047 !important; }
     
     .winrate-bar {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(65px, 1fr)); gap: 6px; background: rgba(15,23,42,0.85) !important;
-        border: 1px solid rgba(148,163,184,0.18); border-radius: 8px; padding: 7px 6px; margin-top: 5px !important; text-align: center;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 6px; background: rgba(15,23,42,0.85) !important;
+        border: 1px solid rgba(148,163,184,0.18); border-radius: 8px; padding: 7px 6px; margin-top: 6px !important; text-align: center;
     }
     .trade-plan-box {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 6px; margin-top: 5px !important;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 6px; margin-top: 6px !important;
         background: rgba(2,6,23,0.7) !important; padding: 7px 6px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.18); text-align: center;
     }
     
@@ -711,14 +711,17 @@ def inject_css():
     .signal-10tier-badge {
         padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; display: flex; justify-content: space-between; margin-bottom: 6px;
     }
+    .badge-wrap-row {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 6px;
+    }
     .pill-badge {
-        font-size: 11px; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(148,163,184,0.3); margin-right: 4px; display: inline-block;
+        font-size: 11px; padding: 2.5px 8px; border-radius: 4px; border: 1px solid rgba(148,163,184,0.3); display: inline-flex; align-items: center; white-space: nowrap; line-height: 1.3;
     }
     .quantum-badge {
-        font-size: 11px; padding: 2px 7px; border-radius: 4px; background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.4); color: #c084fc; margin-right: 4px;
+        font-size: 11px; padding: 2.5px 8px; border-radius: 4px; background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.4); color: #c084fc; display: inline-flex; align-items: center; white-space: nowrap; line-height: 1.3;
     }
     .inst-badge {
-        font-size: 11px; padding: 2px 7px; border-radius: 4px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.4); color: #38bdf8; margin-right: 4px;
+        font-size: 11px; padding: 2.5px 8px; border-radius: 4px; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.4); color: #38bdf8; display: inline-flex; align-items: center; white-space: nowrap; line-height: 1.3;
     }
     .ipo-link-btn {
         display: inline-block; padding: 5px 12px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 6px; color: #fde047; text-decoration: none; font-size: 11.5px; font-weight: 700; margin-right: 6px; margin-top: 4px;
@@ -1418,7 +1421,7 @@ def render_council_sec(r, uk, auto_open=False):
 def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     rel_news = next((n for n in all_impact_news if r["full_code"] in n["detail"]["related_codes"]), None)
     dc, ds, ps = "#10b981" if r["diff"] >= 0 else "#ef4444", ("+" if r["diff"] > 0 else ""), ("+" if r["pts_gap_pct"] > 0 else "")
-    rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
+    rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;font-weight:900;">🏆 #{rank}</span>' if rank else ""
     lot, st_info = r["lot_info"], r["strat"]
     
     news_banner_html = ""
@@ -1435,7 +1438,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     full_card_html = (
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
-        f'<div style="margin-bottom:6px;">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点</span></div>'
+        f'<div class="badge-wrap-row">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点</span></div>'
         f'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'
         f'<div style="min-width:0;flex:1;">'
         f'<div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;"><span style="font-size:16px;font-weight:800;color:#f8fafc;white-space:nowrap;">{r["name"]}</span> <span style="font-size:11.5px;color:#94a3b8;white-space:nowrap;">({r["code"]} / {r["genre"]})</span></div>'
