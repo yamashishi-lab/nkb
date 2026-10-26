@@ -511,12 +511,12 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
         return None
 
 # ==========================================
-# 5. UI と CSS / JS 注入 (BaseWeb Popoverと完全調和)
+# 5. UI と CSS / JS 注入 (サイドバー見切れ完全退避・BaseWeb Popoverと完全調和)
 # ==========================================
 def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     db, sec = load_mem(), load_sec()
     raw_hfp, cur_fp = get_raw_header_fp(), get_client_fp()
-    
+
     if mode == "register":
         lbl = "✅ 生体・ワンタップ認証 登録済" if db.get(user_email, {}).get("bio_enabled") else "🧬 この端末をワンタップ登録"
         if st.button(lbl, key=f"bio_{user_email}", use_container_width=True):
@@ -528,14 +528,14 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
             db_set("sec", sec)
             st.success("✅ 端末認証を登録しました")
         return
-        
+
     mapped = sec.get("device_bio_map", {}).get(raw_hfp) or sec.get("device_bio_map", {}).get(cur_fp)
     if not mapped:
         for k, v in db.items():
             if v.get("bio_enabled") and v.get("status") == "approved" and (v.get("raw_hfp") == raw_hfp or v.get("fp") == cur_fp):
                 mapped = {"email": k, "token": gen_tok(k, "session_keep"), "fp": cur_fp}
                 break
-                
+
     if st.button("🧬 登録済み端末：生体認証 / ワンタップで即ログイン", use_container_width=True, type="primary"):
         if mapped and mapped.get("email"):
             t_em = mapped["email"].strip().lower(); u_rec = db.get(t_em, {})
@@ -577,12 +577,26 @@ def inject_css():
     header[data-testid="stHeader"] [data-testid="stToolbar"],
     header[data-testid="stHeader"] [data-testid="stActionButtons"] { display: none !important; }
 
+    /* サイドバー初期位置：端の隙間すら完全に消えるよう左側へ大幅オフセット移動 */
     section[data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
         z-index: 999995 !important; width: 330px !important; max-width: 88vw !important; min-width: 320px !important;
         background: rgba(8, 12, 22, 0.98) !important; backdrop-filter: blur(25px) !important;
         border-right: 1px solid rgba(56, 189, 248, 0.35) !important;
         pointer-events: auto !important; visibility: visible !important;
+        transform: translateX(-105%) !important;
+        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    /* 開いた時のみ自然にスライドイン */
+    section[data-testid="stSidebar"][aria-expanded="true"] {
+        transform: translateX(0) !important;
+    }
+
+    /* 閉じた状態：確実に完全に画面外へ退避 */
+    section[data-testid="stSidebar"][aria-expanded="false"] {
+        transform: translateX(-110%) !important;
+        left: -380px !important;
     }
     
     section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
@@ -788,19 +802,19 @@ inject_css()
 # ==========================================
 def check_auth():
     qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
-    
+
     if "authenticated_user" not in st.session_state: 
         st.session_state["authenticated_user"] = None
-        
+
     db = load_mem()
     sec = load_sec()
     cur_fp, raw_hfp = get_client_fp(), get_raw_header_fp()
-    
+
     if not st.session_state["authenticated_user"] and qu and qt:
         expected_tok = gen_tok(qu, "session_keep")
         if hmac.compare_digest(qt, expected_tok) and ((db.get(qu) and db[qu].get("status") == "approved") or qu == ADMIN_EMAIL.strip().lower()):
             st.session_state["authenticated_user"] = qu
-            
+
     if st.session_state["authenticated_user"]:
         cu = st.session_state["authenticated_user"]
         u_rec = db.get(cu, {})
@@ -810,11 +824,28 @@ def check_auth():
                 st.session_state["authenticated_user"] = None; st.query_params.clear(); st.error("💀 このアカウントまたは端末は永久BANされています。"); st.stop()
             if not u_rec or u_rec.get("status") != "approved":
                 st.session_state["authenticated_user"] = None; st.query_params.clear(); st.error("🚫 アカウント一時停止中、または削除されています。"); st.stop()
-        
+
         keep_tok = gen_tok(cu, "session_keep")
         if st.query_params.get("u") != cu or st.query_params.get("t") != keep_tok:
             st.query_params["u"], st.query_params["t"] = cu, keep_tok
         return True
+
+    # ログイン画面表示（ログイン時はサイドバーが完全非表示となるようDOM制御）
+    st.markdown(
+        """
+        <style>
+        section[data-testid="stSidebar"] {
+            display: none !important;
+            transform: translateX(-120%) !important;
+            left: -400px !important;
+        }
+        #yamashishi-floating-sidebar-btn {
+            display: none !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.markdown(
         '<div class="glass-header" style="text-align:center;padding:18px 12px;">'
@@ -827,7 +858,7 @@ def check_auth():
         '</div></div>',
         unsafe_allow_html=True
     )
-    
+
     render_biometric_bridge(mode="login")
 
     tab_login, tab_apply, tab_vault = st.tabs(["🔑 コードログイン", "📩 新規会員登録申請", "🔐 承認確認・暗号化コード照会"])
@@ -1011,9 +1042,16 @@ components.html(
                     }} else {{
                         const sb = doc.querySelector('section[data-testid="stSidebar"]');
                         if (sb) {{
-                            const isHidden = (sb.style.display === 'none' || sb.getAttribute('aria-expanded') === 'false');
-                            sb.style.display = isHidden ? 'block' : 'none';
-                            sb.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+                            const isExpanded = (sb.getAttribute('aria-expanded') === 'true');
+                            if (isExpanded) {
+                                sb.setAttribute('aria-expanded', 'false');
+                                sb.style.transform = 'translateX(-110%)';
+                                sb.style.left = '-380px';
+                            } else {
+                                sb.setAttribute('aria-expanded', 'true');
+                                sb.style.left = '0px';
+                                sb.style.transform = 'translateX(0)';
+                            }
                         }}
                     }}
                 }};
@@ -1060,7 +1098,7 @@ def _render_realtime_audit_center():
     agents = st.session_state["agent_roster"]
 
     jitter_seed = int(hashlib.md5(f"{now_ts // 10}".encode()).hexdigest()[:4], 16)
-    
+
     st.markdown(
         f'<div style="background:rgba(168,85,247,0.12);border:1px solid #c084fc;padding:6px 8px;border-radius:6px;font-size:11px;margin-bottom:8px;">'
         f'<span class="live-pulse-indicator"></span>👁️‍🗨️ <b>SYSTEM-ZERO (最高次統括神)</b>: <span style="color:#10b981;font-weight:700;">LIVE REALTIME</span><br>'
@@ -1138,7 +1176,7 @@ with st.sidebar:
             f'</div>', unsafe_allow_html=True
         )
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
-    
+
     if cu == ADMIN_EMAIL.strip().lower():
         st.markdown('<div class="sidebar-section-card" style="border-color:#eab308;">', unsafe_allow_html=True)
         st.markdown('<div class="sidebar-header-badge" style="color:#fde047;">👑 管理者コントロール</div>', unsafe_allow_html=True)
@@ -1158,13 +1196,13 @@ with st.sidebar:
         style_idx = style_list.index(cur_style_saved) if cur_style_saved in style_list else 0
 
         investment_style = st.selectbox("トレードスタイル", style_list, index=style_idx, key="investment_style_choice")
-        
+
         if investment_style != cur_style_saved:
             st.session_state["council_threads"] = {}
             st.session_state["council_meta"] = {}
-            
+
         st.caption(f"選択中: **{investment_style.split(' ')[1]}**")
-        
+
         st.markdown("<hr style='margin:8px 0; border-color:rgba(56,189,248,0.2);'>", unsafe_allow_html=True)
         st.markdown("<b>稼働アルゴリズム</b>", unsafe_allow_html=True)
         BOOST_MAP = {
@@ -1325,7 +1363,7 @@ def search_web_knowledge_parallel(query1: str, query2: str) -> list:
 def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
     uq = user_query.strip()
     is_greeting = any(w in uq for w in ["こんにちは", "こんちは", "こんばんは", "おはよ", "初めまして", "よろしく", "押忍", "ども"]) if uq else False
-    
+
     web_hits = []
     if uq and not is_greeting:
         search_q1 = f"{r['name']} 株価 {uq}"
@@ -1334,12 +1372,12 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "") -> list:
     else:
         search_q1 = f"{r['name']} 株価 ニュース"
         web_hits = search_single_query(search_q1, 2)
-    
+
     top_news_context = web_hits[0] if web_hits else f"{r['theme']}に関する機関フロー流入中、直近の大きな悪材料なし"
     sub_news_context = web_hits[1] if len(web_hits) > 1 else f"気配値OFI乖離度 Z={r.get('ofi_z', 0.5)}、板厚増加傾向"
 
     st_style = r.get("strat", {}).get("style_name", "デイトレード")
-    
+
     sys_prompt = f"""
 あなたは日本の2ch（5ch）の市況実況スレにいる凄腕個人投資家AIエージェント達です。
 対象銘柄: 【{r['code']} {r['name']}】（分野: {r.get('genre', '')} / テーマ: {r.get('theme', '')}）
@@ -1457,7 +1495,7 @@ def render_council_sec(r, uk, auto_open=False):
             if r["code"] in st.session_state["watchlist"]: del st.session_state["watchlist"][r["code"]]
             else: st.session_state["watchlist"][r["code"]] = r
             st.rerun()
-        
+
     if not is_open: return
 
     cache_council_key = f"{uk}_{r.get('strat', {}).get('style_name', 'default')}"
@@ -1465,12 +1503,12 @@ def render_council_sec(r, uk, auto_open=False):
         deb = run_7ai_council(r, None, 0, "")
         st.session_state["council_threads"][cache_council_key] = deb["dialogue"]
         st.session_state["council_meta"][cache_council_key] = deb
-            
+
     meta = st.session_state["council_meta"][cache_council_key]
     turns = st.session_state["council_threads"][cache_council_key]
 
     st.markdown(f'<div class="ai-council-box"><div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t, i) for i, t in enumerate(turns))}</div></div>', unsafe_allow_html=True)
-    
+
     with st.form(f"form_q_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
         uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』への質問・スレへの書き込み", label_visibility="collapsed")
@@ -1498,7 +1536,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     dc, ds, ps = "#10b981" if r["diff"] >= 0 else "#ef4444", ("+" if r["diff"] > 0 else ""), ("+" if r["pts_gap_pct"] > 0 else "")
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
     lot, st_info = r["lot_info"], r["strat"]
-    
+
     news_banner_html = ""
     if rel_news:
         short_t = rel_news['title'][:32] + "..." if len(rel_news['title']) > 32 else rel_news['title']
@@ -1575,48 +1613,36 @@ def fetch_macro():
     return res
 
 def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
-    """
-    【神話級 QWM-7】ファインマン経路積分 × シュレーディンガー波動関数固有値解析
-    確率振幅 ψ(x, t) の複素ポテンシャル障壁透過・デコヒーレンス時間厳密解
-    """
     denom = np.maximum(c[:-1], 1e-4)
     rets = np.diff(c) / denom
-    
-    # 1. 複素ポテンシャル井戸 V(x) の厳密積分
+
     hist_h = h[-25:-1] if len(h) >= 25 else h[:-1]
     hist_l = l[-25:-1] if len(l) >= 25 else l[:-1]
     res_high = np.max(hist_h) if len(hist_h) > 0 else c[-1]
     sup_low = np.min(hist_l) if len(hist_l) > 0 else c[-1]
-    
-    # 障壁幅と障壁高 (ポテンシャル勾配)
+
     v_barrier_real = max(float(res_high - c[-1]) / max(float(c[-1]), 1e-4), 0.0001)
     v_absorb_imag = max(float(c[-1] - sup_low) / max(float(c[-1]), 1e-4), 0.0001) * 0.15
-    
-    # 2. ハミルトニアン運動エネルギー演算子 T = p^2 / 2m
-    # 出来高加重実効運動量 p_eff
+
     mean_v = max(float(np.mean(v[-20:])), 1.0)
     vol_flux = np.clip(v[-5:] / mean_v, 0.1, 8.0)
     kinetic_p = max(float(np.mean(np.abs(rets[-5:]) * vol_flux)) * 4.5, 1e-5)
-    
-    # 3. WKB高精度近似によるトンネル透過確率 T(E) = exp(-2 * ∫ |k(x)| dx)
+
     if kinetic_p >= v_barrier_real:
-        # トンネル突破領域（共鳴透過・クォンタムサージ）
         delta_e = kinetic_p - v_barrier_real
         qt = 95.0 + min(float(delta_e / max(v_barrier_real, 1e-4)) * 3.8, 4.9)
     else:
-        # 指数関数的減衰障壁透過
         kappa = np.sqrt(v_barrier_real - kinetic_p) * 11.8
         phase_damping = np.exp(-v_absorb_imag * 15.0)
         qt = float(100.0 * np.exp(-2.0 * kappa) * phase_damping)
     qt = float(np.clip(qt, 50.0, 99.8))
-    
-    # 4. 位相コヒーレンス |<ψ_t | ψ_0>|^2 とフォン・ノイマン量子エントロピー
+
     if len(rets) >= 16:
         phase_angles = np.angle(np.fft.rfft(rets[-16:]))
         phase_coherence = float(np.abs(np.mean(np.exp(1j * phase_angles))) * 100.0)
     else:
         phase_coherence = 70.0
-    
+
     pos_count = np.sum(rets[-16:] > 0)
     p_up = float(np.clip(pos_count / 16.0, 1e-5, 1.0 - 1e-5))
     shannon_entropy = float(-(p_up * np.log2(p_up) + (1.0 - p_up) * np.log2(1.0 - p_up)))
@@ -1631,14 +1657,9 @@ def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v:
     }
 
 def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
-    """
-    【神話級 機関ミクロ構造】Multifractal-DFA Hurst指数 × Hasbrouck価格インパクト係数(λ)
-    連続時間オーダードリブン市場における氷山注文(Iceberg)逆算モデル
-    """
     denom = np.maximum(c[:-1], 1e-4)
     rets = np.diff(c) / denom
-    
-    # 1. MF-DFA (マルチフラクタル変動解析) 修正Hurst指数
+
     n = min(len(rets), 50)
     if n >= 20:
         sub_r = rets[-n:]
@@ -1653,24 +1674,19 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
                 p = np.polyfit(np.arange(s), seg, 1)
                 f_s += np.mean((seg - np.polyval(p, np.arange(s))) ** 2)
             flucts.append(np.sqrt(f_s / max(segments, 1)))
-        
-        # log-log傾き推定
+
         poly_h = np.polyfit(np.log(scales), np.log(np.maximum(flucts, 1e-8)), 1)
         hurst = float(np.clip(poly_h[0], 0.40, 0.92))
     else:
         hurst = 0.58
 
-    # 2. Hasbrouck (1991) 構造価格インパクト係数 λ
     delta_p = np.diff(c[-20:])
     mean_v20 = max(float(np.mean(v[-20:])), 1.0)
     norm_v = v[-19:] / mean_v20
     signs = np.sign(delta_p)
     signs[signs == 0] = 1.0
-    
-    # λ = Cov(ΔP, Sign(V)) / Var(V)
+
     hasbrouck_lambda = float(np.mean(delta_p * signs / np.maximum(norm_v, 0.05)))
-    
-    # 3. 機関大口の氷山ステルス吸収度算出
     ks = float(np.clip(58.0 + (hurst - 0.5) * 62.0 + min(max(hasbrouck_lambda, 0.0) * 6.5, 25.0), 52.0, 99.2))
     luld = float(np.clip(70.0 + (hurst - 0.5) * 48.0, 52.0, 98.5))
 
@@ -1681,13 +1697,9 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
     }
 
 def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
-    """
-    【神話級 クオンツ統計】VPIN毒性フロー × 極値理論(EVT) CVaR 99% × 非対称ボラティリティ
-    """
     denom = np.maximum(c[:-1], 1e-4)
     rets = np.diff(c) / denom
 
-    # 1. RSI (14) 指数加重Wilder平滑化
     diffs = np.diff(c)
     gains = np.where(diffs > 0, diffs, 0.0)
     losses = np.where(diffs < 0, -diffs, 0.0)
@@ -1703,7 +1715,6 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
         rsi_val = 50.0
     rsi_val = float(np.clip(rsi_val, 5.0, 95.0))
 
-    # 2. VPIN (Volume-Synchronized Probability of Toxicity) 厳密時間枠分割
     vol_sub = v[-20:]
     ret_sub = rets[-20:] if len(rets) >= 20 else rets
     if np.sum(vol_sub) > 0 and len(ret_sub) > 0:
@@ -1712,7 +1723,6 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
     else:
         vpin_val = 0.52
 
-    # 3. 極値理論 (EVT) に基づくテールワースト CVaR 99%
     if len(rets) >= 20:
         var99 = np.percentile(rets, 1)
         tail_losses = rets[rets <= var99]
@@ -1720,7 +1730,6 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
     else:
         cvar99_val = 3.8
 
-    # 4. リアルタイム板流動性＆5ch勢い連動スコア
     recent_v = max(float(np.mean(v[-5:])), 1.0)
     base_v = max(float(np.mean(v[:-5])), 1.0) if len(v) > 5 else recent_v
     vol_surge = np.clip(recent_v / base_v, 0.4, 4.0)
@@ -1735,7 +1744,7 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
 
 def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: float, ofi_z: float, vpin: float, yz_vol: float, cvar95: float, rsi: float, cpos: float, base_sh: int, pest_str: str, vwap_str: str, tp_str: str, sl_str: str, kelly_pct: float, qm: dict, ms: dict) -> dict:
     st_prefix = style.split(" ")[1] if " " in style else "デイトレード"
-    
+
     if st_prefix == "スキャルピング":
         sh = max(1, int(round(base_sh * 1.5)))
         return {
@@ -1813,7 +1822,7 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
                 f"<b>・出口戦略：</b> 企業価値が適正に市場評価され、目標値<b>{tp_str}</b>に達するまで堂々とホールドしましょう。"
             )
         }
-    
+
     sh = max(1, int(round(base_sh * 1.65)))
     return {
         "style_name": "デイトレード",
@@ -1846,32 +1855,32 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         if df_raw is None or df_raw.empty: return None
         df = df_raw.dropna(subset=["Close", "Open", "High", "Low", "Volume"]).copy()
         if len(df) < 25: return None
-        
+
         c = df["Close"].values.astype(float)
         o = df["Open"].values.astype(float)
         h = df["High"].values.astype(float)
         l = df["Low"].values.astype(float)
         v = df["Volume"].values.astype(float)
-        
+
         prev_c = np.roll(c, 1)
         prev_c[0] = c[0]
         tr = np.maximum(h - l, np.maximum(np.abs(h - prev_c), np.abs(l - prev_c)))
         atrv = float(np.mean(tr[-14:])) if len(tr) >= 14 else float(c[-1] * 0.02)
-        
+
         v_sub = v[-20:]
         v_sum = np.sum(v_sub)
         vwap20 = float(np.sum(((h[-20:] + l[-20:] + c[-20:]) / 3.0) * v_sub) / v_sum) if v_sum > 0 else float(c[-1])
         day_ret = float((c[-1] - o[0]) / max(o[0], 1e-4) * 100) if len(o) > 0 else 0.0
-        
+
         qm = compute_quantum_wave_metrics(c, h, l, v)
         ms = compute_inst_microstructure(c, h, l, v)
         q_adv = compute_advanced_quant_indicators(c, h, l, v)
-        
+
         cv = float(c[-1])
-        
+
         recent_20_wins = np.sum(np.diff(c[-21:]) > 0) if len(c) >= 21 else 10
         tot_win = float(np.clip(recent_20_wins / 20.0 * 100.0 * 0.35 + qm["q_tunnel"] * 0.40 + ms["kyle_stealth"] * 0.25, 50.0, 97.8))
-        
+
         hl_r = np.maximum(h - l, 1e-4)
         sf = ((2.0 * c - h - l) / hl_r) * v
         mean_sf_5 = np.mean(sf[-5:])
@@ -1892,7 +1901,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
             expect_pct = min(99.8, expect_pct + (qm["q_tunnel"] - 75.0) * 0.48)
             qm["q_score"] = min(99, qm["q_score"] + 6)
             qm["q_state"] = "🧠 AGI×量子トンネル超連鎖"
-            
+
         if bhft and ofi_z > 0.4:
             expect_pct = min(99.9, expect_pct + ofi_z * 4.8)
             tot_win = min(99.2, tot_win + ofi_z * 2.6)
@@ -1902,7 +1911,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
 
         pgap = round(float(np.clip(ofi_z * 0.65 + macro_bias * 0.45, -2.5, 3.8)), 2)
         pest = cv * (1.0 + pgap / 100.0)
-        
+
         st_p = style.split(" ")[1] if " " in style else "デイトレード"
         if st_p == "スキャルピング":
             tpv = max(pest, cv) + (atrv * 0.55)
@@ -1916,7 +1925,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         else:
             tpv = max(pest, cv) + (atrv * 1.1)
             slv = cv - (atrv * 0.6)
-        
+
         rmoney = total_capital * (risk_tolerance_pct / 100.0)
         base_sh = max(1, int(rmoney / max(cv - slv, cv * 0.005)))
         fp = lambda val: f"{val:,.0f}円" if ".T" in code else f"${val:,.2f}"
@@ -1932,7 +1941,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
             t_lbl, t_col, t_bg = "【Lv.10：🔥S級・全ツッパ】", "#fff", "linear-gradient(90deg,#7e22ce,#dc2626)"
         elif expect_pct > 85: 
             t_lbl, t_col, t_bg = "【Lv.9：⚡超強気買い】", "#fff", "linear-gradient(90deg,#0369a1,#1d4ed8)"
-        
+
         return {
             "full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, 
             "price": fp(cv), "raw_close": cv,
@@ -1965,7 +1974,7 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
     except Exception as e:
         record_system_error("fetch_pool_batch:download", e)
         raw = {}
-        
+
     gmap = {g: [] for g in DYNAMIC_GENRES}
     alist, seen = [], set()
 
@@ -1990,7 +1999,6 @@ def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft):
                 record_system_error("fetch_pool_batch:future_result", e)
                 continue
 
-    # 【弱肉強食ソート】期待度とモメンタム順で動的ソート
     for g in gmap:
         gmap[g] = sorted(gmap[g], key=lambda x: x["expect_pct"], reverse=True)
     alist = sorted(alist, key=lambda x: x["expect_pct"], reverse=True)
@@ -2044,7 +2052,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         st.markdown("#### 📋 登録済み会員一覧 (データベース同期中)")
         db_m = load_mem()
         sec_m = load_sec()
-        
+
         st.markdown(
             """
             <div class="admin-table-container">
@@ -2083,7 +2091,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         if target_em and target_em != ADMIN_EMAIL.strip().lower():
             u_status = db_m[target_em].get("status", "")
             btn_col1, btn_col2, btn_col3 = st.columns(3)
-            
+
             if u_status == "approved":
                 if btn_col1.button("⏸️ アカウント一時停止", use_container_width=True):
                     db_m[target_em]["status"] = "suspended"
@@ -2110,7 +2118,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
 
     with tab_employment:
         st.markdown("#### 🏢 SYSTEM-ZERO & AGI雇用・解雇統括パネル")
-        
+
         c_sz1, c_sz2 = st.columns([3, 1])
         sz_status = "🟢 稼働中 (超越監視作動中)" if st.session_state.get("system_zero_active", True) else "🔴 解雇・停止中"
         c_sz1.markdown(f"**SYSTEM-ZERO 状態:** {sz_status}")
@@ -2194,10 +2202,10 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
     with tab_error_logs:
         st.markdown("#### ⚠️ システムエラーログ管理 & ダウンロードセンター")
         err_list = get_system_error_logs()
-        
+
         c_err1, c_err2 = st.columns([3, 1])
         c_err1.caption(f"蓄積されたエラー件数: **{len(err_list)} 件** (最大 {MAX_ERROR_LOGS} 件まで自動リングバッファ保持)")
-        
+
         col_down, col_clear = st.columns([2, 2])
         if err_list:
             json_str = json.dumps(err_list, ensure_ascii=False, indent=2)
