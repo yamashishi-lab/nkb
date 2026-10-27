@@ -94,8 +94,9 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
+# 404エラーを防止するため、実在が保証されている正規モデル名に更新
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -655,7 +656,7 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
     return True
 
 # ==========================================
-# 4. LLM APIと設定関連関数 (自動モデルフォールバック & テスト機能搭載)
+# 4. LLM APIと設定関連関数 (自動404回避モデル自動救済ロジック搭載)
 # ==========================================
 def clean_k_llm(k: str) -> str:
     return clean_k(k)
@@ -716,25 +717,48 @@ def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_pr
 def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
     if not key:
         return False, "⚠️ APIキーが未入力です。"
-    try:
-        res = _try_single_llm_call(prov, mod, key, "You are a test assistant.", "Respond with: OK")
-        if res:
-            return True, f"✅ 接続成功！レスポンス受信: {res[:20].strip()}"
-    except urllib.error.HTTPError as he:
-        # 404等の場合、他のモデルでも1回自動テスト
-        if he.code == 404 and prov == "gemini":
-            for fallback_m in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
-                if fallback_m != mod:
-                    try:
-                        res = _try_single_llm_call(prov, fallback_m, key, "You are a test assistant.", "Respond with: OK")
-                        if res:
-                            return True, f"✅ 接続成功（{fallback_m} に自動救済）"
-                    except Exception:
-                        pass
-        return False, f"❌ HTTPエラー: {he.code} {he.reason}"
-    except Exception as e:
-        return False, f"❌ 通信エラー: {str(e)}"
-    return False, "❌ レスポンスが空でした。"
+    
+    # 試行候補モデル順序（指定モデル -> 安定版フォールバック群）
+    candidate_models = [mod]
+    if prov == "gemini":
+        stable_defaults = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        for sm in stable_defaults:
+            if sm not in candidate_models:
+                candidate_models.append(sm)
+
+    last_err_msg = ""
+    for target_m in candidate_models:
+        try:
+            res = _try_single_llm_call(prov, target_m, key, "You are a test assistant.", "Respond with: OK")
+            if res:
+                if target_m != mod:
+                    # モデルを稼働実績のある安定版に自動更新
+                    cfg = load_llm()
+                    models_dict = cfg.get("models", {})
+                    models_dict[prov] = target_m
+                    decrypted_dict = cfg.get("decrypted_keys", {})
+                    decrypted_dict[prov] = key
+                    save_llm_encrypted(prov, models_dict, decrypted_dict)
+                    st.session_state[f"rt_mod_{prov}"] = target_m
+                    return True, f"✅ 接続成功！(モデルを安定版『{target_m}』に自動設定しました)"
+                return True, f"✅ 接続成功！モデル『{target_m}』が正常稼働しています。"
+        except urllib.error.HTTPError as he:
+            err_detail = ""
+            try:
+                err_detail = he.read().decode("utf-8")
+            except Exception:
+                pass
+            last_err_msg = f"HTTP {he.code} {he.reason} - {err_detail[:120]}"
+            if he.code in [400, 404]:
+                # 404/400の場合は次のモデル候補を試行
+                continue
+            else:
+                return False, f"❌ APIエラー: {last_err_msg}"
+        except Exception as e:
+            last_err_msg = str(e)
+            continue
+            
+    return False, f"❌ 全モデルで接続失敗: {last_err_msg}"
 
 def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
     providers = get_active_ai_providers()
@@ -742,27 +766,26 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
         return None
 
     for prov, lbl, mod, key in providers:
-        # まず指定されたモデルで試行
-        try:
-            res = _try_single_llm_call(prov, mod, key, sys_prompt, user_prompt)
-            if res:
-                return res
-        except urllib.error.HTTPError as he:
-            record_system_error("call_real_llm_api:http_err", he, f"Provider: {prov}, Model: {mod}, Code: {he.code}")
-            # 404/400時、Geminiや主要プロバイダーなら別モデルへ自動フォールバック
-            if prov == "gemini":
-                fallback_models = [m for m in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-pro"] if m != mod]
-                for fb_m in fallback_models:
-                    try:
-                        fb_res = _try_single_llm_call(prov, fb_m, key, sys_prompt, user_prompt)
-                        if fb_res:
-                            return fb_res
-                    except Exception as fb_err:
-                        record_system_error("call_real_llm_api:gemini_fallback", fb_err, f"FallbackModel: {fb_m}")
-                        continue
-        except Exception as e:
-            record_system_error("call_real_llm_api:err", e, f"Provider: {prov}, Model: {mod}")
-            continue
+        candidate_models = [mod]
+        if prov == "gemini":
+            stable_defaults = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+            for sm in stable_defaults:
+                if sm not in candidate_models:
+                    candidate_models.append(sm)
+
+        for target_m in candidate_models:
+            try:
+                res = _try_single_llm_call(prov, target_m, key, sys_prompt, user_prompt)
+                if res:
+                    return res
+            except urllib.error.HTTPError as he:
+                record_system_error("call_real_llm_api:http_err", he, f"Provider: {prov}, Model: {target_m}, Code: {he.code}")
+                if he.code in [400, 404]:
+                    continue
+                break
+            except Exception as e:
+                record_system_error("call_real_llm_api:err", e, f"Provider: {prov}, Model: {target_m}")
+                continue
     return None
 
 # ==========================================
@@ -1566,6 +1589,8 @@ with st.sidebar:
         cur_prov = st.selectbox("AIプロバイダー", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
         p_name, p_models, _ = AI_PROVIDERS[cur_prov]
         saved_m = llm_cfg.get("models", {}).get(cur_prov, p_models[0])
+        if saved_m not in p_models:
+            saved_m = p_models[0]
         decrypted_dict = llm_cfg.get("decrypted_keys", {})
         init_key_val = st.session_state.get(f"rt_key_{cur_prov}", "") or decrypted_dict.get(cur_prov, "")
 
@@ -2686,7 +2711,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                 now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 if tfp and tfp != "-": sec_m.setdefault("banned_fps", {})[tfp] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN"}
                 if trhfp and trhfp != "-": sec_m.setdefault("banned_fps", {})[trhfp] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN"}
-                sec_m.setdefault("banned_emails", {})[target_em] = {"banned_at": now_s, "orig": target_em}
+                sec_m.setdefault("banned_emails", {})[target_em] = {"name": log_entry["input_name"], "banned_at": now_s, "orig": target_em}
                 db_set("mem", db_m); db_set("sec", sec_m)
                 st.error(f"{target_em} を永久BANリストに登録しました"); st.rerun()
 
