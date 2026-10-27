@@ -95,7 +95,7 @@ else:
 DB_SQLITE_PATH = "yamashishi_core.db"
 
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemma-3-27b-it", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -256,7 +256,6 @@ def db_set(key: str, val):
         except Exception as e:
             record_system_error(f"db_set:{key}", e)
 
-# --- APIキー暗号化ユーティリティ (AES-GCM / PBKDF2) ---
 def _derive_crypto_key(salt: bytes) -> bytes:
     return hashlib.pbkdf2_hmac("sha256", SECRET_KEY.encode(), salt, 60000, 32)
 
@@ -656,7 +655,7 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
     return True
 
 # ==========================================
-# 4. LLM APIと設定関連関数
+# 4. LLM APIと設定関連関数 (自動モデルフォールバック & テスト機能搭載)
 # ==========================================
 def clean_k_llm(k: str) -> str:
     return clean_k(k)
@@ -670,59 +669,101 @@ def get_active_ai_providers() -> list:
         if key: act.append((k, lbl, mod, key))
     return act
 
+def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_prompt: str) -> str:
+    ctx = ssl.create_default_context()
+    if prov == "gemini":
+        url = AI_PROVIDERS[prov][2].format(model=mod, key=key)
+        data = json.dumps({
+            "contents": [{"role": "user", "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]}],
+            "generationConfig": {"temperature": 0.85}
+        }).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
+            res = json.loads(r.read())
+            return res["candidates"][0]["content"]["parts"][0]["text"]
+    elif prov == "claude":
+        url = AI_PROVIDERS[prov][2]
+        headers = {
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json"
+        }
+        data = json.dumps({
+            "model": mod,
+            "max_tokens": 1500,
+            "system": sys_prompt,
+            "messages": [{"role": "user", "content": user_prompt}],
+            "temperature": 0.85
+        }).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
+            res = json.loads(r.read())
+            return res["content"][0]["text"]
+    else:
+        url = AI_PROVIDERS[prov][2]
+        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        payload = {
+            "model": mod,
+            "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
+            "temperature": 0.85
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
+            res = json.loads(r.read())
+            return res["choices"][0]["message"]["content"]
+
+def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
+    if not key:
+        return False, "⚠️ APIキーが未入力です。"
+    try:
+        res = _try_single_llm_call(prov, mod, key, "You are a test assistant.", "Respond with: OK")
+        if res:
+            return True, f"✅ 接続成功！レスポンス受信: {res[:20].strip()}"
+    except urllib.error.HTTPError as he:
+        # 404等の場合、他のモデルでも1回自動テスト
+        if he.code == 404 and prov == "gemini":
+            for fallback_m in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+                if fallback_m != mod:
+                    try:
+                        res = _try_single_llm_call(prov, fallback_m, key, "You are a test assistant.", "Respond with: OK")
+                        if res:
+                            return True, f"✅ 接続成功（{fallback_m} に自動救済）"
+                    except Exception:
+                        pass
+        return False, f"❌ HTTPエラー: {he.code} {he.reason}"
+    except Exception as e:
+        return False, f"❌ 通信エラー: {str(e)}"
+    return False, "❌ レスポンスが空でした。"
+
 def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
     providers = get_active_ai_providers()
     if not providers:
         return None
-    prov, lbl, mod, key = providers[0]
-    ctx = ssl.create_default_context()
-    try:
-        if prov == "gemini":
-            url = AI_PROVIDERS[prov][2].format(model=mod, key=key)
-            data = json.dumps({
-                "contents": [{"role": "user", "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]}],
-                "generationConfig": {"temperature": 0.85, "response_mime_type": "application/json"}
-            }).encode("utf-8")
-            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
-                res = json.loads(r.read())
-                return res["candidates"][0]["content"]["parts"][0]["text"]
-        elif prov == "claude":
-            url = AI_PROVIDERS[prov][2]
-            headers = {
-                "x-api-key": key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json"
-            }
-            data = json.dumps({
-                "model": mod,
-                "max_tokens": 1500,
-                "system": sys_prompt,
-                "messages": [{"role": "user", "content": user_prompt}],
-                "temperature": 0.85
-            }).encode("utf-8")
-            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
-                res = json.loads(r.read())
-                return res["content"][0]["text"]
-        else:
-            url = AI_PROVIDERS[prov][2]
-            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-            payload = {
-                "model": mod,
-                "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
-                "temperature": 0.85
-            }
-            if prov in ["openai", "groq"]:
-                payload["response_format"] = {"type": "json_object"}
-            data = json.dumps(payload).encode("utf-8")
-            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
-                res = json.loads(r.read())
-                return res["choices"][0]["message"]["content"]
-    except Exception as e:
-        record_system_error("call_real_llm_api", e, f"Provider: {prov}, Model: {mod}")
-        return None
+
+    for prov, lbl, mod, key in providers:
+        # まず指定されたモデルで試行
+        try:
+            res = _try_single_llm_call(prov, mod, key, sys_prompt, user_prompt)
+            if res:
+                return res
+        except urllib.error.HTTPError as he:
+            record_system_error("call_real_llm_api:http_err", he, f"Provider: {prov}, Model: {mod}, Code: {he.code}")
+            # 404/400時、Geminiや主要プロバイダーなら別モデルへ自動フォールバック
+            if prov == "gemini":
+                fallback_models = [m for m in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-pro"] if m != mod]
+                for fb_m in fallback_models:
+                    try:
+                        fb_res = _try_single_llm_call(prov, fb_m, key, sys_prompt, user_prompt)
+                        if fb_res:
+                            return fb_res
+                    except Exception as fb_err:
+                        record_system_error("call_real_llm_api:gemini_fallback", fb_err, f"FallbackModel: {fb_m}")
+                        continue
+        except Exception as e:
+            record_system_error("call_real_llm_api:err", e, f"Provider: {prov}, Model: {mod}")
+            continue
+    return None
 
 # ==========================================
 # 5. UI と CSS / JS 注入 (フリーズ完全防止・高効率バッファ)
@@ -1199,7 +1240,7 @@ for k, v in [
         st.session_state[k] = v
 
 # ==========================================
-# 8. トップナビゲーションとサイドバー開閉JS (質問位置最上部固定＆メイン画面中央スクロール完全対応)
+# 8. トップナビゲーションとサイドバー開閉JS
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -1531,7 +1572,14 @@ with st.sidebar:
         in_k = clean_k(st.text_input(f"🔑 {p_name} Key (暗号化保護)", value=init_key_val, type="password"))
         in_m = st.selectbox(f"🧠 モデル選択", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
 
-        # 変更検知時に暗号化ストレージへ即時反映（再ログイン時も完全永続化）
+        if st.button("🧪 API接続テスト実行", key=f"btn_test_{cur_prov}", use_container_width=True):
+            with st.spinner("API疎通テスト実行中..."):
+                t_ok, t_msg = test_single_provider_connection(cur_prov, in_m, in_k)
+                if t_ok:
+                    st.success(t_msg)
+                else:
+                    st.error(t_msg)
+
         if in_m != saved_m or cur_prov != llm_cfg.get("provider") or in_k != init_key_val:
             models_dict = llm_cfg.get("models", {})
             models_dict[cur_prov] = in_m
@@ -1714,7 +1762,6 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
         txt = t.get("text", "")
         spk = t.get("speaker", "")
 
-        # オウム返し検出 (入力文を長々とそのまま引用)
         if uq and len(uq) >= 6 and (f"『{uq}』" in txt or f"「{uq}」" in txt or uq in txt):
             for ak, av in list(agents.items()):
                 if av["name"] in spk or ak in spk:
@@ -1722,7 +1769,6 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
                     all_fired.append(av["name"])
                     break
 
-        # 禁止定型句・AI敬語検出
         for cw in cliche_words:
             if cw in txt:
                 for ak, av in list(agents.items()):
@@ -1734,7 +1780,6 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
     return all_fired
 
 def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: list, ignis_ag: dict, technos_ag: dict, sentinel_ag: dict, nexus_ag: dict, valkyrie_ag: dict) -> list:
-    """100の設計基準に基づく高密度・柔軟適応型自然会話エンジン（API未接続時完全稼働）"""
     stock_kws = ["株", "買", "売", "配当", "決算", "チャート", "板", "気配", "PER", "PBR", "PTS", "利確", "損切", "ロット", "銘柄", "指数", "先物", "寄", "信用", "空売り"]
     game_kws = ["ゲーム", "ガチャ", "PS5", "Switch", "steam", "モンハン", "原神", "ポケモン", "RPG", "fps", "課金", "攻略", "ボス", "任天堂", "カプコン"]
     
@@ -1743,7 +1788,6 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
 
     turns = []
 
-    # ■ 初期表示時（ユーザー発言なし）のボリューム増強（白熱した議論を展開）
     if not uq:
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
@@ -1767,7 +1811,6 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
         })
         return turns
 
-    # ■ ゲームに関する質問の場合（銘柄の数値を一切持ち出さずゲームの話に完全適応）
     if is_game_question:
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
@@ -1784,7 +1827,6 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
             })
         return turns
 
-    # ■ 銘柄と無関係な一般的な雑談・相談・世間話の場合
     if not is_stock_question:
         fact_summary = ""
         if web_hits:
@@ -1806,7 +1848,6 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
             })
         return turns
 
-    # ■ 銘柄・相場に関する質問の場合（感情・状況別に深く掘り下げ）
     provocative = any(pw in uq for pw in ["下手", "ゴミ", "クソ", "バカ", "死ね", "詐欺", "消えろ", "役立たず"])
     is_loser = any(lw in uq for lw in ["負けた", "損した", "死にたい", "破産", "溶かした", "大損", "助けて"])
     is_novice = any(nw in uq for nw in ["初心者", "始め方", "教えて", "何から", "いくらから", "どうすれば"])
