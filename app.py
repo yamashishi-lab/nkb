@@ -185,7 +185,7 @@ GLOBAL_MARKET_TICKERS = [
 STOCK_METADATA_CACHE = {c: {"name": n, "genre": g, "theme": t} for c, n, g, t in GLOBAL_MARKET_TICKERS}
 
 # ==========================================
-# 3. 高速インメモリキャッシュ & DBレイヤー
+# 3. 高速インメモリキャッシュ & DBレイヤー ＆ 暗号化ストレージ
 # ==========================================
 _DB_LOCK = threading.RLock()
 _MEM_CACHE = {}
@@ -256,6 +256,62 @@ def db_set(key: str, val):
         except Exception as e:
             record_system_error(f"db_set:{key}", e)
 
+# --- APIキー暗号化ユーティリティ (AES-GCM / PBKDF2) ---
+def _derive_crypto_key(salt: bytes) -> bytes:
+    return hashlib.pbkdf2_hmac("sha256", SECRET_KEY.encode(), salt, 60000, 32)
+
+def encrypt_secret_str(plain_text: str) -> str:
+    if not plain_text:
+        return ""
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        salt = secrets.token_bytes(16)
+        key = _derive_crypto_key(salt)
+        aesgcm = AESGCM(key)
+        nonce = secrets.token_bytes(12)
+        ct = aesgcm.encrypt(nonce, plain_text.encode("utf-8"), None)
+        payload = salt + nonce + ct
+        return "enc:" + payload.hex()
+    except Exception:
+        salt = secrets.token_bytes(16)
+        key = _derive_crypto_key(salt)
+        data = plain_text.encode("utf-8")
+        stream = hashlib.sha256(key + salt).digest()
+        while len(stream) < len(data):
+            stream += hashlib.sha256(stream + key).digest()
+        xor_bytes = bytes([b ^ stream[i] for i, b in enumerate(data)])
+        mac = hmac.new(key, xor_bytes, hashlib.sha256).digest()[:16]
+        return "xor:" + (salt + mac + xor_bytes).hex()
+
+def decrypt_secret_str(cipher_text: str) -> str:
+    if not cipher_text:
+        return ""
+    if not (cipher_text.startswith("enc:") or cipher_text.startswith("xor:")):
+        return cipher_text
+    try:
+        scheme, hex_data = cipher_text.split(":", 1)
+        raw = bytes.fromhex(hex_data)
+        if scheme == "enc":
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+            salt, nonce, ct = raw[:16], raw[16:28], raw[28:]
+            key = _derive_crypto_key(salt)
+            aesgcm = AESGCM(key)
+            return aesgcm.decrypt(nonce, ct, None).decode("utf-8")
+        elif scheme == "xor":
+            salt, mac, xor_bytes = raw[:16], raw[16:32], raw[32:]
+            key = _derive_crypto_key(salt)
+            expected_mac = hmac.new(key, xor_bytes, hashlib.sha256).digest()[:16]
+            if not hmac.compare_digest(mac, expected_mac):
+                return ""
+            stream = hashlib.sha256(key + salt).digest()
+            while len(stream) < len(xor_bytes):
+                stream += hashlib.sha256(stream + key).digest()
+            return bytes([b ^ stream[i] for i, b in enumerate(xor_bytes)]).decode("utf-8")
+    except Exception as e:
+        record_system_error("decrypt_secret_str", e)
+        return ""
+    return ""
+
 def clean_k(k: str) -> str: 
     return re.sub(r"\s+", "", unicodedata.normalize("NFKC", str(k or "")).strip().strip("\"'"))
 
@@ -312,7 +368,25 @@ def load_smtp():
     return db_get("smtp", {"smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
 
 def load_llm(): 
-    return db_get("llm", {"provider": "gemini", "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}})
+    raw = db_get("llm", {"provider": "gemini", "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}, "enc_keys": {}})
+    enc_keys = raw.get("enc_keys", {})
+    plain_keys = {}
+    for prov in AI_PROVIDERS:
+        if prov in enc_keys:
+            plain_keys[prov] = decrypt_secret_str(enc_keys[prov])
+    raw["decrypted_keys"] = plain_keys
+    return raw
+
+def save_llm_encrypted(provider: str, models: dict, keys_dict: dict):
+    enc_keys = {}
+    for prov, k_val in keys_dict.items():
+        if k_val:
+            enc_keys[prov] = encrypt_secret_str(clean_k(k_val))
+    db_set("llm", {
+        "provider": provider,
+        "models": models,
+        "enc_keys": enc_keys
+    })
 
 def load_sec(): 
     return db_get("sec", {"banned_fps": {}, "banned_emails": {}, "banned_pins": {}, "banned_names": [], "spoof_logs": [], "device_bio_map": {}})
@@ -589,8 +663,9 @@ def clean_k_llm(k: str) -> str:
 
 def get_active_ai_providers() -> list:
     cfg = load_llm(); act = []
+    decrypted_keys = cfg.get("decrypted_keys", {})
     for k, (lbl, m_list, _) in AI_PROVIDERS.items():
-        key = clean_k(st.session_state.get(f"rt_key_{k}", ""))
+        key = clean_k(st.session_state.get(f"rt_key_{k}", "") or decrypted_keys.get(k, ""))
         mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
         if key: act.append((k, lbl, mod, key))
     return act
@@ -889,7 +964,7 @@ def inject_css():
     .chat-bubble-agree { background: rgba(6, 78, 59, 0.65); border-left: 3px solid #10b981; }
     .chat-bubble-doubt { background: rgba(120, 53, 15, 0.65); border-left: 3px solid #f59e0b; }
     .chat-bubble-rage { background: rgba(127, 29, 29, 0.65); border-left: 3px solid #ef4444; }
-    .chat-bubble-user { background: rgba(56, 189, 248, 0.2); border-right: 3px solid #38bdf8; text-align: right; }
+    .chat-bubble-user { background: rgba(56, 189, 248, 0.2); border-right: 3px solid #38bdf8; text-align: right; scroll-margin-top: 6px; }
     .round-divider { font-size: 11px; font-weight: 800; color: #94a3b8; text-align: center; margin: 6px 0; letter-spacing: 1px; }
 
     .beginner-action-box {
@@ -1113,7 +1188,7 @@ for k, v in [
         st.session_state[k] = v
 
 # ==========================================
-# 8. トップナビゲーションとサイドバー開閉JS (フリーズ完全防止・非同期デバウンス)
+# 8. トップナビゲーションとサイドバー開閉JS (質問位置最上部固定＆メイン画面中央スクロール対応)
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -1133,10 +1208,10 @@ if st.session_state.get("scroll_target_id"):
             if (el) {{
                 const win = el.closest('.council-scroll-window');
                 if (win) {{
-                    win.scrollTo({{ top: win.scrollHeight, behavior: 'smooth' }});
-                }} else {{
-                    el.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
+                    const elTop = el.offsetTop;
+                    win.scrollTo({{ top: Math.max(0, elTop - 8), behavior: 'smooth' }});
                 }}
+                el.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
             }}
         }} catch(e){{}}
     }});
@@ -1433,17 +1508,27 @@ with st.sidebar:
             if st.checkbox(label, value=default_val, key=f"chk_{key}"):
                 ac_b.add(key)
 
-    with st.expander("🧠 7大AI ＆ 量子エンジン設定", expanded=False):
+    with st.expander("🧠 7大AI ＆ 量子エンジン設定 (🔒暗号化保存対応)", expanded=False):
         llm_cfg = load_llm()
         cur_prov = st.selectbox("AIプロバイダー", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
         p_name, p_models, _ = AI_PROVIDERS[cur_prov]
         saved_m = llm_cfg.get("models", {}).get(cur_prov, p_models[0])
-        in_k = clean_k(st.text_input(f"🔑 {p_name} Key", value=st.session_state.get(f"rt_key_{cur_prov}", ""), type="password"))
+        decrypted_dict = llm_cfg.get("decrypted_keys", {})
+        init_key_val = st.session_state.get(f"rt_key_{cur_prov}", "") or decrypted_dict.get(cur_prov, "")
+
+        in_k = clean_k(st.text_input(f"🔑 {p_name} Key (暗号化保護)", value=init_key_val, type="password"))
         in_m = st.selectbox(f"🧠 モデル選択", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
 
-        if in_m != saved_m or cur_prov != llm_cfg.get("provider"):
-            llm_cfg["provider"] = cur_prov; llm_cfg.setdefault("models", {})[cur_prov] = in_m; db_set("llm", llm_cfg); st.session_state["council_threads"] = {}
-        st.session_state[f"rt_key_{cur_prov}"] = in_k; st.session_state[f"rt_mod_{cur_prov}"] = in_m
+        # 変更検知時に暗号化ストレージへ即時反映
+        if in_m != saved_m or cur_prov != llm_cfg.get("provider") or in_k != init_key_val:
+            models_dict = llm_cfg.get("models", {})
+            models_dict[cur_prov] = in_m
+            decrypted_dict[cur_prov] = in_k
+            save_llm_encrypted(cur_prov, models_dict, decrypted_dict)
+            st.session_state["council_threads"] = {}
+        st.session_state[f"rt_key_{cur_prov}"] = in_k
+        st.session_state[f"rt_mod_{cur_prov}"] = in_m
+        st.caption(f"🔒 **暗号化保存有効**: 安全に暗号化されて保存されます")
         st.caption(f"🟢 現在稼働可能AI: **{len(get_active_ai_providers())} / 7社**")
 
     with st.expander("💰 資金管理＆選抜フィルタ", expanded=False):
@@ -1544,7 +1629,7 @@ def fetch_global_impact_news() -> list:
 all_impact_news = fetch_global_impact_news()
 
 # ==========================================
-# 11. 【魔改造】オウム返し完全排除・意図適応型 人間味実況チャットエンジン
+# 11. 【魔改造】意図適応・WEB情報結合 自然対話チャットエンジン
 # ==========================================
 @st.cache_data(ttl=300)
 def search_single_query(query: str, max_results: int) -> list:
@@ -1617,7 +1702,7 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
         txt = t.get("text", "")
         spk = t.get("speaker", "")
         
-        # 1. オウム返し検出 (入力文を長々とそのまま引用)
+        # オウム返し検出 (入力文を長々とそのまま引用)
         if uq and len(uq) >= 6 and (f"『{uq}』" in txt or f"「{uq}」" in txt or uq in txt):
             for ak, av in list(agents.items()):
                 if av["name"] in spk or ak in spk:
@@ -1625,7 +1710,7 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
                     all_fired.append(av["name"])
                     break
 
-        # 2. 禁止定型句・AI敬語検出
+        # 禁止定型句・AI敬語検出
         for cw in cliche_words:
             if cw in txt:
                 for ak, av in list(agents.items()):
@@ -1636,13 +1721,40 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
 
     return all_fired
 
-def _build_dynamic_slot_dialogue(uq: str, r: dict, st_style: str, ignis_ag: dict, technos_ag: dict, sentinel_ag: dict, nexus_ag: dict, valkyrie_ag: dict) -> list:
-    """API未設定・障害時でもオウム返しをゼロにする動的スロット構文生成"""
+def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: list, ignis_ag: dict, technos_ag: dict, sentinel_ag: dict, nexus_ag: dict, valkyrie_ag: dict) -> list:
+    """API未接続時でもWEB検索結果を元に質問意図へ自然に回答するフォールバック"""
+    stock_kws = ["株", "買", "売", "配当", "決算", "チャート", "板", "気配", "PER", "PBR", "PTS", "利確", "損切", "ロット", "銘柄", "指数", "先物"]
+    is_stock_question = any(kw in uq for kw in stock_kws) or (r['name'] in uq) or (r['code'] in uq)
+    
+    turns = []
+    
+    # 質問意図が一般的な質問や雑談・ニュース・相談の場合 (銘柄数値を無理強いしない)
+    if not is_stock_question and uq:
+        fact_summary = ""
+        if web_hits:
+            clean_facts = [re.sub(r'\(.*?\)', '', h).strip() for h in web_hits]
+            fact_summary = "・" + "\n・".join(clean_facts[:2])
+        
+        turns.append({
+            "speaker": f"{technos_ag['icon']} {technos_ag['name']}", "score": technos_ag['score'], "tone": "normal",
+            "text": f"WEBの最新情報をリサーチしました。\n{fact_summary}\nご質問の論点については上記の動向がダイレクトに関わっていますね。" if fact_summary else "その件について客観的データを照合すると、目先の表層的な情報よりも背景にある構造を押さえるのが一番確実です。"
+        })
+        turns.append({
+            "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
+            "text": "小難しい能書き垂れてないで結論から言えっての！要するに今どう動くかが全てだろ。グダグダ迷う時間が一番無駄だぞ。"
+        })
+        if random.random() > 0.4:
+            turns.append({
+                "speaker": f"{sentinel_ag['icon']} {sentinel_ag['name']}", "score": sentinel_ag['score'], "tone": "doubt",
+                "text": "ネットの情報なんざ半分ポジショントークなんだから真に受けすぎるなよ。裏で誰が得するか考えりゃ見えてくるだろ。"
+            })
+        return turns
+
+    # 銘柄やトレードに関する質問の場合
     provocative = any(pw in uq for pw in ["下手", "ゴミ", "クソ", "バカ", "死ね", "詐欺", "消えろ"])
     is_loser = any(lw in uq for lw in ["負けた", "損した", "死にたい", "破産", "溶かした", "大損"])
     is_novice = any(nw in uq for nw in ["初心者", "始め方", "教えて", "何から", "いくらから"])
 
-    turns = []
     if provocative:
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "rage",
@@ -1685,7 +1797,6 @@ def _build_dynamic_slot_dialogue(uq: str, r: dict, st_style: str, ignis_ag: dict
             "text": "SNSのインフルエンサーが煽ってる銘柄にイナゴ買いするのだけはやめとけよ。全員高値で売り抜けるための養分探してるだけだからな。"
         })
     else:
-        # 相場や一般の質問
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
             "text": random.choice([
@@ -1700,7 +1811,7 @@ def _build_dynamic_slot_dialogue(uq: str, r: dict, st_style: str, ignis_ag: dict
         if random.random() > 0.4:
             turns.append({
                 "speaker": f"{valkyrie_ag['icon']} {valkyrie_ag['name']}", "score": valkyrie_ag['score'], "tone": "agree",
-                "text": "スピード感も大事だけど、目標値（{r['tp_price']}）に届いたら欲張らず利確するのが勝ち逃げの鉄則！"
+                "text": f"スピード感も大事だけど、目標値（{r['tp_price']}）に届いたら欲張らず利確するのが勝ち逃げの鉄則！"
             })
     return turns
 
@@ -1729,34 +1840,34 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "", history_turns: 
     history_context_str = "\n".join(history_context_lines) if history_context_lines else "（これまでの会話なし・新規スレッド）"
 
     web_hits = []
+    stock_keywords = ["株", "決算", "買い", "売り", "チャート", "PTS", "利確", "損切", "寄り", "板", "気配", "PER", "目標", "相場", "信用", "空売り", "ロット", "配当"]
+    is_stock_related = any(kw in uq for kw in stock_keywords) or (r['name'] in uq) if uq else True
+
     if uq:
-        stock_keywords = [r['name'], r['code'], "株", "決算", "買い", "売り", "チャート", "PTS", "利確", "損切", "寄り", "板", "気配", "PER", "目標", "相場", "信用", "空売り", "ロット"]
-        is_stock_related = any(kw in uq for kw in stock_keywords)
-        if not is_stock_related and len(uq) > 2:
-            web_hits = search_single_query(uq, 2)
+        if not is_stock_related and len(uq) >= 2:
+            web_hits = search_single_query(uq, 3)
         else:
             web_hits = search_web_knowledge_parallel(f"{r['name']} {uq}", f"{r['code']} 株価")
     else:
         web_hits = search_web_knowledge_parallel(f"{r['name']} 株価 最新 ニュース", f"{r['name']} {r.get('genre', '')}")
 
-    news_fact_1 = web_hits[0] if web_hits else f"{r['name']}は直近{r.get('genre', '')}分野で需給思惑が継続中。"
-    news_fact_2 = web_hits[1] if len(web_hits) > 1 else f"現在値{r['price']}、気配値乖離Z={r.get('ofi_z', 0.5)}で推移。"
+    web_fact_context = "\n".join([f"・{h}" for h in web_hits]) if web_hits else f"・{r['name']}は直近{r.get('genre', '')}分野で需給思惑が継続中。"
 
     llm_result = None
     if get_active_ai_providers():
         sys_prompt = f"""
-あなたは日本の市況実況板（2ch/5ch実況スレ）に常駐する百戦錬磨の専業トレーダーたちです。
+あなたは日本の市況実況板（2ch/5ch実況スレ）に常駐する百戦錬磨の個性派トレーダーたちです。
 ユーザー（スレ住人）の書き込み、または銘柄の初期スレッドに対して本物の人間らしくレスを返してください。
 
 【厳格処刑ルール（違反時は鬼監視センターにより即刻解雇）】
 1. オウム返し・引用の絶対禁止:
    - ユーザーの入力文を『』や「」でそのまま繰り返したり引用することは厳禁。「〜って書いた奴！」「〜について答えます」のようなオウム返しは即刻処刑。
-   - ユーザーの言いたい状況・感情を瞬時に察知し、自分の言葉で要約・ツッコミ・相槌を入れよ。
-2. 意図への柔軟な適応:
+   - ユーザーの意図や感情を察知し、自分の言葉で自然に要約・ツッコミ・相槌を入れよ。
+2. 意図への柔軟な適応（質問が銘柄と無関係なら銘柄情報を無理にねじ込むな）:
+   - 一般の質問、雑談、愚痴、ニュースの質問であれば、無理に現在値や目標値を持ち出さず、下記のWEB検索情報を活用してそのトピックについて自然に答えよ。
    - 愚痴や大損報告なら、安易に慰めず「ルール破ったお前が悪い」「今日は寝ろ」と突き放すか現実的立ち回りを説け。
    - 初心者質問なら、TECHNOSが噛み砕いて教えつつ、IGNISやSENTINELが手厳しく釘を刺せ。
    - 煽りや暴言なら、市況板らしく倍返しで煽り返せ。
-   - 質問内容と無関係な場合、銘柄数値（現在値や目標値）を無理にねじ込むな。
 3. 発言の長さとテンポの不均一化:
    - 全員が長文を書くな。1行だけの即レス（「草」「それな」「知らんがな」）と、2〜3行で持論を展開するレスを混ぜろ。
    - ユーザーへの返信は全員ではなく【1〜3名】の言いたい奴だけが返せ。
@@ -1770,9 +1881,11 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "", history_turns: 
 【これまでの会話ログ】
 {history_context_str}
 
-【対象銘柄情報（質問が銘柄関連の場合のみ参照）】
+【WEB検索結果（回答の参照用）】
+{web_fact_context}
+
+【現在の銘柄情報（質問が銘柄・相場に関係する場合のみ参照）】
 銘柄: {r['code']} {r['name']} ({r.get('genre','')}) / 現在値: {r['price']} / 目標: {r['tp_price']} / 逆指値: {r['sl_price']} / 戦略: {st_style}
-リアルタイム材料: {news_fact_1} / {news_fact_2}
 
 【今回の入力】
 『{uq if uq else "（スレッド初期議論・立ち回り）"}』
@@ -1806,8 +1919,7 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "", history_turns: 
     if llm_result:
         turns.extend(llm_result)
     else:
-        # フォールバック時も動的スロット生成でオウム返しをゼロにする
-        fallback_turns = _build_dynamic_slot_dialogue(uq, r, st_style, ignis_agent, technos_agent, sentinel_agent, nexus_agent, valkyrie_agent)
+        fallback_turns = _build_natural_fallback_dialogue(uq, r, st_style, web_hits, ignis_agent, technos_agent, sentinel_agent, nexus_agent, valkyrie_agent)
         turns.extend(fallback_turns)
 
     audit_and_execute_fires(turns, r["code"], user_query=uq, is_user_turn=bool(uq))
@@ -1877,7 +1989,7 @@ def render_council_sec(r, uk, auto_open=False):
     meta = st.session_state["council_meta"][cache_council_key]
     turns = st.session_state["council_threads"][cache_council_key]
 
-    st.markdown(f'<div class="ai-council-box"><div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t, i) for i, t in enumerate(turns))}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="ai-council-box" id="box_{uk}"><div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t, i) for i, t in enumerate(turns))}</div></div>', unsafe_allow_html=True)
 
     with st.form(f"form_q_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
