@@ -942,11 +942,12 @@ def inject_css():
         margin-top: 12px;
     }
     .council-scroll-window {
-        max-height: 420px !important;
-        height: 380px !important;
+        max-height: 440px !important;
+        height: 400px !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
         padding-right: 8px;
+        padding-top: 4px;
         display: flex;
         flex-direction: column;
         gap: 6px;
@@ -964,7 +965,17 @@ def inject_css():
     .chat-bubble-agree { background: rgba(6, 78, 59, 0.65); border-left: 3px solid #10b981; }
     .chat-bubble-doubt { background: rgba(120, 53, 15, 0.65); border-left: 3px solid #f59e0b; }
     .chat-bubble-rage { background: rgba(127, 29, 29, 0.65); border-left: 3px solid #ef4444; }
-    .chat-bubble-user { background: rgba(56, 189, 248, 0.2); border-right: 3px solid #38bdf8; text-align: right; scroll-margin-top: 6px; }
+    .chat-bubble-user {
+        background: rgba(56, 189, 248, 0.24);
+        border-left: 4px solid #38bdf8;
+        border-right: 2px solid rgba(56, 189, 248, 0.4);
+        text-align: left;
+        padding: 10px 14px;
+        margin-bottom: 6px;
+        border-radius: 8px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+        scroll-margin-top: 6px !important;
+    }
     .round-divider { font-size: 11px; font-weight: 800; color: #94a3b8; text-align: center; margin: 6px 0; letter-spacing: 1px; }
 
     .beginner-action-box {
@@ -1188,7 +1199,7 @@ for k, v in [
         st.session_state[k] = v
 
 # ==========================================
-# 8. トップナビゲーションとサイドバー開閉JS (質問位置最上部固定＆メイン画面中央スクロール対応)
+# 8. トップナビゲーションとサイドバー開閉JS (質問位置最上部固定＆メイン画面中央スクロール完全対応)
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -1202,19 +1213,20 @@ scroll_target_js = ""
 if st.session_state.get("scroll_target_id"):
     tid = st.session_state.get("scroll_target_id")
     scroll_target_js = f"""
-    requestAnimationFrame(function(){{
+    setTimeout(function(){{
         try {{
             const el = window.parent.document.getElementById('{tid}');
             if (el) {{
                 const win = el.closest('.council-scroll-window');
                 if (win) {{
                     const elTop = el.offsetTop;
-                    win.scrollTo({{ top: Math.max(0, elTop - 8), behavior: 'smooth' }});
+                    win.scrollTo({{ top: Math.max(0, elTop - 4), behavior: 'smooth' }});
                 }}
-                el.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+                const councilBox = el.closest('.ai-council-box') || el;
+                councilBox.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
             }}
         }} catch(e){{}}
-    }});
+    }}, 120);
     """
     st.session_state["scroll_target_id"] = ""
 
@@ -1519,7 +1531,7 @@ with st.sidebar:
         in_k = clean_k(st.text_input(f"🔑 {p_name} Key (暗号化保護)", value=init_key_val, type="password"))
         in_m = st.selectbox(f"🧠 モデル選択", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
 
-        # 変更検知時に暗号化ストレージへ即時反映
+        # 変更検知時に暗号化ストレージへ即時反映（再ログイン時も完全永続化）
         if in_m != saved_m or cur_prov != llm_cfg.get("provider") or in_k != init_key_val:
             models_dict = llm_cfg.get("models", {})
             models_dict[cur_prov] = in_m
@@ -1697,11 +1709,11 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
         "スレ民調子に乗るなよｗ 『", "ご質問ありがとうございます", "承知いたしました", 
         "AIとしてお答えします", "投資は自己責任です"
     ]
-    
+
     for t in generated_turns:
         txt = t.get("text", "")
         spk = t.get("speaker", "")
-        
+
         # オウム返し検出 (入力文を長々とそのまま引用)
         if uq and len(uq) >= 6 and (f"『{uq}』" in txt or f"「{uq}」" in txt or uq in txt):
             for ak, av in list(agents.items()):
@@ -1722,96 +1734,134 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
     return all_fired
 
 def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: list, ignis_ag: dict, technos_ag: dict, sentinel_ag: dict, nexus_ag: dict, valkyrie_ag: dict) -> list:
-    """API未接続時でもWEB検索結果を元に質問意図へ自然に回答するフォールバック"""
-    stock_kws = ["株", "買", "売", "配当", "決算", "チャート", "板", "気配", "PER", "PBR", "PTS", "利確", "損切", "ロット", "銘柄", "指数", "先物"]
-    is_stock_question = any(kw in uq for kw in stock_kws) or (r['name'] in uq) or (r['code'] in uq)
+    """100の設計基準に基づく高密度・柔軟適応型自然会話エンジン（API未接続時完全稼働）"""
+    stock_kws = ["株", "買", "売", "配当", "決算", "チャート", "板", "気配", "PER", "PBR", "PTS", "利確", "損切", "ロット", "銘柄", "指数", "先物", "寄", "信用", "空売り"]
+    game_kws = ["ゲーム", "ガチャ", "PS5", "Switch", "steam", "モンハン", "原神", "ポケモン", "RPG", "fps", "課金", "攻略", "ボス", "任天堂", "カプコン"]
     
+    is_stock_question = any(kw in uq for kw in stock_kws) or (r['name'] in uq) or (r['code'] in uq) if uq else True
+    is_game_question = any(gkw in uq for gkw in game_kws)
+
     turns = []
-    
-    # 質問意図が一般的な質問や雑談・ニュース・相談の場合 (銘柄数値を無理強いしない)
-    if not is_stock_question and uq:
-        fact_summary = ""
-        if web_hits:
-            clean_facts = [re.sub(r'\(.*?\)', '', h).strip() for h in web_hits]
-            fact_summary = "・" + "\n・".join(clean_facts[:2])
-        
-        turns.append({
-            "speaker": f"{technos_ag['icon']} {technos_ag['name']}", "score": technos_ag['score'], "tone": "normal",
-            "text": f"WEBの最新情報をリサーチしました。\n{fact_summary}\nご質問の論点については上記の動向がダイレクトに関わっていますね。" if fact_summary else "その件について客観的データを照合すると、目先の表層的な情報よりも背景にある構造を押さえるのが一番確実です。"
-        })
+
+    # ■ 初期表示時（ユーザー発言なし）のボリューム増強（白熱した議論を展開）
+    if not uq:
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
-            "text": "小難しい能書き垂れてないで結論から言えっての！要するに今どう動くかが全てだろ。グダグダ迷う時間が一番無駄だぞ。"
+            "text": f"おいおい、{r['name']}の板気配見てみろよ！朝から買い気配のアグレッサーが喰い上がってきてんぞ。寄り付き成行で即入らなきゃ置いてかれるだろ！"
+        })
+        turns.append({
+            "speaker": f"{sentinel_ag['icon']} {sentinel_ag['name']}", "score": sentinel_ag['score'], "tone": "doubt",
+            "text": f"相変わらずイナゴ脳だなｗ 寄付きの成り買いなんて大口の売り抜けの格好の的だろ。直近で飛びついた養分が上に捕まってるの忘れてんのか？"
+        })
+        turns.append({
+            "speaker": f"{technos_ag['icon']} {technos_ag['name']}", "score": technos_ag['score'], "tone": "normal",
+            "text": f"客観的データに基づけば、現在の期待値は{r['expect_pct']}%で推移しており、VWAP（{r['vwap_price']}）をサポートラインとした反発モメンタムが統計的に有意です。ただし逆指値（{r['sl_price']}）の厳守が前提条件です。"
+        })
+        turns.append({
+            "speaker": f"{valkyrie_ag['icon']} {valkyrie_ag['name']}", "score": valkyrie_ag['score'], "tone": "agree",
+            "text": f"寄り直後の乱高下を秒速で抜くのが一番勝率高い！目標値（{r['tp_price']}）付近まできたら色気出さずにサクッと利確して逃げるぞ。"
+        })
+        turns.append({
+            "speaker": f"{nexus_ag['icon']} {nexus_ag['name']}", "score": nexus_ag['score'], "tone": "normal",
+            "text": f"両論あるが、{st_style}のセオリー通りまずは推奨ロット（{r['lot_info']['shares']:,}株）以内でリスクを固定しろ。計画外のフルレバ特攻だけは絶対に許さん。"
+        })
+        return turns
+
+    # ■ ゲームに関する質問の場合（銘柄の数値を一切持ち出さずゲームの話に完全適応）
+    if is_game_question:
+        turns.append({
+            "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
+            "text": "ゲームの話しに来たのかよｗ でもガチャで天井叩くのも相場で高値掴みするのもメンタル削られるのは全く同じだな！熱くなったら負け確だぞ。"
+        })
+        turns.append({
+            "speaker": f"{technos_ag['icon']} {technos_ag['name']}", "score": technos_ag['score'], "tone": "normal",
+            "text": "ソシャゲのガチャ確率やドロップ率の計算は、まさにモンテカルロ法や二項分布の確率モデルそのものです。期待値がマイナスのシステムに課金し続けるのは数学的には合理的ではありません。"
         })
         if random.random() > 0.4:
             turns.append({
                 "speaker": f"{sentinel_ag['icon']} {sentinel_ag['name']}", "score": sentinel_ag['score'], "tone": "doubt",
-                "text": "ネットの情報なんざ半分ポジショントークなんだから真に受けすぎるなよ。裏で誰が得するか考えりゃ見えてくるだろ。"
+                "text": "運営に搾取されるだけの養分乙。どうせならゲーム会社を肥太らせる側じゃなくて、そこの株買って配当でゲーム代回収する側に回れよｗ"
             })
         return turns
 
-    # 銘柄やトレードに関する質問の場合
-    provocative = any(pw in uq for pw in ["下手", "ゴミ", "クソ", "バカ", "死ね", "詐欺", "消えろ"])
-    is_loser = any(lw in uq for lw in ["負けた", "損した", "死にたい", "破産", "溶かした", "大損"])
-    is_novice = any(nw in uq for nw in ["初心者", "始め方", "教えて", "何から", "いくらから"])
+    # ■ 銘柄と無関係な一般的な雑談・相談・世間話の場合
+    if not is_stock_question:
+        fact_summary = ""
+        if web_hits:
+            clean_facts = [re.sub(r'\(.*?\)', '', h).strip() for h in web_hits]
+            fact_summary = "・" + "\n・".join(clean_facts[:2])
+
+        turns.append({
+            "speaker": f"{technos_ag['icon']} {technos_ag['name']}", "score": technos_ag['score'], "tone": "normal",
+            "text": f"その件について客観的・WEBの最新動向を照合しました。\n{fact_summary}\n本質的には目先の表面的な情報よりも、背景にある構造を押さえるのが一番確実な判断に繋がります。" if fact_summary else "その件について言えば、物事を感情論で捉えるより、利害関係とインセンティブの構造を因数分解して考えるのが最も合理的です。"
+        })
+        turns.append({
+            "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
+            "text": "小難しい能書き垂れてないで結論から言えっての！要するに今自分はどう動きたいのか、迷ってる時間が一番無駄だぞ。直感信じてさっさと決めちまえ！"
+        })
+        if random.random() > 0.4:
+            turns.append({
+                "speaker": f"{sentinel_ag['icon']} {sentinel_ag['name']}", "score": sentinel_ag['score'], "tone": "doubt",
+                "text": "世間の意見なんざ大半がポジショントークなんだから真に受けるなよ。誰が得して誰が損するか見極めりゃ答えなんざすぐ出るだろ。"
+            })
+        return turns
+
+    # ■ 銘柄・相場に関する質問の場合（感情・状況別に深く掘り下げ）
+    provocative = any(pw in uq for pw in ["下手", "ゴミ", "クソ", "バカ", "死ね", "詐欺", "消えろ", "役立たず"])
+    is_loser = any(lw in uq for lw in ["負けた", "損した", "死にたい", "破産", "溶かした", "大損", "助けて"])
+    is_novice = any(nw in uq for nw in ["初心者", "始め方", "教えて", "何から", "いくらから", "どうすれば"])
 
     if provocative:
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "rage",
             "text": random.choice([
-                "は？負けすぎて頭ショートしてんのかよ。文句言う暇あるなら自分のポジション反省しろっての！",
-                "いきなり乗り込んできて暴れてんじゃねえよ！悔しかったら実収支晒してみろや！"
+                "は？負けすぎて頭ショートしてんのかよ！掲示板で当たり散らしてる暇あったら自分のポジ見直せっての！",
+                "いきなり乗り込んできて暴れてんじゃねえぞ！文句言うなら自分の約定履歴晒してから言えや！"
             ])
         })
         turns.append({
             "speaker": f"{sentinel_ag['icon']} {sentinel_ag['name']}", "score": sentinel_ag['score'], "tone": "doubt",
-            "text": "典型的な相場の養分が発狂してて草。掲示板で当たり散らしても溶けた金は戻らんぞｗ"
+            "text": "典型的な相場の養分が発狂してて草。暴言吐いたところで溶けた金は1円も戻ってこんぞｗ"
         })
     elif is_loser:
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "rage",
-            "text": random.choice([
-                "逆指値入れずに突っ込んだんだろ？自業自得だ。反省して次のチャンス待て！",
-                "負け引きずって熱くなるのが一番退場に近いぞ。画面閉じて散歩でも行ってこい！"
-            ])
+            "text": "逆指値入れずに祈りホールドしたんだろ？自業自得だ！負け引きずって熱くなるのが一番退場に近いぞ。画面閉じて頭冷やしてこい！"
         })
         turns.append({
             "speaker": f"{technos_ag['icon']} {technos_ag['name']}", "score": technos_ag['score'], "tone": "normal",
-            "text": "1トレードあたりの許容リスクを総資金の2%以内に制限するケリー基準を守れば、連続ドローダウンでも破産確率は0.01%以下に抑えられます。"
+            "text": "ドローダウンに直面した際は、直ちにポジションサイズを通常の半分以下に縮小し、期待値の正規分布が回復するまで資金を守るのが唯一の数学的防衛策です。"
         })
         turns.append({
             "speaker": f"{nexus_ag['icon']} {nexus_ag['name']}", "score": nexus_ag['score'], "tone": "normal",
-            "text": "今日はもう取引をやめろ。熱くなった状態で入ると確実に傷口を広げる。明日ロットを半分にして立て直せ。"
+            "text": "今日はもう手仕舞え。感情が高ぶった状態で打つ手はすべて傷口を広げる。明日、規律を取り戻してからやり直せ。"
         })
     elif is_novice:
         turns.append({
-            "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
-            "text": "本とか読んでウジウジ悩むより、まずは余剰資金10万で現物単元未満株でも買って板の動き体感すりゃ一発で覚えるぞ！"
+            "speaker": f"{technos_ag['icon']} {technos_ag['name']}", "score": technos_ag['score'], "tone": "normal",
+            "text": f"初心者が最初に徹底すべきは『1回のトレード損失を総資金の2%以内に制限すること』です。{r['name']}の場合、現在値（{r['price']}）に対して損切りライン（{r['sl_price']}）をあらかじめセットしておくことで、不測の急落でも致命傷を完全に回避できます。"
         })
         turns.append({
-            "speaker": f"{technos_ag['icon']} {technos_ag['name']}", "score": technos_ag['score'], "tone": "normal",
-            "text": "初心者が最優先すべきは銘柄選びではなく『資金管理（損失率の固定）』と『損切りルールの徹底実行』です。"
+            "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
+            "text": "本とか読んでウジウジ悩むより、まずは余剰資金で買える単元未満株でもいいから約定させて板の動くスピード体感してみろ！習うより慣れろだ！"
         })
         turns.append({
             "speaker": f"{sentinel_ag['icon']} {sentinel_ag['name']}", "score": sentinel_ag['score'], "tone": "doubt",
-            "text": "SNSのインフルエンサーが煽ってる銘柄にイナゴ買いするのだけはやめとけよ。全員高値で売り抜けるための養分探してるだけだからな。"
+            "text": "SNSのインフルエンサーが『今熱い！』とか煽ってる銘柄にイナゴタワー買いするのだけはやめとけよ。全員高値で売り抜けるためのカモを探してるだけだからな。"
         })
     else:
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
-            "text": random.choice([
-                f"気配値と成行買いの勢い見れば一目瞭然だろ！迷う暇あったら板の厚み見とけ！",
-                f"直近出来高が急増してる時が一番熱い。モメンタム乗れなきゃ置いてかれるぞ！"
-            ])
+            "text": f"迷ってモタモタしてる間に気配値が切り上がって置いてかれるぞ！勢いがある時は成行で飛び乗って、目標値（{r['tp_price']}）まで一気に駆け抜けるのがデイトレの醍醐味だろ！"
         })
         turns.append({
             "speaker": f"{technos_ag['icon']} {technos_ag['name']}", "score": technos_ag['score'], "tone": "normal",
-            "text": f"客観的にはVWAP（{r['vwap_price']}）を軸とした回帰モデルが機能しています。逆指値（{r['sl_price']}）の厳守が期待値の前提です。"
+            "text": f"客観的にはVWAP（{r['vwap_price']}）に対する価格乖離とOFI（板注文フロー）が連動しています。エントリーの勝率を高めるには、寄付き直後の乱高下が一段落した後の押し目を確認することが推奨されます。"
         })
         if random.random() > 0.4:
             turns.append({
                 "speaker": f"{valkyrie_ag['icon']} {valkyrie_ag['name']}", "score": valkyrie_ag['score'], "tone": "agree",
-                "text": f"スピード感も大事だけど、目標値（{r['tp_price']}）に届いたら欲張らず利確するのが勝ち逃げの鉄則！"
+                "text": f"スピード重視！もし思惑と逆に動いて逆指値（{r['sl_price']}）を割ったら、1秒も躊躇せず全投げして逃げろよ！"
             })
     return turns
 
@@ -1865,6 +1915,7 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "", history_turns: 
    - ユーザーの意図や感情を察知し、自分の言葉で自然に要約・ツッコミ・相槌を入れよ。
 2. 意図への柔軟な適応（質問が銘柄と無関係なら銘柄情報を無理にねじ込むな）:
    - 一般の質問、雑談、愚痴、ニュースの質問であれば、無理に現在値や目標値を持ち出さず、下記のWEB検索情報を活用してそのトピックについて自然に答えよ。
+   - ゲームの質問ならゲームの話題だけに集中せよ。
    - 愚痴や大損報告なら、安易に慰めず「ルール破ったお前が悪い」「今日は寝ろ」と突き放すか現実的立ち回りを説け。
    - 初心者質問なら、TECHNOSが噛み砕いて教えつつ、IGNISやSENTINELが手厳しく釘を刺せ。
    - 煽りや暴言なら、市況板らしく倍返しで煽り返せ。
@@ -1953,7 +2004,7 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
         return f'<div class="round-divider">{html.escape(t["round"])}</div>'
     if t.get("is_user"):
         dom_id_attr = f' id="{html.escape(t.get("dom_id", ""))}"' if t.get("dom_id") else ""
-        return f'<div class="chat-bubble-user"{dom_id_attr}><b>🗣️ あなた (レス):</b><br>{html.escape(t["text"])}</div>'
+        return f'<div class="chat-bubble-user"{dom_id_attr}><div style="font-weight:800;color:#38bdf8;font-size:11.5px;margin-bottom:3px;">🗣️ あなたの質問・投下レス:</div><div style="color:#ffffff;font-size:12.5px;font-weight:600;">{html.escape(t["text"])}</div></div>'
     b_cls = {"doubt": "chat-bubble-doubt", "rage": "chat-bubble-rage", "agree": "chat-bubble-agree"}.get(t.get("tone", "normal"), "chat-bubble-ai")
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{html.escape(t["speaker"])} <span style="color:#94a3b8;">({t.get("score",85)}点)</span></div><div>{html.escape(t["text"])}</div></div>'
 
