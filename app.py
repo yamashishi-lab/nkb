@@ -94,9 +94,9 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
-# 404エラーを完全防止するため、現行の公式モデル名とフォールバック系列に最適化
+# 404を防止するため、-latestサフィックスを排除し正規の現行モデルIDのみを登録
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash-latest"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -375,6 +375,17 @@ def load_llm():
         if prov in enc_keys:
             plain_keys[prov] = decrypt_secret_str(enc_keys[prov])
     raw["decrypted_keys"] = plain_keys
+    
+    # 保存されたモデル名が廃止版（-latest等）になっている場合は、自動的に現行先頭モデルへ補正
+    models = raw.get("models", {})
+    for p_k, (_, valid_list, _) in AI_PROVIDERS.items():
+        if p_k in models:
+            cur_m = models[p_k]
+            if cur_m not in valid_list:
+                models[p_k] = valid_list[0]
+        else:
+            models[p_k] = valid_list[0]
+    raw["models"] = models
     return raw
 
 def save_llm_encrypted(provider: str, models: dict, keys_dict: dict):
@@ -667,6 +678,8 @@ def get_active_ai_providers() -> list:
     for k, (lbl, m_list, _) in AI_PROVIDERS.items():
         key = clean_k(st.session_state.get(f"rt_key_{k}", "") or decrypted_keys.get(k, ""))
         mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
+        if mod not in m_list:
+            mod = m_list[0]
         if key: act.append((k, lbl, mod, key))
     return act
 
@@ -721,7 +734,7 @@ def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
     # 試行候補モデル順序（指定モデル -> 確実な現行モデル順）
     candidate_models = [mod]
     if prov == "gemini":
-        stable_defaults = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash-latest"]
+        stable_defaults = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"]
         for sm in stable_defaults:
             if sm not in candidate_models:
                 candidate_models.append(sm)
@@ -731,16 +744,16 @@ def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
         try:
             res = _try_single_llm_call(prov, target_m, key, "You are a test assistant.", "Respond with: OK")
             if res:
+                # 成功したモデルでDB・セッションを自動補正
+                cfg = load_llm()
+                models_dict = cfg.get("models", {})
+                models_dict[prov] = target_m
+                decrypted_dict = cfg.get("decrypted_keys", {})
+                decrypted_dict[prov] = key
+                save_llm_encrypted(prov, models_dict, decrypted_dict)
+                st.session_state[f"rt_mod_{prov}"] = target_m
                 if target_m != mod:
-                    # モデルを稼働実績のある安定版に自動更新
-                    cfg = load_llm()
-                    models_dict = cfg.get("models", {})
-                    models_dict[prov] = target_m
-                    decrypted_dict = cfg.get("decrypted_keys", {})
-                    decrypted_dict[prov] = key
-                    save_llm_encrypted(prov, models_dict, decrypted_dict)
-                    st.session_state[f"rt_mod_{prov}"] = target_m
-                    return True, f"✅ 接続成功！(モデルを安定版『{target_m}』に自動設定しました)"
+                    return True, f"✅ 接続成功！(モデルを安定版『{target_m}』に自動更新しました)"
                 return True, f"✅ 接続成功！モデル『{target_m}』が正常稼働しています。"
         except urllib.error.HTTPError as he:
             err_detail = ""
@@ -750,7 +763,6 @@ def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
                 pass
             last_err_msg = f"HTTP {he.code} {he.reason} - {err_detail[:120]}"
             if he.code in [400, 404]:
-                # 404/400の場合は次のモデル候補を試行
                 continue
             else:
                 return False, f"❌ APIエラー: {last_err_msg}"
@@ -768,7 +780,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
     for prov, lbl, mod, key in providers:
         candidate_models = [mod]
         if prov == "gemini":
-            stable_defaults = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash-latest"]
+            stable_defaults = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"]
             for sm in stable_defaults:
                 if sm not in candidate_models:
                     candidate_models.append(sm)
@@ -777,6 +789,15 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
             try:
                 res = _try_single_llm_call(prov, target_m, key, sys_prompt, user_prompt)
                 if res:
+                    if target_m != mod:
+                        # 成功したモデルにDBを自動修復
+                        cfg = load_llm()
+                        models_dict = cfg.get("models", {})
+                        models_dict[prov] = target_m
+                        decrypted_dict = cfg.get("decrypted_keys", {})
+                        decrypted_dict[prov] = key
+                        save_llm_encrypted(prov, models_dict, decrypted_dict)
+                        st.session_state[f"rt_mod_{prov}"] = target_m
                     return res
             except urllib.error.HTTPError as he:
                 record_system_error("call_real_llm_api:http_err", he, f"Provider: {prov}, Model: {target_m}, Code: {he.code}")
@@ -2036,7 +2057,7 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "", history_turns: 
     if llm_result:
         turns.extend(llm_result)
     else:
-        fallback_turns = _build_natural_fallback_dialogue(uq, r, st_style, web_hits, ignis_agent, technos_agent, sentinel_agent, nexus_agent, valkyrie_agent)
+        fallback_turns = _build_natural_fallback_dialogue(uq, r, st_style, web_hits, ignis_agent, technos_agent, sentinel_agent, nexus_agent, valkyrie_ag=valkyrie_agent)
         turns.extend(fallback_turns)
 
     audit_and_execute_fires(turns, r["code"], user_query=uq, is_user_turn=bool(uq))
