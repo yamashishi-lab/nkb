@@ -95,7 +95,7 @@ else:
 DB_SQLITE_PATH = "yamashishi_core.db"
 
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -370,8 +370,8 @@ def sanitize_model_name(prov: str, mod: str) -> str:
     valid_list = AI_PROVIDERS.get(prov, ("", ["gemini-2.0-flash"]))[1]
     m_clean = str(mod or "").strip()
     if prov == "gemini":
-        if any(bad in m_clean.lower() for bad in ["2.5", "1.5-pro", "gemini-pro", "text-", "ultra"]):
-            return "gemini-2.0-flash"
+        if any(bad in m_clean.lower() for bad in ["2.5", "1.5-pro", "gemini-pro", "text-", "ultra"]) or m_clean not in valid_list:
+            return valid_list[0]
     if not m_clean or m_clean not in valid_list:
         return valid_list[0]
     return m_clean
@@ -1308,8 +1308,8 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
-if "rt_mod_gemini" in st.session_state and st.session_state["rt_mod_gemini"] not in AI_PROVIDERS["gemini"][1]:
-    st.session_state["rt_mod_gemini"] = AI_PROVIDERS["gemini"][1][0]
+if "rt_mod_gemini" in st.session_state:
+    st.session_state["rt_mod_gemini"] = sanitize_model_name("gemini", st.session_state["rt_mod_gemini"])
 
 # ==========================================
 # 8. トップナビゲーションとサイドバー開閉JS
@@ -2660,7 +2660,7 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, t
         if re.match(r"^[0-9]{3}[0-9A-Z]$", code):
             code = f"{code}.T"
         inf = STOCK_METADATA_CACHE.get(code, {"name": code.replace(".T", ""), "theme": "動的スキャン対象銘柄", "genre": "個別検索"})
-        return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_pct=risk_tolerance_pct)
+        return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_tolerance_pct=risk_pct)
     except Exception as e:
         record_system_error("fetch_one", e, f"Code: {code}")
         return None
@@ -2825,7 +2825,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             for p_em, p_u in list(pending_users.items()):
                 st.markdown(
                     f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 14px;margin-bottom:8px;">'
-                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:gap:8px;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
                     f'<div>'
                     f'<span style="font-size:13.5px;font-weight:800;color:#f8fafc;">{html.escape(p_u.get("name","未入力"))}</span> '
                     f'<span style="font-size:11.5px;color:#94a3b8;">({html.escape(p_em)})</span><br>'
