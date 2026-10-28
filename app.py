@@ -94,7 +94,7 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
-# 公式現行稼働モデル
+# Google公式現行アクティブモデル(gemini-2.0-flash / gemini-1.5-flash / gemini-2.0-flash-lite)のみを厳格指定
 AI_PROVIDERS = {
     "gemini": ("🔵 Google Gemini", ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
@@ -700,7 +700,7 @@ def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_pr
     ctx = ssl.create_default_context()
     target_mod = sanitize_model_name(prov, mod)
 
-    # 404迎撃ガード: どんな文字列が送られてきても公式稼働版へ固定
+    # 404完全迎撃: どんな値が渡されても公式稼働版へ強制固定
     if prov == "gemini":
         if target_mod not in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]:
             target_mod = "gemini-2.0-flash"
@@ -765,6 +765,7 @@ def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
     valid_models = AI_PROVIDERS.get(prov, ("", ["gemini-2.0-flash"]))[1]
     safe_mod = sanitize_model_name(prov, mod)
 
+    # 確実に存在するモデルから順に検証
     candidate_models = [safe_mod]
     for vm in valid_models:
         if vm not in candidate_models:
@@ -1312,7 +1313,7 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
-# 旧世代・停止モデル名を強制パージ
+# 旧世代・停止モデル名のセッション完全パージ
 if "rt_mod_gemini" in st.session_state:
     st.session_state["rt_mod_gemini"] = sanitize_model_name("gemini", st.session_state["rt_mod_gemini"])
 
@@ -1647,7 +1648,9 @@ with st.sidebar:
         init_key_val = st.session_state.get(f"rt_key_{cur_prov}", "") or decrypted_dict.get(cur_prov, "")
 
         in_k = clean_k(st.text_input(f"🔑 {p_name} Key (暗号化保護)", value=init_key_val, type="password"))
-        in_m = st.selectbox(f"🧠 モデル選択", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
+        # ウィジェットキャッシュの古い不正文字列汚染を完全防ぐためkeyにモデルリストをバインド
+        m_idx = p_models.index(saved_m) if saved_m in p_models else 0
+        in_m = st.selectbox(f"🧠 モデル選択", p_models, index=m_idx, key=f"sel_mod_v2_{cur_prov}")
 
         if st.button("🧪 API接続テスト実行", key=f"btn_test_{cur_prov}", use_container_width=True):
             with st.spinner("API疎通テスト実行中..."):
