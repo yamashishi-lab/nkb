@@ -94,9 +94,9 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
-# 404を防止するため、現行稼働モデル（gemini-2.5-flash / gemini-2.0-flash）を最上位に配置
+# 404廃止エラーを根絶: 提供終了モデル(lite/1.5/2.0旧世代)を全排除し、公式アクティブモデルのみを指定
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-2.0-flash-lite"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -367,6 +367,13 @@ def get_client_fp() -> str:
 def load_smtp(): 
     return db_get("smtp", {"smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
 
+def sanitize_model_name(prov: str, mod: str) -> str:
+    valid_list = AI_PROVIDERS.get(prov, ("", ["gemini-2.5-flash"]))[1]
+    m_clean = str(mod or "").strip()
+    if not m_clean or m_clean not in valid_list:
+        return valid_list[0]
+    return m_clean
+
 def load_llm(): 
     raw = db_get("llm", {"provider": "gemini", "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}, "enc_keys": {}})
     enc_keys = raw.get("enc_keys", {})
@@ -376,7 +383,7 @@ def load_llm():
             plain_keys[prov] = decrypt_secret_str(enc_keys[prov])
     raw["decrypted_keys"] = plain_keys
     
-    # DB内に残っている過去の無効モデル名（-latestや1.5系など）を強制パージ
+    # DB内に残っている過去の無効・廃止モデル（lite、1.5系、2.0系など）を強制パージして即時上書き保存
     models = raw.get("models", {})
     needs_rewrite = False
     for p_k, (_, valid_list, _) in AI_PROVIDERS.items():
@@ -677,13 +684,6 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
 def clean_k_llm(k: str) -> str:
     return clean_k(k)
 
-def sanitize_model_name(prov: str, mod: str) -> str:
-    valid_list = AI_PROVIDERS.get(prov, ("", ["gemini-2.5-flash"]))[1]
-    m_clean = str(mod or "").strip()
-    if not m_clean or m_clean not in valid_list:
-        return valid_list[0]
-    return m_clean
-
 def get_active_ai_providers() -> list:
     cfg = load_llm(); act = []
     decrypted_keys = cfg.get("decrypted_keys", {})
@@ -699,7 +699,6 @@ def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_pr
     target_mod = sanitize_model_name(prov, mod)
     
     if prov == "gemini":
-        # Google公式の標準仕様（ヘッダーでx-goog-api-keyを渡し、URLパラメータ不備による404/400を完全防止）
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_mod}:generateContent"
         headers = {
             "Content-Type": "application/json",
@@ -781,7 +780,7 @@ def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
                 save_llm_encrypted(prov, models_dict, decrypted_dict)
                 st.session_state[f"rt_mod_{prov}"] = target_m
                 if target_m != mod:
-                    return True, f"✅ 接続成功！(モデルを安定版『{target_m}』に自動更新しました)"
+                    return True, f"✅ 接続成功！(モデルを稼働保証版『{target_m}』に自動設定しました)"
                 return True, f"✅ 接続成功！モデル『{target_m}』が正常稼働しています。"
         except urllib.error.HTTPError as he:
             err_detail = ""
@@ -818,7 +817,6 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
                 res = _try_single_llm_call(prov, target_m, key, sys_prompt, user_prompt)
                 if res:
                     if target_m != mod:
-                        # 成功したモデルにDBを自動修復
                         cfg = load_llm()
                         models_dict = cfg.get("models", {})
                         models_dict[prov] = target_m
@@ -1311,7 +1309,7 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
-# セッション状態内の無効な古いGeminiモデル名を安全なモデル名へ強制矯正
+# セッション状態に残存する古いGeminiモデル名を公式現行モデルへ即時強制矯正
 if "rt_mod_gemini" in st.session_state and st.session_state["rt_mod_gemini"] not in AI_PROVIDERS["gemini"][1]:
     st.session_state["rt_mod_gemini"] = AI_PROVIDERS["gemini"][1][0]
 
