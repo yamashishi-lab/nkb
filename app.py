@@ -94,9 +94,9 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
-# 404エラーを防止するため、実在が保証されている正規モデル名に更新
+# 404エラーを完全防止するため、現行の公式モデル名とフォールバック系列に最適化
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash-latest"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -443,7 +443,7 @@ def save_watchlist(email: str, wl: dict):
     db_set(safe_key, wl)
 
 # ==========================================
-# 【魔改造】自律型AGI雇用・鬼監視センター
+# 【自律型AGI雇用・鬼監視センター】
 # ==========================================
 DEFAULT_AGENTS = {
     "IGNIS": {"name": "IGNIS", "icon": "🔥", "age": 28, "score": 98, "role_type": "scalper", "good": "直感型スキャル・瞬発モメンタムと板喰いアグレッサー追従", "bad": "短気で煽り耐性が極端に低くスレ住人を罵倒しがち"},
@@ -717,11 +717,11 @@ def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_pr
 def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
     if not key:
         return False, "⚠️ APIキーが未入力です。"
-    
-    # 試行候補モデル順序（指定モデル -> 安定版フォールバック群）
+
+    # 試行候補モデル順序（指定モデル -> 確実な現行モデル順）
     candidate_models = [mod]
     if prov == "gemini":
-        stable_defaults = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        stable_defaults = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash-latest"]
         for sm in stable_defaults:
             if sm not in candidate_models:
                 candidate_models.append(sm)
@@ -757,7 +757,7 @@ def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
         except Exception as e:
             last_err_msg = str(e)
             continue
-            
+
     return False, f"❌ 全モデルで接続失敗: {last_err_msg}"
 
 def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
@@ -768,7 +768,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
     for prov, lbl, mod, key in providers:
         candidate_models = [mod]
         if prov == "gemini":
-            stable_defaults = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+            stable_defaults = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash-latest"]
             for sm in stable_defaults:
                 if sm not in candidate_models:
                     candidate_models.append(sm)
@@ -1807,7 +1807,7 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
 def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: list, ignis_ag: dict, technos_ag: dict, sentinel_ag: dict, nexus_ag: dict, valkyrie_ag: dict) -> list:
     stock_kws = ["株", "買", "売", "配当", "決算", "チャート", "板", "気配", "PER", "PBR", "PTS", "利確", "損切", "ロット", "銘柄", "指数", "先物", "寄", "信用", "空売り"]
     game_kws = ["ゲーム", "ガチャ", "PS5", "Switch", "steam", "モンハン", "原神", "ポケモン", "RPG", "fps", "課金", "攻略", "ボス", "任天堂", "カプコン"]
-    
+
     is_stock_question = any(kw in uq for kw in stock_kws) or (r['name'] in uq) or (r['code'] in uq) if uq else True
     is_game_question = any(gkw in uq for gkw in game_kws)
 
@@ -2711,7 +2711,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                 now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 if tfp and tfp != "-": sec_m.setdefault("banned_fps", {})[tfp] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN"}
                 if trhfp and trhfp != "-": sec_m.setdefault("banned_fps", {})[trhfp] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN"}
-                sec_m.setdefault("banned_emails", {})[target_em] = {"name": log_entry["input_name"], "banned_at": now_s, "orig": target_em}
+                sec_m.setdefault("banned_emails", {})[target_em] = {"name": db_m[target_em].get("name", "不明"), "banned_at": now_s, "orig": target_em}
                 db_set("mem", db_m); db_set("sec", sec_m)
                 st.error(f"{target_em} を永久BANリストに登録しました"); st.rerun()
 
