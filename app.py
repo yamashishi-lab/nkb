@@ -94,9 +94,9 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
-# 404を完全に根絶するため、v1betaで実在稼働する正規モデルIDのみを指定
+# 404を防止するため、現行稼働モデル（gemini-2.5-flash / gemini-2.0-flash）を最上位に配置
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-2.0-flash-lite"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -376,7 +376,7 @@ def load_llm():
             plain_keys[prov] = decrypt_secret_str(enc_keys[prov])
     raw["decrypted_keys"] = plain_keys
     
-    # DB内に残っている過去の無効モデル名（-latestなど）を完全に強制パージ
+    # DB内に残っている過去の無効モデル名（-latestや1.5系など）を強制パージ
     models = raw.get("models", {})
     needs_rewrite = False
     for p_k, (_, valid_list, _) in AI_PROVIDERS.items():
@@ -394,7 +394,6 @@ def save_llm_encrypted(provider: str, models: dict, keys_dict: dict):
     for prov, k_val in keys_dict.items():
         if k_val:
             enc_keys[prov] = encrypt_secret_str(clean_k(k_val))
-    # 保存時にもモデル名が有効リストに含まれているか厳密バリデーション
     sanitized_models = dict(models)
     for p_k, (_, valid_list, _) in AI_PROVIDERS.items():
         if sanitized_models.get(p_k) not in valid_list:
@@ -698,16 +697,31 @@ def get_active_ai_providers() -> list:
 def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_prompt: str) -> str:
     ctx = ssl.create_default_context()
     target_mod = sanitize_model_name(prov, mod)
+    
     if prov == "gemini":
-        url = AI_PROVIDERS[prov][2].format(model=target_mod, key=key)
-        data = json.dumps({
-            "contents": [{"role": "user", "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]}],
-            "generationConfig": {"temperature": 0.85}
-        }).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+        # Google公式の標準仕様（ヘッダーでx-goog-api-keyを渡し、URLパラメータ不備による404/400を完全防止）
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_mod}:generateContent"
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": key
+        }
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.85
+            }
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
             res = json.loads(r.read())
             return res["candidates"][0]["content"]["parts"][0]["text"]
+            
     elif prov == "claude":
         url = AI_PROVIDERS[prov][2]
         headers = {
@@ -726,6 +740,7 @@ def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_pr
         with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
             res = json.loads(r.read())
             return res["content"][0]["text"]
+            
     else:
         url = AI_PROVIDERS[prov][2]
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
