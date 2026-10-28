@@ -94,6 +94,7 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
+# 公式現行稼働モデル
 AI_PROVIDERS = {
     "gemini": ("🔵 Google Gemini", ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
@@ -699,7 +700,10 @@ def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_pr
     ctx = ssl.create_default_context()
     target_mod = sanitize_model_name(prov, mod)
 
+    # 404迎撃ガード: どんな文字列が送られてきても公式稼働版へ固定
     if prov == "gemini":
+        if target_mod not in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]:
+            target_mod = "gemini-2.0-flash"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_mod}:generateContent?key={key}"
         headers = {
             "Content-Type": "application/json"
@@ -1308,6 +1312,7 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
+# 旧世代・停止モデル名を強制パージ
 if "rt_mod_gemini" in st.session_state:
     st.session_state["rt_mod_gemini"] = sanitize_model_name("gemini", st.session_state["rt_mod_gemini"])
 
@@ -2083,7 +2088,7 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "", history_turns: 
     if llm_result:
         turns.extend(llm_result)
     else:
-        fallback_turns = _build_natural_fallback_dialogue(uq, r, st_style, web_hits, ignis_agent, technos_agent, sentinel_agent, nexus_agent, valkyrie_ag=valkyrie_agent)
+        fallback_turns = _build_natural_fallback_dialogue(uq, r, st_style, web_hits, ignis_agent, technos_agent, sentinel_agent, nexus_ag=nexus_agent, valkyrie_ag=valkyrie_agent)
         turns.extend(fallback_turns)
 
     audit_and_execute_fires(turns, r["code"], user_query=uq, is_user_turn=bool(uq))
@@ -2825,7 +2830,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             for p_em, p_u in list(pending_users.items()):
                 st.markdown(
                     f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 14px;margin-bottom:8px;">'
-                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:gap:8px;">'
                     f'<div>'
                     f'<span style="font-size:13.5px;font-weight:800;color:#f8fafc;">{html.escape(p_u.get("name","未入力"))}</span> '
                     f'<span style="font-size:11.5px;color:#94a3b8;">({html.escape(p_em)})</span><br>'
