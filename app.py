@@ -94,7 +94,6 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
-# Google公式現行アクティブモデル(gemini-2.0-flash / gemini-2.0-flash-lite / gemini-1.5-flash)を厳格指定
 AI_PROVIDERS = {
     "gemini": ("🔵 Google Gemini", ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
@@ -371,8 +370,7 @@ def sanitize_model_name(prov: str, mod: str) -> str:
     valid_list = AI_PROVIDERS.get(prov, ("", ["gemini-2.0-flash"]))[1]
     m_clean = str(mod or "").strip()
     if prov == "gemini":
-        # 存在しない・提供停止モデル（2.5系/1.5旧pro系等）を検知して最新公式稼働版へ強制リダイレクト
-        if any(bad in m_clean.lower() for bad in ["2.5", "1.5-pro", "gemini-pro", "text-"]):
+        if any(bad in m_clean.lower() for bad in ["2.5", "1.5-pro", "gemini-pro", "text-", "ultra"]):
             return "gemini-2.0-flash"
     if not m_clean or m_clean not in valid_list:
         return valid_list[0]
@@ -1310,7 +1308,6 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
-# 旧世代・停止モデル名をGoogle公式最新稼働モデルへ完全自動更新
 if "rt_mod_gemini" in st.session_state and st.session_state["rt_mod_gemini"] not in AI_PROVIDERS["gemini"][1]:
     st.session_state["rt_mod_gemini"] = AI_PROVIDERS["gemini"][1][0]
 
@@ -2663,7 +2660,7 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, t
         if re.match(r"^[0-9]{3}[0-9A-Z]$", code):
             code = f"{code}.T"
         inf = STOCK_METADATA_CACHE.get(code, {"name": code.replace(".T", ""), "theme": "動的スキャン対象銘柄", "genre": "個別検索"})
-        return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_tolerance_pct=risk_pct)
+        return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_pct=risk_tolerance_pct)
     except Exception as e:
         record_system_error("fetch_one", e, f"Code: {code}")
         return None
