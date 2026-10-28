@@ -94,9 +94,9 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
-# 404廃止エラーを根絶: 提供終了モデル(lite/1.5/2.0旧世代)を全排除し、公式アクティブモデルのみを指定
+# 404廃止エラーを根絶: 提供終了モデル(1.5/2.0旧世代/2.5-pro新規停止モデル等)を排除し、公式現行アクティブモデルのみを指定
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.5"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -371,8 +371,9 @@ def sanitize_model_name(prov: str, mod: str) -> str:
     valid_list = AI_PROVIDERS.get(prov, ("", ["gemini-2.5-flash"]))[1]
     m_clean = str(mod or "").strip()
     if prov == "gemini":
-        if any(deprecated in m_clean.lower() for deprecated in ["1.5", "2.0", "lite", "gemini-pro"]):
-            return "gemini-2.5-pro" if "pro" in m_clean.lower() else "gemini-2.5-flash"
+        # 過去の廃止モデルおよび2.5-pro(新規停止)を検知して最新公式稼働版へ自動正規化
+        if any(deprecated in m_clean.lower() for deprecated in ["1.5", "2.0", "lite", "gemini-pro", "2.5-pro"]):
+            return "gemini-2.5-flash"
     if not m_clean or m_clean not in valid_list:
         return valid_list[0]
     return m_clean
@@ -780,7 +781,7 @@ def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
                 save_llm_encrypted(prov, models_dict, decrypted_dict)
                 st.session_state[f"rt_mod_{prov}"] = target_m
                 if target_m != mod:
-                    return True, f"✅ 接続成功！(モデルを稼働保証版『{target_m}』に自動設定しました)"
+                    return True, f"✅ 接続成功！(モデルを最新稼働版『{target_m}』に自動設定しました)"
                 return True, f"✅ 接続成功！モデル『{target_m}』が正常稼働しています。"
         except urllib.error.HTTPError as he:
             err_detail = ""
@@ -1309,6 +1310,7 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
+# 旧世代または新規停止モデル名を公式現行アクティブモデルへ完全矯正
 if "rt_mod_gemini" in st.session_state and st.session_state["rt_mod_gemini"] not in AI_PROVIDERS["gemini"][1]:
     st.session_state["rt_mod_gemini"] = AI_PROVIDERS["gemini"][1][0]
 
