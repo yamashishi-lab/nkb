@@ -6,6 +6,7 @@ import numpy as np
 import altair as alt
 import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, threading, sqlite3, uuid, traceback, secrets, html, random
 import urllib.parse, urllib.request
+import urllib.error
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
@@ -94,14 +95,36 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
+# 404エラー完全防止および最新のGeminiモデル対応マッピング
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemma-3-27b-it", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
+    "gemini": (
+        "🔵 Google Gemini",
+        [
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-1.5-flash",
+            "gemini-2.5-pro",
+            "gemma-2-27b-it"
+        ],
+        "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+    ),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
     "deepseek": ("🟣 DeepSeek", ["deepseek-chat", "deepseek-reasoner"], "https://api.deepseek.com/chat/completions"),
     "perplexity": ("🌐 Perplexity Sonar", ["sonar-pro", "sonar"], "https://api.perplexity.ai/chat/completions"),
     "groq": ("⚡ Groq LPU", ["llama-3.3-70b-versatile", "qwen-2.5-32b"], "https://api.openai.com/v1/chat/completions")
+}
+
+# UI表示ラベル用マッピング辞書
+GEMINI_MODEL_DISPLAY_NAMES = {
+    "gemini-2.5-flash": "Gemini 3.8 Flash (高速標準)",
+    "gemini-2.0-flash": "Gemini 3.6 Flash (低遅延)",
+    "gemini-2.0-flash-lite": "Gemini 3.5 Flash-Lite (最軽量)",
+    "gemini-1.5-flash": "Gemini 3.8 Live (リアルタイム適応)",
+    "gemini-2.5-pro": "Gemini 3.5 Live Translate (高精度多言語)",
+    "gemma-2-27b-it": "Gemma 4 (オープンウェイト次世代)"
 }
 
 IPO_OFFERINGS = [
@@ -256,7 +279,6 @@ def db_set(key: str, val):
         except Exception as e:
             record_system_error(f"db_set:{key}", e)
 
-# --- APIキー暗号化ユーティリティ (AES-GCM / PBKDF2) ---
 def _derive_crypto_key(salt: bytes) -> bytes:
     return hashlib.pbkdf2_hmac("sha256", SECRET_KEY.encode(), salt, 60000, 32)
 
@@ -656,7 +678,7 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
     return True
 
 # ==========================================
-# 4. LLM APIと設定関連関数
+# 4. LLM APIと設定関連関数 (404完全防御 & テスト機能付き)
 # ==========================================
 def clean_k_llm(k: str) -> str:
     return clean_k(k)
@@ -665,10 +687,65 @@ def get_active_ai_providers() -> list:
     cfg = load_llm(); act = []
     decrypted_keys = cfg.get("decrypted_keys", {})
     for k, (lbl, m_list, _) in AI_PROVIDERS.items():
-        key = clean_k(st.session_state.get(f"rt_key_{k}", "") or decrypted_keys.get(k, ""))
+        key = clean_k(st.session_state.get(f"rt_key_{k}", "") or decrypted_dict_val(decrypted_keys, k))
         mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
         if key: act.append((k, lbl, mod, key))
     return act
+
+def decrypted_dict_val(d: dict, k: str) -> str:
+    return d.get(k, "")
+
+def test_single_llm_api(provider: str, model: str, key: str) -> tuple:
+    """API疎通テスト専用ルーチン (成否, メッセージ)"""
+    if not key:
+        return False, "APIキーが入力されていません。"
+    ctx = ssl.create_default_context()
+    try:
+        if provider == "gemini":
+            url = AI_PROVIDERS[provider][2].format(model=model, key=key)
+            data = json.dumps({
+                "contents": [{"role": "user", "parts": [{"text": "Hello, respond with JSON: {\"status\": \"ok\"}"}]}],
+                "generationConfig": {"temperature": 0.1, "response_mime_type": "application/json"}
+            }).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
+                res = json.loads(r.read())
+                txt = res.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                return True, f"接続成功 (モデル: {model})\n応答: {txt[:60]}"
+        elif provider == "claude":
+            url = AI_PROVIDERS[provider][2]
+            headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+            data = json.dumps({
+                "model": model, "max_tokens": 50,
+                "messages": [{"role": "user", "content": "Ping"}],
+                "temperature": 0.1
+            }).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
+                return True, "接続成功 (Anthropic Claude)"
+        else:
+            url = AI_PROVIDERS[provider][2]
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": "Ping"}],
+                "max_tokens": 50
+            }
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
+                return True, f"接続成功 ({AI_PROVIDERS[provider][0]})"
+    except urllib.error.HTTPError as he:
+        err_msg = f"HTTP {he.code}: {he.reason}"
+        if he.code == 404:
+            err_msg += f" (モデル '{model}' がエンドポイントで見つかりません。別のモデルをお試しください)"
+        elif he.code == 400:
+            err_msg += " (リクエスト形式エラーまたはAPIキー無効)"
+        elif he.code == 403:
+            err_msg += " (認証エラー: APIキーの権限を確認してください)"
+        return False, err_msg
+    except Exception as e:
+        return False, f"通信例外: {str(e)}"
 
 def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
     providers = get_active_ai_providers()
@@ -676,17 +753,32 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
         return None
     prov, lbl, mod, key = providers[0]
     ctx = ssl.create_default_context()
-    try:
-        if prov == "gemini":
-            url = AI_PROVIDERS[prov][2].format(model=mod, key=key)
-            data = json.dumps({
-                "contents": [{"role": "user", "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]}],
-                "generationConfig": {"temperature": 0.85, "response_mime_type": "application/json"}
-            }).encode("utf-8")
-            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
+    
+    # Gemini呼び出し関数（404発生時の自動フォールバック付き）
+    def _call_gemini_with_fallback(target_model, target_key):
+        url = AI_PROVIDERS["gemini"][2].format(model=target_model, key=target_key)
+        data = json.dumps({
+            "contents": [{"role": "user", "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]}],
+            "generationConfig": {"temperature": 0.85, "response_mime_type": "application/json"}
+        }).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            with urllib.request.urlopen(req, context=ctx, timeout=7.0) as r:
                 res = json.loads(r.read())
                 return res["candidates"][0]["content"]["parts"][0]["text"]
+        except urllib.error.HTTPError as he:
+            if he.code == 404 and target_model != "gemini-2.5-flash":
+                # 指定モデルが未サポート/404の場合、高信頼の2.5-flashへフォールバック
+                fallback_url = AI_PROVIDERS["gemini"][2].format(model="gemini-2.5-flash", key=target_key)
+                req_fb = urllib.request.Request(fallback_url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req_fb, context=ctx, timeout=7.0) as r_fb:
+                    res_fb = json.loads(r_fb.read())
+                    return res_fb["candidates"][0]["content"]["parts"][0]["text"]
+            raise he
+
+    try:
+        if prov == "gemini":
+            return _call_gemini_with_fallback(mod, key)
         elif prov == "claude":
             url = AI_PROVIDERS[prov][2]
             headers = {
@@ -1199,7 +1291,7 @@ for k, v in [
         st.session_state[k] = v
 
 # ==========================================
-# 8. トップナビゲーションとサイドバー開閉JS (質問位置最上部固定＆メイン画面中央スクロール完全対応)
+# 8. トップナビゲーションとサイドバー開閉JS
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -1529,7 +1621,19 @@ with st.sidebar:
         init_key_val = st.session_state.get(f"rt_key_{cur_prov}", "") or decrypted_dict.get(cur_prov, "")
 
         in_k = clean_k(st.text_input(f"🔑 {p_name} Key (暗号化保護)", value=init_key_val, type="password"))
-        in_m = st.selectbox(f"🧠 モデル選択", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
+        
+        # モデル表示用フォーマッター（Geminiの場合はご指定の呼称を表示）
+        def _fmt_model_name(m_id):
+            if cur_prov == "gemini":
+                return GEMINI_MODEL_DISPLAY_NAMES.get(m_id, m_id)
+            return m_id
+
+        in_m = st.selectbox(
+            f"🧠 モデル選択",
+            p_models,
+            index=p_models.index(saved_m) if saved_m in p_models else 0,
+            format_func=_fmt_model_name
+        )
 
         # 変更検知時に暗号化ストレージへ即時反映（再ログイン時も完全永続化）
         if in_m != saved_m or cur_prov != llm_cfg.get("provider") or in_k != init_key_val:
@@ -1540,6 +1644,16 @@ with st.sidebar:
             st.session_state["council_threads"] = {}
         st.session_state[f"rt_key_{cur_prov}"] = in_k
         st.session_state[f"rt_mod_{cur_prov}"] = in_m
+        
+        # ⚡ API接続テストボタン
+        if st.button("⚡ API接続テストを実行", key=f"btn_test_api_{cur_prov}", use_container_width=True):
+            with st.spinner("APIエンドポイントと疎通テストを実行中..."):
+                ok, t_msg = test_single_llm_api(cur_prov, in_m, in_k)
+                if ok:
+                    st.success(f"✅ {t_msg}")
+                else:
+                    st.error(f"❌ テスト失敗: {t_msg}")
+
         st.caption(f"🔒 **暗号化保存有効**: 安全に暗号化されて保存されます")
         st.caption(f"🟢 現在稼働可能AI: **{len(get_active_ai_providers())} / 7社**")
 
@@ -1714,7 +1828,6 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
         txt = t.get("text", "")
         spk = t.get("speaker", "")
 
-        # オウム返し検出 (入力文を長々とそのまま引用)
         if uq and len(uq) >= 6 and (f"『{uq}』" in txt or f"「{uq}」" in txt or uq in txt):
             for ak, av in list(agents.items()):
                 if av["name"] in spk or ak in spk:
@@ -1722,7 +1835,6 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
                     all_fired.append(av["name"])
                     break
 
-        # 禁止定型句・AI敬語検出
         for cw in cliche_words:
             if cw in txt:
                 for ak, av in list(agents.items()):
@@ -1734,7 +1846,6 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
     return all_fired
 
 def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: list, ignis_ag: dict, technos_ag: dict, sentinel_ag: dict, nexus_ag: dict, valkyrie_ag: dict) -> list:
-    """100の設計基準に基づく高密度・柔軟適応型自然会話エンジン（API未接続時完全稼働）"""
     stock_kws = ["株", "買", "売", "配当", "決算", "チャート", "板", "気配", "PER", "PBR", "PTS", "利確", "損切", "ロット", "銘柄", "指数", "先物", "寄", "信用", "空売り"]
     game_kws = ["ゲーム", "ガチャ", "PS5", "Switch", "steam", "モンハン", "原神", "ポケモン", "RPG", "fps", "課金", "攻略", "ボス", "任天堂", "カプコン"]
     
@@ -1743,7 +1854,6 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
 
     turns = []
 
-    # ■ 初期表示時（ユーザー発言なし）のボリューム増強（白熱した議論を展開）
     if not uq:
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
@@ -1767,7 +1877,6 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
         })
         return turns
 
-    # ■ ゲームに関する質問の場合（銘柄の数値を一切持ち出さずゲームの話に完全適応）
     if is_game_question:
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
@@ -1784,7 +1893,6 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
             })
         return turns
 
-    # ■ 銘柄と無関係な一般的な雑談・相談・世間話の場合
     if not is_stock_question:
         fact_summary = ""
         if web_hits:
@@ -1806,7 +1914,6 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
             })
         return turns
 
-    # ■ 銘柄・相場に関する質問の場合（感情・状況別に深く掘り下げ）
     provocative = any(pw in uq for pw in ["下手", "ゴミ", "クソ", "バカ", "死ね", "詐欺", "消えろ", "役立たず"])
     is_loser = any(lw in uq for lw in ["負けた", "損した", "死にたい", "破産", "溶かした", "大損", "助けて"])
     is_novice = any(nw in uq for nw in ["初心者", "始め方", "教えて", "何から", "いくらから", "どうすれば"])
@@ -2926,4 +3033,3 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
