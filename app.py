@@ -370,6 +370,9 @@ def load_smtp():
 def sanitize_model_name(prov: str, mod: str) -> str:
     valid_list = AI_PROVIDERS.get(prov, ("", ["gemini-2.5-flash"]))[1]
     m_clean = str(mod or "").strip()
+    if prov == "gemini":
+        if any(deprecated in m_clean.lower() for deprecated in ["1.5", "2.0", "lite", "gemini-pro"]):
+            return "gemini-2.5-pro" if "pro" in m_clean.lower() else "gemini-2.5-flash"
     if not m_clean or m_clean not in valid_list:
         return valid_list[0]
     return m_clean
@@ -382,14 +385,14 @@ def load_llm():
         if prov in enc_keys:
             plain_keys[prov] = decrypt_secret_str(enc_keys[prov])
     raw["decrypted_keys"] = plain_keys
-    
-    # DB内に残っている過去の無効・廃止モデル（lite、1.5系、2.0系など）を強制パージして即時上書き保存
+
     models = raw.get("models", {})
     needs_rewrite = False
     for p_k, (_, valid_list, _) in AI_PROVIDERS.items():
         cur_m = models.get(p_k, "")
-        if cur_m not in valid_list:
-            models[p_k] = valid_list[0]
+        sanitized = sanitize_model_name(p_k, cur_m)
+        if cur_m != sanitized:
+            models[p_k] = sanitized
             needs_rewrite = True
     raw["models"] = models
     if needs_rewrite:
@@ -403,8 +406,7 @@ def save_llm_encrypted(provider: str, models: dict, keys_dict: dict):
             enc_keys[prov] = encrypt_secret_str(clean_k(k_val))
     sanitized_models = dict(models)
     for p_k, (_, valid_list, _) in AI_PROVIDERS.items():
-        if sanitized_models.get(p_k) not in valid_list:
-            sanitized_models[p_k] = valid_list[0]
+        sanitized_models[p_k] = sanitize_model_name(p_k, sanitized_models.get(p_k))
     db_set("llm", {
         "provider": provider,
         "models": sanitized_models,
@@ -697,12 +699,11 @@ def get_active_ai_providers() -> list:
 def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_prompt: str) -> str:
     ctx = ssl.create_default_context()
     target_mod = sanitize_model_name(prov, mod)
-    
+
     if prov == "gemini":
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_mod}:generateContent"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_mod}:generateContent?key={key}"
         headers = {
-            "Content-Type": "application/json",
-            "x-goog-api-key": key
+            "Content-Type": "application/json"
         }
         payload = {
             "contents": [
@@ -720,7 +721,7 @@ def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_pr
         with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
             res = json.loads(r.read())
             return res["candidates"][0]["content"]["parts"][0]["text"]
-            
+
     elif prov == "claude":
         url = AI_PROVIDERS[prov][2]
         headers = {
@@ -739,7 +740,7 @@ def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_pr
         with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
             res = json.loads(r.read())
             return res["content"][0]["text"]
-            
+
     else:
         url = AI_PROVIDERS[prov][2]
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
@@ -771,7 +772,6 @@ def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
         try:
             res = _try_single_llm_call(prov, target_m, key, "You are a test assistant.", "Respond with: OK")
             if res:
-                # 成功したモデルでDB・セッションを自動補正
                 cfg = load_llm()
                 models_dict = cfg.get("models", {})
                 models_dict[prov] = target_m
@@ -1309,7 +1309,6 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
-# セッション状態に残存する古いGeminiモデル名を公式現行モデルへ即時強制矯正
 if "rt_mod_gemini" in st.session_state and st.session_state["rt_mod_gemini"] not in AI_PROVIDERS["gemini"][1]:
     st.session_state["rt_mod_gemini"] = AI_PROVIDERS["gemini"][1][0]
 
