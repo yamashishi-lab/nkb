@@ -94,9 +94,8 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
-# Google公式現行アクティブモデル(gemini-2.0-flash / gemini-1.5-flash / gemini-2.0-flash-lite)のみを厳格指定
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemma-3-27b-it", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -257,6 +256,7 @@ def db_set(key: str, val):
         except Exception as e:
             record_system_error(f"db_set:{key}", e)
 
+# --- APIキー暗号化ユーティリティ (AES-GCM / PBKDF2) ---
 def _derive_crypto_key(salt: bytes) -> bytes:
     return hashlib.pbkdf2_hmac("sha256", SECRET_KEY.encode(), salt, 60000, 32)
 
@@ -367,16 +367,6 @@ def get_client_fp() -> str:
 def load_smtp(): 
     return db_get("smtp", {"smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
 
-def sanitize_model_name(prov: str, mod: str) -> str:
-    valid_list = AI_PROVIDERS.get(prov, ("", ["gemini-2.0-flash"]))[1]
-    m_clean = str(mod or "").strip()
-    if prov == "gemini":
-        if any(bad in m_clean.lower() for bad in ["2.5", "1.5-pro", "gemini-pro", "text-", "ultra"]) or m_clean not in valid_list:
-            return valid_list[0]
-    if not m_clean or m_clean not in valid_list:
-        return valid_list[0]
-    return m_clean
-
 def load_llm(): 
     raw = db_get("llm", {"provider": "gemini", "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}, "enc_keys": {}})
     enc_keys = raw.get("enc_keys", {})
@@ -385,18 +375,6 @@ def load_llm():
         if prov in enc_keys:
             plain_keys[prov] = decrypt_secret_str(enc_keys[prov])
     raw["decrypted_keys"] = plain_keys
-
-    models = raw.get("models", {})
-    needs_rewrite = False
-    for p_k, (_, valid_list, _) in AI_PROVIDERS.items():
-        cur_m = models.get(p_k, "")
-        sanitized = sanitize_model_name(p_k, cur_m)
-        if cur_m != sanitized:
-            models[p_k] = sanitized
-            needs_rewrite = True
-    raw["models"] = models
-    if needs_rewrite:
-        db_set("llm", raw)
     return raw
 
 def save_llm_encrypted(provider: str, models: dict, keys_dict: dict):
@@ -404,12 +382,9 @@ def save_llm_encrypted(provider: str, models: dict, keys_dict: dict):
     for prov, k_val in keys_dict.items():
         if k_val:
             enc_keys[prov] = encrypt_secret_str(clean_k(k_val))
-    sanitized_models = dict(models)
-    for p_k, (_, valid_list, _) in AI_PROVIDERS.items():
-        sanitized_models[p_k] = sanitize_model_name(p_k, sanitized_models.get(p_k))
     db_set("llm", {
         "provider": provider,
-        "models": sanitized_models,
+        "models": models,
         "enc_keys": enc_keys
     })
 
@@ -468,7 +443,7 @@ def save_watchlist(email: str, wl: dict):
     db_set(safe_key, wl)
 
 # ==========================================
-# 【自律型AGI雇用・鬼監視センター】
+# 【魔改造】自律型AGI雇用・鬼監視センター
 # ==========================================
 DEFAULT_AGENTS = {
     "IGNIS": {"name": "IGNIS", "icon": "🔥", "age": 28, "score": 98, "role_type": "scalper", "good": "直感型スキャル・瞬発モメンタムと板喰いアグレッサー追従", "bad": "短気で煽り耐性が極端に低くスレ住人を罵倒しがち"},
@@ -681,7 +656,7 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
     return True
 
 # ==========================================
-# 4. LLM APIと設定関連関数 (自動404回避モデル自動救済ロジック搭載)
+# 4. LLM APIと設定関連関数
 # ==========================================
 def clean_k_llm(k: str) -> str:
     return clean_k(k)
@@ -691,153 +666,63 @@ def get_active_ai_providers() -> list:
     decrypted_keys = cfg.get("decrypted_keys", {})
     for k, (lbl, m_list, _) in AI_PROVIDERS.items():
         key = clean_k(st.session_state.get(f"rt_key_{k}", "") or decrypted_keys.get(k, ""))
-        raw_mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
-        mod = sanitize_model_name(k, raw_mod)
+        mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
         if key: act.append((k, lbl, mod, key))
     return act
-
-def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_prompt: str) -> str:
-    ctx = ssl.create_default_context()
-    target_mod = sanitize_model_name(prov, mod)
-
-    # 404完全迎撃: どんな値が渡されても公式稼働版へ強制固定
-    if prov == "gemini":
-        if target_mod not in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]:
-            target_mod = "gemini-2.0-flash"
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_mod}:generateContent?key={key}"
-        headers = {
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.85
-            }
-        }
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
-            res = json.loads(r.read())
-            return res["candidates"][0]["content"]["parts"][0]["text"]
-
-    elif prov == "claude":
-        url = AI_PROVIDERS[prov][2]
-        headers = {
-            "x-api-key": key,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json"
-        }
-        data = json.dumps({
-            "model": target_mod,
-            "max_tokens": 1500,
-            "system": sys_prompt,
-            "messages": [{"role": "user", "content": user_prompt}],
-            "temperature": 0.85
-        }).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
-            res = json.loads(r.read())
-            return res["content"][0]["text"]
-
-    else:
-        url = AI_PROVIDERS[prov][2]
-        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-        payload = {
-            "model": target_mod,
-            "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
-            "temperature": 0.85
-        }
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        with urllib.request.urlopen(req, context=ctx, timeout=6.5) as r:
-            res = json.loads(r.read())
-            return res["choices"][0]["message"]["content"]
-
-def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
-    if not key:
-        return False, "⚠️ APIキーが未入力です。"
-
-    valid_models = AI_PROVIDERS.get(prov, ("", ["gemini-2.0-flash"]))[1]
-    safe_mod = sanitize_model_name(prov, mod)
-
-    # 確実に存在するモデルから順に検証
-    candidate_models = [safe_mod]
-    for vm in valid_models:
-        if vm not in candidate_models:
-            candidate_models.append(vm)
-
-    last_err_msg = ""
-    for target_m in candidate_models:
-        try:
-            res = _try_single_llm_call(prov, target_m, key, "You are a test assistant.", "Respond with: OK")
-            if res:
-                cfg = load_llm()
-                models_dict = cfg.get("models", {})
-                models_dict[prov] = target_m
-                decrypted_dict = cfg.get("decrypted_keys", {})
-                decrypted_dict[prov] = key
-                save_llm_encrypted(prov, models_dict, decrypted_dict)
-                st.session_state[f"rt_mod_{prov}"] = target_m
-                if target_m != mod:
-                    return True, f"✅ 接続成功！(モデルを最新公式稼働版『{target_m}』に自動設定しました)"
-                return True, f"✅ 接続成功！モデル『{target_m}』が正常稼働しています。"
-        except urllib.error.HTTPError as he:
-            err_detail = ""
-            try:
-                err_detail = he.read().decode("utf-8")
-            except Exception:
-                pass
-            last_err_msg = f"HTTP {he.code} {he.reason} - {err_detail[:120]}"
-            if he.code in [400, 404]:
-                continue
-            else:
-                return False, f"❌ APIエラー: {last_err_msg}"
-        except Exception as e:
-            last_err_msg = str(e)
-            continue
-
-    return False, f"❌ 全モデルで接続失敗: {last_err_msg}"
 
 def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
     providers = get_active_ai_providers()
     if not providers:
         return None
-
-    for prov, lbl, mod, key in providers:
-        valid_models = AI_PROVIDERS.get(prov, ("", ["gemini-2.0-flash"]))[1]
-        safe_mod = sanitize_model_name(prov, mod)
-        candidate_models = [safe_mod]
-        for vm in valid_models:
-            if vm not in candidate_models:
-                candidate_models.append(vm)
-
-        for target_m in candidate_models:
-            try:
-                res = _try_single_llm_call(prov, target_m, key, sys_prompt, user_prompt)
-                if res:
-                    if target_m != mod:
-                        cfg = load_llm()
-                        models_dict = cfg.get("models", {})
-                        models_dict[prov] = target_m
-                        decrypted_dict = cfg.get("decrypted_keys", {})
-                        decrypted_dict[prov] = key
-                        save_llm_encrypted(prov, models_dict, decrypted_dict)
-                        st.session_state[f"rt_mod_{prov}"] = target_m
-                    return res
-            except urllib.error.HTTPError as he:
-                record_system_error("call_real_llm_api:http_err", he, f"Provider: {prov}, Model: {target_m}, Code: {he.code}")
-                if he.code in [400, 404]:
-                    continue
-                break
-            except Exception as e:
-                record_system_error("call_real_llm_api:err", e, f"Provider: {prov}, Model: {target_m}")
-                continue
-    return None
+    prov, lbl, mod, key = providers[0]
+    ctx = ssl.create_default_context()
+    try:
+        if prov == "gemini":
+            url = AI_PROVIDERS[prov][2].format(model=mod, key=key)
+            data = json.dumps({
+                "contents": [{"role": "user", "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]}],
+                "generationConfig": {"temperature": 0.85, "response_mime_type": "application/json"}
+            }).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
+                res = json.loads(r.read())
+                return res["candidates"][0]["content"]["parts"][0]["text"]
+        elif prov == "claude":
+            url = AI_PROVIDERS[prov][2]
+            headers = {
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json"
+            }
+            data = json.dumps({
+                "model": mod,
+                "max_tokens": 1500,
+                "system": sys_prompt,
+                "messages": [{"role": "user", "content": user_prompt}],
+                "temperature": 0.85
+            }).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
+                res = json.loads(r.read())
+                return res["content"][0]["text"]
+        else:
+            url = AI_PROVIDERS[prov][2]
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            payload = {
+                "model": mod,
+                "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
+                "temperature": 0.85
+            }
+            if prov in ["openai", "groq"]:
+                payload["response_format"] = {"type": "json_object"}
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=6.0) as r:
+                res = json.loads(r.read())
+                return res["choices"][0]["message"]["content"]
+    except Exception as e:
+        record_system_error("call_real_llm_api", e, f"Provider: {prov}, Model: {mod}")
+        return None
 
 # ==========================================
 # 5. UI と CSS / JS 注入 (フリーズ完全防止・高効率バッファ)
@@ -1313,12 +1198,8 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
-# 旧世代・停止モデル名のセッション完全パージ
-if "rt_mod_gemini" in st.session_state:
-    st.session_state["rt_mod_gemini"] = sanitize_model_name("gemini", st.session_state["rt_mod_gemini"])
-
 # ==========================================
-# 8. トップナビゲーションとサイドバー開閉JS
+# 8. トップナビゲーションとサイドバー開閉JS (質問位置最上部固定＆メイン画面中央スクロール完全対応)
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
@@ -1643,23 +1524,14 @@ with st.sidebar:
         llm_cfg = load_llm()
         cur_prov = st.selectbox("AIプロバイダー", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
         p_name, p_models, _ = AI_PROVIDERS[cur_prov]
-        saved_m = sanitize_model_name(cur_prov, llm_cfg.get("models", {}).get(cur_prov, p_models[0]))
+        saved_m = llm_cfg.get("models", {}).get(cur_prov, p_models[0])
         decrypted_dict = llm_cfg.get("decrypted_keys", {})
         init_key_val = st.session_state.get(f"rt_key_{cur_prov}", "") or decrypted_dict.get(cur_prov, "")
 
         in_k = clean_k(st.text_input(f"🔑 {p_name} Key (暗号化保護)", value=init_key_val, type="password"))
-        # ウィジェットキャッシュの古い不正文字列汚染を完全防ぐためkeyにモデルリストをバインド
-        m_idx = p_models.index(saved_m) if saved_m in p_models else 0
-        in_m = st.selectbox(f"🧠 モデル選択", p_models, index=m_idx, key=f"sel_mod_v2_{cur_prov}")
+        in_m = st.selectbox(f"🧠 モデル選択", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0)
 
-        if st.button("🧪 API接続テスト実行", key=f"btn_test_{cur_prov}", use_container_width=True):
-            with st.spinner("API疎通テスト実行中..."):
-                t_ok, t_msg = test_single_provider_connection(cur_prov, in_m, in_k)
-                if t_ok:
-                    st.success(t_msg)
-                else:
-                    st.error(t_msg)
-
+        # 変更検知時に暗号化ストレージへ即時反映（再ログイン時も完全永続化）
         if in_m != saved_m or cur_prov != llm_cfg.get("provider") or in_k != init_key_val:
             models_dict = llm_cfg.get("models", {})
             models_dict[cur_prov] = in_m
@@ -1842,6 +1714,7 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
         txt = t.get("text", "")
         spk = t.get("speaker", "")
 
+        # オウム返し検出 (入力文を長々とそのまま引用)
         if uq and len(uq) >= 6 and (f"『{uq}』" in txt or f"「{uq}」" in txt or uq in txt):
             for ak, av in list(agents.items()):
                 if av["name"] in spk or ak in spk:
@@ -1849,6 +1722,7 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
                     all_fired.append(av["name"])
                     break
 
+        # 禁止定型句・AI敬語検出
         for cw in cliche_words:
             if cw in txt:
                 for ak, av in list(agents.items()):
@@ -1860,14 +1734,16 @@ def audit_and_execute_fires(generated_turns: list, stock_code: str, user_query: 
     return all_fired
 
 def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: list, ignis_ag: dict, technos_ag: dict, sentinel_ag: dict, nexus_ag: dict, valkyrie_ag: dict) -> list:
+    """100の設計基準に基づく高密度・柔軟適応型自然会話エンジン（API未接続時完全稼働）"""
     stock_kws = ["株", "買", "売", "配当", "決算", "チャート", "板", "気配", "PER", "PBR", "PTS", "利確", "損切", "ロット", "銘柄", "指数", "先物", "寄", "信用", "空売り"]
     game_kws = ["ゲーム", "ガチャ", "PS5", "Switch", "steam", "モンハン", "原神", "ポケモン", "RPG", "fps", "課金", "攻略", "ボス", "任天堂", "カプコン"]
-
+    
     is_stock_question = any(kw in uq for kw in stock_kws) or (r['name'] in uq) or (r['code'] in uq) if uq else True
     is_game_question = any(gkw in uq for gkw in game_kws)
 
     turns = []
 
+    # ■ 初期表示時（ユーザー発言なし）のボリューム増強（白熱した議論を展開）
     if not uq:
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
@@ -1891,6 +1767,7 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
         })
         return turns
 
+    # ■ ゲームに関する質問の場合（銘柄の数値を一切持ち出さずゲームの話に完全適応）
     if is_game_question:
         turns.append({
             "speaker": f"{ignis_ag['icon']} {ignis_ag['name']}", "score": ignis_ag['score'], "tone": "agree",
@@ -1907,6 +1784,7 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
             })
         return turns
 
+    # ■ 銘柄と無関係な一般的な雑談・相談・世間話の場合
     if not is_stock_question:
         fact_summary = ""
         if web_hits:
@@ -1928,6 +1806,7 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
             })
         return turns
 
+    # ■ 銘柄・相場に関する質問の場合（感情・状況別に深く掘り下げ）
     provocative = any(pw in uq for pw in ["下手", "ゴミ", "クソ", "バカ", "死ね", "詐欺", "消えろ", "役立たず"])
     is_loser = any(lw in uq for lw in ["負けた", "損した", "死にたい", "破産", "溶かした", "大損", "助けて"])
     is_novice = any(nw in uq for nw in ["初心者", "始め方", "教えて", "何から", "いくらから", "どうすれば"])
@@ -2091,7 +1970,7 @@ def generate_humanlike_2ch_debate(r: dict, user_query: str = "", history_turns: 
     if llm_result:
         turns.extend(llm_result)
     else:
-        fallback_turns = _build_natural_fallback_dialogue(uq, r, st_style, web_hits, ignis_agent, technos_agent, sentinel_agent, nexus_ag=nexus_agent, valkyrie_ag=valkyrie_agent)
+        fallback_turns = _build_natural_fallback_dialogue(uq, r, st_style, web_hits, ignis_agent, technos_agent, sentinel_agent, nexus_agent, valkyrie_agent)
         turns.extend(fallback_turns)
 
     audit_and_execute_fires(turns, r["code"], user_query=uq, is_user_turn=bool(uq))
@@ -2766,7 +2645,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                 now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 if tfp and tfp != "-": sec_m.setdefault("banned_fps", {})[tfp] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN"}
                 if trhfp and trhfp != "-": sec_m.setdefault("banned_fps", {})[trhfp] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN"}
-                sec_m.setdefault("banned_emails", {})[target_em] = {"name": db_m[target_em].get("name", "不明"), "banned_at": now_s, "orig": target_em}
+                sec_m.setdefault("banned_emails", {})[target_em] = {"banned_at": now_s, "orig": target_em}
                 db_set("mem", db_m); db_set("sec", sec_m)
                 st.error(f"{target_em} を永久BANリストに登録しました"); st.rerun()
 
@@ -2833,7 +2712,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             for p_em, p_u in list(pending_users.items()):
                 st.markdown(
                     f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 14px;margin-bottom:8px;">'
-                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:gap:8px;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
                     f'<div>'
                     f'<span style="font-size:13.5px;font-weight:800;color:#f8fafc;">{html.escape(p_u.get("name","未入力"))}</span> '
                     f'<span style="font-size:11.5px;color:#94a3b8;">({html.escape(p_em)})</span><br>'
@@ -3047,3 +2926,4 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
