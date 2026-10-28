@@ -94,9 +94,9 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
-# 404廃止エラーを根絶: 提供終了モデル(1.5/2.0旧世代/2.5-pro新規停止モデル等)を排除し、公式現行アクティブモデルのみを指定
+# Google公式現行アクティブモデル(gemini-2.0-flash / gemini-2.0-flash-lite / gemini-1.5-flash)を厳格指定
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.5"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -368,12 +368,12 @@ def load_smtp():
     return db_get("smtp", {"smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
 
 def sanitize_model_name(prov: str, mod: str) -> str:
-    valid_list = AI_PROVIDERS.get(prov, ("", ["gemini-2.5-flash"]))[1]
+    valid_list = AI_PROVIDERS.get(prov, ("", ["gemini-2.0-flash"]))[1]
     m_clean = str(mod or "").strip()
     if prov == "gemini":
-        # 過去の廃止モデルおよび2.5-pro(新規停止)を検知して最新公式稼働版へ自動正規化
-        if any(deprecated in m_clean.lower() for deprecated in ["1.5", "2.0", "lite", "gemini-pro", "2.5-pro"]):
-            return "gemini-2.5-flash"
+        # 存在しない・提供停止モデル（2.5系/1.5旧pro系等）を検知して最新公式稼働版へ強制リダイレクト
+        if any(bad in m_clean.lower() for bad in ["2.5", "1.5-pro", "gemini-pro", "text-"]):
+            return "gemini-2.0-flash"
     if not m_clean or m_clean not in valid_list:
         return valid_list[0]
     return m_clean
@@ -760,7 +760,7 @@ def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
     if not key:
         return False, "⚠️ APIキーが未入力です。"
 
-    valid_models = AI_PROVIDERS.get(prov, ("", ["gemini-2.5-flash"]))[1]
+    valid_models = AI_PROVIDERS.get(prov, ("", ["gemini-2.0-flash"]))[1]
     safe_mod = sanitize_model_name(prov, mod)
 
     candidate_models = [safe_mod]
@@ -781,7 +781,7 @@ def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
                 save_llm_encrypted(prov, models_dict, decrypted_dict)
                 st.session_state[f"rt_mod_{prov}"] = target_m
                 if target_m != mod:
-                    return True, f"✅ 接続成功！(モデルを最新稼働版『{target_m}』に自動設定しました)"
+                    return True, f"✅ 接続成功！(モデルを最新公式稼働版『{target_m}』に自動設定しました)"
                 return True, f"✅ 接続成功！モデル『{target_m}』が正常稼働しています。"
         except urllib.error.HTTPError as he:
             err_detail = ""
@@ -806,7 +806,7 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
         return None
 
     for prov, lbl, mod, key in providers:
-        valid_models = AI_PROVIDERS.get(prov, ("", ["gemini-2.5-flash"]))[1]
+        valid_models = AI_PROVIDERS.get(prov, ("", ["gemini-2.0-flash"]))[1]
         safe_mod = sanitize_model_name(prov, mod)
         candidate_models = [safe_mod]
         for vm in valid_models:
@@ -1310,7 +1310,7 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
-# 旧世代または新規停止モデル名を公式現行アクティブモデルへ完全矯正
+# 旧世代・停止モデル名をGoogle公式最新稼働モデルへ完全自動更新
 if "rt_mod_gemini" in st.session_state and st.session_state["rt_mod_gemini"] not in AI_PROVIDERS["gemini"][1]:
     st.session_state["rt_mod_gemini"] = AI_PROVIDERS["gemini"][1][0]
 
@@ -2828,7 +2828,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             for p_em, p_u in list(pending_users.items()):
                 st.markdown(
                     f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 14px;margin-bottom:8px;">'
-                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:gap:8px;">'
                     f'<div>'
                     f'<span style="font-size:13.5px;font-weight:800;color:#f8fafc;">{html.escape(p_u.get("name","未入力"))}</span> '
                     f'<span style="font-size:11.5px;color:#94a3b8;">({html.escape(p_em)})</span><br>'
