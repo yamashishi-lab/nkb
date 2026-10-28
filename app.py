@@ -94,7 +94,7 @@ else:
 
 DB_SQLITE_PATH = "yamashishi_core.db"
 
-# 404を防止するため、-latestサフィックスを排除し正規の現行モデルIDのみを登録
+# 404を完全に根絶するため、v1betaで実在稼働する正規モデルIDのみを指定
 AI_PROVIDERS = {
     "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
@@ -376,16 +376,17 @@ def load_llm():
             plain_keys[prov] = decrypt_secret_str(enc_keys[prov])
     raw["decrypted_keys"] = plain_keys
     
-    # 保存されたモデル名が廃止版（-latest等）になっている場合は、自動的に現行先頭モデルへ補正
+    # DB内に残っている過去の無効モデル名（-latestなど）を完全に強制パージ
     models = raw.get("models", {})
+    needs_rewrite = False
     for p_k, (_, valid_list, _) in AI_PROVIDERS.items():
-        if p_k in models:
-            cur_m = models[p_k]
-            if cur_m not in valid_list:
-                models[p_k] = valid_list[0]
-        else:
+        cur_m = models.get(p_k, "")
+        if cur_m not in valid_list:
             models[p_k] = valid_list[0]
+            needs_rewrite = True
     raw["models"] = models
+    if needs_rewrite:
+        db_set("llm", raw)
     return raw
 
 def save_llm_encrypted(provider: str, models: dict, keys_dict: dict):
@@ -393,9 +394,14 @@ def save_llm_encrypted(provider: str, models: dict, keys_dict: dict):
     for prov, k_val in keys_dict.items():
         if k_val:
             enc_keys[prov] = encrypt_secret_str(clean_k(k_val))
+    # 保存時にもモデル名が有効リストに含まれているか厳密バリデーション
+    sanitized_models = dict(models)
+    for p_k, (_, valid_list, _) in AI_PROVIDERS.items():
+        if sanitized_models.get(p_k) not in valid_list:
+            sanitized_models[p_k] = valid_list[0]
     db_set("llm", {
         "provider": provider,
-        "models": models,
+        "models": sanitized_models,
         "enc_keys": enc_keys
     })
 
@@ -672,21 +678,28 @@ def send_mail(to_em: str, subj: str, body: str, category: str = "自動通知") 
 def clean_k_llm(k: str) -> str:
     return clean_k(k)
 
+def sanitize_model_name(prov: str, mod: str) -> str:
+    valid_list = AI_PROVIDERS.get(prov, ("", ["gemini-2.5-flash"]))[1]
+    m_clean = str(mod or "").strip()
+    if not m_clean or m_clean not in valid_list:
+        return valid_list[0]
+    return m_clean
+
 def get_active_ai_providers() -> list:
     cfg = load_llm(); act = []
     decrypted_keys = cfg.get("decrypted_keys", {})
     for k, (lbl, m_list, _) in AI_PROVIDERS.items():
         key = clean_k(st.session_state.get(f"rt_key_{k}", "") or decrypted_keys.get(k, ""))
-        mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
-        if mod not in m_list:
-            mod = m_list[0]
+        raw_mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, m_list[0])
+        mod = sanitize_model_name(k, raw_mod)
         if key: act.append((k, lbl, mod, key))
     return act
 
 def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_prompt: str) -> str:
     ctx = ssl.create_default_context()
+    target_mod = sanitize_model_name(prov, mod)
     if prov == "gemini":
-        url = AI_PROVIDERS[prov][2].format(model=mod, key=key)
+        url = AI_PROVIDERS[prov][2].format(model=target_mod, key=key)
         data = json.dumps({
             "contents": [{"role": "user", "parts": [{"text": f"{sys_prompt}\n\n{user_prompt}"}]}],
             "generationConfig": {"temperature": 0.85}
@@ -703,7 +716,7 @@ def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_pr
             "Content-Type": "application/json"
         }
         data = json.dumps({
-            "model": mod,
+            "model": target_mod,
             "max_tokens": 1500,
             "system": sys_prompt,
             "messages": [{"role": "user", "content": user_prompt}],
@@ -717,7 +730,7 @@ def _try_single_llm_call(prov: str, mod: str, key: str, sys_prompt: str, user_pr
         url = AI_PROVIDERS[prov][2]
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
         payload = {
-            "model": mod,
+            "model": target_mod,
             "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
             "temperature": 0.85
         }
@@ -731,13 +744,13 @@ def test_single_provider_connection(prov: str, mod: str, key: str) -> tuple:
     if not key:
         return False, "⚠️ APIキーが未入力です。"
 
-    # 試行候補モデル順序（指定モデル -> 確実な現行モデル順）
-    candidate_models = [mod]
-    if prov == "gemini":
-        stable_defaults = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"]
-        for sm in stable_defaults:
-            if sm not in candidate_models:
-                candidate_models.append(sm)
+    valid_models = AI_PROVIDERS.get(prov, ("", ["gemini-2.5-flash"]))[1]
+    safe_mod = sanitize_model_name(prov, mod)
+
+    candidate_models = [safe_mod]
+    for vm in valid_models:
+        if vm not in candidate_models:
+            candidate_models.append(vm)
 
     last_err_msg = ""
     for target_m in candidate_models:
@@ -778,12 +791,12 @@ def call_real_llm_api(sys_prompt: str, user_prompt: str) -> str:
         return None
 
     for prov, lbl, mod, key in providers:
-        candidate_models = [mod]
-        if prov == "gemini":
-            stable_defaults = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"]
-            for sm in stable_defaults:
-                if sm not in candidate_models:
-                    candidate_models.append(sm)
+        valid_models = AI_PROVIDERS.get(prov, ("", ["gemini-2.5-flash"]))[1]
+        safe_mod = sanitize_model_name(prov, mod)
+        candidate_models = [safe_mod]
+        for vm in valid_models:
+            if vm not in candidate_models:
+                candidate_models.append(vm)
 
         for target_m in candidate_models:
             try:
@@ -1283,6 +1296,10 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
+# セッション状態内の無効な古いGeminiモデル名を安全なモデル名へ強制矯正
+if "rt_mod_gemini" in st.session_state and st.session_state["rt_mod_gemini"] not in AI_PROVIDERS["gemini"][1]:
+    st.session_state["rt_mod_gemini"] = AI_PROVIDERS["gemini"][1][0]
+
 # ==========================================
 # 8. トップナビゲーションとサイドバー開閉JS
 # ==========================================
@@ -1609,9 +1626,7 @@ with st.sidebar:
         llm_cfg = load_llm()
         cur_prov = st.selectbox("AIプロバイダー", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
         p_name, p_models, _ = AI_PROVIDERS[cur_prov]
-        saved_m = llm_cfg.get("models", {}).get(cur_prov, p_models[0])
-        if saved_m not in p_models:
-            saved_m = p_models[0]
+        saved_m = sanitize_model_name(cur_prov, llm_cfg.get("models", {}).get(cur_prov, p_models[0]))
         decrypted_dict = llm_cfg.get("decrypted_keys", {})
         init_key_val = st.session_state.get(f"rt_key_{cur_prov}", "") or decrypted_dict.get(cur_prov, "")
 
