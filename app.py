@@ -60,7 +60,7 @@ ADMIN_PASS = _get_sec_val("ADMIN_PASS", ".yamashishi_cred.lock", lambda: "ADMIN7
 DB_SQLITE_PATH = "yamashishi_core.db"
 
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-2.5-pro", "gemma-2-27b-it"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -70,9 +70,10 @@ AI_PROVIDERS = {
 }
 
 GEMINI_MODEL_DISPLAY_NAMES = {
-    "gemini-2.5-flash": "Gemini 2.5 Flash (推奨・最新標準)", "gemini-2.0-flash": "Gemini 2.0 Flash (高速低遅延)",
-    "gemini-2.0-flash-lite": "Gemini 2.0 Flash-Lite (最軽量)", "gemini-1.5-flash": "Gemini 1.5 Flash (高互換性)",
-    "gemini-2.5-pro": "Gemini 2.5 Pro (最高精度モデル)", "gemma-2-27b-it": "Gemma 2 27B-IT (オープンウェイト)"
+    "gemini-2.0-flash": "Gemini 2.0 Flash (推奨・標準)",
+    "gemini-1.5-flash": "Gemini 1.5 Flash (高互換・超高速)",
+    "gemini-1.5-pro": "Gemini 1.5 Pro (高精度・推論特化)",
+    "gemini-2.0-flash-lite": "Gemini 2.0 Flash-Lite (最軽量)"
 }
 
 IPO_OFFERINGS = [
@@ -408,7 +409,7 @@ def get_active_ai_providers() -> list:
 def build_gemini_url(model: str, key: str) -> str:
     clean_m = model.strip()
     if clean_m.startswith("models/"): clean_m = clean_m[7:]
-    return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent?key={key.strip()}"
+    return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent?key={urllib.parse.quote(key.strip())}"
 
 def test_single_llm_api(prov: str, mod: str, key: str) -> tuple:
     if not key: return False, "APIキーが入力されていません。"
@@ -416,19 +417,20 @@ def test_single_llm_api(prov: str, mod: str, key: str) -> tuple:
     try:
         if prov == "gemini":
             candidates_models = [mod]
-            if mod != "gemini-2.0-flash": candidates_models.append("gemini-2.0-flash")
-            if mod != "gemini-1.5-flash": candidates_models.append("gemini-1.5-flash")
-            
+            for fb in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
+                if fb not in candidates_models: candidates_models.append(fb)
+
             last_err = None
             for m_test in candidates_models:
                 url = build_gemini_url(m_test, key)
                 d = json.dumps({
-                    "contents": [{"parts": [{"text": "Hello, respond with JSON: {\"status\": \"ok\"}"}]}],
-                    "generationConfig": {"temperature": 0.1, "response_mime_type": "application/json"}
+                    "contents": [{"parts": [{"text": "Hello, respond with JSON: {\"status\": \"ok\"}"}]}]
                 }).encode("utf-8")
                 try:
-                    with urllib.request.urlopen(urllib.request.Request(url, data=d, headers={"Content-Type": "application/json"}, method="POST"), context=ctx, timeout=8.0) as r:
-                        txt = json.loads(r.read()).get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    req = urllib.request.Request(url, data=d, headers={"Content-Type": "application/json", "x-goog-api-key": key.strip()}, method="POST")
+                    with urllib.request.urlopen(req, context=ctx, timeout=8.0) as r:
+                        resp_data = json.loads(r.read())
+                        txt = resp_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                         return True, f"接続成功 (モデル: {m_test})\n応答: {txt[:60]}"
                 except urllib.error.HTTPError as he:
                     last_err = he
@@ -467,15 +469,15 @@ def call_real_llm_api(sys_p: str, user_p: str) -> str:
 
     def _call_gemini(m_name, k_val):
         candidates = [m_name]
-        if m_name != "gemini-2.0-flash": candidates.append("gemini-2.0-flash")
-        if m_name != "gemini-1.5-flash": candidates.append("gemini-1.5-flash")
-        
+        for fb in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
+            if fb not in candidates: candidates.append(fb)
+
         d = json.dumps({"contents": [{"parts": [{"text": f"{sys_p}\n\n{user_p}"}]}], "generationConfig": {"temperature": 0.85, "response_mime_type": "application/json"}}).encode("utf-8")
-        
+
         last_e = None
         for cand in candidates:
             url = build_gemini_url(cand, k_val)
-            req = urllib.request.Request(url, data=d, headers={"Content-Type": "application/json"}, method="POST")
+            req = urllib.request.Request(url, data=d, headers={"Content-Type": "application/json", "x-goog-api-key": k_val.strip()}, method="POST")
             try:
                 with urllib.request.urlopen(req, context=ctx, timeout=8.0) as r:
                     return json.loads(r.read())["candidates"][0]["content"]["parts"][0]["text"]
@@ -744,9 +746,13 @@ components.html(
                 b.onclick=function(e){{e.preventDefault();e.stopPropagation();const sb=doc.querySelector('section[data-testid="stSidebar"]');if(sb){{sb.getAttribute('aria-expanded')==='true'?closeCustomSidebar():openCustomSidebar();}}}};
                 if(!doc._yamashishiGlobalOutsideBound){{doc.addEventListener('click',function(e){{const sb=doc.querySelector('section[data-testid="stSidebar"]'),btn=doc.getElementById('yamashishi-floating-sidebar-btn');if(sb&&sb.getAttribute('aria-expanded')==='true'&&!sb.contains(e.target)&&(!btn||!btn.contains(e.target)))closeCustomSidebar();}},true);doc._yamashishiGlobalOutsideBound=true;}}
                 
-                // セッション保持による開閉状態の自動復元
+                // 選択時・リロード時のサイドバー保持
                 const savedState = window.parent.sessionStorage.getItem('yamashishi_sb_state');
-                if(savedState === 'open'){{ openCustomSidebar(); }}
+                if(savedState === 'open'){{
+                    openCustomSidebar();
+                    setTimeout(openCustomSidebar, 50);
+                    setTimeout(openCustomSidebar, 150);
+                }}
             }}catch(e){{}}
         }}
         function fixTopNav(){{try{{const m=doc.querySelector('.top-nav-marker');if(!m)return;let bx=m.closest('[data-testid="stVerticalBlockBorderWrapper"]')||m.closest('[data-testid="stVerticalBlock"]');if(bx&&bx.querySelector('button'))bx.classList.add('fixed-top-nav-bar');}}catch(e){{}}}}
@@ -809,7 +815,7 @@ with st.sidebar:
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
 
     if cu == ADMIN_EMAIL.strip().lower():
-        st.markdown('<div class="sidebar-section-card" style="border-color:#eab308;"><div class="sidebar-header-badge" style="color:#fde047;">👑 管理者コントロール</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-section-card" style="border-color:#eab308;padding:8px 12px;margin-bottom:12px;">', unsafe_allow_html=True)
         if st.button("🖥️ 統合管理コントロールセンター起動", use_container_width=True, type="primary"):
             st.session_state["navigation_page"] = "ADMIN"; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
