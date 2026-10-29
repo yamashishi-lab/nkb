@@ -70,9 +70,9 @@ AI_PROVIDERS = {
 }
 
 GEMINI_MODEL_DISPLAY_NAMES = {
-    "gemini-2.5-flash": "Gemini 3.8 Flash (高速標準)", "gemini-2.0-flash": "Gemini 3.6 Flash (低遅延)",
-    "gemini-2.0-flash-lite": "Gemini 3.5 Flash-Lite (最軽量)", "gemini-1.5-flash": "Gemini 3.8 Live (リアルタイム適応)",
-    "gemini-2.5-pro": "Gemini 3.5 Live Translate (高精度多言語)", "gemma-2-27b-it": "Gemma 4 (オープンウェイト次世代)"
+    "gemini-2.5-flash": "Gemini 2.5 Flash (推奨・最新標準)", "gemini-2.0-flash": "Gemini 2.0 Flash (高速低遅延)",
+    "gemini-2.0-flash-lite": "Gemini 2.0 Flash-Lite (最軽量)", "gemini-1.5-flash": "Gemini 1.5 Flash (高互換性)",
+    "gemini-2.5-pro": "Gemini 2.5 Pro (最高精度モデル)", "gemma-2-27b-it": "Gemma 2 27B-IT (オープンウェイト)"
 }
 
 IPO_OFFERINGS = [
@@ -405,25 +405,51 @@ def get_active_ai_providers() -> list:
         if key: act.append((k, lbl, mod, key))
     return act
 
+def build_gemini_url(model: str, key: str) -> str:
+    clean_m = model.strip()
+    if clean_m.startswith("models/"): clean_m = clean_m[7:]
+    return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent?key={key.strip()}"
+
 def test_single_llm_api(prov: str, mod: str, key: str) -> tuple:
     if not key: return False, "APIキーが入力されていません。"
     ctx = ssl.create_default_context()
     try:
         if prov == "gemini":
-            url = AI_PROVIDERS[prov][2].format(model=mod, key=key)
-            d = json.dumps({"contents": [{"role": "user", "parts": [{"text": "Hello, respond with JSON: {\"status\": \"ok\"}"}]}], "generationConfig": {"temperature": 0.1, "response_mime_type": "application/json"}}).encode("utf-8")
-            with urllib.request.urlopen(urllib.request.Request(url, data=d, headers={"Content-Type": "application/json"}, method="POST"), context=ctx, timeout=6.0) as r:
-                txt = json.loads(r.read()).get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                return True, f"接続成功 (モデル: {mod})\n応答: {txt[:60]}"
+            candidates_models = [mod]
+            if mod != "gemini-2.0-flash": candidates_models.append("gemini-2.0-flash")
+            if mod != "gemini-1.5-flash": candidates_models.append("gemini-1.5-flash")
+            
+            last_err = None
+            for m_test in candidates_models:
+                url = build_gemini_url(m_test, key)
+                d = json.dumps({
+                    "contents": [{"parts": [{"text": "Hello, respond with JSON: {\"status\": \"ok\"}"}]}],
+                    "generationConfig": {"temperature": 0.1, "response_mime_type": "application/json"}
+                }).encode("utf-8")
+                try:
+                    with urllib.request.urlopen(urllib.request.Request(url, data=d, headers={"Content-Type": "application/json"}, method="POST"), context=ctx, timeout=8.0) as r:
+                        txt = json.loads(r.read()).get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                        return True, f"接続成功 (モデル: {m_test})\n応答: {txt[:60]}"
+                except urllib.error.HTTPError as he:
+                    last_err = he
+                    if he.code != 404:
+                        break
+            if last_err:
+                m = f"HTTP {last_err.code}: {last_err.reason}"
+                if last_err.code == 404: m += f" (モデル '{mod}' が見つかりませんでした。APIキーの有効性または別モデルをご確認ください)"
+                elif last_err.code == 400: m += " (リクエスト形式エラーまたはAPIキー無効)"
+                elif last_err.code == 403: m += " (認証エラー: APIキーの権限・有効期限を確認してください)"
+                return False, m
+            return False, "接続テストに失敗しました。"
         elif prov == "claude":
             url = AI_PROVIDERS[prov][2]
             d = json.dumps({"model": mod, "max_tokens": 50, "messages": [{"role": "user", "content": "Ping"}], "temperature": 0.1}).encode("utf-8")
-            with urllib.request.urlopen(urllib.request.Request(url, data=d, headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=6.0) as r:
+            with urllib.request.urlopen(urllib.request.Request(url, data=d, headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=8.0) as r:
                 return True, "接続成功 (Anthropic Claude)"
         else:
             url = AI_PROVIDERS[prov][2]
             d = json.dumps({"model": mod, "messages": [{"role": "user", "content": "Ping"}], "max_tokens": 50}).encode("utf-8")
-            with urllib.request.urlopen(urllib.request.Request(url, data=d, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=6.0) as r:
+            with urllib.request.urlopen(urllib.request.Request(url, data=d, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=8.0) as r:
                 return True, f"接続成功 ({AI_PROVIDERS[prov][0]})"
     except urllib.error.HTTPError as he:
         m = f"HTTP {he.code}: {he.reason}"
@@ -440,29 +466,35 @@ def call_real_llm_api(sys_p: str, user_p: str) -> str:
     ctx = ssl.create_default_context()
 
     def _call_gemini(m_name, k_val):
-        url = AI_PROVIDERS["gemini"][2].format(model=m_name, key=k_val)
-        d = json.dumps({"contents": [{"role": "user", "parts": [{"text": f"{sys_p}\n\n{user_p}"}]}], "generationConfig": {"temperature": 0.85, "response_mime_type": "application/json"}}).encode("utf-8")
-        req = urllib.request.Request(url, data=d, headers={"Content-Type": "application/json"}, method="POST")
-        try:
-            with urllib.request.urlopen(req, context=ctx, timeout=7.0) as r:
-                return json.loads(r.read())["candidates"][0]["content"]["parts"][0]["text"]
-        except urllib.error.HTTPError as he:
-            if he.code == 404 and m_name != "gemini-2.5-flash":
-                fb_url = AI_PROVIDERS["gemini"][2].format(model="gemini-2.5-flash", key=k_val)
-                with urllib.request.urlopen(urllib.request.Request(fb_url, data=d, headers={"Content-Type": "application/json"}, method="POST"), context=ctx, timeout=7.0) as r_fb:
-                    return json.loads(r_fb.read())["candidates"][0]["content"]["parts"][0]["text"]
-            raise he
+        candidates = [m_name]
+        if m_name != "gemini-2.0-flash": candidates.append("gemini-2.0-flash")
+        if m_name != "gemini-1.5-flash": candidates.append("gemini-1.5-flash")
+        
+        d = json.dumps({"contents": [{"parts": [{"text": f"{sys_p}\n\n{user_p}"}]}], "generationConfig": {"temperature": 0.85, "response_mime_type": "application/json"}}).encode("utf-8")
+        
+        last_e = None
+        for cand in candidates:
+            url = build_gemini_url(cand, k_val)
+            req = urllib.request.Request(url, data=d, headers={"Content-Type": "application/json"}, method="POST")
+            try:
+                with urllib.request.urlopen(req, context=ctx, timeout=8.0) as r:
+                    return json.loads(r.read())["candidates"][0]["content"]["parts"][0]["text"]
+            except urllib.error.HTTPError as he:
+                last_e = he
+                if he.code != 404: raise he
+        if last_e: raise last_e
+        return None
 
     try:
         if prov == "gemini": return _call_gemini(mod, key)
         elif prov == "claude":
             d = json.dumps({"model": mod, "max_tokens": 1500, "system": sys_p, "messages": [{"role": "user", "content": user_p}], "temperature": 0.85}).encode("utf-8")
-            with urllib.request.urlopen(urllib.request.Request(AI_PROVIDERS[prov][2], data=d, headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=6.0) as r:
+            with urllib.request.urlopen(urllib.request.Request(AI_PROVIDERS[prov][2], data=d, headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=8.0) as r:
                 return json.loads(r.read())["content"][0]["text"]
         else:
             payload = {"model": mod, "messages": [{"role": "system", "content": sys_p}, {"role": "user", "content": user_p}], "temperature": 0.85}
             if prov in ["openai", "groq"]: payload["response_format"] = {"type": "json_object"}
-            with urllib.request.urlopen(urllib.request.Request(AI_PROVIDERS[prov][2], data=json.dumps(payload).encode("utf-8"), headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=6.0) as r:
+            with urllib.request.urlopen(urllib.request.Request(AI_PROVIDERS[prov][2], data=json.dumps(payload).encode("utf-8"), headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=8.0) as r:
                 return json.loads(r.read())["choices"][0]["message"]["content"]
     except Exception as e:
         record_system_error("call_real_llm_api", e, f"Provider: {prov}, Model: {mod}")
@@ -696,8 +728,8 @@ components.html(
     f"""<script>
     (function(){{
         const doc = window.parent.document;
-        function closeCustomSidebar(){{try{{const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');if(sb){{sb.setAttribute('aria-expanded','false');sb.style.setProperty('transform','translateX(-120%)','important');sb.style.setProperty('pointer-events','none','important');}}if(o)o.style.display='none';}}catch(e){{}}}}
-        function openCustomSidebar(){{try{{const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');if(sb){{sb.setAttribute('aria-expanded','true');sb.style.setProperty('transform','translateX(0)','important');sb.style.setProperty('pointer-events','auto','important');}}if(o)o.style.display='block';}}catch(e){{}}}}
+        function closeCustomSidebar(){{try{{const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');if(sb){{sb.setAttribute('aria-expanded','false');sb.style.setProperty('transform','translateX(-120%)','important');sb.style.setProperty('pointer-events','none','important');}}if(o)o.style.display='none';window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');}}catch(e){{}}}}
+        function openCustomSidebar(){{try{{const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');if(sb){{sb.setAttribute('aria-expanded','true');sb.style.setProperty('transform','translateX(0)','important');sb.style.setProperty('pointer-events','auto','important');}}if(o)o.style.display='block';window.parent.sessionStorage.setItem('yamashishi_sb_state','open');}}catch(e){{}}}}
         function setupCustomSidebar(){{
             try{{
                 if(!doc.getElementById('yamashishi-custom-sidebar-styles')){{
@@ -711,6 +743,10 @@ components.html(
                 if(!b){{b=doc.createElement('div');b.id='yamashishi-floating-sidebar-btn';b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span>MENU</span>';doc.body.appendChild(b);}}
                 b.onclick=function(e){{e.preventDefault();e.stopPropagation();const sb=doc.querySelector('section[data-testid="stSidebar"]');if(sb){{sb.getAttribute('aria-expanded')==='true'?closeCustomSidebar():openCustomSidebar();}}}};
                 if(!doc._yamashishiGlobalOutsideBound){{doc.addEventListener('click',function(e){{const sb=doc.querySelector('section[data-testid="stSidebar"]'),btn=doc.getElementById('yamashishi-floating-sidebar-btn');if(sb&&sb.getAttribute('aria-expanded')==='true'&&!sb.contains(e.target)&&(!btn||!btn.contains(e.target)))closeCustomSidebar();}},true);doc._yamashishiGlobalOutsideBound=true;}}
+                
+                // セッション保持による開閉状態の自動復元
+                const savedState = window.parent.sessionStorage.getItem('yamashishi_sb_state');
+                if(savedState === 'open'){{ openCustomSidebar(); }}
             }}catch(e){{}}
         }}
         function fixTopNav(){{try{{const m=doc.querySelector('.top-nav-marker');if(!m)return;let bx=m.closest('[data-testid="stVerticalBlockBorderWrapper"]')||m.closest('[data-testid="stVerticalBlock"]');if(bx&&bx.querySelector('button'))bx.classList.add('fixed-top-nav-bar');}}catch(e){{}}}}
@@ -791,12 +827,12 @@ with st.sidebar:
 
     with st.expander("🧠 7大AI ＆ 量子エンジン設定 (🔒暗号化保存対応)", expanded=False):
         llm_cfg = load_llm()
-        cur_prov = st.selectbox("AIプロバイダー", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0)
+        cur_prov = st.selectbox("AIプロバイダー", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0, key="sb_prov_selector")
         p_name, p_models, _ = AI_PROVIDERS[cur_prov]
         saved_m, dec_dict = llm_cfg.get("models", {}).get(cur_prov, p_models[0]), llm_cfg.get("decrypted_keys", {})
         init_k = st.session_state.get(f"rt_key_{cur_prov}", "") or dec_dict.get(cur_prov, "")
-        in_k = clean_k(st.text_input(f"🔑 {p_name} Key (暗号化保護)", value=init_k, type="password"))
-        in_m = st.selectbox(f"🧠 モデル選択", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0, format_func=lambda m: GEMINI_MODEL_DISPLAY_NAMES.get(m, m) if cur_prov == "gemini" else m)
+        in_k = clean_k(st.text_input(f"🔑 {p_name} Key (暗号化保護)", value=init_k, type="password", key=f"sb_input_key_{cur_prov}"))
+        in_m = st.selectbox(f"🧠 モデル選択", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0, format_func=lambda m: GEMINI_MODEL_DISPLAY_NAMES.get(m, m) if cur_prov == "gemini" else m, key=f"sb_model_selector_{cur_prov}")
         if in_m != saved_m or cur_prov != llm_cfg.get("provider") or in_k != init_k:
             md, dd = llm_cfg.get("models", {}), dec_dict
             md[cur_prov], dd[cur_prov] = in_m, in_k
@@ -807,7 +843,10 @@ with st.sidebar:
         if st.button("⚡ API接続テストを実行", key=f"btn_test_api_{cur_prov}", use_container_width=True):
             with st.spinner("APIエンドポイントと疎通テストを実行中..."):
                 ok, t_msg = test_single_llm_api(cur_prov, in_m, in_k)
-                st.success(f"✅ {t_msg}") if ok else st.error(f"❌ テスト失敗: {t_msg}")
+                if ok:
+                    st.success(f"✅ {t_msg}")
+                else:
+                    st.error(f"❌ テスト失敗: {t_msg}")
         st.caption(f"🔒 **暗号化保存有効**: 安全に暗号化されて保存されます\n\n🟢 現在稼働可能AI: **{len(get_active_ai_providers())} / 7社**")
 
     with st.expander("💰 資金管理＆選抜フィルタ", expanded=False):
