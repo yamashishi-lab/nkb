@@ -417,7 +417,7 @@ def test_single_llm_api(prov: str, mod: str, key: str) -> tuple:
     try:
         if prov == "gemini":
             candidates_models = [mod]
-            for fb in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
+            for fb in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"]:
                 if fb not in candidates_models: candidates_models.append(fb)
 
             last_err = None
@@ -469,7 +469,7 @@ def call_real_llm_api(sys_p: str, user_p: str) -> str:
 
     def _call_gemini(m_name, k_val):
         candidates = [m_name]
-        for fb in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
+        for fb in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"]:
             if fb not in candidates: candidates.append(fb)
 
         d = json.dumps({"contents": [{"parts": [{"text": f"{sys_p}\n\n{user_p}"}]}], "generationConfig": {"temperature": 0.85, "response_mime_type": "application/json"}}).encode("utf-8")
@@ -752,6 +752,7 @@ components.html(
                     openCustomSidebar();
                     setTimeout(openCustomSidebar, 50);
                     setTimeout(openCustomSidebar, 150);
+                    setTimeout(openCustomSidebar, 300);
                 }}
             }}catch(e){{}}
         }}
@@ -815,10 +816,8 @@ with st.sidebar:
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
 
     if cu == ADMIN_EMAIL.strip().lower():
-        st.markdown('<div class="sidebar-section-card" style="border-color:#eab308;padding:8px 12px;margin-bottom:12px;">', unsafe_allow_html=True)
         if st.button("🖥️ 統合管理コントロールセンター起動", use_container_width=True, type="primary"):
             st.session_state["navigation_page"] = "ADMIN"; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
     with st.expander("🎯 投資スタイル ＆ アルゴリズム", expanded=False):
         style_list = ["⚡ デイトレード (前場・後場の波及を狙う)", "🚀 スキャルピング (秒〜分単位のモメンタム)", "📈 スイングトレード (数日〜数週間のトレンド)", "💎 バイ＆ホールド (中長期・IPO分散投資)"]
@@ -1209,7 +1208,7 @@ def fetch_macro():
     tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
     res = {}
     try:
-        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=3.0)
+        raw = yf.download(list(c for c, _ in tks.values()), period="5d", group_by="ticker", threads=True, progress=False, timeout=2.5)
         for k, (c, lbl) in tks.items():
             try:
                 d = raw[c].dropna(subset=["Close"]); lc, pc = float(d["Close"].iloc[-1]), float(d["Close"].iloc[-2])
@@ -1372,7 +1371,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
 @st.cache_data(ttl=90)
 def fetch_pool_batch(macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, total_cap=1000000, risk_pct=2.0):
     codes = [c for c, _, _, _ in GLOBAL_MARKET_TICKERS]
-    try: raw = yf.download(codes, period="5d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=4.0)
+    try: raw = yf.download(codes, period="5d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=3.0)
     except Exception as e: record_system_error("fetch_pool_batch:download", e); raw = {}
     gmap, alist, seen = {g: [] for g in DYNAMIC_GENRES}, [], set()
 
