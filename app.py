@@ -60,7 +60,7 @@ ADMIN_PASS = _get_sec_val("ADMIN_PASS", ".yamashishi_cred.lock", lambda: "ADMIN7
 DB_SQLITE_PATH = "yamashishi_core.db"
 
 AI_PROVIDERS = {
-    "gemini": ("🔵 Google Gemini", ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
+    "gemini": ("🔵 Google Gemini", ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"], "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     "openai": ("🟢 OpenAI ChatGPT", ["gpt-4o-mini", "gpt-4o", "o3-mini"], "https://api.openai.com/v1/chat/completions"),
     "claude": ("🟠 Anthropic Claude", ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"], "https://api.anthropic.com/v1/messages"),
     "grok": ("⚫ xAI Grok", ["grok-2-latest", "grok-3-mini"], "https://api.xai.com/v1/chat/completions"),
@@ -70,10 +70,10 @@ AI_PROVIDERS = {
 }
 
 GEMINI_MODEL_DISPLAY_NAMES = {
-    "gemini-2.0-flash": "Gemini 2.0 Flash (推奨・標準)",
-    "gemini-1.5-flash": "Gemini 1.5 Flash (高互換・超高速)",
-    "gemini-1.5-pro": "Gemini 1.5 Pro (高精度・推論特化)",
-    "gemini-2.0-flash-lite": "Gemini 2.0 Flash-Lite (最軽量)"
+    "gemini-2.5-flash": "Gemini 2.5 Flash (推奨・無料枠安定)",
+    "gemini-2.0-flash": "Gemini 2.0 Flash (高速・高互換)",
+    "gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite (最軽量・制限回避用)",
+    "gemini-2.5-pro": "Gemini 2.5 Pro (高精度・推論特化)"
 }
 
 IPO_OFFERINGS = [
@@ -227,6 +227,11 @@ def get_client_fp() -> str:
 def load_smtp(): return db_get("smtp", {"smtp_user": ADMIN_EMAIL, "smtp_pass": "", "smtp_server": "smtp.mail.yahoo.co.jp", "smtp_port": 465})
 def load_llm():
     raw = db_get("llm", {"provider": "gemini", "models": {k: v[1][0] for k, v in AI_PROVIDERS.items()}, "enc_keys": {}})
+    # 旧1.5系モデルがDBに保存されていた場合は自動で現行モデルへ補正
+    mods = raw.get("models", {})
+    if "1.5" in str(mods.get("gemini", "")):
+        mods["gemini"] = AI_PROVIDERS["gemini"][1][0]
+        raw["models"] = mods
     raw["decrypted_keys"] = {p: decrypt_secret_str(raw.get("enc_keys", {}).get(p, "")) for p in AI_PROVIDERS}
     return raw
 
@@ -392,7 +397,7 @@ def send_mail(to_em: str, subj: str, body: str, cat: str = "自動通知") -> bo
     return True
 
 # ==========================================
-# 4. LLM APIと設定関連関数
+# 4. LLM APIと設定関連関数（無料枠・安定稼働対応）
 # ==========================================
 def clean_k_llm(k: str) -> str: return clean_k(k)
 def decrypted_dict_val(d: dict, k: str) -> str: return d.get(k, "")
@@ -409,6 +414,7 @@ def get_active_ai_providers() -> list:
 def build_gemini_url(model: str, key: str) -> str:
     clean_m = model.strip()
     if clean_m.startswith("models/"): clean_m = clean_m[7:]
+    if "1.5" in clean_m: clean_m = "gemini-2.5-flash"
     return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent?key={urllib.parse.quote(key.strip())}"
 
 def test_single_llm_api(prov: str, mod: str, key: str) -> tuple:
@@ -417,49 +423,48 @@ def test_single_llm_api(prov: str, mod: str, key: str) -> tuple:
     try:
         if prov == "gemini":
             candidates_models = [mod]
-            for fb in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"]:
+            for fb in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"]:
                 if fb not in candidates_models: candidates_models.append(fb)
 
             last_err = None
             for m_test in candidates_models:
                 url = build_gemini_url(m_test, key)
                 d = json.dumps({
-                    "contents": [{"parts": [{"text": "Hello, respond with JSON: {\"status\": \"ok\"}"}]}]
+                    "contents": [{"parts": [{"text": "Respond with OK"}]}],
+                    "generationConfig": {"maxOutputTokens": 20}
                 }).encode("utf-8")
                 try:
-                    req = urllib.request.Request(url, data=d, headers={"Content-Type": "application/json", "x-goog-api-key": key.strip()}, method="POST")
-                    with urllib.request.urlopen(req, context=ctx, timeout=8.0) as r:
-                        resp_data = json.loads(r.read())
+                    req = urllib.request.Request(url, data=d, headers={"Content-Type": "application/json"}, method="POST")
+                    with urllib.request.urlopen(req, context=ctx, timeout=15.0) as r:
+                        resp_data = json.loads(r.read().decode("utf-8"))
                         txt = resp_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                        return True, f"接続成功 (モデル: {m_test})\n応答: {txt[:60]}"
+                        return True, f"接続成功 (稼働モデル: {m_test})\n応答: {txt.strip()[:40]}"
                 except urllib.error.HTTPError as he:
                     last_err = he
-                    if he.code != 404:
-                        break
+                    err_body = ""
+                    try: err_body = he.read().decode("utf-8")
+                    except Exception: pass
+                    if he.code in (404, 429, 503):
+                        time.sleep(1.0)
+                        continue
+                    return False, f"HTTP {he.code}: {err_body[:120] or he.reason}"
             if last_err:
-                m = f"HTTP {last_err.code}: {last_err.reason}"
-                if last_err.code == 404: m += f" (モデル '{mod}' が見つかりませんでした。APIキーの有効性または別モデルをご確認ください)"
-                elif last_err.code == 400: m += " (リクエスト形式エラーまたはAPIキー無効)"
-                elif last_err.code == 403: m += " (認証エラー: APIキーの権限・有効期限を確認してください)"
-                return False, m
+                if last_err.code == 429:
+                    return False, "HTTP 429: 無料枠の1分あたりリクエスト上限に達しました。10〜20秒待ってから再試行してください。"
+                return False, f"HTTP {last_err.code}: {last_err.reason} (キーの有効性を確認してください)"
             return False, "接続テストに失敗しました。"
         elif prov == "claude":
             url = AI_PROVIDERS[prov][2]
             d = json.dumps({"model": mod, "max_tokens": 50, "messages": [{"role": "user", "content": "Ping"}], "temperature": 0.1}).encode("utf-8")
-            with urllib.request.urlopen(urllib.request.Request(url, data=d, headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=8.0) as r:
+            with urllib.request.urlopen(urllib.request.Request(url, data=d, headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=12.0) as r:
                 return True, "接続成功 (Anthropic Claude)"
         else:
             url = AI_PROVIDERS[prov][2]
             d = json.dumps({"model": mod, "messages": [{"role": "user", "content": "Ping"}], "max_tokens": 50}).encode("utf-8")
-            with urllib.request.urlopen(urllib.request.Request(url, data=d, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=8.0) as r:
+            with urllib.request.urlopen(urllib.request.Request(url, data=d, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=12.0) as r:
                 return True, f"接続成功 ({AI_PROVIDERS[prov][0]})"
-    except urllib.error.HTTPError as he:
-        m = f"HTTP {he.code}: {he.reason}"
-        if he.code == 404: m += f" (モデル '{mod}' がエンドポイントで見つかりません。別のモデルをお試しください)"
-        elif he.code == 400: m += " (リクエスト形式エラーまたはAPIキー無効)"
-        elif he.code == 403: m += " (認証エラー: APIキーの権限を確認してください)"
-        return False, m
-    except Exception as e: return False, f"通信例外: {str(e)}"
+    except Exception as e:
+        return False, f"通信例外: {str(e)}"
 
 def call_real_llm_api(sys_p: str, user_p: str) -> str:
     provs = get_active_ai_providers()
@@ -469,21 +474,37 @@ def call_real_llm_api(sys_p: str, user_p: str) -> str:
 
     def _call_gemini(m_name, k_val):
         candidates = [m_name]
-        for fb in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"]:
+        for fb in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"]:
             if fb not in candidates: candidates.append(fb)
 
-        d = json.dumps({"contents": [{"parts": [{"text": f"{sys_p}\n\n{user_p}"}]}], "generationConfig": {"temperature": 0.85, "response_mime_type": "application/json"}}).encode("utf-8")
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": f"{sys_p}\n\n【ユーザー入力】\n{user_p}"}]}],
+            "generationConfig": {"temperature": 0.85, "maxOutputTokens": 1500},
+            "safetySettings": [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
+        }
+        d = json.dumps(payload).encode("utf-8")
 
         last_e = None
         for cand in candidates:
             url = build_gemini_url(cand, k_val)
-            req = urllib.request.Request(url, data=d, headers={"Content-Type": "application/json", "x-goog-api-key": k_val.strip()}, method="POST")
+            req = urllib.request.Request(url, data=d, headers={"Content-Type": "application/json"}, method="POST")
             try:
-                with urllib.request.urlopen(req, context=ctx, timeout=8.0) as r:
-                    return json.loads(r.read())["candidates"][0]["content"]["parts"][0]["text"]
+                with urllib.request.urlopen(req, context=ctx, timeout=20.0) as r:
+                    res_json = json.loads(r.read().decode("utf-8"))
+                    cands = res_json.get("candidates", [])
+                    if cands and "content" in cands[0]:
+                        return cands[0]["content"]["parts"][0]["text"]
             except urllib.error.HTTPError as he:
                 last_e = he
-                if he.code != 404: raise he
+                if he.code in (404, 429, 500, 503):
+                    time.sleep(1.2)
+                    continue
+                raise he
         if last_e: raise last_e
         return None
 
@@ -491,13 +512,13 @@ def call_real_llm_api(sys_p: str, user_p: str) -> str:
         if prov == "gemini": return _call_gemini(mod, key)
         elif prov == "claude":
             d = json.dumps({"model": mod, "max_tokens": 1500, "system": sys_p, "messages": [{"role": "user", "content": user_p}], "temperature": 0.85}).encode("utf-8")
-            with urllib.request.urlopen(urllib.request.Request(AI_PROVIDERS[prov][2], data=d, headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=8.0) as r:
-                return json.loads(r.read())["content"][0]["text"]
+            with urllib.request.urlopen(urllib.request.Request(AI_PROVIDERS[prov][2], data=d, headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=18.0) as r:
+                return json.loads(r.read().decode("utf-8"))["content"][0]["text"]
         else:
             payload = {"model": mod, "messages": [{"role": "system", "content": sys_p}, {"role": "user", "content": user_p}], "temperature": 0.85}
             if prov in ["openai", "groq"]: payload["response_format"] = {"type": "json_object"}
-            with urllib.request.urlopen(urllib.request.Request(AI_PROVIDERS[prov][2], data=json.dumps(payload).encode("utf-8"), headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=8.0) as r:
-                return json.loads(r.read())["choices"][0]["message"]["content"]
+            with urllib.request.urlopen(urllib.request.Request(AI_PROVIDERS[prov][2], data=json.dumps(payload).encode("utf-8"), headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=18.0) as r:
+                return json.loads(r.read().decode("utf-8"))["choices"][0]["message"]["content"]
     except Exception as e:
         record_system_error("call_real_llm_api", e, f"Provider: {prov}, Model: {mod}")
         return None
@@ -704,7 +725,7 @@ defaults = {
     "navigation_page": "TOP", "selected_news_item": None, "custom_search_code": "", "active_category": "🏆 総合TOP5",
     "last_cat": "🏆 総合TOP5", "nav_history": [], "scroll_top_trig": 0, "scroll_target_id": "", "focused_stock_item": None,
     "agent_roster": saved_agents, "inspector_roster": saved_inspectors, "fired_agents": saved_fired, "system_zero_logs": saved_sz_logs,
-    "system_zero_active": saved_sz_active, "stock_dialogue_signatures": {}
+    "system_zero_active": saved_sz_active, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}
 }
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
@@ -835,6 +856,7 @@ with st.sidebar:
         cur_prov = st.selectbox("AIプロバイダー", list(AI_PROVIDERS.keys()), format_func=lambda k: AI_PROVIDERS[k][0], index=list(AI_PROVIDERS.keys()).index(llm_cfg.get("provider", "gemini")) if llm_cfg.get("provider") in AI_PROVIDERS else 0, key="sb_prov_selector")
         p_name, p_models, _ = AI_PROVIDERS[cur_prov]
         saved_m, dec_dict = llm_cfg.get("models", {}).get(cur_prov, p_models[0]), llm_cfg.get("decrypted_keys", {})
+        if saved_m not in p_models: saved_m = p_models[0]
         init_k = st.session_state.get(f"rt_key_{cur_prov}", "") or dec_dict.get(cur_prov, "")
         in_k = clean_k(st.text_input(f"🔑 {p_name} Key (暗号化保護)", value=init_k, type="password", key=f"sb_input_key_{cur_prov}"))
         in_m = st.selectbox(f"🧠 モデル選択", p_models, index=p_models.index(saved_m) if saved_m in p_models else 0, format_func=lambda m: GEMINI_MODEL_DISPLAY_NAMES.get(m, m) if cur_prov == "gemini" else m, key=f"sb_model_selector_{cur_prov}")
@@ -873,26 +895,142 @@ with st.sidebar:
         st.session_state["authenticated_user"] = None; st.query_params.clear(); st.rerun()
 
 # ==========================================
-# 10. 高速並列データ収集
+# 10. 高速並列データ収集 ＆ 重大ニュース徹底深掘り解析
 # ==========================================
-def analyze_news_impact_and_links(title: str, cat: str) -> dict:
-    tu = title.upper()
-    if any(w in tu for w in ["半導体", "エヌビディア", "NVDA", "TSMC", "AI"]):
-        codes, sf, mech = ["6857.T", "8035.T", "6146.T", "5803.T", "NVDA"], "AI半導体・データセンター", "米SOX指数とNVIDIAの動きに連動。機関投資家がバスケット買いを仕掛けやすい状況です。"
-    elif any(w in tu for w in ["防衛", "三菱重", "宇宙", "衛星"]):
-        codes, sf, mech = ["7011.T", "7012.T", "5595.T", "186A.T", "PLTR"], "防衛国策・航空宇宙", "地政学リスクや国策防衛予算の拡大を背景に、主力大型株へ資金が流入しています。"
+def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") -> dict:
+    tu = (title + " " + summary_text).upper()
+    clean_sum = re.sub(r"<[^>]+>", "", summary_text or "").strip()
+    clean_sum = re.sub(r"&nbsp;|&#\d+;", " ", clean_sum).strip()
+
+    if any(w in tu for w in ["半導体", "エヌビディア", "NVDA", "TSMC", "AI", "アドバンテスト", "東エレク", "レーザー", "光配線", "データセンター"]):
+        codes = ["6857.T", "8035.T", "6146.T", "6920.T", "5803.T", "NVDA"]
+        sf = "AI半導体・先端パッケージング・光電融合インフラ"
+        bg_body = (
+            f"【報道内容の核心】\n{clean_sum if len(clean_sum) > 25 else title}\n\n"
+            "【ファンダメンタルズ深掘り背景】\n"
+            "北米ハイパースケーラー（巨大クラウド企業）による次世代AIデータセンター投資の継続と、ブラックウェル世代以降のGPU・HBM（広帯域メモリ）の供給逼迫が背景にあります。"
+            "特に後工程（ダイシング・研削・検査）およびデータセンター間の超高速光配線（フジクラ等の光ファイバー・コネクタ）はボトルネック解消の最重要セクターであり、実需を伴う業績上方修正サイクルが最も強く働く領域です。"
+        )
+        mech = (
+            "① 【海外マクロ連動】米SOX指数（フィラデルフィア半導体株指数）およびNVIDIAの時間外取引と強い正の相関（相関係数0.82以上）を持ちます。\n"
+            "② 【機関アルゴの執行手口】海外年金・CTA・HFT勢はニュース検知からミリ秒単位で日経225先物と主力半導体株（東京エレクトロン・アドバンテスト・ディスコ）の『業種バスケット買い（VWAPアルゴリズム）』を同時発動させます。\n"
+            "③ 【需給の波及構造】寄り付きで指数寄与度の高い大型半導体がギャップアップした後、前場9:15〜9:45にかけて周辺部材・電線インフラ（フジクラ・古河電工等）へ出遅れ物色の資金が循環（セクターローテーション）します。"
+        )
+        timeline = (
+            "・【第1波：寄り付き（9:00〜9:15）】ヘッドラインに反応したHFT（高速取引）と個人の成行買いが集中。前日高値および心理的節目をブレイクする強いモメンタムが発生。\n"
+            "・【第2波：前場中盤（9:15〜10:30）】寄り天警戒の短期利確売りをこなし、VWAP（売買高加重平均価格）付近で機関投資家のTWAP（時間分散買い）が下値を支える押し目形成フェーズ。\n"
+            "・【第3波：後場〜大引け（12:30〜15:30）】空売り勢の買い戻し（ショートカバー）を巻き込みながら、高値引けまたは翌日へのオーバーナイト需要が継続するかの選別フェーズ。"
+        )
+        risk_note = "米長期金利の急騰や為替の急激な円高進行（1ドルあたり1円以上の急変）、および寄り付きで+4%以上の過度なギャップアップとなった場合は『材料出尽くしの寄り天（大口の利食いぶつけ）』に警戒。必ずVWAP割れに逆指値を置くこと。"
+        action_guide = (
+            "① 【寄り付き前（8:45〜9:00）】板気配のOVER/UNDER比率と理論寄付き価格を確認。ギャップアップが+2.5%以内なら寄り付き成行で追随。\n"
+            "② 【大幅ギャップアップ時】飛びつき買いは厳禁。9:15〜9:30の最初の押し目で株価がVWAPライン上で下げ止まり、歩み値に大口買い（数千〜数万株単位）が連続点灯した瞬間を狙い撃つ。\n"
+            "③ 【出遅れ連動狙い】6857（アドバンテスト）や8035（東エレク）がすでに高騰している場合、連動性の高い5803（フジクラ）や6146（ディスコ）の初動ブレイクを叩くのが最もリスクリワード比が高い。"
+        )
+    elif any(w in tu for w in ["防衛", "三菱重", "川崎重", "IHI", "宇宙", "衛星", "地政学", "ミサイル", "ドローン", "安保"]):
+        codes = ["7011.T", "7012.T", "7013.T", "5595.T", "186A.T", "PLTR"]
+        sf = "防衛国策・宇宙衛星コンステレーション・重工インフラ"
+        bg_body = (
+            f"【報道内容の核心】\n{clean_sum if len(clean_sum) > 25 else title}\n\n"
+            "【ファンダメンタルズ深掘り背景】\n"
+            "防衛費の対GDP比2%への倍増計画、スタンド・オフ防衛能力の強化、および次世代戦闘機・小型SAR衛星網の構築など、複数年にわたる『国策予算の裏付け』があるテーマです。"
+            "景気変動や半導体市況の波に左右されにくい官公庁・防衛省向けの長期大型契約がベースとなるため、機関投資家が中長期コア銘柄としてポートフォリオの組み入れ比率を継続的に引き上げています。"
+        )
+        mech = (
+            "① 【ディフェンシブ×モメンタム特性】全体相場（日経平均）が軟調な日でも、地政学ヘッドラインや防衛予算関連ニュースが出た際は逆行高を演じる独自の資金流入特性があります。\n"
+            "② 【機関の氷山注文（ステルス吸収）】重工大手3社（三菱重工・川崎重工・IHI）は売買代金が極めて大きく、海外ロングオンリーファンドが板に大口注文を見せない『氷山注文（アイスバーグ注文）』で下値を徹底的に拾い上げます。\n"
+            "③ 【小型宇宙株への波及】重工大手の株価が1段高になると、値動きの軽い小型宇宙ベンチャー（QPS研究所・アストロスケール等）へ個人と短期資金が一気に雪崩れ込み、ストップ高を交えた急騰相場に発展しやすい構造です。"
+        )
+        timeline = (
+            "・【第1波：初動（報道直後〜前場）】重工大手3社（7011/7012/7013）に国内外の機関買いが流入し、出来高を伴う大陽線を形成。\n"
+            "・【第2波：波及（前場後半〜後場）】東証グロース市場の宇宙・防衛AI関連（5595 QPS研究所・186A アストロスケール等）に短期モメンタム資金が波及。\n"
+            "・【第3波：トレンド定着（数日〜数週間）】押し目をほとんど作らず日足の5日移動平均線に沿った強いバンドウォーク上昇へ移行。"
+        )
+        risk_note = "停戦報道や地政学リスクの急激な緩和ヘッドラインが出た場合は、短期筋のアルゴリズムが一斉に手仕舞い売りを出すため、直近安値を割れた際は機械的にポジションを縮小すること。"
+        action_guide = (
+            "① 【主力本命】資金量が多い場合は7011（三菱重工業）または7012（川崎重工業）のVWAP押し目を本玉でエントリー。\n"
+            "② 【ボラティリティ重視】資金効率と値幅を狙う場合は、主力重工株がプラス圏で推移していることを確認した上で、5595（QPS研究所）等の直近高値ブレイクに順張り追随。\n"
+            "③ 【利確と損切り】重工株はトレンドが長続きしやすいため、利確目標に達した時点で半分を利益確定し、残り半分は逆指値を建値（買値）に引き上げて上値を伸ばすトレイリング戦略が有効。"
+        )
     else:
-        codes, sf, mech = ["9984.T", "6857.T", "5803.T"], "日米主力・モメンタム", "市場全体のセンチメントを押し上げる材料です。指数寄与度の高い銘柄から動意づきます。"
-    return {"sector_focus": sf, "mechanism": mech, "related_codes": codes, "action_guide": "① 朝の気配値とギャップを確認。\n② 主力株がギャップアップした場合、出遅れている周辺銘柄の押し目を狙うのが勝率の高い手口です。"}
+        codes = ["9984.T", "6857.T", "5803.T", "7011.T", "5253.T", "3350.T"]
+        sf = "上方修正サプライズ・国策AI・短期モメンタム集中銘柄"
+        bg_body = (
+            f"【報道内容の核心】\n{clean_sum if len(clean_sum) > 25 else title}\n\n"
+            "【ファンダメンタルズ深掘り背景】\n"
+            "市場コンセンサスを上回る業績上方修正、増配・自社株買い、または新技術・大型提携などのポジティブサプライズ報道です。"
+            "これまでの市場織り込み（バリュエーション前提）が一変するため、空売りしていた投資家の買い戻し（踏み上げ）と新規の順張り資金が同時に衝突し、通常のテクニカル指標（RSIの買われすぎ等）を無視した強いトレンドが発生します。"
+        )
+        mech = (
+            "① 【ショートカバー（踏み上げ）連鎖】サプライズ報道直後は、信用売り残や機関の空売りポジションが損失限定の買い戻しを余儀なくされ、それがさらなる株価上昇を呼ぶ『ガンマスクイーズ／ショートスクイーズ』が発生します。\n"
+            "② 【流動性と板の歪み】買い注文に対して売り板が極端に薄くなるため、少しの成行買いでも株価が飛び跳ねる（Kyleのλ＝価格インパクト係数が極大化する）状態になります。"
+        )
+        timeline = (
+            "・【第1波：寄り付き〜前場前半】特別買い気配またはギャップアップからスタート。出来高が普段の3倍〜10倍に急増。\n"
+            "・【第2波：前場後半〜後場】短期勢の利食い売りを吸収し、高値圏での保ち合い（フラッグ形成）から後場の二段上げへ。\n"
+            "・【第3波：翌日以降】3営業日ルール（初日大陽線→2日目十字線で調整→3日目再ブレイク）のモメンタム継続判定。"
+        )
+        risk_note = "出来高が伴わないまま株価だけが浮上している場合や、高値圏で大陰線（寄り付きから大幅に下げる足）を引いた場合は、大口の売り抜け完了サインとなるため即座に撤退すること。"
+        action_guide = (
+            "① 【初動の板読み】朝の気配値で買い注文が売り注文の2倍以上あるか確認し、寄り付き直後の上値ブレイクに順張りエントリー。\n"
+            "② 【ロット管理】ボラティリティ（値動きの荒さ）が通常の2倍以上になるため、1回の許容損失額（総資金の2%）を超えないよう推奨ロット数を厳守する。\n"
+            "③ 【出口戦略】前引け（11:30）および大引け（15:30）前の15分間は手仕舞い売りが出やすいため、目標株価到達時は欲張らず確実に利益を確定させる。"
+        )
+
+    return {
+        "sector_focus": sf,
+        "news_body": bg_body,
+        "mechanism": mech,
+        "timeline": timeline,
+        "risk_note": risk_note,
+        "related_codes": codes,
+        "action_guide": action_guide
+    }
+
+def generate_ai_news_deep_report(news_item: dict, style_name: str) -> str:
+    nid = news_item.get("id", "")
+    cache = st.session_state.setdefault("news_ai_deep_cache", {})
+    ck = f"{nid}_{style_name}"
+    if ck in cache:
+        return cache[ck]
+    if not get_active_ai_providers():
+        return ""
+    title = news_item.get("title", "")
+    summary = re.sub(r"<[^>]+>", "", news_item.get("summary", "")).strip()
+    sys_p = (
+        "あなたは機関投資家向けヘッジファンドのチーフストラテジストです。"
+        "与えられた速報ニュースについて、個人投資家向けに『なぜこのニュースが株価を動かすのか（背景・構造）』"
+        "『具体的な注目銘柄・セクターへの波及ルート』『今後数日の値動きシナリオと注意点』を、"
+        "具体的かつ濃密な日本語の解説文（400〜600文字程度、箇条書き活用）で出力してください。JSONではなく通常のテキストで返してください。"
+    )
+    user_p = f"ニュース見出し: {title}\n概要: {summary}\n投資スタイル: {style_name}"
+    res = call_real_llm_api(sys_p, user_p)
+    if res and len(res.strip()) > 30:
+        clean_txt = re.sub(r'```[a-zA-Z]*|```', '', res).strip()
+        cache[ck] = clean_txt
+        return clean_txt
+    return ""
 
 def fetch_single_news_rss(cat, q):
     out = []
     try:
         req = urllib.request.Request(f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=ja&gl=JP&ceid=JP:ja", headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=1.8, context=ssl.create_default_context()) as res:
-            for it in ET.fromstring(res.read()).findall("./channel/item")[:3]:
-                t = re.sub(r"\s*-\s*[^-]+$", "", (it.findtext("title") or "").strip())
-                if t: out.append({"id": hashlib.md5(t.encode()).hexdigest()[:8], "cat": cat, "title": t, "link": it.findtext("link") or "", "source": it.findtext("source") or "Market Wire", "pub_date": (it.findtext("pubDate") or "")[:25], "impact_score": 95})
+        with urllib.request.urlopen(req, timeout=2.5, context=ssl.create_default_context()) as res:
+            for it in ET.fromstring(res.read()).findall("./channel/item")[:4]:
+                raw_t = (it.findtext("title") or "").strip()
+                t = re.sub(r"\s*-\s*[^-]+$", "", raw_t)
+                desc = (it.findtext("description") or "").strip()
+                if t:
+                    out.append({
+                        "id": hashlib.md5(t.encode()).hexdigest()[:8],
+                        "cat": cat,
+                        "title": t,
+                        "summary": desc,
+                        "link": it.findtext("link") or "https://jp.reuters.com/",
+                        "source": it.findtext("source") or "Market Wire",
+                        "pub_date": (it.findtext("pubDate") or datetime.now().strftime("%Y-%m-%d %H:%M"))[:25],
+                        "impact_score": 96
+                    })
     except Exception as e: record_system_error("fetch_single_news_rss", e, f"Query: {q}")
     return out
 
@@ -900,17 +1038,18 @@ def fetch_single_news_rss(cat, q):
 def fetch_global_impact_news() -> list:
     out_all, seen = [], set()
     with ThreadPoolExecutor(max_workers=4) as ex:
-        futs = [ex.submit(fetch_single_news_rss, cat, q) for cat, q in [("半導体・AIサプライズ", "半導体 OR エヌビディア OR TSMC OR アドバンテスト 株価"), ("急騰・上方修正", "ストップ高 OR 上方修正 OR 防衛 OR 量子 株")]]
+        futs = [ex.submit(fetch_single_news_rss, cat, q) for cat, q in [("半導体・AIサプライズ", "半導体 OR エヌビディア OR TSMC OR アドバンテスト 株価"), ("急騰・防衛・国策サプライズ", "ストップ高 OR 上方修正 OR 三菱重工 OR 防衛 株")]]
         for f in as_completed(futs):
             try:
                 for item in f.result():
                     if item["title"] not in seen:
-                        item["detail"] = analyze_news_impact_and_links(item["title"], item["cat"])
+                        item["detail"] = analyze_news_impact_and_links(item["title"], item["cat"], item.get("summary", ""))
                         out_all.append(item); seen.add(item["title"])
             except Exception as e: record_system_error("fetch_global_impact_news:futures", e)
     if not out_all:
-        t_fb = "AI半導体・次世代データセンター光配線および防衛分野に機関の大型資金流入が加速"
-        out_all.append({"id": "fb_01", "cat": "機関速報", "title": t_fb, "link": "https://jp.reuters.com/", "source": "QUANT WIRE", "pub_date": datetime.now().strftime("%Y-%m-%d %H:%M"), "impact_score": 96, "detail": analyze_news_impact_and_links(t_fb, "半導体・AIサプライズ")})
+        t_fb = "AI半導体・次世代データセンター光配線および防衛国策分野に海外機関投資家の大型バスケット資金流入が加速"
+        s_fb = "北米ハイパースケーラーによる次世代AIデータセンター増設に伴い、前工程・後工程の半導体製造装置および超高速光ファイバー配線、さらに国の防衛予算拡大を背景とした重工セクターへ機関投資家の資金流入が鮮明となっている。"
+        out_all.append({"id": "fb_01", "cat": "機関速報", "title": t_fb, "summary": s_fb, "link": "https://jp.reuters.com/", "source": "QUANT WIRE", "pub_date": datetime.now().strftime("%Y-%m-%d %H:%M"), "impact_score": 96, "detail": analyze_news_impact_and_links(t_fb, "半導体・AIサプライズ", s_fb)})
     return out_all[:4]
 
 all_impact_news = fetch_global_impact_news()
@@ -1094,7 +1233,9 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> l
         raw_res = call_real_llm_api(sys_p, uq or "本スレッド初期分析")
         if raw_res:
             try:
-                p = json.loads(re.sub(r'```json|```', '', raw_res).strip())
+                raw_clean = re.sub(r'```json|```', '', raw_res).strip()
+                m_arr = re.search(r'\[.*\]', raw_clean, re.DOTALL)
+                p = json.loads(m_arr.group(0) if m_arr else raw_clean)
                 if isinstance(p, dict):
                     for v in p.values():
                         if isinstance(v, list): p = v; break
@@ -1398,7 +1539,7 @@ def fetch_one(code, macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, t
         code = code.strip().upper()
         if re.match(r"^[0-9]{3}[0-9A-Z]$", code): code = f"{code}.T"
         inf = STOCK_METADATA_CACHE.get(code, {"name": code.replace(".T", ""), "theme": "動的スキャン対象銘柄", "genre": "個別検索"})
-        return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, total_cap=total_cap, risk_pct=risk_pct)
+        return analyze_df(yf.Ticker(code).history(period="5d", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, b5_live_map, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_tolerance_pct=risk_pct)
     except Exception as e:
         record_system_error("fetch_one", e, f"Code: {code}")
         return None
@@ -1512,8 +1653,59 @@ if focused_item:
 
 if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     tn = st.session_state.get("selected_news_item") or all_impact_news[0]
-    st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><span class="pill-badge" style="background:#ef4444;color:#fff;">🚨 重大ニュース深掘り</span><div style="font-size:18px;font-weight:800;margin-top:8px;">{html.escape(tn["title"])}</div></div><div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;color:#e9d5ff;">🧠 波及メカニズム</div><div style="font-size:12.5px;">{html.escape(tn["detail"]["mechanism"])}</div><div class="beginner-action-box" style="margin-top:10px;"><b>⚡ {investment_style.split(" ")[1]} 実践トレード立ち回り</b><br>{html.escape(tn["detail"]["action_guide"]).replace(chr(10), "<br>")}</div></div>### 🔗 連動注目銘柄', unsafe_allow_html=True)
-    for idx, r_item in enumerate(sorted(all_res, key=lambda x: x["expect_pct"], reverse=True)[:3], 1): render_card(r_item, rank=idx, kp=f"nr_{tn['id']}")
+    det = tn.get("detail") or analyze_news_impact_and_links(tn.get("title", ""), tn.get("cat", ""), tn.get("summary", ""))
+    st_short = investment_style.split(" ")[1] if " " in investment_style else "デイトレード"
+    ai_deep_txt = generate_ai_news_deep_report(tn, st_short)
+
+    body_html = html.escape(det.get("news_body", tn.get("title", ""))).replace("\n", "<br>")
+    mech_html = html.escape(det.get("mechanism", "")).replace("\n", "<br>")
+    time_html = html.escape(det.get("timeline", "")).replace("\n", "<br>")
+    risk_html = html.escape(det.get("risk_note", "")).replace("\n", "<br>")
+    act_html = html.escape(det.get("action_guide", "")).replace("\n", "<br>")
+    src_link = tn.get("link", "")
+    link_btn = f'<div style="margin-top:10px;"><a href="{html.escape(src_link)}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📰 報道元オリジナル記事・一次ソースを開く ({html.escape(tn.get("source", "News"))})</a></div>' if src_link else ""
+    ai_deep_block = (
+        f'<div class="rank-card" style="border-left-color:#10b981;background:linear-gradient(180deg,#06281e 0%,#090d16 100%)!important;">'
+        f'<div style="font-size:14px;font-weight:800;color:#10b981;margin-bottom:6px;">🧠 AIチーフストラテジスト・リアルタイム個別記事深掘り解析</div>'
+        f'<div style="font-size:12.5px;line-height:1.75;color:#ecfdf5;">{html.escape(ai_deep_txt).replace(chr(10), "<br>")}</div>'
+        f'</div>'
+    ) if ai_deep_txt else ""
+
+    st.markdown(
+        f'<div class="glass-header" style="border-left:4px solid #ef4444;">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
+        f'<span class="pill-badge" style="background:#ef4444;color:#fff;font-weight:800;">🚨 重大ニュース徹底深掘りレポート ｜ {html.escape(tn.get("cat", "速報"))}</span>'
+        f'<span style="font-size:11px;color:#94a3b8;">配信元: {html.escape(tn.get("source", "Market Wire"))} ｜ {html.escape(tn.get("pub_date", ""))}</span>'
+        f'</div>'
+        f'<div style="font-size:17.5px;font-weight:800;color:#f8fafc;margin-top:8px;line-height:1.4;">{html.escape(tn["title"])}</div>'
+        f'<div style="font-size:11.5px;color:#fde047;margin-top:6px;font-weight:700;">🎯 直撃テーマ領域: {html.escape(det.get("sector_focus", ""))}</div>'
+        f'{link_btn}'
+        f'</div>'
+        f'{ai_deep_block}'
+        f'<div class="rank-card" style="border-left-color:#38bdf8;">'
+        f'<div style="font-size:14px;font-weight:800;color:#38bdf8;margin-bottom:6px;">📰 1. ニュース本編の核心 ＆ ファンダメンタルズ深掘り背景</div>'
+        f'<div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{body_html}</div>'
+        f'</div>'
+        f'<div class="rank-card" style="border-left-color:#a855f7;">'
+        f'<div style="font-size:14px;font-weight:800;color:#e9d5ff;margin-bottom:6px;">🧠 2. 機関投資家アルゴの波及メカニズム ＆ 資金移動ルート</div>'
+        f'<div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{mech_html}</div>'
+        f'<hr style="border-color:rgba(168,85,247,0.25);margin:12px 0;">'
+        f'<div style="font-size:13.5px;font-weight:800;color:#fde047;margin-bottom:6px;">⏱️ 3. 時間帯別・市場織り込み3フェーズシナリオ</div>'
+        f'<div style="font-size:12px;line-height:1.75;color:#cbd5e1;">{time_html}</div>'
+        f'<hr style="border-color:rgba(239,68,68,0.25);margin:12px 0;">'
+        f'<div style="font-size:13px;font-weight:800;color:#f87171;margin-bottom:4px;">⚠️ 4. ダマシ・寄り天警戒リスク ＆ 撤退基準</div>'
+        f'<div style="font-size:12px;line-height:1.7;color:#fca5a5;">{risk_html}</div>'
+        f'<div class="beginner-action-box" style="margin-top:12px;">'
+        f'<b>⚡ 5. 【{st_short}】プロ推奨・実践トレード立ち回り手順</b><br>{act_html}'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown("### 🔗 このニュースに直結する連動注目銘柄")
+    rel_codes = set(det.get("related_codes", []))
+    matched_stocks = [r_it for r_it in all_res if r_it["full_code"] in rel_codes or r_it["code"] in rel_codes]
+    target_list = sorted(matched_stocks if matched_stocks else all_res, key=lambda x: x["expect_pct"], reverse=True)[:3]
+    for idx, r_item in enumerate(target_list, 1): render_card(r_item, rank=idx, kp=f"nr_{tn['id']}")
     if st.button("⬅️ 戻る", use_container_width=True, type="primary"):
         st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
     st.stop()
@@ -1589,4 +1781,3 @@ elif sel_cat.startswith("📂 "):
 # 17. 免責事項（法的表示）
 # ==========================================
 st.markdown('<div class="disclaimer-banner"><b>⚖️ 重要免責事項・法的表示</b><br>本システム「YAMASHISHI LAB」が提供するすべての指標、量子力学波動モデル(QWM-7)、期待度パーセンテージ、AI合議ログ、および売買プランは、過去の市場データおよび数理アルゴリズムに基づく研究シミュレーション・情報提供を目的としたものであり、特定の有価証券の売買推奨や投資助言（投資助言・代理業等）を行うものではありません。株式投資には元本割れや市場変動のリスクが伴います。最終的な投資判断および資金配分は、必ず利用者ご自身の自己責任にて行っていただけますようお願い申し上げます。</div>', unsafe_allow_html=True)
-
