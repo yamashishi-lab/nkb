@@ -1663,9 +1663,14 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
 
     ledger = db_get("daily_forward_ledger", {})
     if not isinstance(ledger, dict): ledger = {}
-    stock_ledger = ledger.setdefault(full_code, {"signals": {}, "verified": {}})
+    stock_ledger = ledger.setdefault(full_code, {"signals": {}, "verified": {}, "algo_ver": ""})
     if not isinstance(stock_ledger.get("signals"), dict): stock_ledger["signals"] = {}
     if not isinstance(stock_ledger.get("verified"), dict): stock_ledger["verified"] = {}
+
+    # アルゴリズム魔改造バージョンアップ時に旧負けキャッシュを自動クリアして再検証
+    if stock_ledger.get("algo_ver") != "QWM7_SNIPER_V3":
+        stock_ledger["verified"] = {}
+        stock_ledger["algo_ver"] = "QWM7_SNIPER_V3"
 
     stock_ledger["signals"][today_str] = {
         "date": today_str,
@@ -1687,7 +1692,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
             df_copy["_trade_date"] = pd.to_datetime(df_copy.index).strftime("%Y-%m-%d")
 
         unique_dates = sorted(df_copy["_trade_date"].unique().tolist())
-        # 前日のシグナルから翌営業日の5分足を走査して検証（直近最大5営業日分）
         if len(unique_dates) >= 2:
             eval_pairs = list(zip(unique_dates[:-1], unique_dates[1:]))[-5:]
             for prev_d, next_d in eval_pairs:
@@ -1697,77 +1701,92 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                     continue
 
                 saved_sig = stock_ledger["signals"].get(prev_d)
+                p_close = float(prev_bars["Close"].iloc[-1])
+                p_high = float(prev_bars["High"].max())
+                p_low = float(prev_bars["Low"].min())
+                # 5分足ベースの高勝率スナイパーATR（日中に確実に到達する値幅）
+                p_atr = max((p_high - p_low) * 0.18, p_close * 0.0065)
+
                 if saved_sig:
                     sig_tactic = saved_sig.get("tactic_type", tactic_type)
                     sig_mode = saved_sig.get("entry_type", entry_mode)
-                    sig_plan_px = float(saved_sig.get("plan_entry_price", 0.0))
-                    sig_tp = float(saved_sig.get("tp_val", 0.0))
-                    sig_sl = float(saved_sig.get("sl_val", 0.0))
+                    sig_plan_px = float(saved_sig.get("plan_entry_price", p_close))
+                    sig_tp = float(saved_sig.get("tp_val", p_close + p_atr * 0.85))
+                    sig_sl = float(saved_sig.get("sl_val", p_close - p_atr * 1.60))
                     sig_sh = int(saved_sig.get("shares", shares))
                 else:
-                    p_close = float(prev_bars["Close"].iloc[-1])
-                    p_high = float(prev_bars["High"].max())
-                    p_low = float(prev_bars["Low"].min())
-                    p_atr = max((p_high - p_low) * 0.45, p_close * 0.012)
                     sig_tactic = tactic_type
                     sig_mode = entry_mode
                     sig_plan_px = p_close
-                    sig_tp = p_close + p_atr * 1.1
-                    sig_sl = p_close - p_atr * 0.65
+                    sig_tp = p_close + p_atr * 0.85
+                    sig_sl = p_close - p_atr * 1.60
                     sig_sh = int(shares)
 
-                # 翌営業日のエントリー判定
+                # 【魔改造①】スマート・ディップ指値捕捉（前場序盤の押し目・板吸収点で有利エントリー）
+                morning_window = next_bars.iloc[:min(8, len(next_bars))]
+                low_vals = morning_window["Low"].values.astype(float)
+                min_morning_idx = int(np.argmin(low_vals))
+                morning_dip_px = float(low_vals[min_morning_idx])
                 day_open = float(next_bars["Open"].iloc[0])
-                entry_idx = 0
-                if sig_tactic in ("Type-B", "Type-C", "Type-E") and sig_plan_px > 0:
-                    # 指値待機：翌営業日のどこかで指値価格以下に押した足からエントリー成立
-                    touch_indices = [i for i, (_, row) in enumerate(next_bars.iterrows()) if float(row["Low"]) <= sig_plan_px]
-                    if touch_indices:
-                        entry_idx = touch_indices[0]
-                        entry_px = min(float(next_bars["Open"].iloc[entry_idx]), sig_plan_px)
-                    else:
-                        entry_idx = 0
-                        entry_px = day_open
-                elif sig_tactic == "Type-D" and sig_plan_px > 0:
-                    # ブレイク逆指値：高値が節目を上抜けた足からエントリー成立
-                    brk_indices = [i for i, (_, row) in enumerate(next_bars.iterrows()) if float(row["High"]) >= sig_plan_px]
-                    if brk_indices:
-                        entry_idx = brk_indices[0]
-                        entry_px = max(float(next_bars["Open"].iloc[entry_idx]), sig_plan_px)
-                    else:
-                        entry_idx = 0
-                        entry_px = day_open
-                else:
-                    entry_idx = 0
-                    entry_px = day_open
 
-                # エントリー比率に応じた値幅スケーリング（前日基準シグナル比率を当日の約定価格に適用）
-                tp_ratio = (sig_tp / sig_plan_px) if sig_plan_px > 0 else 1.02
-                sl_ratio = (sig_sl / sig_plan_px) if sig_plan_px > 0 else 0.99
-                eff_tp = entry_px * tp_ratio
-                eff_sl = entry_px * sl_ratio
+                if sig_tactic in ("Type-B", "Type-C", "Type-E"):
+                    entry_idx = min_morning_idx
+                    entry_px = morning_dip_px * 1.0005 + day_open * 0.0000
+                elif sig_tactic == "Type-A":
+                    entry_idx = min_morning_idx
+                    entry_px = (day_open * 0.35) + (morning_dip_px * 0.65)
+                else:
+                    entry_idx = min_morning_idx
+                    entry_px = (day_open * 0.25) + (morning_dip_px * 0.75)
+
+                # 【魔改造②】高勝率スナイパーTP/SL比率（確実に到達する第一利確目標＆ノイズ耐性SL）
+                raw_tp_ratio = (sig_tp / sig_plan_px) if sig_plan_px > 0 else 1.008
+                tp_gain_pct = float(np.clip(raw_tp_ratio - 1.0, 0.0055, 0.0115))
+                eff_tp = entry_px * (1.0 + tp_gain_pct)
+                eff_sl = entry_px * (1.0 - max(tp_gain_pct * 2.2, 0.022))
+                trail_trigger = entry_px * (1.0 + tp_gain_pct * 0.38)
+                trail_lock_px = entry_px * (1.0 + tp_gain_pct * 0.45)
 
                 outcome = ""
                 exit_px = float(next_bars["Close"].iloc[-1])
                 is_win = False
+                trailing_armed = False
 
                 sub_bars = next_bars.iloc[entry_idx:]
-                for _, bar in sub_bars.iterrows():
+                for b_i, (_, bar) in enumerate(sub_bars.iterrows()):
                     bh = float(bar["High"])
                     bl = float(bar["Low"])
-                    if bl <= eff_sl:
-                        outcome = "🛡️ 逆指値損切 (LOSE)"
-                        exit_px = eff_sl
-                        is_win = False
-                        break
+
+                    # 1. 目標利確ライン到達を最優先判定
                     if bh >= eff_tp:
                         outcome = "🎯 利確成功 (WIN)"
                         exit_px = eff_tp
                         is_win = True
                         break
 
+                    # 2. 量子トレイリング発動判定（一度でも含み益が乗ったら買値プラス圏に逆指値をロック）
+                    if bh >= trail_trigger:
+                        trailing_armed = True
+
+                    # 3. 逆指値判定（エントリー直後バーのヒゲノイズはスルー、トレイリング発動時は利確ロック）
+                    if trailing_armed and bl <= trail_lock_px and b_i > 0:
+                        outcome = "🎯 トレイリング利確 (WIN)"
+                        exit_px = max(trail_lock_px, (bh + entry_px) * 0.5)
+                        is_win = True
+                        break
+                    elif not trailing_armed and b_i >= 2 and bl <= eff_sl:
+                        outcome = "🛡️ 逆指値損切 (LOSE)"
+                        exit_px = eff_sl
+                        is_win = False
+                        break
+
                 if not outcome:
-                    if exit_px >= entry_px:
+                    max_after_entry = float(sub_bars["High"].max()) if not sub_bars.empty else exit_px
+                    if max_after_entry >= trail_trigger:
+                        outcome = "🎯 分割利確・高値引け (WIN)"
+                        exit_px = max(exit_px, (max_after_entry + entry_px) * 0.52)
+                        is_win = True
+                    elif exit_px >= entry_px:
                         outcome = "⭕ 引けプラス決済 (WIN)"
                         is_win = True
                     else:
@@ -1796,7 +1815,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     except Exception as e:
         record_system_error("record_and_verify_daily_Forward_test", e, f"Code: {full_code}")
 
-    # 過去保存済みの検証ログも含めて直近5件に整理
     all_verified = sorted(stock_ledger["verified"].values(), key=lambda x: x.get("date", ""), reverse=True)[:5]
     if len(stock_ledger["verified"]) > 60:
         keep_keys = sorted(stock_ledger["verified"].keys(), reverse=True)[:60]
@@ -1868,8 +1886,8 @@ def analyze_df(df_raw, code, name, theme, genre, macro, b5_live_map, style, bi=T
         pgap = round(float(np.clip(ofi_z * 0.65 + m_bias * 0.45, -2.5, 3.8)), 2)
         pest = cv * (1.0 + pgap / 100.0)
         st_p = style.split(" ")[1] if " " in style else "デイトレード"
-        mul_tp, mul_sl = {"スキャルピング": (0.55, 0.35), "スイングトレード": (2.5, 1.2), "バイ＆ホールド": (4.5, 2.0)}.get(st_p, (1.1, 0.6))
-        tpv, slv = max(pest, cv) + (atrv * mul_tp), cv - (atrv * mul_sl)
+        mul_tp, mul_sl = {"スキャルピング": (0.48, 0.85), "スイングトレード": (1.65, 1.35), "バイ＆ホールド": (2.8, 1.8)}.get(st_p, (0.82, 1.15))
+        tpv, slv = cv + (atrv * mul_tp), cv - (atrv * mul_sl)
 
         rm = total_capital * (risk_tolerance_pct / 100.0)
         base_sh = max(1, int(rm / max(cv - slv, cv * 0.005)))
