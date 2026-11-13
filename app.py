@@ -76,17 +76,9 @@ GEMINI_MODEL_DISPLAY_NAMES = {
     "gemini-2.5-pro": "Gemini 2.5 Pro (高精度・推論特化)"
 }
 
-# 実在の注目新規上場・グロース市場対象ユニバース（リアルタイム取得用）
-REAL_IPO_GROWTH_UNIVERSE = [
-    ("186A.T", "アストロスケールHD", "東証グロース", "宇宙デブリ除去・軌道上サービス世界初", "https://www.sbisec.co.jp", "SBI証券"),
-    ("216A.T", "タイミー", "東証グロース", "スキマバイト市場独占・HRビッグデータ", "https://www.rakuten-sec.co.jp", "楽天証券"),
-    ("5595.T", "QPS研究所", "東証グロース", "小型SAR防衛衛星コンステレーション", "https://www.nomura.co.jp", "野村證券"),
-    ("9166.T", "GENDA", "東証グロース", "エンタメ・アミューズメントM&Aロールアップ", "https://www.smbcnikko.co.jp", "SMBC日興証券"),
-    ("6526.T", "ソシオネクスト", "東証プライム", "先端カスタムSoCファブレス・AI半導体設計", "https://www.daiwa.jp", "大和証券")
-]
-
 DYNAMIC_GENRES = ["半導体・前工程・検査", "AI・防衛・国策", "AI電力・超電導・電線", "宇宙・量子・次世代テック", "小型急騰・仕手・モメンタム"]
 
+# 初期ベースユニバース（30銘柄）
 GLOBAL_MARKET_TICKERS = [
     ("8035.T", "東京エレクトロン", "半導体・前工程・検査", "前工程コータ/エッチャ世界首位"), ("6857.T", "アドバンテスト", "半導体・前工程・検査", "GPU/HBMテスタ独占"),
     ("6920.T", "レーザーテック", "半導体・前工程・検査", "EUVマスクブランクス検査100%独占"), ("6146.T", "ディスコ", "半導体・前工程・検査", "切断・研削ダイサ世界シェア圧倒的"),
@@ -106,7 +98,106 @@ GLOBAL_MARKET_TICKERS = [
     ("4165.T", "プレイド", "小型急騰・仕手・モメンタム", "CXプラットフォーム・リアルタイム解析")
 ]
 
-STOCK_METADATA_CACHE = {c: {"name": n, "genre": g, "theme": t} for c, n, g, t in GLOBAL_MARKET_TICKERS}
+# 広域マスターシード辞書（約100銘柄：市場サーチ・ニュース自動発掘用）
+EXTENDED_SEED_LIST = GLOBAL_MARKET_TICKERS + [
+    ("4063.T", "信越化学工業", "半導体・前工程・検査", "半導体シリコンウエハ世界首位"),
+    ("6526.T", "ソシオネクスト", "半導体・前工程・検査", "先端カスタムSoCファブレス・AI半導体"),
+    ("6967.T", "新光電気工業", "半導体・前工程・検査", "次世代半導体パッケージ基板"),
+    ("4369.T", "トリケミカル研究所", "半導体・前工程・検査", "最先端半導体向けHigh-k絶縁膜材料"),
+    ("6254.T", "野村マイクロ・サイエンス", "半導体・前工程・検査", "半導体向け超純水装置"),
+    ("6315.T", "TOWA", "半導体・前工程・検査", "HBM向けモールディング装置世界首位"),
+    ("6871.T", "日本マイクロニクス", "半導体・前工程・検査", "HBM・DRAM向けプローブカード"),
+    ("6323.T", "ローツェ", "半導体・前工程・検査", "半導体ウエハ搬送ロボット"),
+    ("7741.T", "HOYA", "半導体・前工程・検査", "EUVマスクブランクス世界双璧"),
+    ("3436.T", "SUMCO", "半導体・前工程・検査", "300mm高純度シリコンウエハ"),
+    ("6594.T", "ニデック", "AI電力・超電導・電線", "AIデータセンター水冷モジュール"),
+    ("6758.T", "ソニーグループ", "AI・防衛・国策", "イメージセンサ・エンタメIP"),
+    ("6701.T", "NEC", "AI・防衛・国策", "防衛通信・顔認証・国策AI"),
+    ("6702.T", "富士通", "AI・防衛・国策", "スーパーコンピュータ・防衛DX"),
+    ("9432.T", "NTT", "AI電力・超電導・電線", "IOWN光電融合・次世代通信インフラ"),
+    ("9433.T", "KDDI", "AI・防衛・国策", "AIデータセンター・Starlink連携"),
+    ("4385.T", "メルカリ", "小型急騰・仕手・モメンタム", "フリマプラットフォーム・フィンテック"),
+    ("4483.T", "JMDC", "AI・防衛・国策", "医療ビッグデータ解析"),
+    ("3993.T", "PKSHA Technology", "AI・防衛・国策", "アルゴリズム実装・企業向けAI"),
+    ("5574.T", "ABEJA", "AI・防衛・国策", "生成AI基盤プラットフォーム"),
+    ("9166.T", "GENDA", "小型急騰・仕手・モメンタム", "エンタメM&Aロールアップ成長株"),
+    ("5032.T", "ANYCOLOR", "小型急騰・仕手・モメンタム", "VTuber事業・高収益IPモデル"),
+    ("4592.T", "サンバイオ", "小型急騰・仕手・モメンタム", "再生細胞薬バイオモメンタム"),
+    ("4565.T", "ネクセラファーマ", "小型急騰・仕手・モメンタム", "GPCR創薬・大型ライセンス提携"),
+    ("215A.T", "タイミー・グロース枠", "小型急騰・仕手・モメンタム", "スポットワーク市場リーダー"),
+    ("190A.T", "Chordia Therapeutics", "小型急騰・仕手・モメンタム", "創薬バイオベンチャー"),
+    ("247A.T", "Aiロボティクス", "AI・防衛・国策", "AIマーケティング・D2C急成長"),
+    ("260A.T", "オルツ", "AI・防衛・国策", "パーソナル人工知能・デジタルクローン"),
+    ("278A.T", "Terra Drone", "宇宙・量子・次世代テック", "産業用ドローン・空飛ぶクルマ運航管理"),
+    ("285A.T", "キオクシアHD", "半導体・前工程・検査", "次世代3D NANDフラッシュメモリ"),
+    ("290A.T", "Synspective", "宇宙・量子・次世代テック", "小型SAR衛星コンステレーション"),
+    ("9348.T", "ispace", "宇宙・量子・次世代テック", "民間月面探査・シスルナ経済圏"),
+    ("7014.T", "名村造船所", "AI・防衛・国策", "造船国策・防衛艦艇建造"),
+    ("7003.T", "三井E&S", "AI・防衛・国策", "船舶エンジン・港湾クレーン国策"),
+    ("6503.T", "三菱電機", "AI・防衛・国策", "防衛レーダー・パワー半導体"),
+    ("6946.T", "日本アビオニクス", "AI・防衛・国策", "防衛情報表示システム・赤外線"),
+    ("7721.T", "東京計器", "AI・防衛・国策", "防衛航空計器・マイクロ波"),
+    ("6208.T", "石川製作所", "AI・防衛・国策", "防衛機器・地政学テーマ"),
+    ("4274.T", "細谷火工", "AI・防衛・国策", "自衛隊向け火工品・防衛関連"),
+    ("9502.T", "中部電力", "AI電力・超電導・電線", "浜岡原発・データセンター電力供給"),
+    ("9503.T", "関西電力", "AI電力・超電導・電線", "原発稼働率首位・AI電力インフラ"),
+    ("1942.T", "関電工", "AI電力・超電導・電線", "データセンター電気設備工事"),
+    ("1951.T", "エクシオグループ", "AI電力・超電導・電線", "光通信・データセンターインフラ施工"),
+    ("6619.T", "ダブル・スコープ", "小型急騰・仕手・モメンタム", "EV電池セパレータ・高ボラ銘柄"),
+    ("3697.T", "SHIFT", "AI・防衛・国策", "ソフトウェアテスト・DX推進"),
+    ("6098.T", "リクルートHD", "AI・防衛・国策", "HRテック・AIマッチング"),
+    ("7974.T", "任天堂", "小型急騰・仕手・モメンタム", "次世代機サイクル・世界的IP"),
+    ("8306.T", "三菱UFJフィナンシャルG", "AI・防衛・国策", "金利上昇メリット・メガバンク首位"),
+    ("8316.T", "三井住友フィナンシャルG", "AI・防衛・国策", "高配当・金利上昇恩恵"),
+    ("8058.T", "三菱商事", "AI電力・超電導・電線", "総合商社・資源・AIインフラ投資"),
+    ("8001.T", "伊藤忠商事", "AI・防衛・国策", "非資源ビジネス・高ROE商社"),
+    ("AVGO", "Broadcom", "半導体・前工程・検査", "カスタムAI ASIC・ネットワーク半導体"),
+    ("AMD", "AMD", "半導体・前工程・検査", "AI GPU MIシリーズ・データセンターCPU"),
+    ("SMCI", "Super Micro Computer", "AI電力・超電導・電線", "AIサーバー・液冷ラック"),
+    ("CRWD", "CrowdStrike", "AI・防衛・国策", "AIサイバーセキュリティ"),
+    ("MSFT", "Microsoft", "AI・防衛・国策", "Azure AI・OpenAI最大出資パートナー"),
+    ("GOOGL", "Alphabet", "AI・防衛・国策", "Gemini AI・TPU・量子チップWillow"),
+    ("META", "Meta Platforms", "AI・防衛・国策", "LlamaオープンAI・巨額GPU投資"),
+    ("RKLB", "Rocket Lab", "宇宙・量子・次世代テック", "小型ロケット打ち上げ・宇宙システム"),
+    ("ASTS", "AST SpaceMobile", "宇宙・量子・次世代テック", "衛星直接スマホブロードバンド通信"),
+    ("QBTS", "D-Wave Quantum", "宇宙・量子・次世代テック", "量子アニーリング商用先駆"),
+    ("QUBT", "Quantum Computing", "宇宙・量子・次世代テック", "フォトニクス量子コンピュータ"),
+    ("OKLO", "Oklo", "AI電力・超電導・電線", "次世代SMR小型モジュール原子炉"),
+    ("CEG", "Constellation Energy", "AI電力・超電導・電線", "米最大原子力発電・データセンター電力")
+]
+
+EXTENDED_SEED_DICT = {c: {"code": c, "name": n, "genre": g, "theme": t} for c, n, g, t in EXTENDED_SEED_LIST}
+STOCK_METADATA_CACHE = {c: {"name": n, "genre": g, "theme": t} for c, n, g, t in EXTENDED_SEED_LIST}
+
+# 上場前・ブックビルディング中の超目玉IPO監視リスト（yfinance未収録段階でもレーダー捕捉）
+PRE_IPO_RADAR_CANDIDATES = [
+    {"code": "ANT", "name": "Anthropic (アンソロピック)", "market": "Nasdaq予定", "theme": "Claude開発・フロンティアAI安全研究", "status": "🔥 ロードショー / BB注目案件", "query": "Anthropic OR アンソロピック IPO OR 上場"},
+    {"code": "OPENAI", "name": "OpenAI (オープンAI)", "market": "米市場観測", "theme": "GPTシリーズ・汎用人工知能(AGI)先駆", "status": "📡 上場観測・資本再編ウォッチ", "query": "OpenAI IPO OR 上場"},
+    {"code": "SPACEX", "name": "SpaceX / Starlink", "market": "米市場観測", "theme": "Starship宇宙輸送・衛星通信網", "status": "🚀 スピンオフIPO観測レーダー", "query": "SpaceX OR Starlink IPO OR 上場"},
+    {"code": "TSE_NEW", "name": "東証新規承認IPOレーダー", "market": "東証グロース/スタンダード", "theme": "直近上場承認・ブックビルディング銘柄", "status": "🇯🇵 東証新規上場承認スキャン", "query": "新規上場承認 OR ブックビルディング 東証グロース"}
+]
+
+# 既上場IPO・グロース市場の広域サバイバル候補プール（20銘柄）
+REAL_IPO_GROWTH_UNIVERSE = [
+    ("186A.T", "アストロスケールHD", "東証グロース", "宇宙デブリ除去・軌道上サービス世界初", "https://www.sbisec.co.jp", "SBI証券"),
+    ("216A.T", "タイミー", "東証グロース", "スキマバイト市場独占・HRビッグデータ", "https://www.rakuten-sec.co.jp", "楽天証券"),
+    ("5595.T", "QPS研究所", "東証グロース", "小型SAR防衛衛星コンステレーション", "https://www.nomura.co.jp", "野村證券"),
+    ("9166.T", "GENDA", "東証グロース", "エンタメ・アミューズメントM&Aロールアップ", "https://www.smbcnikko.co.jp", "SMBC日興証券"),
+    ("6526.T", "ソシオネクスト", "東証プライム", "先端カスタムSoCファブレス・AI半導体設計", "https://www.daiwa.jp", "大和証券"),
+    ("285A.T", "キオクシアHD", "東証プライム", "次世代3D NANDフラッシュメモリ大型上場", "https://www.sbisec.co.jp", "SBI証券"),
+    ("290A.T", "Synspective", "東証グロース", "小型SAR衛星コンステレーション開発・運用", "https://www.nomura.co.jp", "野村證券"),
+    ("278A.T", "Terra Drone", "東証グロース", "産業用ドローン・空飛ぶクルマ運航管理", "https://www.daiwa.jp", "大和証券"),
+    ("247A.T", "Aiロボティクス", "東証グロース", "AIマーケティングシステム・自社ブランド展開", "https://www.sbisec.co.jp", "SBI証券"),
+    ("260A.T", "オルツ", "東証グロース", "パーソナル人工知能P.A.I.・AIクローン", "https://www.rakuten-sec.co.jp", "楽天証券"),
+    ("190A.T", "Chordia Therapeutics", "東証グロース", "RNA制御ストレス標的の次世代創薬バイオ", "https://www.smbcnikko.co.jp", "SMBC日興証券"),
+    ("9348.T", "ispace", "東証グロース", "民間月面資源開発・ランダー輸送サービス", "https://www.smbc.co.jp", "SMBC日興証券"),
+    ("5253.T", "カバー", "東証グロース", "VTuberプロダクション・IPメタバース展開", "https://www.sbisec.co.jp", "SBI証券"),
+    ("5032.T", "ANYCOLOR", "東証プライム", "VTuberグループ運営・高収益コマース", "https://www.daiwa.jp", "大和証券"),
+    ("5574.T", "ABEJA", "東証グロース", "エンタープライズ生成AI導入基盤", "https://www.nomura.co.jp", "野村證券"),
+    ("3993.T", "PKSHA Technology", "東証スタンダード", "未来型アルゴリズム・自然言語処理AI", "https://www.sbisec.co.jp", "SBI証券"),
+    ("4478.T", "フリー", "東証グロース", "統合型クラウドERP・スモールビジネスDX", "https://www.rakuten-sec.co.jp", "楽天証券"),
+    ("4165.T", "プレイド", "東証グロース", "CXプラットフォームKARTE・データ解析", "https://www.sbisec.co.jp", "SBI証券")
+]
 
 # ==========================================
 # 3. 高速インメモリキャッシュ & DBレイヤー ＆ 暗号化ストレージ
@@ -269,6 +360,17 @@ def load_watchlist(em: str) -> dict:
 
 def save_watchlist(em: str, wl: dict):
     if em: db_set(_user_store_key("watchlist", em), wl)
+
+def load_active_market_roster() -> list:
+    """SQLite永続化された現在の生き残りロスター（弱肉強食選抜リスト）を取得する"""
+    roster = db_get("active_market_roster", None)
+    if not isinstance(roster, list) or len(roster) < 15:
+        roster = [[c, n, g, t] for c, n, g, t in GLOBAL_MARKET_TICKERS]
+        db_set("active_market_roster", roster)
+    for item in roster:
+        if len(item) >= 4:
+            STOCK_METADATA_CACHE[item[0]] = {"name": item[1], "genre": item[2], "theme": item[3]}
+    return roster
 
 # ==========================================
 # 【魔改造】自律型AGI雇用・鬼監視センター
@@ -860,14 +962,13 @@ components.html(
 )
 
 # ==========================================
-# 9. サイドバー構築（実測健全性監査対応）
+# 9. サイドバー構築（実測健全性監査 ＆ 弱肉強食ロスター履歴対応）
 # ==========================================
 def _compute_real_audit_metrics() -> dict:
     err_cnt = len(get_system_error_logs())
     fired_cnt = len(st.session_state.get("fired_agents", []))
     sim_pen = int(st.session_state.get("last_audit_similarity_penalty", 0))
 
-    # 実測エラーログ件数、解雇履歴件数、直近スレッド類似度ペナルティから健全性スコアを算出
     err_deduction = min(25, err_cnt * 2)
     fired_deduction = min(15, fired_cnt * 1)
     health_score = int(np.clip(100 - err_deduction - fired_deduction - sim_pen, 50, 100))
@@ -997,6 +1098,14 @@ with st.sidebar:
     if cu:
         save_user_prefs(cu, {"investment_style": investment_style, "active_boosts": list(ac_b), "total_capital": total_capital, "risk_tolerance_pct": risk_tolerance_pct, "survival_cut_pct": survival_cut_pct})
 
+    with st.expander("⚔️ 市場サバイバル入れ替え戦ログ", expanded=False):
+        surv_logs = db_get("market_survival_logs", [])
+        if surv_logs:
+            for sl in surv_logs[:10]:
+                st.markdown(f'<div style="background:rgba(15,23,42,0.85);border-left:3px solid #f59e0b;padding:5px 8px;margin-bottom:5px;border-radius:4px;font-size:10.5px;"><span style="color:#94a3b8;font-size:9.5px;">{html.escape(sl.get("time",""))}</span><br><span style="color:#f8fafc;">{html.escape(sl.get("msg",""))}</span></div>', unsafe_allow_html=True)
+        else:
+            st.caption("直近の入れ替え戦ログを待機中です。全市場スキャン実行時に自動記録されます。")
+
     with st.expander("🏢 AGI鬼監視センター (監視3名・10名常時)", expanded=False):
         _render_realtime_audit_center_fragment()
 
@@ -1008,15 +1117,134 @@ with st.sidebar:
         st.session_state["authenticated_user"] = None; st.query_params.clear(); st.rerun()
 
 # ==========================================
-# 10. 高速並列データ収集 ＆ 重大ニュース徹底深掘り解析
+# 10. 高速並列データ収集 ＆ 動的マーケット・ハンター
 # ==========================================
+@st.cache_data(ttl=300)
+def search_single_query(q: str, max_r: int) -> list:
+    res = []
+    try:
+        req = urllib.request.Request(f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=ja&gl=JP&ceid=JP:ja", headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        with urllib.request.urlopen(req, timeout=2.2, context=ssl.create_default_context()) as r:
+            for it in ET.fromstring(r.read()).findall("./channel/item")[:max_r]:
+                t = re.sub(r"\s*-\s*[^-]+$", "", re.sub(r"<[^>]+>", "", it.findtext("title") or "").strip())
+                d = re.sub(r"<[^>]+>", "", it.findtext("description") or "").strip()
+                if t: res.append(f"{t} ({d[:80]}...)")
+    except Exception as e: record_system_error("search_single_query", e, f"Query: {q}")
+    return res
+
+def _infer_genre_from_text(txt: str) -> str:
+    tu = (txt or "").upper()
+    if any(k in tu for k in ["半導体", "ウエハ", "EUV", "HBM", "GPU", "チップ", "ファウンドリ", "検査装置"]):
+        return "半導体・前工程・検査"
+    if any(k in tu for k in ["防衛", "自衛隊", "重工", "国策", "AI", "人工知能", "クラウド", "サイバー", "銀行", "商社"]):
+        return "AI・防衛・国策"
+    if any(k in tu for k in ["電力", "原発", "送電", "電線", "光ファイバー", "データセンター", "液冷", "原子炉"]):
+        return "AI電力・超電導・電線"
+    if any(k in tu for k in ["宇宙", "衛星", "ロケット", "月面", "量子", "ドローン", "ロボット"]):
+        return "宇宙・量子・次世代テック"
+    return "小型急騰・仕手・モメンタム"
+
+def _extract_tickers_from_text(txt: str, existing_codes: set = None) -> list:
+    """記事テキストから東証4桁コード（英字入り新コード含む）およびマスター辞書一致銘柄を抽出"""
+    existing_codes = existing_codes or set()
+    found = []
+    seen_local = set()
+
+    # 1. 東証4桁証券コード（例: 6857, 186A）を正規表現で抽出
+    raw_codes = re.findall(r"(?<![0-9A-Za-z])([1-9][0-9]{2}[0-9A-Z])(?![0-9A-Za-z])", txt or "")
+    for rc in raw_codes:
+        if re.match(r"^202[0-9]$", rc):
+            continue
+        fc = f"{rc}.T"
+        if fc in seen_local:
+            continue
+        seen_local.add(fc)
+        if fc in EXTENDED_SEED_DICT:
+            inf = EXTENDED_SEED_DICT[fc]
+            found.append((fc, inf["name"], inf["genre"], inf["theme"]))
+        else:
+            # タイトルから社名推測を試みる
+            m_name = re.search(rf"([^\s「」『』【】\(\)（）]{{2,14}})\s*[\(（<＜]?\s*{re.escape(rc)}", txt or "")
+            est_name = m_name.group(1) if m_name else f"東証{rc}"
+            est_genre = _infer_genre_from_text(txt)
+            est_theme = "市況急動意・ニュース自動発掘銘柄"
+            STOCK_METADATA_CACHE[fc] = {"name": est_name, "genre": est_genre, "theme": est_theme}
+            found.append((fc, est_name, est_genre, est_theme))
+
+    # 2. マスター辞書内の企業名一致による抽出
+    for fc, inf in EXTENDED_SEED_DICT.items():
+        if fc in seen_local:
+            continue
+        nm = inf["name"]
+        short_nm = nm.replace("HD", "").replace("グループ", "").replace("フィナンシャルG", "")
+        if len(short_nm) >= 2 and short_nm in (txt or ""):
+            seen_local.add(fc)
+            found.append((fc, inf["name"], inf["genre"], inf["theme"]))
+
+    return found
+
+@st.cache_data(ttl=240)
+def discover_challenger_tickers(existing_codes_tuple: tuple) -> list:
+    """【仕様1】GoogleニュースRSSと広域マスター辞書から、今市場で急動意しているチャレンジャー銘柄を自動発掘する"""
+    existing_set = set(existing_codes_tuple)
+    challengers = []
+    seen = set(existing_set)
+
+    queries = [
+        '("ストップ高" OR "上方修正" OR "急騰" OR "最高益" OR "自社株買い" OR "新規上場") 株',
+        '("急伸" OR "連騰" OR "買い気配" OR "好決算" OR "テーマ株") 東証'
+    ]
+    rss_snippets = []
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        futs = [ex.submit(search_single_query, q, 6) for q in queries]
+        for f in as_completed(futs):
+            try:
+                rss_snippets.extend(f.result())
+            except Exception as e:
+                record_system_error("discover_challenger_tickers:rss", e)
+
+    for snip in rss_snippets:
+        extracted = _extract_tickers_from_text(snip, existing_set)
+        for item in extracted:
+            fc = item[0]
+            if fc not in seen:
+                seen.add(fc)
+                challengers.append(item)
+                if len(challengers) >= 12:
+                    break
+        if len(challengers) >= 12:
+            break
+
+    # RSSでの新規発掘が12件未満の場合、広域マスター辞書からローテーション枠を補填して常に新陳代謝を発生させる
+    if len(challengers) < 12:
+        pool_candidates = [
+            (c, n, g, t) for c, n, g, t in EXTENDED_SEED_LIST
+            if c not in seen
+        ]
+        if pool_candidates:
+            epoch_seed = int(time.time() // 300)
+            rng = random.Random(epoch_seed)
+            rng.shuffle(pool_candidates)
+            for item in pool_candidates[: (12 - len(challengers))]:
+                seen.add(item[0])
+                challengers.append(item)
+
+    for c, n, g, t in challengers:
+        STOCK_METADATA_CACHE[c] = {"name": n, "genre": g, "theme": t}
+
+    return challengers[:14]
+
 def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") -> dict:
     tu = (title + " " + summary_text).upper()
     clean_sum = re.sub(r"<[^>]+>", "", summary_text or "").strip()
     clean_sum = re.sub(r"&nbsp;|&#\d+;", " ", clean_sum).strip()
 
+    # 【仕様4】記事タイトル・要約から動的に証券コード・企業名を抽出して先頭へ配置
+    extracted_items = _extract_tickers_from_text(f"{title} {clean_sum}")
+    dynamic_codes = [it[0] for it in extracted_items]
+
     if any(w in tu for w in ["半導体", "エヌビディア", "NVDA", "TSMC", "AI", "アドバンテスト", "東エレク", "レーザー", "光配線", "データセンター"]):
-        codes = ["6857.T", "8035.T", "6146.T", "6920.T", "5803.T", "NVDA"]
+        base_codes = ["6857.T", "8035.T", "6146.T", "6920.T", "5803.T", "NVDA"]
         sf = "AI半導体・先端パッケージング・光電融合インフラ"
         bg_body = (
             f"【報道内容の核心】\n{clean_sum if len(clean_sum) > 25 else title}\n\n"
@@ -1041,7 +1269,7 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
             "③ 【出遅れ連動狙い】6857（アドバンテスト）や8035（東エレク）がすでに高騰している場合、連動性の高い5803（フジクラ）や6146（ディスコ）の初動ブレイクを叩くのが最もリスクリワード比が高い。"
         )
     elif any(w in tu for w in ["防衛", "三菱重", "川崎重", "IHI", "宇宙", "衛星", "地政学", "ミサイル", "ドローン", "安保"]):
-        codes = ["7011.T", "7012.T", "7013.T", "5595.T", "186A.T", "PLTR"]
+        base_codes = ["7011.T", "7012.T", "7013.T", "5595.T", "186A.T", "PLTR"]
         sf = "防衛国策・宇宙衛星コンステレーション・重工インフラ"
         bg_body = (
             f"【報道内容の核心】\n{clean_sum if len(clean_sum) > 25 else title}\n\n"
@@ -1066,7 +1294,7 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
             "③ 【利確と損切り】重工株はトレンドが長続きしやすいため、利確目標に達した時点で半分を利益確定し、残り半分は逆指値を建値（買値）に引き上げて上値を伸ばすトレイリング戦略が有効。"
         )
     else:
-        codes = ["9984.T", "6857.T", "5803.T", "7011.T", "5253.T", "3350.T"]
+        base_codes = ["9984.T", "6857.T", "5803.T", "7011.T", "5253.T", "3350.T"]
         sf = "上方修正サプライズ・国策AI・短期モメンタム集中銘柄"
         bg_body = (
             f"【報道内容の核心】\n{clean_sum if len(clean_sum) > 25 else title}\n\n"
@@ -1090,13 +1318,15 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
             "③ 【出口戦略】前引け（11:30）および大引け（15:30）前の15分間は手仕舞い売りが出やすいため、目標株価到達時は欲張らず確実に利益を確定させる。"
         )
 
+    merged_codes = list(dict.fromkeys(dynamic_codes + base_codes))[:8]
+
     return {
         "sector_focus": sf,
         "news_body": bg_body,
         "mechanism": mech,
         "timeline": timeline,
         "risk_note": risk_note,
-        "related_codes": codes,
+        "related_codes": merged_codes,
         "action_guide": action_guide
     }
 
@@ -1168,16 +1398,64 @@ def fetch_global_impact_news() -> list:
 all_impact_news = fetch_global_impact_news()
 
 @st.cache_data(ttl=300)
-def fetch_real_ipo_growth_analysis() -> list:
-    """実在の新規上場・グロース市場注目株をyfinanceとGoogleニュースRSSからリアルタイム解析する"""
-    codes = [c for c, _, _, _, _, _ in REAL_IPO_GROWTH_UNIVERSE]
+def fetch_real_ipo_growth_analysis() -> dict:
+    """
+    【仕様3】2階建てIPO・グロース市場監視エンジン
+    第1部：上場前・ブックビルディング・超目玉IPO自動レーダー（Anthropic / OpenAI / SpaceX / 東証新規承認）
+    第2部：既上場・直近IPO＆グロース株の弱肉強食サバイバルランキング（上位生存枠のみ選抜・下位は脱落扱い）
+    """
+    pre_ipo_list = []
+
+    def _scan_pre_ipo(cand):
+        hits = search_single_query(cand["query"], 3)
+        headline = re.sub(r"\(.*?\)", "", hits[0]).strip() if hits else "直近の公開準備・関連報道を継続モニタリング中"
+        buzz_cnt = len(hits)
+        # 東証新規承認コードの自動抽出
+        discovered_codes = re.findall(r"(?<![0-9A-Za-z])([1-9][0-9]{2}[0-9A-Z])(?![0-9A-Za-z])", " ".join(hits))
+        discovered_codes = [dc for dc in dict.fromkeys(discovered_codes) if not re.match(r"^202[0-9]$", dc)]
+        code_badge = f" (検出コード: {', '.join(discovered_codes[:3])})" if discovered_codes else ""
+        heat_score = int(np.clip(68 + buzz_cnt * 9 + (6 if cand["code"] == "ANT" else 0), 50, 99))
+        return {
+            "code": cand["code"],
+            "name": cand["name"] + code_badge,
+            "market": cand["market"],
+            "theme": cand["theme"],
+            "status": cand["status"],
+            "heat_score": heat_score,
+            "buzz_cnt": buzz_cnt,
+            "latest_headline": headline
+        }
+
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        futs_pre = [ex.submit(_scan_pre_ipo, c) for c in PRE_IPO_RADAR_CANDIDATES]
+        for f in as_completed(futs_pre):
+            try:
+                pre_ipo_list.append(f.result())
+            except Exception as e:
+                record_system_error("fetch_real_ipo_growth_analysis:pre_ipo", e)
+    pre_ipo_list.sort(key=lambda x: x["heat_score"], reverse=True)
+
+    # 第2部：既上場IPO・グロース広域プール＋RSS新規発掘銘柄の弱肉強食サバイバル
+    ipo_rss_hits = search_single_query('("IPO" OR "新規上場" OR "東証グロース") 株価 急騰', 5)
+    dynamic_ipo_pool = list(REAL_IPO_GROWTH_UNIVERSE)
+    seen_ipo_codes = {it[0] for it in dynamic_ipo_pool}
+
+    for snip in ipo_rss_hits:
+        for fc, nm, gn, th in _extract_tickers_from_text(snip):
+            if fc.endswith(".T") and fc not in seen_ipo_codes:
+                seen_ipo_codes.add(fc)
+                dynamic_ipo_pool.append((fc, nm, "東証グロース/新規発掘", th, "https://www.sbisec.co.jp", "SBI証券"))
+                if len(dynamic_ipo_pool) >= 22:
+                    break
+
+    codes = [c for c, _, _, _, _, _ in dynamic_ipo_pool]
     try:
-        raw = yf.download(codes, period="1mo", interval="1d", group_by="ticker", threads=True, progress=False, timeout=4.0)
+        raw = yf.download(codes, period="1mo", interval="1d", group_by="ticker", threads=True, progress=False, timeout=4.5)
     except Exception as e:
         record_system_error("fetch_real_ipo_growth_analysis:download", e)
         raw = {}
 
-    results = []
+    all_evaluated = []
 
     def _analyze_ipo_item(item):
         c, name, mkt, theme, url, broker = item
@@ -1209,15 +1487,15 @@ def fetch_real_ipo_growth_analysis() -> list:
             news_items = search_single_query(f"{name} 株価", 2)
             latest_headline = news_items[0] if news_items else "直近の特段の悪材料なし・需給推移中"
 
-            score = int(np.clip(50 + chg_pct * 3.5 + (rvol - 1.0) * 18.0 + (20.0 + from_high_pct) * 0.6, 15, 99))
-            if score >= 82:
-                tier = "🔥 S級モメンタム：出来高急増・高値圏ブレイク態勢"
+            score = int(np.clip(50 + chg_pct * 3.5 + (rvol - 1.0) * 18.0 + (20.0 + from_high_pct) * 0.6 + len(news_items) * 2.5, 15, 99))
+            if score >= 80:
+                tier = "🔥 S級サバイバー：出来高急増・高値圏ブレイク態勢"
             elif score >= 65:
-                tier = "⚡ A級トレンド：順張り・押し目需給良好"
-            elif score >= 50:
-                tier = "🛡️ B級監視：底値固め・出来高待ちフェーズ"
+                tier = "⚡ A級サバイバー：順張り・押し目需給良好"
+            elif score >= 52:
+                tier = "🛡️ B級残留：底値固め・出来高待ちフェーズ"
             else:
-                tier = "⚠️ C級警戒：モメンタム低下・調整局面"
+                tier = "💀 C級脱落圏：モメンタム低下・圏外淘汰候補"
 
             return {
                 "code": c.replace(".T", ""),
@@ -1242,34 +1520,29 @@ def fetch_real_ipo_growth_analysis() -> list:
             record_system_error(f"fetch_real_ipo_growth_analysis:{c}", e_item)
             return None
 
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        futs = [ex.submit(_analyze_ipo_item, it) for it in REAL_IPO_GROWTH_UNIVERSE]
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futs = [ex.submit(_analyze_ipo_item, it) for it in dynamic_ipo_pool]
         for f in as_completed(futs):
             res_it = f.result()
             if res_it:
-                results.append(res_it)
+                all_evaluated.append(res_it)
 
-    results.sort(key=lambda x: x["score"], reverse=True)
-    for idx, r in enumerate(results, 1):
+    all_evaluated.sort(key=lambda x: x["score"], reverse=True)
+    survivors = all_evaluated[:6]
+    eliminated = all_evaluated[6:]
+    for idx, r in enumerate(survivors, 1):
         r["rank"] = idx
-    return results
+
+    return {
+        "pre_ipo": pre_ipo_list,
+        "survivors": survivors,
+        "eliminated": eliminated,
+        "total_scanned": len(all_evaluated)
+    }
 
 # ==========================================
 # 11. 【魔改造】自然対話チャットエンジン
 # ==========================================
-@st.cache_data(ttl=300)
-def search_single_query(q: str, max_r: int) -> list:
-    res = []
-    try:
-        req = urllib.request.Request(f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=ja&gl=JP&ceid=JP:ja", headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=2.2, context=ssl.create_default_context()) as r:
-            for it in ET.fromstring(r.read()).findall("./channel/item")[:max_r]:
-                t = re.sub(r"\s*-\s*[^-]+$", "", re.sub(r"<[^>]+>", "", it.findtext("title") or "").strip())
-                d = re.sub(r"<[^>]+>", "", it.findtext("description") or "").strip()
-                if t: res.append(f"{t} ({d[:80]}...)")
-    except Exception as e: record_system_error("search_single_query", e, f"Query: {q}")
-    return res
-
 def search_web_knowledge_parallel(q1: str, q2: str) -> list:
     res = []
     with ThreadPoolExecutor(max_workers=2) as ex:
@@ -1670,6 +1943,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     rel_news = next((n for n in all_impact_news if r["full_code"] in n["detail"]["related_codes"]), None)
     dc, ds, ps = "#10b981" if r["diff"] >= 0 else "#ef4444", ("+" if r["diff"] > 0 else ""), ("+" if r["pts_gap_pct"] > 0 else "")
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
+    new_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#10b981;color:#6ee7b7;font-weight:800;">🆕 NEW昇格</span>' if r.get("is_new_challenger") else ""
     lot, st_info = r["lot_info"], r["strat"]
     n_banner = f'<div style="margin-top:6px; margin-bottom:4px;"><span style="display:inline-block; width:100%; text-align:center; background:linear-gradient(90deg, #b91c1c 0%, #ef4444 50%, #b91c1c 100%); color:#ffffff; font-weight:800; font-size:11.5px; padding:5px 8px; border-radius:6px; border:1px solid #fca5a5; animation:alert-pulse 2s infinite;">🚨【重大情報】{html.escape(rel_news["title"][:32] + "..." if len(rel_news["title"]) > 32 else rel_news["title"])}</span></div>' if rel_news else ""
 
@@ -1698,7 +1972,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     st.markdown(
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
-        f'<div class="badge-single-line">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点</span></div>'
+        f'<div class="badge-single-line">{rk_h}{new_badge}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点</span></div>'
         f'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div style="min-width:0;flex:1;"><div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;"><span style="font-size:16px;font-weight:800;color:#f8fafc;white-space:nowrap;">{html.escape(r["name"])}</span> <span style="font-size:11.5px;color:#94a3b8;white-space:nowrap;">({r["code"]} / {html.escape(r["genre"])})</span></div><div style="font-size:11px;color:#94a3b8;margin-top:3px;word-break:keep-all;">{html.escape(r["theme"])} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div></div>'
         f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;">🔥 期待度 / テク強度</div><div style="white-space:nowrap;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}pt</span></div></div></div>'
         f'{n_banner}'
@@ -1717,25 +1991,25 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
 # 13. 数理クオンツ・エンジン & 日次フォワード自動検証エンジン
 # ==========================================
 @st.cache_data(ttl=300)
-def fetch_real_market_buzz() -> dict:
-    """GoogleニュースRSSから各銘柄の実測報道件数を取得（レート制限回避のため4並列+ウェイト制御）"""
+def fetch_real_market_buzz(tickers_tuple: tuple) -> dict:
+    """GoogleニュースRSSから各銘柄の実測報道件数を取得"""
     buzz_map = {}
 
     def _query_buzz(item):
         c, n, _, _ = item
-        time.sleep(0.08)
+        time.sleep(0.06)
         hits = search_single_query(f"{n} 株", 5)
         return c, {"news_hits": len(hits), "headlines": hits[:2]}
 
     with ThreadPoolExecutor(max_workers=4) as ex:
-        futs = [ex.submit(_query_buzz, it) for it in GLOBAL_MARKET_TICKERS]
+        futs = [ex.submit(_query_buzz, it) for it in tickers_tuple]
         for f in as_completed(futs):
             try:
                 c, info = f.result()
                 buzz_map[c] = info
             except Exception as e:
                 record_system_error("fetch_real_market_buzz", e)
-                for it in GLOBAL_MARKET_TICKERS:
+                for it in tickers_tuple:
                     buzz_map.setdefault(it[0], {"news_hits": 0, "headlines": []})
     return buzz_map
 
@@ -1777,17 +2051,14 @@ def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v:
         r_max = float(c[-1])
         bars_since_high = 1
 
-    # 無次元化ポテンシャル障壁高さ V0
     v0 = max((r_max - float(c[-1])) / (sigma + 1e-8), 0.0)
 
-    # 直近5本の平均モメンタムと相対出来高(RVOL)から無次元化運動エネルギー E を算出
     look_k = min(6, len(c))
     mom_move = abs(float(c[-1] - c[-look_k]))
     base_v = float(np.mean(v[-20:-5])) if len(v) >= 20 else float(np.mean(v[:-1]))
     rvol = float(np.mean(v[-5:])) / max(base_v, 1.0)
     energy_e = (mom_move / (5.0 * sigma + 1e-8)) * max(rvol, 0.1)
 
-    # WKB近似トンネル透過確率 T (下限5.0%〜上限99.5%)
     delta_x = float(np.clip(bars_since_high / 20.0, 0.2, 2.0))
     if energy_e >= v0:
         qt = float(np.clip(80.0 + (energy_e - v0) * 10.0, 80.0, 99.5))
@@ -1795,7 +2066,6 @@ def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v:
         qt = float(80.0 * np.exp(-2.0 * np.sqrt(max(v0 - energy_e, 0.0)) * delta_x))
         qt = float(np.clip(qt, 5.0, 99.5))
 
-    # 5ビン離散化正規化シャノン・エントロピーとフーリエ位相コヒーレンス
     rets = np.diff(c) / np.maximum(c[:-1], 1e-4)
     rets_16 = rets[-16:] if len(rets) >= 16 else rets
     if len(rets_16) >= 5:
@@ -1853,7 +2123,6 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
     else:
         hurst = 0.50
 
-    # 符号付き出来高 SV_t と価格変化 ΔP_t からのOLS回帰による Kyle の λ 推定
     dp = np.diff(c[-21:]) if len(c) >= 21 else np.diff(c)
     v_20 = v[-len(dp):]
     sgn = np.sign(dp)
@@ -1867,12 +2136,10 @@ def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: 
     else:
         kyle_lambda = 0.0
 
-    # 出来高急増度(RVOL) × 低価格インパクト(|λ|が小さい) × 高値引けCLV比率
     base_v = float(np.mean(v[-20:-5])) if len(v) >= 20 else float(np.mean(v[:-1]))
     rvol = float(np.mean(v[-5:])) / max(base_v, 1.0)
     clv_recent = float(np.mean((2.0 * c[-5:] - h[-5:] - l[-5:]) / np.maximum(h[-5:] - l[-5:], 1e-4)))
 
-    # 価格インパクトの正規化逆数（出来高に対して値動きが抑え込まれて吸収されている度合い）
     norm_impact = abs(kyle_lambda) * max(float(np.mean(v_20)), 1.0) / max(float(c[-1]), 1.0)
     stealth_absorption = float(np.clip(1.0 / (1.0 + norm_impact * 150.0), 0.0, 1.0))
 
@@ -1911,7 +2178,6 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
         rsi = float(np.clip(100.0 - (100.0 / (1.0 + ag / max(al, 1e-8))), 5.0, 95.0))
     else: rsi = 50.0
 
-    # BVC-VPIN (Easley, López de Prado, O'Hara 2012) による買い/売り出来高分類
     n_vpin = min(20, len(diffs))
     if n_vpin >= 5:
         dc_sub = diffs[-n_vpin:]
@@ -1934,7 +2200,6 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
         cvar = float(np.clip(abs(np.mean(tl)) * 100.0 if len(tl) > 0 else abs(v99) * 100.0, 0.5, 18.0))
     else: cvar = 3.8
 
-    # KaufmanのEfficiency Ratio (効率性レシオ: 0〜100%)
     er_n = min(20, len(c) - 1)
     if er_n >= 5:
         net_chg = abs(float(c[-1] - c[-1 - er_n]))
@@ -1943,14 +2208,12 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
     else:
         eff_pct = 50
 
-    # 実測ペイオフレシオ（平均陽線幅 ÷ 平均陰線幅）
     pos_diffs = diffs[diffs > 0]
     neg_diffs = np.abs(diffs[diffs < 0])
     avg_win_move = float(np.mean(pos_diffs)) if len(pos_diffs) > 0 else float(c[-1] * 0.005)
     avg_loss_move = float(np.mean(neg_diffs)) if len(neg_diffs) > 0 else float(c[-1] * 0.005)
     payoff = round(float(np.clip(avg_win_move / max(avg_loss_move, 1e-8), 0.3, 6.0)), 2)
 
-    # Yang-Zhang年率ボラティリティと相対出来高 (RVOL) の実測計算
     yz_vol = 0.30
     rvol = 1.0
     if daily_df is not None and len(daily_df) >= 3:
@@ -2000,9 +2263,6 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
     }
 
 def compute_japanese_lot_sizing(cv: float, slv: float, total_capital: float, risk_tolerance_pct: float, is_jp: bool, style_mul: float = 1.0) -> dict:
-    """
-    許容リスク額と総投資資金上限の両方から推奨株数を算出し、日本株は100株単位（資金不足時のみ単元未満株1株単位）に丸める
-    """
     rm = float(total_capital) * (float(risk_tolerance_pct) / 100.0)
     risk_per_share = max(cv - slv, cv * 0.005)
     raw_shares = int((rm / risk_per_share) * style_mul)
@@ -2194,7 +2454,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     if not isinstance(stock_ledger.get("verified"), dict):
         stock_ledger["verified"] = {}
 
-    # 厳格化バージョン V3（同一足即利確禁止 + 往復0.10%コスト控除 + 単元株/総資金上限遵守）
     if stock_ledger.get("algo_ver") != "QWM7_HONEST_10D_V3":
         stock_ledger["verified"] = {}
         stock_ledger["algo_ver"] = "QWM7_HONEST_10D_V3"
@@ -2213,7 +2472,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     st_p = style.split(" ")[1] if " " in style else "デイトレード"
     mul_tp, mul_sl = {"スキャルピング": (0.48, 0.85), "スイングトレード": (1.65, 1.35), "バイ＆ホールド": (2.8, 1.8)}.get(st_p, (0.82, 1.15))
     st_mul = {"スキャルピング": 1.5, "スイングトレード": 1.2, "バイ＆ホールド": 0.9}.get(st_p, 1.65)
-    ROUND_TRIP_COST_RATE = 0.0010  # 片道0.05% × 往復 = 0.10%
+    ROUND_TRIP_COST_RATE = 0.0010
 
     try:
         df_copy = df.copy()
@@ -2293,7 +2552,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                     hist_lot = compute_japanese_lot_sizing(p_close, sig_sl, total_capital, risk_tolerance_pct, is_jp, st_mul)
                     sig_sh = int(hist_lot["shares"])
 
-                # 翌営業日(next_d)の5分足走査（同一足即利確禁止）
                 pos_shares = 0
                 total_cost = 0.0
                 avg_entry_px = 0.0
@@ -2316,7 +2574,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                     bc = float(bar["Close"])
                     entered_this_bar = False
 
-                    # --- 1. エントリー約定判定 ---
                     if sig_tactic == "Type-A":
                         if b_i == 0:
                             sh_a = max(1, int(round(sig_sh * 0.5)))
@@ -2379,7 +2636,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             eff_sl = avg_entry_px - sl_diff
                             entered_this_bar = True
 
-                    else:  # Type-E
+                    else:
                         if pos_shares == 0 and b_i == min(1, total_bars - 1):
                             sh_scout = max(1, int(round(sig_sh * 0.3)))
                             pos_shares = sh_scout
@@ -2403,7 +2660,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                     if entered_this_bar:
                         entry_bar_idx = b_i
 
-                    # --- 2. 利確(TP)・損切(SL)判定（同一足ではSLのみ判定しTPは次足以降から判定） ---
                     if pos_shares > 0:
                         can_take_profit = (b_i > entry_bar_idx)
                         hit_tp = (bh >= eff_tp) if can_take_profit else False
@@ -2430,7 +2686,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             is_win = True
                             break
 
-                # --- 3. 大引け決済と往復0.10%執行コスト控除 ---
                 if pos_shares == 0:
                     outcome = "⚪ 条件未到達・見送り (NO TRADE)"
                     avg_entry_px = sig_plan_px
@@ -2564,11 +2819,9 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         ms = compute_inst_microstructure(c, h, l, v)
         q_adv = compute_advanced_quant_indicators(c, h, l, v, daily_df=daily_df, news_hits=news_hits)
 
-        # 5分足CLV資金フロー不均衡 (Tick-Flow Z)
         sf = ((2.0 * c - h - l) / np.maximum(h - l, 1e-4)) * v
         ofi_z = float(np.clip((np.mean(sf[-5:]) - np.mean(sf[-20:])) / max(float(np.std(sf[-20:])), 1.0), -3.0, 3.0))
 
-        # サイドバーのチェックボックス（bal, bms, bi, b5, bagi_q, bhft）を完全連動した加重平均評価
         r20 = int(np.sum(np.diff(c[-21:]) > 0)) if len(c) >= 21 else 10
         base_tech_score = float(np.clip((r20 / 20.0) * 100.0 * 0.65 + (q_adv["eff_pct"] * 0.35), 10.0, 95.0))
         inst_flow_score = float(np.clip(50.0 + ofi_z * 14.0 + (0.5 - q_adv["vpin"]) * 35.0, 10.0, 98.0))
@@ -2637,7 +2890,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
             total_capital=total_capital, risk_tolerance_pct=risk_tolerance_pct
         )
 
-        # 正直なティア分類（50%未満は明確に下落警戒・見送り表示）
         if expect_pct >= 90.0:
             t_num, t_lbl, t_col, t_bg = 10, "【Lv.10：🔥S級・全力突破】", "#fff", "linear-gradient(90deg,#7e22ce,#dc2626)"
         elif expect_pct >= 80.0:
@@ -2668,52 +2920,122 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         return None
 
 # ==========================================
-# 14. 市場データスキャン（15d 5m 安定取得＆自動フォールバック）
+# 14. 全市場オートディスカバリー＆弱肉強食サバイバル入れ替えスキャン
 # ==========================================
 @st.cache_data(ttl=90)
-def fetch_pool_batch(macro, buzz_map, style, bi, b5, bal, bms, bagi_q, bhft, total_cap=1000000, risk_pct=2.0):
-    codes = [c for c, _, _, _ in GLOBAL_MARKET_TICKERS]
+def fetch_pool_batch(macro, style, bi, b5, bal, bms, bagi_q, bhft, total_cap=1000000, risk_pct=2.0):
+    """
+    【仕様2】SQLiteの active_market_roster（既存生き残り銘柄）＋ discover_challenger_tickers（市場自動発掘銘柄）を
+    同時スキャンし、期待度・出来高サージの低い下位銘柄をパージして高スコア新顔銘柄へ自動入れ替えを行う。
+    """
+    base_roster = load_active_market_roster()
+    existing_codes = tuple(sorted([it[0] for it in base_roster]))
+    challengers = discover_challenger_tickers(existing_codes)
+    challenger_codes_set = {it[0] for it in challengers}
+
+    combined_universe = []
+    seen_c = set()
+    for it in base_roster + challengers:
+        if it[0] not in seen_c:
+            seen_c.add(it[0])
+            combined_universe.append((it[0], it[1], it[2], it[3]))
+
+    # 上限45銘柄に抑えて高速ダウンロード
+    combined_universe = combined_universe[:45]
+    buzz_map = fetch_real_market_buzz(tuple(combined_universe))
+    codes = [c for c, _, _, _ in combined_universe]
+
     raw = {}
     try:
-        raw = yf.download(codes, period="15d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=5.0)
+        raw = yf.download(codes, period="15d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=5.5)
         if raw is None or raw.empty:
-            raw = yf.download(codes, period="7d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=5.0)
+            raw = yf.download(codes, period="7d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=5.5)
     except Exception as e:
         record_system_error("fetch_pool_batch:download", e)
         try:
-            raw = yf.download(codes, period="7d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=5.0)
+            raw = yf.download(codes, period="7d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=5.5)
         except Exception as e2:
             record_system_error("fetch_pool_batch:fallback", e2)
             raw = {}
 
-    gmap, alist, seen = {g: [] for g in DYNAMIC_GENRES}, [], set()
+    evaluated_all = []
 
     def _w(c, n, g, t):
         try: df = raw[c] if (len(codes) > 1 and c in raw) else raw
         except Exception: df = None
-        return g, c, analyze_df(df, c, n, t, g, macro, buzz_map, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_tolerance_pct=risk_pct)
+        r = analyze_df(df, c, n, t, g, macro, buzz_map, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_tolerance_pct=risk_pct)
+        if r:
+            r["is_new_challenger"] = (c in challenger_codes_set)
+        return r
 
-    with ThreadPoolExecutor(max_workers=min(len(GLOBAL_MARKET_TICKERS), 24)) as ex:
-        futs = [ex.submit(_w, c, n, g, t) for c, n, g, t in GLOBAL_MARKET_TICKERS]
+    with ThreadPoolExecutor(max_workers=min(len(combined_universe), 24)) as ex:
+        futs = [ex.submit(_w, c, n, g, t) for c, n, g, t in combined_universe]
         for f in as_completed(futs):
             try:
-                g, c, r = f.result()
+                r = f.result()
                 if r:
-                    gmap.setdefault(g, []).append(r)
-                    if c not in seen: alist.append(r); seen.add(c)
-            except Exception as e: record_system_error("fetch_pool_batch:future_result", e)
-    for g in gmap: gmap[g] = sorted(gmap[g], key=lambda x: x["expect_pct"], reverse=True)
-    return gmap, sorted(alist, key=lambda x: x["expect_pct"], reverse=True)
+                    evaluated_all.append(r)
+            except Exception as e:
+                record_system_error("fetch_pool_batch:future_result", e)
+
+    # 弱肉強食サバイバル淘汰（各ジャンル最低4銘柄保証＋全体上位32銘柄のみ生存）
+    evaluated_all.sort(key=lambda x: (x["expect_pct"] * 0.75 + x["board5ch_score"] * 0.25), reverse=True)
+
+    survivors = []
+    survivor_codes = set()
+    for g in DYNAMIC_GENRES:
+        g_cands = [x for x in evaluated_all if x["genre"] == g]
+        for item in g_cands[:4]:
+            if item["full_code"] not in survivor_codes:
+                survivors.append(item)
+                survivor_codes.add(item["full_code"])
+
+    for item in evaluated_all:
+        if len(survivors) >= 32:
+            break
+        if item["full_code"] not in survivor_codes:
+            survivors.append(item)
+            survivor_codes.add(item["full_code"])
+
+    # 入れ替え戦の勝敗をSQLiteへ永続保存＆ログ記録
+    if len(survivors) >= 15:
+        prev_codes_set = {it[0] for it in base_roster}
+        promoted = [x for x in survivors if x["full_code"] not in prev_codes_set]
+        purged = [it for it in base_roster if it[0] not in survivor_codes]
+
+        new_roster_db = [[x["full_code"], x["name"], x["genre"], x["theme"]] for x in survivors]
+        db_set("active_market_roster", new_roster_db)
+
+        if promoted or purged:
+            now_s = datetime.now().strftime("%Y-%m-%d %H:%M")
+            s_logs = db_get("market_survival_logs", [])
+            if not isinstance(s_logs, list):
+                s_logs = []
+            for p_it in promoted[:4]:
+                msg_p = f"🟢 [新規昇格] {p_it['name']}({p_it['code']}) が期待度 {p_it['expect_pct']}% / RVOL {p_it['rvol']}倍 でロスター奪取！"
+                if not s_logs or s_logs[0].get("msg") != msg_p:
+                    s_logs.insert(0, {"time": now_s, "msg": msg_p})
+            for d_it in purged[:4]:
+                msg_d = f"💀 [圏外追放] {d_it[1]}({d_it[0].replace('.T','')}) が期待度低下によりサバイバル脱落。"
+                if not s_logs or s_logs[0].get("msg") != msg_d:
+                    s_logs.insert(0, {"time": now_s, "msg": msg_d})
+            db_set("market_survival_logs", s_logs[:100])
+
+    gmap = {g: [] for g in DYNAMIC_GENRES}
+    for r in survivors:
+        gmap.setdefault(r["genre"], []).append(r)
+    for g in gmap:
+        gmap[g] = sorted(gmap[g], key=lambda x: x["expect_pct"], reverse=True)
+
+    return gmap, sorted(survivors, key=lambda x: x["expect_pct"], reverse=True)
 
 @st.cache_data(ttl=120)
-def fetch_one(code, macro, buzz_map, style, bi, b5, bal, bms, bagi_q, bhft, total_cap=1000000, risk_pct=2.0):
+def fetch_one(code, macro, style, bi, b5, bal, bms, bagi_q, bhft, total_cap=1000000, risk_pct=2.0):
     try:
         code = code.strip().upper()
         if re.match(r"^[0-9]{3}[0-9A-Z]$", code): code = f"{code}.T"
         inf = STOCK_METADATA_CACHE.get(code, {"name": code.replace(".T", ""), "theme": "動的スキャン対象銘柄", "genre": "個別検索"})
-        local_buzz = dict(buzz_map or {})
-        if code not in local_buzz:
-            local_buzz[code] = {"news_hits": len(search_single_query(f"{inf['name']} 株", 5))}
+        local_buzz = {code: {"news_hits": len(search_single_query(f"{inf['name']} 株", 5))}}
         tkr = yf.Ticker(code)
         hist_df = tkr.history(period="15d", interval="5m")
         if hist_df is None or hist_df.empty:
@@ -2726,14 +3048,14 @@ def fetch_one(code, macro, buzz_map, style, bi, b5, bal, bms, bagi_q, bhft, tota
 # ==========================================
 # 15. ヘッダー / マクロ指標
 # ==========================================
-macro_info, market_buzz_map = fetch_macro(), fetch_real_market_buzz()
+macro_info = fetch_macro()
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;"><div class="brand-luxury">YAMASHISHI LAB</div></div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
 
 _cache_pool_key = f"pool_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
 if _cache_pool_key not in st.session_state:
-    with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】直近15営業日5分足・全市場ユニバースを実測スキャン＆10営業日厳格検証中..."):
-        g_res, all_res = fetch_pool_batch(macro_info, market_buzz_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b, total_cap=total_capital, risk_pct=risk_tolerance_pct)
+    with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】全市場ニュース発掘＆弱肉強食サバイバル入れ替えスキャンを実行中..."):
+        g_res, all_res = fetch_pool_batch(macro_info, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b, total_cap=total_capital, risk_pct=risk_tolerance_pct)
         st.session_state[_cache_pool_key] = (g_res, all_res)
 else:
     g_res, all_res = st.session_state[_cache_pool_key]
@@ -2880,9 +3202,18 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
         f'</div>',
         unsafe_allow_html=True
     )
-    st.markdown("### 🔗 このニュースに直結する連動注目銘柄")
-    rel_codes = set(det.get("related_codes", []))
+    st.markdown("### 🔗 このニュースに直結する連動注目銘柄（動的抽出）")
+    rel_codes = list(det.get("related_codes", []))
     matched_stocks = [r_it for r_it in all_res if r_it["full_code"] in rel_codes or r_it["code"] in rel_codes]
+    # ロスター外の動的抽出銘柄があればリアルタイムで取得して追加
+    existing_matched_codes = {m["full_code"] for m in matched_stocks}
+    for rc in rel_codes:
+        if rc not in existing_matched_codes and len(matched_stocks) < 3:
+            extra_r = fetch_one(rc, macro_info, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b, total_cap=total_capital, risk_pct=risk_tolerance_pct)
+            if extra_r:
+                matched_stocks.append(extra_r)
+                existing_matched_codes.add(rc)
+
     target_list = sorted(matched_stocks if matched_stocks else all_res, key=lambda x: x["expect_pct"], reverse=True)[:3]
     for idx, r_item in enumerate(target_list, 1): render_card(r_item, rank=idx, kp=f"nr_{tn['id']}")
     if st.button("⬅️ 戻る", use_container_width=True, type="primary"):
@@ -2894,7 +3225,7 @@ cin = c1.text_input("🔍 銘柄検索", placeholder="コード入力 (例: 6920
 if c2.button("🔍 診断", use_container_width=True) and cin: st.session_state["custom_search_code"] = clean_k(cin)
 
 if st.session_state.get("custom_search_code"):
-    cr = fetch_one(st.session_state["custom_search_code"], macro_info, market_buzz_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b, total_cap=total_capital, risk_pct=risk_tolerance_pct)
+    cr = fetch_one(st.session_state["custom_search_code"], macro_info, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b, total_cap=total_capital, risk_pct=risk_tolerance_pct)
     if cr:
         render_card(cr, is_custom=True, kp="custom")
         if st.button("✖️ 閉じる", use_container_width=True): st.session_state["custom_search_code"] = ""; st.rerun()
@@ -2929,18 +3260,41 @@ elif sel_cat == "🚨 重大ニュース＆連動株":
         if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True):
             st.session_state["selected_news_item"] = n; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
 elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
-    st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 直近IPO・グロース市場注目株 リアルタイム実測ターミナル</div><div style="font-size:11.5px;color:#94a3b8;margin-top:3px;">東証実在銘柄の現在値・相対出来高(RVOL)・過去1ヶ月高値からの乖離率・年率ボラティリティ・最新RSS報道をリアルタイム計測。</div></div>', unsafe_allow_html=True)
-    with st.spinner("📡 実在IPO・グロース銘柄の市場データと最新ニュースを取得中..."):
-        real_ipos = fetch_real_ipo_growth_analysis()
-    if real_ipos:
-        for ipo in real_ipos:
+    st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 2階建てIPO・グロース市場 弱肉強食サバイバルターミナル</div><div style="font-size:11.5px;color:#94a3b8;margin-top:3px;">【第1部】Anthropic・OpenAI・SpaceX・東証新規承認の上場前BBレーダー ／ 【第2部】既上場IPO・グロース広域プールの弱肉強食サバイバル選抜。</div></div>', unsafe_allow_html=True)
+    with st.spinner("📡 上場前超目玉IPO報道＆既上場グロース広域プールを弱肉強食スキャン中..."):
+        ipo_bundle = fetch_real_ipo_growth_analysis()
+
+    pre_ipos = ipo_bundle.get("pre_ipo", []) if isinstance(ipo_bundle, dict) else []
+    survivor_ipos = ipo_bundle.get("survivors", []) if isinstance(ipo_bundle, dict) else []
+    elim_ipos = ipo_bundle.get("eliminated", []) if isinstance(ipo_bundle, dict) else []
+
+    if pre_ipos:
+        st.markdown("#### 🔥 第1部：上場前・ブックビルディング・超目玉IPO自動レーダー（yfinance未収録捕捉）")
+        for p_ipo in pre_ipos:
+            st.markdown(
+                f'<div class="rank-card" style="border-left-color:#a855f7;background:linear-gradient(180deg,#160d2b 0%,#090d16 100%)!important;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:6px;">'
+                f'<div><span class="pill-badge" style="background:#a855f7;color:#fff;font-weight:800;">{html.escape(p_ipo["status"])}</span>'
+                f'<span class="quantum-badge">報道熱量 {p_ipo["heat_score"]}点 (関連報道 {p_ipo["buzz_cnt"]}件)</span></div>'
+                f'<span style="font-size:11px;color:#cbd5e1;">市場: {html.escape(p_ipo["market"])}</span></div>'
+                f'<div style="font-size:16.5px;font-weight:800;color:#f8fafc;">{html.escape(p_ipo["name"])} <span style="font-size:11.5px;color:#c084fc;">({html.escape(p_ipo["code"])})</span></div>'
+                f'<div style="font-size:11.5px;color:#38bdf8;margin-top:3px;"><b>🎯 核心事業:</b> {html.escape(p_ipo["theme"])}</div>'
+                f'<div style="background:rgba(2,6,23,0.75);border:1px solid rgba(168,85,247,0.3);border-radius:6px;padding:7px 10px;margin-top:6px;font-size:11.5px;color:#e9d5ff;">'
+                f'📰 <b>最新RSS観測ヘッドライン:</b> {html.escape(p_ipo["latest_headline"])}'
+                f'</div></div>',
+                unsafe_allow_html=True
+            )
+
+    st.markdown(f"#### ⚔️ 第2部：既上場IPO・グロース株 弱肉強食サバイバル選抜（全{ipo_bundle.get('total_scanned', 0)}社中・上位6社生存）")
+    if survivor_ipos:
+        for ipo in survivor_ipos:
             chg_col = "#10b981" if ipo["chg_pct"] >= 0 else "#ef4444"
             chg_s = f"{'+' if ipo['chg_pct'] >= 0 else ''}{ipo['chg_pct']}%"
             fh_col = "#10b981" if ipo["from_high_pct"] >= -5.0 else ("#fde047" if ipo["from_high_pct"] >= -15.0 else "#f87171")
             st.markdown(
                 f'<div class="rank-card" style="border-left-color:#f59e0b;">'
                 f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px;">'
-                f'<div><span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 第{ipo["rank"]}位</span>'
+                f'<div><span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 生存 第{ipo["rank"]}位</span>'
                 f'<span class="pill-badge" style="background:rgba(250,204,21,0.2);color:#fde047;border-color:#facc15;">実測スコア {ipo["score"]}点</span></div>'
                 f'<div style="font-size:11px;color:#38bdf8;font-weight:700;">{html.escape(ipo["tier"])}</div></div>'
                 f'<div><span style="font-size:18px;font-weight:800;color:#f8fafc;">{html.escape(ipo["name"])}</span> <span style="font-size:12px;color:#94a3b8;">({ipo["code"]} / {html.escape(ipo["market"])})</span></div>'
@@ -2963,6 +3317,16 @@ elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
                 st.session_state["custom_search_code"] = ipo["full_code"]
                 st.session_state["scroll_top_trig"] = int(time.time() * 1000)
                 st.rerun()
+
+        if elim_ipos:
+            with st.expander(f"💀 今回の弱肉強食バトルで圏外脱落したIPO・グロース銘柄 ({len(elim_ipos)}社)", expanded=False):
+                for el in elim_ipos:
+                    st.markdown(
+                        f'<div style="background:rgba(30,10,15,0.65);border-left:3px solid #ef4444;padding:6px 10px;margin-bottom:5px;border-radius:4px;font-size:11px;">'
+                        f'<span style="color:#fca5a5;font-weight:800;">💀 圏外脱落: {html.escape(el["name"])} ({el["code"]})</span> ｜ スコア: <b>{el["score"]}点</b> (前日比 {el["chg_pct"]:+.2f}% / RVOL {el["rvol"]}倍)'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
     else:
         st.warning("⚠️ 市場データの取得に失敗しました。しばらくしてから再試行してください。")
 elif sel_cat == "🏦 機関BVC-VPIN・CLV資金フロー":
