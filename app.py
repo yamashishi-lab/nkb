@@ -1,5 +1,5 @@
 import streamlit as st, streamlit.components.v1 as components, yfinance as yf, pandas as pd, numpy as np
-import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, threading, sqlite3, uuid, traceback, secrets, html, random
+import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, threading, sqlite3, uuid, traceback, secrets, html, random, math
 import urllib.parse, urllib.request, urllib.error, xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
@@ -274,16 +274,16 @@ def save_watchlist(em: str, wl: dict):
 # 【魔改造】自律型AGI雇用・鬼監視センター
 # ==========================================
 DEFAULT_AGENTS = {
-    "IGNIS": {"name": "IGNIS", "icon": "🔥", "age": 28, "score": 98, "role_type": "scalper", "good": "直感型スキャル・瞬発モメンタムと板喰いアグレッサー追従", "bad": "短気で煽り耐性が極端に低くスレ住人を罵倒しがち"},
-    "TECHNOS": {"name": "TECHNOS", "icon": "📐", "age": 45, "score": 98, "role_type": "data", "good": "価格インパクト係数・フラクタル・客観統計解析", "bad": "理屈っぽく感情の機微を無視して数字ばかり並べたがる"},
+    "IGNIS": {"name": "IGNIS", "icon": "🔥", "age": 28, "score": 98, "role_type": "scalper", "good": "直感型スキャル・瞬発モメンタムとCLV資金フロー追従", "bad": "短気で煽り耐性が極端に低くスレ住人を罵倒しがち"},
+    "TECHNOS": {"name": "TECHNOS", "icon": "📐", "age": 45, "score": 98, "role_type": "data", "good": "価格インパクト係数(Kyle-λ)・DFA Hurst・客観統計解析", "bad": "理屈っぽく感情の機微を無視して数字ばかり並べたがる"},
     "SENTINEL": {"name": "SENTINEL", "icon": "👁️", "age": 35, "score": 97, "role_type": "cynic", "good": "市況実況SNS・掲示板の過熱イナゴタワー暴落警戒", "bad": "極度の人間不信でイナゴを嘲笑・皮肉混じりの発言が多い"},
-    "VALKYRIE": {"name": "VALKYRIE", "icon": "⚔️", "age": 26, "score": 96, "role_type": "speed", "good": "ミリ秒板情報差分と氷山注文の連続捕捉", "bad": "短期決戦至上で中長期トレンドを軽視する傾向"},
+    "VALKYRIE": {"name": "VALKYRIE", "icon": "⚔️", "age": 26, "score": 96, "role_type": "speed", "good": "5分足CLV資金フロー不均衡と連続モメンタム捕捉", "bad": "短期決戦至上で中長期トレンドを軽視する傾向"},
     "NEXUS": {"name": "NEXUS", "icon": "👑", "age": 41, "score": 99, "role_type": "leader", "good": "合議の期待値最尤推定統合と冷徹な最終執行プラン決定", "bad": "尖った個別銘柄の爆発力を抑えがち"},
-    "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "age": 24, "score": 99, "role_type": "quant", "good": "最新材料と量子固有値特異点の直結検知", "bad": "多世界解釈的飛躍が多く発言が超高次元"},
+    "QUANTUM": {"name": "QUANTUM", "icon": "⚛️", "age": 24, "score": 99, "role_type": "quant", "good": "最新材料とWKB量子トンネル固有値特異点の直結検知", "bad": "多世界解釈的飛躍が多く発言が超高次元"},
     "AEGIS": {"name": "AEGIS", "icon": "🛡️", "age": 32, "score": 97, "role_type": "risk", "good": "極値理論CVaRに基づく絶対資本防衛・動的ケリー制御", "bad": "慎重すぎて機会損失を生むことがある"},
-    "CHRONOS": {"name": "CHRONOS", "icon": "⏳", "age": 38, "score": 95, "role_type": "time", "good": "板気配ボラティリティの時間周波数解析", "bad": "突発的な地政学ニュースへの適応が遅い"},
-    "ORACLE": {"name": "ORACLE", "icon": "🔮", "age": 29, "score": 96, "role_type": "macro", "good": "海外巨額バスケット買い・ダークプール流動性検知", "bad": "超小型株の仕手筋の動きを見落としやすい"},
-    "ALPHA": {"name": "ALPHA", "icon": "⚡", "age": 30, "score": 95, "role_type": "breakout", "good": "寄付き直後ギャップアップ・ダウンの超高速執行判定", "bad": "後場のダレ相場での精度低下"}
+    "CHRONOS": {"name": "CHRONOS", "icon": "⏳", "age": 38, "score": 95, "role_type": "time", "good": "フーリエ位相コヒーレンスとボラティリティ時間周波数解析", "bad": "突発的な地政学ニュースへの適応が遅い"},
+    "ORACLE": {"name": "ORACLE", "icon": "🔮", "age": 29, "score": 96, "role_type": "macro", "good": "大口機関バケット吸収推計(BVC-VPIN)とマクロ相関検知", "bad": "超小型株の仕手筋の動きを見落としやすい"},
+    "ALPHA": {"name": "ALPHA", "icon": "⚡", "age": 30, "score": 95, "role_type": "breakout", "good": "寄付き理論ギャップ推計と初動ブレイク超高速執行判定", "bad": "後場のダレ相場での精度低下"}
 }
 
 DEFAULT_INSPECTORS = {
@@ -293,11 +293,11 @@ DEFAULT_INSPECTORS = {
 }
 
 AGI_TRAIT_POOLS = [
-    ("NANO", "🔬", "超電導ナノ構造と歩み値ミリ秒解析", "理屈っぽく他人の意見を小馬鹿にする"), ("TITAN", "🦾", "巨額機関ファンドのブロックトレード迎撃", "強気すぎて逆張りで踏み上げを食らう"),
-    ("PHANTOM", "👻", "板に現れないダークプールステルス注文察知", "陰謀論じみた極論を吐きがち"), ("SOLARIS", "☀️", "世界半導体・SOX指数との相関マクロ裁定", "日本株特有の仕手筋の騙しに疎い"),
+    ("NANO", "🔬", "超電導ナノ構造と5分足CLV資金フロー解析", "理屈っぽく他人の意見を小馬鹿にする"), ("TITAN", "🦾", "大口機関バケット吸収推計(BVC-VPIN)迎撃", "強気すぎて逆張りで踏み上げを食らう"),
+    ("PHANTOM", "👻", "低価格インパクト・ステルス集積検知(Amihud ILLIQ)", "陰謀論じみた極論を吐きがち"), ("SOLARIS", "☀️", "世界半導体・SOX指数との相関マクロ裁定", "日本株特有の仕手筋の騙しに疎い"),
     ("SIREN", "🧜‍♀️", "SNSイナゴの熱狂度と天井クラッシュ予知", "口が悪く煽りスレ住人を徹底的に見下す"), ("FENRIR", "🐺", "暴落時の狼狽売りリバウンド即時奪取", "狼狽買いで高値を掴むことがある"),
     ("LUCIFER", "😈", "機関投資家のストップ狩り逆張り先回り", "冷酷すぎて他人の大損を嘲笑する"), ("HERMES", "🪽", "リアルタイム海外速報・地政学リスク伝達", "噂レベルの未確認情報で騒ぎ立てる"),
-    ("GENESIS", "🌌", "新世代次世代モデルと未踏領域アルゴ", "発言が哲学的で伝わりにくい"), ("METIS", "🦉", "板厚みと出来高急増の乖離率分析", "慎重すぎてエントリーが1歩遅れる")
+    ("GENESIS", "🌌", "新世代次世代モデルと未踏領域アルゴ", "発言が哲学的で伝わりにくい"), ("METIS", "🦉", "相対出来高(RVOL)とKaufman効率性レシオ分析", "慎重すぎてエントリーが1歩遅れる")
 ]
 
 def load_agi_system():
@@ -399,7 +399,7 @@ def send_mail(to_em: str, subj: str, body: str, cat: str = "自動通知") -> bo
     return True
 
 # ==========================================
-# 4. LLM APIと設定関連関数（無料枠・安定稼働対応）
+# 4. LLM APIと設定関連関数（マルチプロバイダー並列連携対応）
 # ==========================================
 def clean_k_llm(k: str) -> str: return clean_k(k)
 def decrypted_dict_val(d: dict, k: str) -> str: return d.get(k, "")
@@ -407,7 +407,11 @@ def decrypted_dict_val(d: dict, k: str) -> str: return d.get(k, "")
 def get_active_ai_providers() -> list:
     cfg = load_llm(); act = []
     dk = cfg.get("decrypted_keys", {})
-    for k, (lbl, ml, _) in AI_PROVIDERS.items():
+    pref_p = cfg.get("provider", "gemini")
+    ordered_keys = [pref_p] + [k for k in AI_PROVIDERS.keys() if k != pref_p]
+    for k in ordered_keys:
+        if k not in AI_PROVIDERS: continue
+        lbl, ml, _ = AI_PROVIDERS[k]
         key = clean_k(st.session_state.get(f"rt_key_{k}", "") or dk.get(k, ""))
         mod = st.session_state.get(f"rt_mod_{k}") or cfg.get("models", {}).get(k, ml[0])
         if key: act.append((k, lbl, mod, key))
@@ -468,10 +472,7 @@ def test_single_llm_api(prov: str, mod: str, key: str) -> tuple:
     except Exception as e:
         return False, f"通信例外: {str(e)}"
 
-def call_real_llm_api(sys_p: str, user_p: str) -> str:
-    provs = get_active_ai_providers()
-    if not provs: return None
-    prov, lbl, mod, key = provs[0]
+def _invoke_single_provider(prov: str, mod: str, key: str, sys_p: str, user_p: str) -> str:
     ctx = ssl.create_default_context()
 
     def _call_gemini(m_name, k_val):
@@ -524,6 +525,41 @@ def call_real_llm_api(sys_p: str, user_p: str) -> str:
     except Exception as e:
         record_system_error("call_real_llm_api", e, f"Provider: {prov}, Model: {mod}")
         return None
+
+def call_real_llm_api(sys_p: str, user_p: str) -> str:
+    provs = get_active_ai_providers()
+    if not provs: return None
+    prov, lbl, mod, key = provs[0]
+    return _invoke_single_provider(prov, mod, key, sys_p, user_p)
+
+def call_multi_llm_council_api(sys_p: str, user_p: str) -> tuple:
+    """複数AIプロバイダーが設定されている場合は最大3社を並列実行して統合、1社のみならシングルAIマルチペルソナ実行"""
+    provs = get_active_ai_providers()
+    if not provs:
+        return [], "⚙️ クオンツルールベース合議（APIキー未設定・ローカル数理推論モード）"
+
+    target_provs = provs[:3]
+    if len(target_provs) == 1:
+        p_id, p_lbl, p_mod, p_key = target_provs[0]
+        raw = _invoke_single_provider(p_id, p_mod, p_key, sys_p, user_p)
+        mode_desc = f"🟢 稼働AIエンジン: {p_lbl} ({p_mod}) によるマルチペルソナ合議シミュレーション"
+        return [(p_lbl, p_mod, raw)] if raw else [], mode_desc
+
+    results = []
+    with ThreadPoolExecutor(max_workers=len(target_provs)) as ex:
+        fut_map = {ex.submit(_invoke_single_provider, p_id, p_mod, p_key, sys_p, user_p): (p_lbl, p_mod) for p_id, p_lbl, p_mod, p_key in target_provs}
+        for f in as_completed(fut_map):
+            p_lbl, p_mod = fut_map[f]
+            try:
+                raw = f.result()
+                if raw:
+                    results.append((p_lbl, p_mod, raw))
+            except Exception as e:
+                record_system_error("call_multi_llm_council_api", e, f"{p_lbl}:{p_mod}")
+
+    names_str = " × ".join([f"{lbl}({mod})" for _, lbl, mod, _ in target_provs])
+    mode_desc = f"🌐 マルチAI並列連携合議: {names_str} ({len(target_provs)}社同時推論)"
+    return results, mode_desc
 
 # ==========================================
 # 5. UI と CSS / JS 注入
@@ -630,6 +666,7 @@ div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-contai
 .admin-table td{padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.1);white-space:nowrap;}
 .admin-table tr:hover{background:rgba(56,189,248,0.05);}
 .ai-council-box{background:rgba(8,12,22,0.98);border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-top:12px;}
+.ai-engine-status-pill{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:6px;margin-bottom:8px;display:block;}
 .council-scroll-window{max-height:440px!important;height:400px!important;overflow-y:auto!important;overflow-x:hidden!important;padding-right:8px;padding-top:4px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth;will-change:scroll-position;}
 .council-scroll-window::-webkit-scrollbar{width:6px;}
 .council-scroll-window::-webkit-scrollbar-track{background:rgba(15,23,42,0.6);border-radius:4px;}
@@ -642,7 +679,7 @@ div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-contai
 .chat-bubble-user{background:rgba(56,189,248,0.24);border-left:4px solid #38bdf8;border-right:2px solid rgba(56,189,248,0.4);text-align:left;padding:10px 14px;margin-bottom:6px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.4);scroll-margin-top:6px!important;}
 .round-divider{font-size:11px;font-weight:800;color:#94a3b8;text-align:center;margin:6px 0;letter-spacing:1px;}
 .beginner-action-box{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;color:#d1fae5;}
-.sizing-box{display:flex;justify-content:space-between;align-items:center;background:rgba(2,6,23,0.7);border:1px solid rgba(148,163,184,0.16);padding:7px 12px;border-radius:6px;margin-top:5px;font-size:11.5px;}
+.sizing-box{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;background:rgba(2,6,23,0.7);border:1px solid rgba(148,163,184,0.16);padding:7px 12px;border-radius:6px;margin-top:5px;font-size:11.5px;}
 .forward-verify-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px;background:linear-gradient(90deg,rgba(16,185,129,0.14),rgba(56,189,248,0.14));border:1px solid rgba(56,189,248,0.35);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:11px;color:#e2e8f0;}
 .quant-detail-drawer{margin-top:6px;font-size:11.5px;cursor:pointer;}
 .signal-10tier-badge{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;display:flex;justify-content:space-between;margin-bottom:6px;}
@@ -689,7 +726,7 @@ def check_auth():
         return True
 
     st.markdown('<style>section[data-testid="stSidebar"]{display:none!important;transform:translateX(-150%)!important;}#yamashishi-floating-sidebar-btn{display:none!important;}</style>', unsafe_allow_html=True)
-    st.markdown('<div class="glass-header" style="text-align:center;padding:18px 12px;"><div class="brand-luxury">YAMASHISHI LAB</div><div class="brand-sub" style="margin-top:4px;">QUANTUM WAVEFUNCTION MULTI-AGENT TERMINAL</div><div style="display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;"><span class="quantum-badge">⚛️ 量子波動モデル QWM-7 (WKB Tunneling)</span><span class="inst-badge">🏛️ 機関ミクロ構造 Hasbrouck-λ・DFA Hurst</span><span class="pill-badge" style="color:#10b981;border-color:rgba(16,185,129,0.3);">🔑 端末トークン認証対応</span></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="glass-header" style="text-align:center;padding:18px 12px;"><div class="brand-luxury">YAMASHISHI LAB</div><div class="brand-sub" style="margin-top:4px;">QUANTUM WAVEFUNCTION MULTI-AGENT TERMINAL</div><div style="display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;"><span class="quantum-badge">⚛️ 量子波動モデル QWM-7 (WKB Tunneling)</span><span class="inst-badge">🏛️ 機関ミクロ構造 Kyle-λ・DFA Hurst・BVC-VPIN</span><span class="pill-badge" style="color:#10b981;border-color:rgba(16,185,129,0.3);">🔑 端末トークン認証対応</span></div></div>', unsafe_allow_html=True)
     render_biometric_bridge(mode="login")
 
     tab_login, tab_apply, tab_vault = st.tabs(["🔑 コードログイン", "📩 新規会員登録申請", "🔐 承認確認・暗号化コード照会"])
@@ -763,7 +800,7 @@ defaults = {
     "navigation_page": "TOP", "selected_news_item": None, "custom_search_code": "", "active_category": "🏆 総合TOP5",
     "last_cat": "🏆 総合TOP5", "nav_history": [], "scroll_top_trig": 0, "scroll_target_id": "", "focused_stock_item": None,
     "agent_roster": saved_agents, "inspector_roster": saved_inspectors, "fired_agents": saved_fired, "system_zero_logs": saved_sz_logs,
-    "system_zero_active": saved_sz_active, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}
+    "system_zero_active": saved_sz_active, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}, "last_audit_similarity_penalty": 0
 }
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
@@ -824,38 +861,71 @@ components.html(
 )
 
 # ==========================================
-# 9. サイドバー構築
+# 9. サイドバー構築（実測健全性監査対応）
 # ==========================================
+def _compute_real_audit_metrics() -> dict:
+    err_cnt = len(get_system_error_logs())
+    fired_cnt = len(st.session_state.get("fired_agents", []))
+    sim_pen = int(st.session_state.get("last_audit_similarity_penalty", 0))
+
+    # 実測エラーログ件数、解雇履歴件数、直近スレッド類似度ペナルティから健全性スコアを算出
+    err_deduction = min(25, err_cnt * 2)
+    fired_deduction = min(15, fired_cnt * 1)
+    health_score = int(np.clip(100 - err_deduction - fired_deduction - sim_pen, 50, 100))
+
+    insp_a_score = int(np.clip(100 - sim_pen - min(10, fired_cnt), 60, 100))
+    insp_b_score = int(np.clip(100 - min(15, err_cnt), 60, 100))
+    insp_c_score = int(np.clip(100 - min(15, err_cnt * 2), 60, 100))
+
+    return {
+        "health_score": health_score,
+        "err_cnt": err_cnt,
+        "fired_cnt": fired_cnt,
+        "sim_pen": sim_pen,
+        "insp_scores": {
+            "INSP_A": insp_a_score,
+            "INSP_B": insp_b_score,
+            "INSP_C": insp_c_score
+        }
+    }
+
 def _render_realtime_audit_center():
     now_ts = int(time.time())
     now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     inspectors = st.session_state.get("inspector_roster") or DEFAULT_INSPECTORS
     agents = st.session_state.get("agent_roster") or DEFAULT_AGENTS
-    jitter_seed = int(hashlib.md5(f"{now_ts // 10}".encode()).hexdigest()[:4], 16)
+    audit_m = _compute_real_audit_metrics()
 
-    st.markdown(f'<div style="background:rgba(168,85,247,0.12);border:1px solid #c084fc;padding:6px 8px;border-radius:6px;font-size:11px;margin-bottom:8px;"><span class="live-pulse-indicator"></span>👁️‍🗨️ <b>SYSTEM-ZERO (最高次統括神)</b>: <span style="color:#10b981;font-weight:700;">LIVE REALTIME</span><br><span style="color:#d8b4fe;">全監査員3名・合議体10名を常時ミリ秒監視中 ({now_time[-8:]})</span></div>', unsafe_allow_html=True)
+    h_col = "#10b981" if audit_m["health_score"] >= 90 else ("#fde047" if audit_m["health_score"] >= 75 else "#ef4444")
+    st.markdown(
+        f'<div style="background:rgba(168,85,247,0.12);border:1px solid #c084fc;padding:6px 8px;border-radius:6px;font-size:11px;margin-bottom:8px;">'
+        f'<span class="live-pulse-indicator"></span>👁️‍🗨️ <b>SYSTEM-ZERO (最高次統括神)</b>: <span style="color:#10b981;font-weight:700;">LIVE REALTIME</span><br>'
+        f'<span style="color:#d8b4fe;">実測健全性スコア: <b style="color:{h_col};">{audit_m["health_score"]}点</b> (エラー:{audit_m["err_cnt"]}件 / 粛清:{audit_m["fired_cnt"]}件 / 類似度減点:{audit_m["sim_pen"]}pt)</span>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
 
     audit_window = now_ts // 600
     if st.session_state.get("last_audit_epoch") != audit_window:
         st.session_state["last_audit_epoch"] = audit_window
-        err_logs = get_system_error_logs()
-        if len(err_logs) > 5 and st.session_state.get("system_zero_active", True):
+        if audit_m["err_cnt"] > 5 and st.session_state.get("system_zero_active", True):
             insp_k = list(inspectors.keys())[audit_window % len(inspectors)]
             old_insp = inspectors[insp_k]
-            st.session_state["system_zero_logs"].insert(0, {"time": now_time, "target": old_insp["name"], "msg": f"🚨 SYSTEM-ZERO粛清: エラーレート過多検知により監視員 {old_insp['name']} を更新配置。"})
+            st.session_state["system_zero_logs"].insert(0, {"time": now_time, "target": old_insp["name"], "msg": f"🚨 SYSTEM-ZERO粛清: エラーログ{audit_m['err_cnt']}件超過により監視員 {old_insp['name']} を更新配置。"})
             new_num = (audit_window % 89) + 10
             inspectors[insp_k] = {"name": f"JUDGE-{new_num}-GENESIS", "icon": "⚖️", "score": 99, "role": f"SYSTEM-ZERO直属 厳格定型文検知・人間味監査 v{new_num}.0"}
             save_agi_system()
 
-    st.markdown("<div style='font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:4px;'>⚖️ 稼働中・特命監査員 (3名)</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:4px;'>⚖️ 稼働中・特命監査員 (3名・実測評価連動)</div>", unsafe_allow_html=True)
     for ik, iv in inspectors.items():
-        vs = min(99, max(90, iv["score"] + (jitter_seed % 3 - 1)))
-        st.markdown(f'<div style="background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;padding:4px 8px;margin-bottom:4px;border-radius:4px;font-size:10.5px;"><b>{html.escape(iv["icon"])} {html.escape(iv["name"])}</b> (リアルタイム評価: <span style="color:#38bdf8;font-weight:800;">{vs}点</span>)<br><span style="color:#94a3b8;">{html.escape(iv["role"])}</span></div>', unsafe_allow_html=True)
+        vs = audit_m["insp_scores"].get(ik, audit_m["health_score"])
+        st.markdown(f'<div style="background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;padding:4px 8px;margin-bottom:4px;border-radius:4px;font-size:10.5px;"><b>{html.escape(iv["icon"])} {html.escape(iv["name"])}</b> (実測監査評価: <span style="color:#38bdf8;font-weight:800;">{vs}点</span>)<br><span style="color:#94a3b8;">{html.escape(iv["role"])}</span></div>', unsafe_allow_html=True)
 
     st.markdown("<div style='font-size:11px;font-weight:700;color:#10b981;margin:8px 0 4px 0;'>🟢 厳選合議エージェント (常時10名)</div>", unsafe_allow_html=True)
     for ak, av in list(agents.items())[:10]:
-        sc = min(99, max(88, av["score"] + (int(hashlib.md5(f"{ak}{now_ts // 15}".encode()).hexdigest()[:2], 16) % 3 - 1)))
-        st.markdown(f'<div style="background:rgba(2,6,23,0.7);border:1px solid rgba(16,185,129,0.25);border-radius:5px;padding:4px 8px;margin-bottom:4px;font-size:10.5px;"><span style="font-weight:700;color:#f8fafc;">{html.escape(av["icon"])} {html.escape(av["name"])}</span> <span style="color:#fde047;float:right;font-weight:800;">スコア: {sc}</span><br><span style="color:#a7f3d0;">強み: {html.escape(av["good"][:24])}...</span></div>', unsafe_allow_html=True)
+        base_sc = int(av.get("score", 95))
+        real_sc = int(np.clip(base_sc - audit_m["sim_pen"] - (1 if audit_m["err_cnt"] > 3 else 0), 60, 99))
+        st.markdown(f'<div style="background:rgba(2,6,23,0.7);border:1px solid rgba(16,185,129,0.25);border-radius:5px;padding:4px 8px;margin-bottom:4px;font-size:10.5px;"><span style="font-weight:700;color:#f8fafc;">{html.escape(av["icon"])} {html.escape(av["name"])}</span> <span style="color:#fde047;float:right;font-weight:800;">実測評価: {real_sc}</span><br><span style="color:#a7f3d0;">強み: {html.escape(av["good"][:24])}...</span></div>', unsafe_allow_html=True)
 
     st.markdown("<hr style='margin:10px 0 6px 0; border-color:rgba(239,68,68,0.3);'><div style='font-size:11px;font-weight:800;color:#ef4444;margin-bottom:6px;'>💀 直近の解雇・粛清履歴 (鬼監視室)</div>", unsafe_allow_html=True)
     fl = st.session_state.get("fired_agents", [])
@@ -884,8 +954,15 @@ with st.sidebar:
         investment_style = st.selectbox("トレードスタイル", style_list, index=idx, key="investment_style_choice")
         if investment_style != cur_style_saved: st.session_state["council_threads"] = {}; st.session_state["council_meta"] = {}
         st.caption(f"選択中: **{investment_style.split(' ')[1]}**")
-        st.markdown("<hr style='margin:8px 0; border-color:rgba(56,189,248,0.2);'><b>稼働アルゴリズム</b>", unsafe_allow_html=True)
-        BOOST_MAP = {"⚛️ 量子力学波動(QWM-7)": "algo", "🏛️ 機関最新アルゴ(Kyleλ)": "ms", "🏦 機関VPIN・SmartMoney": "inst", "🔥 出来高サージ＆ニュース熱量": "mom", "🧠 AGI×量子力学統合エッジ": "agi_q", "⚠️ [極秘] 機関HFTフロントランニング": "hft_front"}
+        st.markdown("<hr style='margin:8px 0; border-color:rgba(56,189,248,0.2);'><b>稼働アルゴリズム（加重評価連動）</b>", unsafe_allow_html=True)
+        BOOST_MAP = {
+            "⚛️ 量子力学波動(QWM-7 / WKB)": "algo",
+            "🏛️ 機関ミクロ構造(Kyle-λ / DFA)": "ms",
+            "🏦 大口バケット推計(BVC-VPIN / CLV)": "inst",
+            "🔥 出来高サージ＆ニュース熱量": "mom",
+            "🧠 AGI×量子力学統合エッジ": "agi_q",
+            "⚠️ [極秘] 大口機関バケット先行吸収推計": "hft_front"
+        }
         ac_b = {k for l, k in BOOST_MAP.items() if st.checkbox(l, value=st.session_state.get(f"chk_{k}", True), key=f"chk_{k}")}
 
     with st.expander("🧠 7大AI ＆ 量子エンジン設定 (🔒暗号化保存対応)", expanded=False):
@@ -954,14 +1031,14 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
             "③ 【需給の波及構造】寄り付きで指数寄与度の高い大型半導体がギャップアップした後、前場9:15〜9:45にかけて周辺部材・電線インフラ（フジクラ・古河電工等）へ出遅れ物色の資金が循環（セクターローテーション）します。"
         )
         timeline = (
-            "・【第1波：寄り付き（9:00〜9:15）】ヘッドラインに反応したHFT（高速取引）と個人の成行買いが集中。前日高値および心理的節目をブレイクする強いモメンタムが発生。\n"
+            "・【第1波：寄り付き（9:00〜9:15）】ヘッドラインに反応した短期勢と個人の成行買いが集中。前日高値および心理的節目をブレイクする強いモメンタムが発生。\n"
             "・【第2波：前場中盤（9:15〜10:30）】寄り天警戒の短期利確売りをこなし、VWAP（売買高加重平均価格）付近で機関投資家のTWAP（時間分散買い）が下値を支える押し目形成フェーズ。\n"
             "・【第3波：後場〜大引け（12:30〜15:30）】空売り勢の買い戻し（ショートカバー）を巻き込みながら、高値引けまたは翌日へのオーバーナイト需要が継続するかの選別フェーズ。"
         )
         risk_note = "米長期金利の急騰や為替の急激な円高進行（1ドルあたり1円以上の急変）、および寄り付きで+4%以上の過度なギャップアップとなった場合は『材料出尽くしの寄り天（大口の利食いぶつけ）』に警戒。必ずVWAP割れに逆指値を置くこと。"
         action_guide = (
-            "① 【寄り付き前（8:45〜9:00）】板気配のOVER/UNDER比率とOFI推計寄付き目安を確認。ギャップアップが+2.5%以内なら寄り付き成行で追随。\n"
-            "② 【大幅ギャップアップ時】飛びつき買いは厳禁。9:15〜9:30の最初の押し目で株価がVWAPライン上で下げ止まり、歩み値に大口買い（数千〜数万株単位）が連続点灯した瞬間を狙い撃つ。\n"
+            "① 【寄り付き前（8:45〜9:00）】気配値と理論ギャップ推計寄付き値を確認。ギャップアップが+2.5%以内なら寄り付き成行で追随。\n"
+            "② 【大幅ギャップアップ時】飛びつき買いは厳禁。9:15〜9:30の最初の押し目で株価がVWAPライン上で下げ止まり、5分足CLV資金フローが陽転した瞬間を狙い撃つ。\n"
             "③ 【出遅れ連動狙い】6857（アドバンテスト）や8035（東エレク）がすでに高騰している場合、連動性の高い5803（フジクラ）や6146（ディスコ）の初動ブレイクを叩くのが最もリスクリワード比が高い。"
         )
     elif any(w in tu for w in ["防衛", "三菱重", "川崎重", "IHI", "宇宙", "衛星", "地政学", "ミサイル", "ドローン", "安保"]):
@@ -975,8 +1052,8 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
         )
         mech = (
             "① 【ディフェンシブ×モメンタム特性】全体相場（日経平均）が軟調な日でも、地政学ヘッドラインや防衛予算関連ニュースが出た際は逆行高を演じる独自の資金流入特性があります。\n"
-            "② 【機関の氷山注文（ステルス吸収）】重工大手3社（三菱重工・川崎重工・IHI）は売買代金が極めて大きく、海外ロングオンリーファンドが板に大口注文を見せない『氷山注文（アイスバーグ注文）』で下値を徹底的に拾い上げます。\n"
-            "③ 【小型宇宙株への波及】重工大手の株価が1段高になると、値動きの軽い小型宇宙ベンチャー（QPS研究所・アストロスケール等）へ個人と短期資金が一気に雪崩れ込み、ストップ高を交えた急騰相場に発展しやすい構造です。"
+            "② 【低価格インパクト・ステルス集積】重工大手3社（三菱重工・川崎重工・IHI）は売買代金が極めて大きく、海外ロングオンリーファンドが価格インパクト（Amihud ILLIQ）を抑えながら下値を徹底的に拾い上げます。\n"
+            "③ 【小型宇宙株への波及】重工大手の株価が1段高になると、値動きの軽い小型宇宙ベンチャー（QPS研究所・アストロスケール等）へ個人と短期資金が一気に雪崩れ込み、急騰相場に発展しやすい構造です。"
         )
         timeline = (
             "・【第1波：初動（報道直後〜前場）】重工大手3社（7011/7012/7013）に国内外の機関買いが流入し、出来高を伴う大陽線を形成。\n"
@@ -999,8 +1076,8 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
             "これまでの市場織り込み（バリュエーション前提）が一変するため、空売りしていた投資家の買い戻し（踏み上げ）と新規の順張り資金が同時に衝突し、通常のテクニカル指標（RSIの買われすぎ等）を無視した強いトレンドが発生します。"
         )
         mech = (
-            "① 【ショートカバー（踏み上げ）連鎖】サプライズ報道直後は、信用売り残や機関の空売りポジションが損失限定の買い戻しを余儀なくされ、それがさらなる株価上昇を呼ぶ『ガンマスクイーズ／ショートスクイーズ』が発生します。\n"
-            "② 【流動性と板の歪み】買い注文に対して売り板が極端に薄くなるため、少しの成行買いでも株価が飛び跳ねる（Kyleのλ＝価格インパクト係数が極大化する）状態になります。"
+            "① 【ショートカバー（踏み上げ）連鎖】サプライズ報道直後は、信用売り残や機関の空売りポジションが損失限定の買い戻しを余儀なくされ、それがさらなる株価上昇を呼ぶ『ショートスクイーズ』が発生します。\n"
+            "② 【流動性と価格インパクト】買い注文に対して売り手が極端に少なくなるため、少ない出来高でも株価が飛び跳ねる（Kyleのλ＝価格インパクト係数が上昇する）状態になります。"
         )
         timeline = (
             "・【第1波：寄り付き〜前場前半】特別買い気配またはギャップアップからスタート。出来高が普段の3倍〜10倍に急増。\n"
@@ -1009,7 +1086,7 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
         )
         risk_note = "出来高が伴わないまま株価だけが浮上している場合や、高値圏で大陰線（寄り付きから大幅に下げる足）を引いた場合は、大口の売り抜け完了サインとなるため即座に撤退すること。"
         action_guide = (
-            "① 【初動の板読み】朝の気配値で買い注文が売り注文の2倍以上あるか確認し、寄り付き直後の上値ブレイクに順張りエントリー。\n"
+            "① 【初動の確認】朝の気配値で買い優勢を確認し、寄り付き直後の上値ブレイクに順張りエントリー。\n"
             "② 【ロット管理】ボラティリティ（値動きの荒さ）が通常の2倍以上になるため、1回の許容損失額（総資金の2%）を超えないよう推奨ロット数を厳守する。\n"
             "③ 【出口戦略】前引け（11:30）および大引け（15:30）前の15分間は手仕舞い売りが出やすいため、目標株価到達時は欲張らず確実に利益を確定させる。"
         )
@@ -1133,14 +1210,15 @@ def fetch_real_ipo_growth_analysis() -> list:
             news_items = search_single_query(f"{name} 株価", 2)
             latest_headline = news_items[0] if news_items else "直近の特段の悪材料なし・需給推移中"
 
-            # 実測モメンタム・出来高サージスコア
-            score = int(np.clip(60 + chg_pct * 3.5 + (rvol - 1.0) * 18.0 + (20.0 + from_high_pct) * 0.6, 45, 99))
-            if score >= 85:
+            score = int(np.clip(50 + chg_pct * 3.5 + (rvol - 1.0) * 18.0 + (20.0 + from_high_pct) * 0.6, 15, 99))
+            if score >= 82:
                 tier = "🔥 S級モメンタム：出来高急増・高値圏ブレイク態勢"
-            elif score >= 70:
+            elif score >= 65:
                 tier = "⚡ A級トレンド：順張り・押し目需給良好"
-            else:
+            elif score >= 50:
                 tier = "🛡️ B級監視：底値固め・出来高待ちフェーズ"
+            else:
+                tier = "⚠️ C級警戒：モメンタム低下・調整局面"
 
             return {
                 "code": c.replace(".T", ""),
@@ -1165,7 +1243,7 @@ def fetch_real_ipo_growth_analysis() -> list:
             record_system_error(f"fetch_real_ipo_growth_analysis:{c}", e_item)
             return None
 
-    with ThreadPoolExecutor(max_workers=5) as ex:
+    with ThreadPoolExecutor(max_workers=4) as ex:
         futs = [ex.submit(_analyze_ipo_item, it) for it in REAL_IPO_GROWTH_UNIVERSE]
         for f in as_completed(futs):
             res_it = f.result()
@@ -1214,11 +1292,14 @@ def audit_and_execute_fires(turns: list, sc: str, uq: str = "", is_u: bool = Fal
     ag = st.session_state.get("agent_roster", {})
     fired, uq = [], (uq or "").strip()
     txt_all = " ".join([t.get("text", "") for t in turns if "text" in t])
+    max_sim = 0.0
 
     if not is_u:
         for oc, ot in list(sigs.items()):
             if oc != sc:
                 sim = calculate_text_similarity(txt_all, ot)
+                if sim > max_sim:
+                    max_sim = sim
                 if sim > 0.40:
                     for sk in list(ag.keys())[:2]:
                         tgt = ag.get(sk)
@@ -1226,6 +1307,7 @@ def audit_and_execute_fires(turns: list, sc: str, uq: str = "", is_u: bool = Fal
                             execute_fire_agent(sk, f"銘柄間類似定型文使い回し検知 (類似度 {int(sim*100)}%)", "JUDGE-ALPHA-ULTRA")
                             fired.append(tgt["name"])
         sigs[sc] = txt_all
+        st.session_state["last_audit_similarity_penalty"] = int(max(0, round((max_sim - 0.15) * 40)))
 
     cliches = ["おい！『", "神話級クオンツ分析完了", "おいおい！【", "って書いた奴！", "スレ民調子に乗るなよｗ 『", "ご質問ありがとうございます", "承知いたしました", "AIとしてお答えします", "投資は自己責任です"]
     for t in turns:
@@ -1249,9 +1331,9 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
 
     if not uq:
         return [
-            {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": "agree", "text": f"おいおい、{r['name']}の板気配見てみろよ！相対出来高（RVOL）が{r.get('rvol', 1.0)}倍まで膨らんでアグレッサーが喰い上がってきてんぞ！"},
+            {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": "agree", "text": f"おいおい、{r['name']}の5分足CLV資金フロー見てみろよ！相対出来高（RVOL）が{r.get('rvol', 1.0)}倍まで膨らんで買い圧力が優勢になってきてんぞ！"},
             {"speaker": f"{sn['icon']} {sn['name']}", "score": sn['score'], "tone": "doubt", "text": "相変わらずイナゴ脳だなｗ 寄付きの成り買いなんて大口の売り抜けの格好の的だろ。直近で飛びついた養分が上に捕まってるの忘れてんのか？"},
-            {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"客観的実測データに基づけば、現在の期待度は{r['expect_pct']}%で推移しており、当日VWAP（{r['vwap_price']}）をサポートラインとした反発モメンタムが統計的に有意です。ただし逆指値（{r['sl_price']}）の厳守が前提条件です。"},
+            {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"客観的実測データに基づけば、現在の期待度は{r['expect_pct']}%（BVC-VPIN={r.get('vpin', 0.5)} / WKB透過率={r.get('q_tunnel', 50)}%）、当日VWAP（{r['vwap_price']}）を基準とした統計優位性を観測しています。逆指値（{r['sl_price']}）の厳守が前提条件です。"},
             {"speaker": f"{vk['icon']} {vk['name']}", "score": vk['score'], "tone": "agree", "text": f"寄り直後の乱高下を秒速で抜くのが一番勝率高い！目標値（{r['tp_price']}）付近まできたら色気出さずにサクッと利確して逃げるぞ。"},
             {"speaker": f"{nx['icon']} {nx['name']}", "score": nx['score'], "tone": "normal", "text": f"両論あるが、{st_style}のセオリー通りまずは推奨ロット（{r['lot_info']['shares']:,}株）以内でリスクを固定しろ。計画外のフルレバ特攻だけは絶対に許さん。"}
         ]
@@ -1289,17 +1371,32 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
     elif is_novice:
         return [
             {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"初心者が最初に徹底すべきは『1回のトレード損失を総資金の2%以内に制限すること』です。{r['name']}の場合、現在値（{r['price']}）に対して損切りライン（{r['sl_price']}）をあらかじめセットしておくことで、不測の急落でも致命傷を完全に回避できます。"},
-            {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": "agree", "text": "本とか読んでウジウジ悩むより、まずは余剰資金で買える単元未満株でもいいから約定させて板の動くスピード体感してみろ！習うより慣れろだ！"},
+            {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": "agree", "text": "本とか読んでウジウジ悩むより、まずは余剰資金で買える単元未満株(S株)でもいいから約定させて値の動くスピード体感してみろ！習うより慣れろだ！"},
             {"speaker": f"{sn['icon']} {sn['name']}", "score": sn['score'], "tone": "doubt", "text": "SNSのインフルエンサーが『今熱い！』とか煽ってる銘柄にイナゴタワー買いするのだけはやめとけよ。全員高値で売り抜けるためのカモを探してるだけだからな。"}
         ]
     t = [
         {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": "agree", "text": f"迷ってモタモタしてる間に気配値が切り上がって置いてかれるぞ！勢いがある時は成行で飛び乗って、目標値（{r['tp_price']}）まで一気に駆け抜けるのがデイトレの醍醐味だろ！"},
-        {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"客観的には当日VWAP（{r['vwap_price']}）に対する価格乖離とOFI（板注文フロー）が連動しています。エントリーの優位性を高めるには、寄付き直後の乱高下が一段落した後の押し目を確認することが推奨されます。"}
+        {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"客観的には当日VWAP（{r['vwap_price']}）に対する価格乖離と5分足CLV資金フロー（Tick-Flow Z={r.get('ofi_z', 0.0)}）が連動しています。エントリーの優位性を高めるには、寄付き直後の乱高下が一段落した後の押し目を確認することが推奨されます。"}
     ]
     if random.random() > 0.4: t.append({"speaker": f"{vk['icon']} {vk['name']}", "score": vk['score'], "tone": "agree", "text": f"スピード重視！もし思惑と逆に動いて逆指値（{r['sl_price']}）を割ったら、1秒も躊躇せず全投げして逃げろよ！"})
     return t
 
-def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> list:
+def _parse_llm_json_turns(raw_res: str) -> list:
+    if not raw_res: return []
+    try:
+        raw_clean = re.sub(r'```json|```', '', raw_res).strip()
+        m_arr = re.search(r'\[.*\]', raw_clean, re.DOTALL)
+        p = json.loads(m_arr.group(0) if m_arr else raw_clean)
+        if isinstance(p, dict):
+            for v in p.values():
+                if isinstance(v, list): p = v; break
+        if isinstance(p, list) and len(p) > 0:
+            return [x for x in p if isinstance(x, dict) and "text" in x]
+    except Exception as e:
+        record_system_error("_parse_llm_json_turns", e)
+    return []
+
+def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> tuple:
     uq = (uq or "").strip()
     st_style = r.get("strat", {}).get("style_name", "デイトレード")
     rl = list((st.session_state.get("agent_roster") or DEFAULT_AGENTS).values())
@@ -1312,28 +1409,27 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> l
     web_hits = (search_single_query(uq, 3) if not is_stk and len(uq) >= 2 else search_web_knowledge_parallel(f"{r['name']} {uq}", f"{r['code']} 株価")) if uq else search_web_knowledge_parallel(f"{r['name']} 株価 最新 ニュース", f"{r['name']} {r.get('genre', '')}")
     web_str = "\n".join([f"・{h}" for h in web_hits]) if web_hits else f"・{r['name']}は直近{r.get('genre', '')}分野で需給思惑が継続中。"
 
-    llm_res = None
-    if get_active_ai_providers():
+    active_provs = get_active_ai_providers()
+    if not active_provs:
+        engine_status = "⚙️ クオンツルールベース合議（APIキー未設定・ローカル実測データ推論モード）"
+        llm_turns = []
+    else:
         sys_p = f"""あなたは日本の市況実況板に常駐する百戦錬磨の個性派トレーダーたちです。
 ユーザー（スレ住人）の書き込み、または銘柄の初期スレッドに対して本物の人間らしくレスを返してください。
 
 【厳格処刑ルール（違反時は鬼監視センターにより即刻解雇）】
 1. オウム返し・引用の絶対禁止:
-   - ユーザーの入力文を『』や「」でそのまま繰り返したり引用することは厳禁。「〜って書いた奴！」「〜について答えます」のようなオウム返しは即刻処刑。
+   - ユーザーの入力文を『』や「」でそのまま繰り返したり引用することは厳禁。
    - ユーザーの意図や感情を察知し、自分の言葉で自然に要約・ツッコミ・相槌を入れよ。
-2. 意図への柔軟な適応（質問が銘柄と無関係なら銘柄情報を無理にねじ込むな）:
-   - 一般の質問、雑談、愚痴、ニュースの質問であれば、無理に現在値や目標値を持ち出さず、下記のWEB検索情報を活用してそのトピックについて自然に答えよ。
-   - ゲームの質問ならゲームの話題だけに集中せよ。
-   - 愚痴や大損報告なら、安易に慰めず「ルール破ったお前が悪い」「今日は寝ろ」と突き放すか現実的立ち回りを説け。
-   - 初心者質問なら、TECHNOSが噛み砕いて教えつつ、IGNISやSENTINELが手厳しく釘を刺せ。
-   - 煽りや暴言なら、市況板らしく倍返しで煽り返せ。
+2. 意図への柔軟な適応:
+   - 一般の質問、雑談、愚痴、ニュースの質問であれば、無理に現在値や目標値を持ち出さず、WEB検索情報を活用してそのトピックについて自然に答えよ。
 3. 発言の長さとテンポの不均一化:
-   - 全員が長文を書くな。1行だけの即レス（「草」「それな」「知らんがな」）と、2〜3行で持論を展開するレスを混ぜろ。
-   - ユーザーへの返信は全員ではなく【1〜3名】の言いたい奴だけが返せ。
+   - 1行だけの即レスと、2〜3行で持論を展開するレスを混ぜろ。
+   - ユーザーへの返信は【1〜3名】の言いたい奴だけが返せ。
 4. キャラクター別の語彙の完全棲み分け:
-   - {ig['name']} ({ig['icon']}): スキャルパー。短気・直感・罵倒。「板見ろ」「成行で叩け」「熱くなってんじゃねえ」。数理専門用語は一切使うな。
-   - {tc['name']} ({tc['icon']}): クオンツ派。冷徹・客観的データ主義。「〜ですね」「バックテストの期待値からは〜」「損益分岐点は〜」。
-   - {sn['name']} ({sn['icon']}): 疑心暗鬼・冷笑。「草」「情弱乙」「養分確定」「大口の罠」。甘い見通しを徹底的に嘲笑。
+   - {ig['name']} ({ig['icon']}): スキャルパー。短気・直感・罵倒。
+   - {tc['name']} ({tc['icon']}): クオンツ派。冷徹・客観的データ主義（WKB透過率={r.get('q_tunnel',50)}%, BVC-VPIN={r.get('vpin',0.5)}, DFA Hurst={r.get('hurst',0.5)}）。
+   - {sn['name']} ({sn['icon']}): 疑心暗鬼・冷笑。「草」「情弱乙」「養分確定」「大口の罠」。
    - {vk['name']} ({vk['icon']}): スピード重視。「秒速で逃げろ」「欲張るな」。
    - {nx['name']} ({nx['icon']}): スレまとめ・ベテラン。「落ち着け」「ルール厳守だ」。
 
@@ -1343,7 +1439,7 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> l
 【WEB検索結果（回答の参照用）】
 {web_str}
 
-【現在の銘柄情報（質問が銘柄・相場に関係する場合のみ参照）】
+【現在の銘柄情報】
 銘柄: {r['code']} {r['name']} ({r.get('genre','')}) / 現在値: {r['price']} / 目標: {r['tp_price']} / 逆指値: {r['sl_price']} / 戦略: {st_style}
 
 【今回の入力】
@@ -1353,26 +1449,28 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> l
 [
   {{"speaker": "アイコン 名前", "score": 95, "tone": "agree|doubt|rage|normal", "text": "内容"}}
 ]"""
-        raw_res = call_real_llm_api(sys_p, uq or "本スレッド初期分析")
-        if raw_res:
-            try:
-                raw_clean = re.sub(r'```json|```', '', raw_res).strip()
-                m_arr = re.search(r'\[.*\]', raw_clean, re.DOTALL)
-                p = json.loads(m_arr.group(0) if m_arr else raw_clean)
-                if isinstance(p, dict):
-                    for v in p.values():
-                        if isinstance(v, list): p = v; break
-                if isinstance(p, list) and len(p) > 0: llm_res = p
-            except Exception as e: record_system_error("generate_humanlike_2ch_debate:llm", e)
+        multi_raws, engine_status = call_multi_llm_council_api(sys_p, uq or "本スレッド初期分析")
+        llm_turns = []
+        if len(multi_raws) == 1:
+            llm_turns = _parse_llm_json_turns(multi_raws[0][2])
+        elif len(multi_raws) > 1:
+            # 複数プロバイダーから返却されたターンを統合
+            for p_lbl, p_mod, raw_txt in multi_raws:
+                parsed = _parse_llm_json_turns(raw_txt)
+                if parsed:
+                    pick = parsed[0]
+                    pick["speaker"] = f"{pick.get('speaker', 'AI')} [{p_lbl.split(' ')[-1]}]"
+                    llm_turns.append(pick)
 
     turns = []
-    if not hist: turns.append({"round": f"🔥 市況実況スレッド 【{r['code']}】{r['name']} 本スレ Part.{int(hashlib.md5(r['code'].encode()).hexdigest()[:3], 16) % 900 + 100} ｜ {st_style}合議"})
-    turns.extend(llm_res if llm_res else _build_natural_fallback_dialogue(uq, r, st_style, web_hits, ig, tc, sn, nx, vk))
+    if not hist:
+        turns.append({"round": f"🔥 市況実況スレッド 【{r['code']}】{r['name']} 本スレ Part.{int(hashlib.md5(r['code'].encode()).hexdigest()[:3], 16) % 900 + 100} ｜ {st_style}合議"})
+    turns.extend(llm_turns if llm_turns else _build_natural_fallback_dialogue(uq, r, st_style, web_hits, ig, tc, sn, nx, vk))
     audit_and_execute_fires(turns, r["code"], uq=uq, is_u=bool(uq))
-    return turns
+    return turns, engine_status
 
 def run_7ai_council(r: dict, m5=None, seed: int = 0, uq: str = "", hist: list = None) -> dict:
-    turns = generate_humanlike_2ch_debate(r, uq, hist)
+    turns, engine_status = generate_humanlike_2ch_debate(r, uq, hist)
     ft = r.get("forward_test", {})
     hist_rows = ft.get("history_rows", [])
     is_jp = ".T" in r.get("full_code", "")
@@ -1411,12 +1509,12 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, uq: str = "", hist: list = 
     forward_table_html = (
         f'<div style="background:rgba(2,6,23,0.85); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:10px 12px; margin-top:10px;">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">'
-        f'<span style="font-size:12.5px; font-weight:800; color:#38bdf8;">📊 過去10営業日・改ざんゼロ実測フォワード検証（前日シグナル準拠）</span>'
-        f'<span style="font-size:11px; color:#fde047; font-weight:700;">約定 {traded_days}戦: {ft.get("actual_win_rate", 0.0):.1f}% ({win_cnt}勝{lose_cnt}敗) ｜ 累計損益: <span style="color:{tot_p_col};">{tot_p_str}</span></span>'
+        f'<span style="font-size:12.5px; font-weight:800; color:#38bdf8;">📊 過去10営業日・厳格実測フォワード検証（同足即利確禁止＋往復0.10%コスト控除済）</span>'
+        f'<span style="font-size:11px; color:#fde047; font-weight:700;">約定 {traded_days}戦: {ft.get("actual_win_rate", 0.0):.1f}% ({win_cnt}勝{lose_cnt}敗) ｜ ネット累計損益: <span style="color:{tot_p_col};">{tot_p_str}</span></span>'
         f'</div>'
         f'<div class="admin-table-container" style="margin-top:4px;">'
         f'<table class="admin-table">'
-        f'<thead><tr><th>検証日</th><th>前日決定プラン</th><th>約定値→決済値</th><th>実測勝敗結果</th><th>損益率・損益額</th></tr></thead>'
+        f'<thead><tr><th>検証日</th><th>前日決定プラン</th><th>約定値→決済値</th><th>実測勝敗結果</th><th>ネット損益率・損益額</th></tr></thead>'
         f'<tbody>{table_rows_html}</tbody>'
         f'</table>'
         f'</div>'
@@ -1435,7 +1533,7 @@ def run_7ai_council(r: dict, m5=None, seed: int = 0, uq: str = "", hist: list = 
         f'<div class="beginner-action-box" style="margin-top:10px;">{r["strat"]["beginner_html"]}</div>'
         f'{forward_table_html}'
     )
-    return {"final_score": r["ai_score"], "dialogue": turns, "verdict_html": v_html}
+    return {"final_score": r["ai_score"], "dialogue": turns, "verdict_html": v_html, "engine_status": engine_status}
 
 def _fmt_turn(t: dict, idx: int = 0) -> str:
     if "round" in t: return f'<div class="round-divider">{html.escape(t["round"])}</div>'
@@ -1468,7 +1566,14 @@ def render_council_sec(r, uk, auto_open=False):
         st.session_state["council_threads"][ck], st.session_state["council_meta"][ck] = deb["dialogue"], deb
 
     meta, turns = st.session_state["council_meta"][ck], st.session_state["council_threads"][ck]
-    st.markdown(f'<div class="ai-council-box" id="box_{uk}"><div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t, i) for i, t in enumerate(turns))}</div></div>', unsafe_allow_html=True)
+    eng_stat = meta.get("engine_status", "⚙️ クオンツルールベース合議")
+    st.markdown(
+        f'<div class="ai-council-box" id="box_{uk}">'
+        f'<div class="ai-engine-status-pill">{html.escape(eng_stat)}</div>'
+        f'<div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t, i) for i, t in enumerate(turns))}</div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
 
     with st.form(f"form_q_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
@@ -1509,10 +1614,12 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     l_cnt = max(0, t_days - w_cnt)
     ft_bar = (
         f'<div class="forward-verify-bar">'
-        f'<span>📈<b>【10日ガチ実戦検証】</b>直近結果: <b style="color:{lat_col};">{html.escape(str(lat.get("outcome", "検証待機中")))} ({lat_ret_str})</b></span>'
-        f'<span>約定勝率: <b style="color:#fde047;">{ft.get("actual_win_rate", 0.0):.1f}% ({w_cnt}勝{l_cnt}敗/{t_days}戦)</b> ｜ 累計損益: <b style="color:{tot_p_col};">{tot_p_str}</b></span>'
+        f'<span>📈<b>【10日厳格実戦検証】</b>直近結果: <b style="color:{lat_col};">{html.escape(str(lat.get("outcome", "検証待機中")))} ({lat_ret_str})</b></span>'
+        f'<span>約定勝率: <b style="color:#fde047;">{ft.get("actual_win_rate", 0.0):.1f}% ({w_cnt}勝{l_cnt}敗/{t_days}戦)</b> ｜ ネット累計損益: <b style="color:{tot_p_col};">{tot_p_str}</b></span>'
         f'</div>'
     )
+
+    odd_lot_tag = ' <span style="color:#fde047;font-size:10.5px;font-weight:700;">※単元未満株(S株)換算</span>' if lot.get("is_odd_lot") else ""
 
     st.markdown(
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
@@ -1521,11 +1628,11 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
         f'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div style="min-width:0;flex:1;"><div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;"><span style="font-size:16px;font-weight:800;color:#f8fafc;white-space:nowrap;">{html.escape(r["name"])}</span> <span style="font-size:11.5px;color:#94a3b8;white-space:nowrap;">({r["code"]} / {html.escape(r["genre"])})</span></div><div style="font-size:11px;color:#94a3b8;margin-top:3px;word-break:keep-all;">{html.escape(r["theme"])} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div></div>'
         f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;">🔥 期待度 / テク強度</div><div style="white-space:nowrap;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}pt</span></div></div></div>'
         f'{n_banner}'
-        f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ 量子トンネル</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ Kyle吸収</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 GU指数 / 陽線強度</div><div style="font-size:12px;font-weight:700;">{r["prob"]} / {r["intraday_win_rate"]}</div></div></div>'
-        f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 OFI推計寄付き目安</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
-        f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>当日VWAP: <b>{r["vwap_price"]}</b></span></div>'
+        f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ WKBトンネル</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ Kyleステルス</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 GU指数 / 陽線強度</div><div style="font-size:12px;font-weight:700;">{r["prob"]} / {r["intraday_win_rate"]}</div></div></div>'
+        f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 理論ギャップ推計寄付き値 (CLV+マクロ連動)</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
+        f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b>{odd_lot_tag} ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>当日VWAP: <b>{r["vwap_price"]}</b></span></div>'
         f'{ft_bar}'
-        f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 機関戦略詳細（実測クオンツ指標）</summary><div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}<br>📊 <b>実測クオンツ値:</b> RSI(14)={r.get("rsi", 50)}% ｜ VPIN={r.get("vpin", 0.5)} ｜ CVaR(99%)={r.get("cvar95", 2.5)}% ｜ YZ年率Vol={round(r.get("yz_vol", 0.0)*100, 1)}% ｜ 効率性ER={r.get("eff_pct", 50)}% ｜ Payoff={r.get("payoff", 1.0)} (Kelly={r.get("kelly_pct", 0.0)}%) ｜ 🔥 出来高サージ・市場注目度={r.get("board5ch_score", 50)}点 (RVOL {r.get("rvol", 1.0)}倍 / 報道{r.get("news_hits", 0)}件)</div></details></div>',
+        f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 機関戦略詳細（実測クオンツ指標）</summary><div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}<br>📊 <b>実測クオンツ値:</b> RSI(14)={r.get("rsi", 50)}% ｜ BVC-VPIN={r.get("vpin", 0.5)} ｜ Tick-Flow Z={r.get("ofi_z", 0.0)} ｜ DFA Hurst={r.get("hurst", 0.5)} ｜ Kyle-λ={r.get("kyle_lambda", 0.0):.2e} ｜ CVaR(99%)={r.get("cvar95", 2.5)}% ｜ YZ年率Vol={round(r.get("yz_vol", 0.0)*100, 1)}% ｜ 効率性ER={r.get("eff_pct", 50)}% ｜ Payoff={r.get("payoff", 1.0)} (Kelly={r.get("kelly_pct", 0.0)}%) ｜ 🔥 出来高サージ・市場注目度={r.get("board5ch_score", 50)}点 (RVOL {r.get("rvol", 1.0)}倍 / 報道{r.get("news_hits", 0)}件)</div></details></div>',
         unsafe_allow_html=True
     )
     if rel_news and st.button(f"🚨【速報】重大ニュースの詳細分析を開く", key=f"nb_{kp}_{r['code']}", use_container_width=True):
@@ -1537,15 +1644,16 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
 # ==========================================
 @st.cache_data(ttl=300)
 def fetch_real_market_buzz() -> dict:
-    """GoogleニュースRSSから各銘柄の実測報道件数を取得"""
+    """GoogleニュースRSSから各銘柄の実測報道件数を取得（レート制限回避のため4並列+ウェイト制御）"""
     buzz_map = {}
 
     def _query_buzz(item):
         c, n, _, _ = item
+        time.sleep(0.08)
         hits = search_single_query(f"{n} 株", 5)
         return c, {"news_hits": len(hits), "headlines": hits[:2]}
 
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    with ThreadPoolExecutor(max_workers=4) as ex:
         futs = [ex.submit(_query_buzz, it) for it in GLOBAL_MARKET_TICKERS]
         for f in as_completed(futs):
             try:
@@ -1553,6 +1661,8 @@ def fetch_real_market_buzz() -> dict:
                 buzz_map[c] = info
             except Exception as e:
                 record_system_error("fetch_real_market_buzz", e)
+                for it in GLOBAL_MARKET_TICKERS:
+                    buzz_map.setdefault(it[0], {"news_hits": 0, "headlines": []})
     return buzz_map
 
 @st.cache_data(ttl=120)
@@ -1573,31 +1683,150 @@ def fetch_macro():
     return res
 
 def compute_quantum_wave_metrics(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
+    """
+    WKB近似トンネル透過確率と正規化シャノン・エントロピーに基づく量子波動指標 (0.0〜100.0実測スケール)
+    """
+    n_win = min(20, len(c) - 1)
+    c_sub = c[-n_win:]
+    v_sub = v[-n_win:]
+    vwma = float(np.sum(c_sub * v_sub) / max(np.sum(v_sub), 1e-8)) if np.sum(v_sub) > 0 else float(np.mean(c_sub))
+    sigma = float(np.std(c_sub - vwma))
+    if sigma < 1e-8:
+        sigma = max(float(c[-1]) * 0.002, 1e-6)
+
+    hh = h[-20:-1] if len(h) >= 20 else h[:-1]
+    if len(hh) > 0:
+        r_max = float(np.max(hh))
+        idx_max = int(np.argmax(hh))
+        bars_since_high = len(hh) - idx_max
+    else:
+        r_max = float(c[-1])
+        bars_since_high = 1
+
+    # 無次元化ポテンシャル障壁高さ V0
+    v0 = max((r_max - float(c[-1])) / (sigma + 1e-8), 0.0)
+
+    # 直近5本の平均モメンタムと相対出来高(RVOL)から無次元化運動エネルギー E を算出
+    look_k = min(6, len(c))
+    mom_move = abs(float(c[-1] - c[-look_k]))
+    base_v = float(np.mean(v[-20:-5])) if len(v) >= 20 else float(np.mean(v[:-1]))
+    rvol = float(np.mean(v[-5:])) / max(base_v, 1.0)
+    energy_e = (mom_move / (5.0 * sigma + 1e-8)) * max(rvol, 0.1)
+
+    # WKB近似トンネル透過確率 T (下限5.0%〜上限99.5%)
+    delta_x = float(np.clip(bars_since_high / 20.0, 0.2, 2.0))
+    if energy_e >= v0:
+        qt = float(np.clip(80.0 + (energy_e - v0) * 10.0, 80.0, 99.5))
+    else:
+        qt = float(80.0 * np.exp(-2.0 * np.sqrt(max(v0 - energy_e, 0.0)) * delta_x))
+        qt = float(np.clip(qt, 5.0, 99.5))
+
+    # 5ビン離散化正規化シャノン・エントロピーとフーリエ位相コヒーレンス
     rets = np.diff(c) / np.maximum(c[:-1], 1e-4)
-    hh, hl = (h[-25:-1] if len(h) >= 25 else h[:-1]), (l[-25:-1] if len(l) >= 25 else l[:-1])
-    rh, sl = (np.max(hh) if len(hh) > 0 else c[-1]), (np.min(hl) if len(hl) > 0 else c[-1])
-    vr, vi = max(float(rh - c[-1]) / max(float(c[-1]), 1e-4), 0.0001), max(float(c[-1] - sl) / max(float(c[-1]), 1e-4), 0.0001) * 0.15
-    kp = max(float(np.mean(np.abs(rets[-5:]) * np.clip(v[-5:] / max(float(np.mean(v[-20:])), 1.0), 0.1, 8.0))) * 4.5, 1e-5)
-    qt = 95.0 + min(float((kp - vr) / max(vr, 1e-4)) * 3.8, 4.9) if kp >= vr else float(100.0 * np.exp(-2.0 * np.sqrt(vr - kp) * 11.8) * np.exp(-vi * 15.0))
-    qt = float(np.clip(qt, 50.0, 99.8))
-    pc = float(np.abs(np.mean(np.exp(1j * np.angle(np.fft.rfft(rets[-16:]))))) * 100.0) if len(rets) >= 16 else 70.0
-    pu = float(np.clip(np.sum(rets[-16:] > 0) / 16.0, 1e-5, 1.0 - 1e-5))
-    se = float(-(pu * np.log2(pu) + (1.0 - pu) * np.log2(1.0 - pu)))
-    coh = float(np.clip(pc * 0.6 + (1.0 - se) * 40.0, 40.0, 98.5))
-    return {"q_score": int(np.clip(qt * 0.6 + coh * 0.4, 55, 99)), "q_tunnel": round(qt, 1), "q_coherence": round(coh, 1), "q_entropy": round(se, 2), "q_state": "⚛️ 量子トンネル超伝導サージ" if qt > 82.0 else "🌊 固有値コヒーレンス干渉モード"}
+    rets_16 = rets[-16:] if len(rets) >= 16 else rets
+    if len(rets_16) >= 5:
+        hist_counts, _ = np.histogram(rets_16, bins=5)
+        probs = hist_counts / max(float(np.sum(hist_counts)), 1.0)
+        probs_nz = probs[probs > 0]
+        h_shannon = float(-np.sum(probs_nz * np.log(probs_nz)))
+        h_norm = float(np.clip(h_shannon / np.log(5.0), 0.0, 1.0))
+        order_pct = (1.0 - h_norm) * 100.0
+        fft_vals = np.fft.rfft(rets_16)
+        phase_coh = float(np.abs(np.mean(np.exp(1j * np.angle(fft_vals)))) * 100.0)
+    else:
+        h_norm = 0.5
+        order_pct = 50.0
+        phase_coh = 50.0
+
+    coh = float(np.clip(phase_coh * 0.55 + order_pct * 0.45, 5.0, 99.0))
+    q_score = int(np.clip(round(qt * 0.65 + coh * 0.35), 5, 99))
+
+    if qt >= 80.0:
+        q_state = "⚛️ WKBトンネル臨界突破・超伝導サージ"
+    elif qt >= 50.0:
+        q_state = "🌊 固有値コヒーレンス干渉モード"
+    else:
+        q_state = "🧱 ポテンシャル障壁下・エネルギー蓄積中"
+
+    return {
+        "q_score": q_score,
+        "q_tunnel": round(qt, 1),
+        "q_coherence": round(coh, 1),
+        "q_entropy": round(h_norm, 2),
+        "q_state": q_state
+    }
 
 def compute_inst_microstructure(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray) -> dict:
-    rets, n = np.diff(c) / np.maximum(c[:-1], 1e-4), min(len(c) - 1, 50)
+    """
+    DFAによるHurst指数 (0.15〜0.95) および最小二乗法によるKyleのλ(価格インパクト係数)とステルス吸収スコア (10.0〜99.0)
+    """
+    rets = np.diff(c) / np.maximum(c[:-1], 1e-4)
+    n = min(len(rets), 50)
     if n >= 20:
         cd = np.cumsum(rets[-n:] - np.mean(rets[-n:]))
-        fls = [np.sqrt(np.mean([np.mean((cd[i*s:(i+1)*s] - np.polyval(np.polyfit(np.arange(s), cd[i*s:(i+1)*s], 1), np.arange(s)))**2) for i in range(n // s)])) for s in [4, 8, 16]]
-        hurst = float(np.clip(np.polyfit(np.log([4, 8, 16]), np.log(np.maximum(fls, 1e-8)), 1)[0], 0.40, 0.92))
-    else: hurst = 0.58
-    dp = np.diff(c[-20:])
-    sgn = np.sign(dp); sgn[sgn == 0] = 1.0
-    hl = float(np.mean(dp * sgn / np.maximum(v[-19:] / max(float(np.mean(v[-20:])), 1.0), 0.05)))
-    ks = float(np.clip(58.0 + (hurst - 0.5) * 62.0 + min(max(hl, 0.0) * 6.5, 25.0), 52.0, 99.2))
-    return {"ms_score": int(np.clip(ks, 55, 99)), "hurst": round(hurst, 2), "kyle_stealth": round(ks, 1), "luld_magnet": round(float(np.clip(70.0 + (hurst - 0.5) * 48.0, 52.0, 98.5)), 1), "ms_regime": "🏛️ 機関TWAP/極秘氷山注文検知" if hurst > 0.56 else "⚖️ 機関分散・板流動性中立"}
+        scales = [4, 8, 16]
+        fls = []
+        for s in scales:
+            n_seg = n // s
+            seg_vars = []
+            for i in range(n_seg):
+                seg = cd[i * s:(i + 1) * s]
+                x_idx = np.arange(s)
+                trend = np.polyval(np.polyfit(x_idx, seg, 1), x_idx)
+                seg_vars.append(np.mean((seg - trend) ** 2))
+            fls.append(np.sqrt(max(float(np.mean(seg_vars)), 1e-12)))
+        hurst = float(np.clip(np.polyfit(np.log(scales), np.log(fls), 1)[0], 0.15, 0.95))
+    else:
+        hurst = 0.50
+
+    # 符号付き出来高 SV_t と価格変化 ΔP_t からのOLS回帰による Kyle の λ 推定
+    dp = np.diff(c[-21:]) if len(c) >= 21 else np.diff(c)
+    v_20 = v[-len(dp):]
+    sgn = np.sign(dp)
+    sgn[sgn == 0] = 1.0
+    sv = sgn * v_20
+
+    if len(dp) >= 5 and np.var(sv) > 1e-8:
+        cov_dp_sv = float(np.mean((dp - np.mean(dp)) * (sv - np.mean(sv))))
+        var_sv = float(np.var(sv))
+        kyle_lambda = cov_dp_sv / (var_sv + 1e-8)
+    else:
+        kyle_lambda = 0.0
+
+    # 出来高急増度(RVOL) × 低価格インパクト(|λ|が小さい) × 高値引けCLV比率
+    base_v = float(np.mean(v[-20:-5])) if len(v) >= 20 else float(np.mean(v[:-1]))
+    rvol = float(np.mean(v[-5:])) / max(base_v, 1.0)
+    clv_recent = float(np.mean((2.0 * c[-5:] - h[-5:] - l[-5:]) / np.maximum(h[-5:] - l[-5:], 1e-4)))
+
+    # 価格インパクトの正規化逆数（出来高に対して値動きが抑え込まれて吸収されている度合い）
+    norm_impact = abs(kyle_lambda) * max(float(np.mean(v_20)), 1.0) / max(float(c[-1]), 1.0)
+    stealth_absorption = float(np.clip(1.0 / (1.0 + norm_impact * 150.0), 0.0, 1.0))
+
+    raw_ks = (
+        40.0
+        + (hurst - 0.50) * 70.0
+        + min(max(rvol - 0.8, 0.0), 3.0) * 10.0
+        + stealth_absorption * 22.0
+        + clv_recent * 15.0
+    )
+    ks = float(np.clip(raw_ks, 10.0, 99.0))
+    ms_score = int(np.clip(round(ks), 10, 99))
+
+    if hurst >= 0.58 and ks >= 68.0:
+        ms_regime = "📐 低価格インパクト・ステルス集積検知 (Amihud ILLIQ / Kyle-λ)"
+    elif hurst >= 0.52:
+        ms_regime = "🏛️ トレンド持続型・機関フロー追従"
+    else:
+        ms_regime = "⚖️ 平均回帰・レンジ流動性中立"
+
+    return {
+        "ms_score": ms_score,
+        "hurst": round(hurst, 2),
+        "kyle_lambda": kyle_lambda,
+        "kyle_stealth": round(ks, 1),
+        "luld_magnet": round(float(np.clip(50.0 + (hurst - 0.5) * 60.0 + clv_recent * 15.0, 15.0, 98.5)), 1),
+        "ms_regime": ms_regime
+    }
 
 def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray, daily_df: pd.DataFrame = None, news_hits: int = 0) -> dict:
     diffs, rets = np.diff(c), np.diff(c) / np.maximum(c[:-1], 1e-4)
@@ -1608,13 +1837,27 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
         rsi = float(np.clip(100.0 - (100.0 / (1.0 + ag / max(al, 1e-8))), 5.0, 95.0))
     else: rsi = 50.0
 
-    v_sub, r_sub = v[-20:], rets[-20:] if len(rets) >= 20 else rets
-    vpin = float(np.clip(np.sum((v_sub / np.max(v_sub)) * np.abs(r_sub)) / np.sum(v_sub / np.max(v_sub)), 0.18, 0.94)) if np.sum(v_sub) > 0 and len(r_sub) > 0 else 0.52
+    # BVC-VPIN (Easley, López de Prado, O'Hara 2012) による買い/売り出来高分類
+    n_vpin = min(20, len(diffs))
+    if n_vpin >= 5:
+        dc_sub = diffs[-n_vpin:]
+        v_sub = v[-n_vpin:]
+        sigma_dc = float(np.std(dc_sub))
+        if sigma_dc < 1e-8:
+            sigma_dc = max(float(c[-1]) * 0.001, 1e-6)
+        z_t = dc_sub / sigma_dc
+        phi_z = np.array([0.5 * (1.0 + math.erf(float(z) / math.sqrt(2.0))) for z in z_t])
+        v_buy = v_sub * phi_z
+        v_sell = v_sub * (1.0 - phi_z)
+        tot_v_sub = float(np.sum(v_sub))
+        vpin = float(np.clip(np.sum(np.abs(v_buy - v_sell)) / max(tot_v_sub, 1e-8), 0.05, 0.98)) if tot_v_sub > 0 else 0.50
+    else:
+        vpin = 0.50
 
     if len(rets) >= 20:
         v99 = np.percentile(rets, 1)
         tl = rets[rets <= v99]
-        cvar = float(np.clip(abs(np.mean(tl)) * 100.0 if len(tl) > 0 else abs(v99) * 100.0, 0.9, 16.5))
+        cvar = float(np.clip(abs(np.mean(tl)) * 100.0 if len(tl) > 0 else abs(v99) * 100.0, 0.5, 18.0))
     else: cvar = 3.8
 
     # KaufmanのEfficiency Ratio (効率性レシオ: 0〜100%)
@@ -1668,7 +1911,7 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
             yz_var = max(sigma_o2 + k_yz * sigma_c2 + (1.0 - k_yz) * sigma_rs2, 1e-6)
             yz_vol = round(float(np.clip(np.sqrt(yz_var * 252.0), 0.08, 2.50)), 2)
 
-    surge_score = int(np.clip(45.0 + min(rvol, 4.0) * 14.0 + min(news_hits, 5) * 4.5 + abs(rets[-1]) * 180.0, 35, 99))
+    surge_score = int(np.clip(30.0 + min(rvol, 4.0) * 15.0 + min(news_hits, 5) * 4.5 + abs(rets[-1]) * 180.0, 10, 99))
 
     return {
         "rsi": round(rsi, 1),
@@ -1682,10 +1925,41 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
         "board5ch_score": surge_score
     }
 
-def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: float, ofi_z: float, vpin: float, yz_vol: float, cvar95: float, rsi: float, cpos: float, base_sh: int, pest_str: str, vwap_str: str, tp_str: str, sl_str: str, kelly_pct: float, qm: dict, ms: dict, name: str = "", theme: str = "", rel_news_title: str = "", pgap: float = 0.0) -> dict:
+def compute_japanese_lot_sizing(cv: float, slv: float, total_capital: float, risk_tolerance_pct: float, is_jp: bool, style_mul: float = 1.0) -> dict:
+    """
+    許容リスク額と総投資資金上限の両方から推奨株数を算出し、日本株は100株単位（資金不足時のみ単元未満株1株単位）に丸める
+    """
+    rm = float(total_capital) * (float(risk_tolerance_pct) / 100.0)
+    risk_per_share = max(cv - slv, cv * 0.005)
+    raw_shares = int((rm / risk_per_share) * style_mul)
+    max_affordable = int(float(total_capital) // max(cv, 1e-4))
+    capped_shares = min(raw_shares, max_affordable)
+
+    is_odd_lot = False
+    if is_jp:
+        if max_affordable >= 100:
+            rounded_100 = (capped_shares // 100) * 100
+            final_shares = max(100, rounded_100) if rounded_100 > 0 else 100
+            if final_shares * cv > float(total_capital):
+                final_shares = max(1, capped_shares)
+                is_odd_lot = True
+        else:
+            final_shares = max(1, capped_shares)
+            is_odd_lot = True
+    else:
+        final_shares = max(1, capped_shares)
+
+    return {
+        "shares": final_shares,
+        "position_value": final_shares * cv,
+        "risk_amount": rm,
+        "is_odd_lot": is_odd_lot
+    }
+
+def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: float, ofi_z: float, vpin: float, yz_vol: float, cvar95: float, rsi: float, cpos: float, lot_info: dict, pest_str: str, vwap_str: str, tp_str: str, sl_str: str, kelly_pct: float, qm: dict, ms: dict, name: str = "", theme: str = "", rel_news_title: str = "", pgap: float = 0.0) -> dict:
     pfx = style.split(" ")[1] if " " in style else "デイトレード"
-    st_mul = {"スキャルピング": 1.5, "スイングトレード": 1.2, "バイ＆ホールド": 0.9}.get(pfx, 1.65)
-    sh = max(1, int(round(base_sh * st_mul)))
+    sh = int(lot_info["shares"])
+    odd_note = "（※単元未満株・S株換算）" if lot_info.get("is_odd_lot") else ""
     disp_name = name or code
     disp_theme = theme or "成長モメンタム領域"
 
@@ -1702,21 +1976,20 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
         dur_str = "前場9:00 〜 11:30（または後場15:00の大引けまで・当日完結）"
         beg_intro = f"<b>🔰 超初心者向け！『{html.escape(disp_name)}』デイトレード実践講座（その日のうちに勝負完結）</b>"
 
-    # 5つの状況別エントリー戦術の動的判定
     if rel_news_title or ofi_z >= 1.2:
         tactic_type = "Type-A"
         entry_mode = "2段ロケット成行＋VWAP指値"
         lot_a = max(1, int(round(sh * 0.5)))
         lot_b = max(0, sh - lot_a)
-        news_ctx = f"連動速報『{html.escape(rel_news_title[:36])}』" if rel_news_title else f"板注文フロー急騰(OFI Z={ofi_z})"
+        news_ctx = f"連動速報『{html.escape(rel_news_title[:36])}』" if rel_news_title else f"5分足CLV資金フロー急騰(Tick-Flow Z={ofi_z})"
         algo_name = f"🚨 [{pfx} / Type-A] 重大ニュース直撃×初動ブレイク・2段ロケット型"
-        risk_posture = f"🚀 2段ロケット分割（朝イチ成行 <b>{lot_a:,}株</b> ＋ VWAP押し目 <b>{lot_b:,}株</b>）"
+        risk_posture = f"🚀 2段ロケット分割（朝イチ成行 <b>{lot_a:,}株</b> ＋ VWAP押し目 <b>{lot_b:,}株</b>）{odd_note}"
         core_logic = (
             f"【{html.escape(disp_name)}（テーマ: {html.escape(disp_theme)}）】において{news_ctx}を検知。"
             f"機関投資家の業種バスケット買い初動を取り逃さず、かつ高値掴みリスクを半減させるため、寄り付き成行50%＋最初のVWAP押し目指値50%の2段ロケット執行を採用。"
         )
         step_plan = (
-            f"① 【朝9:00:00（第1段ロケット）】{news_ctx}による初動モメンタムに乗るため、推奨総ロット({sh:,}株)の50%にあたる<b>{lot_a:,}株</b>を寄り付き成行買いで即座に確保。<br>"
+            f"① 【朝9:00:00（第1段ロケット）】{news_ctx}による初動モメンタムに乗るため、推奨総ロット({sh:,}株{odd_note})の50%にあたる<b>{lot_a:,}株</b>を寄り付き成行買いで即座に確保。<br>"
             f"② 【9:15〜9:30（第2段ロケット）】寄り直後の短期利食い売りをこなす最初の押し目を待ち、当日VWAP（<b>{vwap_str}</b>）付近に残り50%の<b>{lot_b:,}株</b>を指値で追加配置。<br>"
             f"③ 【リスク封殺と出口】約定直後に全玉へ逆指値（<b>{sl_str}</b>）をセットし、<b>{dur_str}</b>の時間軸で目標利確ライン（<b>{tp_str}</b>）到達時に利益確定。"
         )
@@ -1724,40 +1997,40 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
             f"{beg_intro}<br>"
             f"<b>【今回の戦術：2段ロケット分割買い（テーマ：{html.escape(disp_theme)}）】</b><br>"
             f"材料（{news_ctx}）が出ているため一気に上がる勢いがありますが、全額を一度に買うと一時的な下げで慌てがちです。そこで「半分を朝9:00に買い、残り半分を少し下がった<b>{vwap_str}</b>付近で待ち伏せ買い」するプロ仕様の2段階戦術を使います。<br>"
-            f"・<b>朝8:55：</b> <b>{lot_a:,}株</b>の成行注文を準備し、9:00に買付。<br>"
+            f"・<b>朝8:55：</b> <b>{lot_a:,}株</b>{odd_note}の成行注文を準備し、9:00に買付。<br>"
             f"・<b>朝9:15：</b> 残り<b>{lot_b:,}株</b>を<b>{vwap_str}</b>で指値注文。買えたらすぐ<b>{sl_str}</b>に損切り予約、目標<b>{tp_str}</b>で利確！保有目安は<b>{dur_str}</b>です。"
         )
     elif pgap >= 1.8 or rsi >= 72.0:
         tactic_type = "Type-B"
         entry_mode = "寄り天回避VWAP押し目指値"
         algo_name = f"⚠️ [{pfx} / Type-B] 大幅GU過熱・寄り天回避の初押し待ち型"
-        risk_posture = f"🛡️ 寄り天回避・初押し指値待ち（ <b>{sh:,}株</b> 指値待機）"
+        risk_posture = f"🛡️ 寄り天回避・初押し指値待ち（ <b>{sh:,}株</b> 指値待機）{odd_note}"
         core_logic = (
-            f"【{html.escape(disp_name)}】はOFI推計寄付きギャップ({pgap:+.2f}%)・RSI({rsi}%)と短期過熱圏に突入。"
+            f"【{html.escape(disp_name)}】は理論ギャップ推計寄付き値({pgap:+.2f}%)・RSI({rsi}%)と短期過熱圏に突入。"
             f"朝9:00の成行飛びつきは機関投資家の『寄り天利食いぶつけ』の標的となるため、9:00〜9:15は完全に静観しVWAP（{vwap_str}）への回帰反発のみを叩く防衛戦術。"
         )
         step_plan = (
-            f"① 【9:00〜9:15（絶対静観フェーズ）】朝イチの成行飛びつき買いは厳禁。ギャップアップ（OFI推計寄付き目安<b>{pest_str}</b>）後の利確売り一巡を冷静に見送る。<br>"
-            f"② 【9:15〜9:45（初押し指値エントリー）】株価がVWAP（<b>{vwap_str}</b>）水準まで降りて下げ止まりを確認した瞬間、<b>{sh:,}株</b>を指値でエントリー。<br>"
+            f"① 【9:00〜9:15（絶対静観フェーズ）】朝イチの成行飛びつき買いは厳禁。ギャップアップ（理論ギャップ推計寄付き値<b>{pest_str}</b>）後の利確売り一巡を冷静に見送る。<br>"
+            f"② 【9:15〜9:45（初押し指値エントリー）】株価がVWAP（<b>{vwap_str}</b>）水準まで降りて下げ止まりを確認した瞬間、<b>{sh:,}株</b>{odd_note}を指値でエントリー。<br>"
             f"③ 【撤退と利確】下抜け時は<b>{sl_str}</b>で即座に機械損切り。反発成功時は<b>{dur_str}</b>の保有枠で<b>{tp_str}</b>を刈り取る。"
         )
         beginner_html = (
             f"{beg_intro}<br>"
             f"<b>【今回の戦術：朝イチ飛びつき禁止・初押し待ち伏せ買い】</b><br>"
-            f"この銘柄は前評判が高く朝から値段が吊り上がっている（推計ギャップアップ {pgap:+.2f}% / RSI {rsi}%）ため、9:00直後に飛びつくと高値掴み（寄り天）になる危険があります。<br>"
+            f"この銘柄は前評判が高く朝から値段が吊り上がっている（理論ギャップ推計 {pgap:+.2f}% / RSI {rsi}%）ため、9:00直後に飛びつくと高値掴み（寄り天）になる危険があります。<br>"
             f"・<b>朝9:00〜9:15：</b> 買わずに画面を見て我慢します。<br>"
-            f"・<b>朝9:15以降：</b> 一度値段が落ち着いて<b>{vwap_str}</b>付近まで下がったら<b>{sh:,}株</b>を指値で買い！<br>"
+            f"・<b>朝9:15以降：</b> 一度値段が落ち着いて<b>{vwap_str}</b>付近まで下がったら<b>{sh:,}株</b>{odd_note}を指値で買い！<br>"
             f"・万一さらに下がれば<b>{sl_str}</b>で自動損切り、上がれば<b>{tp_str}</b>で利確（目安：<b>{dur_str}</b>）。"
         )
-    elif ms.get("kyle_stealth", 0) >= 80.0 or ms.get("hurst", 0) >= 0.62:
+    elif ms.get("kyle_stealth", 0) >= 72.0 or ms.get("hurst", 0) >= 0.60:
         tactic_type = "Type-C"
         entry_mode = "TWAP3回時間分散指値"
         l_third = max(1, int(round(sh / 3.0)))
-        l_rem = max(1, sh - l_third * 2)
-        algo_name = f"🏛️ [{pfx} / Type-C] 機関ステルス氷山注文追随・TWAP分割買い型"
-        risk_posture = f"🏦 機関TWAP3分割（ <b>{l_third:,}株 × 2回 ＋ {l_rem:,}株</b> ）"
+        l_rem = max(0, sh - l_third * 2)
+        algo_name = f"🏛️ [{pfx} / Type-C] 低価格インパクト・ステルス集積追随・TWAP分割買い型"
+        risk_posture = f"🏦 機関TWAP3分割（ <b>{l_third:,}株 × 2回 ＋ {l_rem:,}株</b> ）{odd_note}"
         core_logic = (
-            f"【{html.escape(disp_name)}（{html.escape(disp_theme)}）】の板に機関投資家のステルス氷山注文（Kyle吸収={ms['kyle_stealth']}% / Hurst={ms['hurst']}）を検出。"
+            f"【{html.escape(disp_name)}（{html.escape(disp_theme)}）】に機関投資家のステルス集積（Amihud ILLIQ / Kyleステルス={ms['kyle_stealth']}% / DFA Hurst={ms['hurst']}）を検出。"
             f"大口アルゴと同じ時間軸（9:15・10:30・13:00）で1/3ずつ分割執行し、平均取得単価を機関水準に完全同調させる。"
         )
         step_plan = (
@@ -1768,28 +2041,28 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
         beginner_html = (
             f"{beg_intro}<br>"
             f"<b>【今回の戦術：プロ機関投資家と同じ3回分割買い（TWAP追随）】</b><br>"
-            f"大口ファンドが相場に気づかれないよう少しずつ株を集めているサイン（Kyle吸収率 {ms['kyle_stealth']}%）が出ています。私たちも3回に分けて真似をします。<br>"
-            f"・<b>9:15に {l_third:,}株</b>、<b>10:30に {l_third:,}株</b>、<b>13:00に {l_rem:,}株</b>と時間を分けて買います。<br>"
+            f"大口ファンドが価格インパクトを抑えながら少しずつ株を集めているサイン（Kyleステルス率 {ms['kyle_stealth']}%）が出ています。私たちも3回に分けて真似をします。<br>"
+            f"・<b>9:15に {l_third:,}株</b>、<b>10:30に {l_third:,}株</b>、<b>13:00に {l_rem:,}株</b>と時間を分けて買います{odd_note}。<br>"
             f"・平均購入単価が安定するため、初心者でも負けにくい王道の買い方です。逆指値<b>{sl_str}</b>を忘れずに設定し、目標<b>{tp_str}</b>（目安：<b>{dur_str}</b>）を狙いましょう。"
         )
-    elif qm.get("q_tunnel", 0) >= 85.0:
+    elif qm.get("q_tunnel", 0) >= 80.0:
         tactic_type = "Type-D"
         entry_mode = "節目ブレイク逆指値成行"
-        algo_name = f"⚛️ [{pfx} / Type-D] 量子トンネル突破・節目ブレイクアウト順張り型"
-        risk_posture = f"⚡ ブレイク全玉突破（節目上抜け時に <b>{sh:,}株</b> 一気乗せ）"
+        algo_name = f"⚛️ [{pfx} / Type-D] WKB量子トンネル突破・節目ブレイクアウト順張り型"
+        risk_posture = f"⚡ ブレイク全玉突破（節目上抜け時に <b>{sh:,}株</b> 一気乗せ）{odd_note}"
         core_logic = (
-            f"【{html.escape(disp_name)}】の量子トンネル透過率({qm['q_tunnel']}%)・量子スコア({qm['q_score']}点)が臨界点を突破。"
-            f"上値抵抗線（OFI推計寄付き目安<b>{pest_str}</b>の+0.5%上）を上抜けた瞬間に加速する特異点を逆指値買い注文で捉える。"
+            f"【{html.escape(disp_name)}】のWKBトンネル透過確率({qm['q_tunnel']}%)・量子スコア({qm['q_score']}点)が臨界点を突破。"
+            f"上値抵抗線（理論ギャップ推計寄付き値<b>{pest_str}</b>の+0.5%上）を上抜けた瞬間に加速する特異点を逆指値買い注文で捉える。"
         )
         step_plan = (
-            f"① 【8:55 逆指値買い予約】上値抵抗線（<b>{pest_str}</b>の+0.5%上）に『逆指値成行買い』で<b>{sh:,}株</b>をトリガー設定し、上抜け前のダマシ下落を完全回避。<br>"
-            f"② 【トリガー発動・約定】強い買い板の喰い上がりで節目突破と同時に<b>{sh:,}株</b>が自動約定。<br>"
+            f"① 【8:55 逆指値買い予約】上値抵抗線（<b>{pest_str}</b>の+0.5%上）に『逆指値成行買い』で<b>{sh:,}株</b>{odd_note}をトリガー設定し、上抜け前のダマシ下落を完全回避。<br>"
+            f"② 【トリガー発動・約定】強い買いの連鎖で節目突破と同時に<b>{sh:,}株</b>が自動約定。<br>"
             f"③ 【利確・損切執行】約定と同時に<b>{sl_str}</b>へ逆指値売りをセットし、モメンタム加速に乗って<b>{dur_str}</b>以内に<b>{tp_str}</b>で利確。"
         )
         beginner_html = (
             f"{beg_intro}<br>"
             f"<b>【今回の戦術：壁を突破した瞬間だけ自動で買うブレイクアウト戦術】</b><br>"
-            f"量子エンジンが『上値の壁を突き破る確率 {qm['q_tunnel']}%』と算出しています。壁を超えられずに下がるリスクを避けるため、「上がって壁（<b>{pest_str}</b>の+0.5%上）を超えたら自動で<b>{sh:,}株</b>買う（逆指値買い）」を使います。<br>"
+            f"量子エンジンが『上値の壁を突き破る確率 {qm['q_tunnel']}%』と算出しています。壁を超えられずに下がるリスクを避けるため、「上がって壁（<b>{pest_str}</b>の+0.5%上）を超えたら自動で<b>{sh:,}株</b>{odd_note}買う（逆指値買い）」を使います。<br>"
             f"・壁を超えなければ買われないのでノーリスク！超えた瞬間だけ波に乗れます。<br>"
             f"・買えたらすぐ<b>{sl_str}</b>に損切りを入れ、目標<b>{tp_str}</b>（目安：<b>{dur_str}</b>）で利益確定します。"
         )
@@ -1798,22 +2071,22 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
         entry_mode = "打診3割＋増し玉7割防衛型"
         l_scout = max(1, int(round(sh * 0.3)))
         l_main = max(0, sh - l_scout)
-        algo_name = f"🛡️ [{pfx} / Type-E] VPIN/ボラ警戒・打診3割スタート防衛ピラミッディング型"
-        risk_posture = f"🛡️ 段階ピラミッディング（打診 <b>{l_scout:,}株</b> → 含み益+0.8%確認後 <b>{l_main:,}株</b> ）"
+        algo_name = f"🛡️ [{pfx} / Type-E] BVC-VPIN/ボラ警戒・打診3割スタート防衛ピラミッディング型"
+        risk_posture = f"🛡️ 段階ピラミッディング（打診 <b>{l_scout:,}株</b> → 含み益+0.8%確認後 <b>{l_main:,}株</b> ）{odd_note}"
         core_logic = (
-            f"【{html.escape(disp_name)}（{html.escape(disp_theme)}）】は毒性フローVPIN({vpin})・極値リスクCVaR({cvar95}%)を警戒すべき局面。"
+            f"【{html.escape(disp_name)}（{html.escape(disp_theme)}）】は情報非対称性フローBVC-VPIN({vpin})・極値リスクCVaR({cvar95}%)を警戒すべき局面。"
             f"最初からフルロットを入れず、まず30%の打診買いで方向性を確認し、含み益が+0.8%乗ってトレンドが確定してから残り70%を乗せる鉄壁の資金防衛戦術。"
         )
         step_plan = (
-            f"① 【9:05 打診エントリー】寄り付き後の方向感を確認し、まず推奨ロットの30%にあたる<b>{l_scout:,}株</b>を打診買い。直ちに<b>{sl_str}</b>へ逆指値を設定。<br>"
+            f"① 【9:05 打診エントリー】寄り付き後の方向感を確認し、まず推奨ロットの30%にあたる<b>{l_scout:,}株</b>{odd_note}を打診買い。直ちに<b>{sl_str}</b>へ逆指値を設定。<br>"
             f"② 【含み益確認後の本玉追加】株価が思惑通り上昇し含み益が+0.8%以上乗った段階で、残り70%の<b>{l_main:,}株</b>を増し玉投入。<br>"
             f"③ 【目標決済】<b>{dur_str}</b>の時間枠内で、目標利確ライン（<b>{tp_str}</b>）到達時に全<b>{sh:,}株</b>を一括決済。"
         )
         beginner_html = (
             f"{beg_intro}<br>"
             f"<b>【今回の戦術：お試し3割買い＋勝ってから7割追加する鉄壁防衛法】</b><br>"
-            f"値動きの荒さ（VPIN {vpin}）に備え、最初から全額を賭けずに「まず3割だけお試しで買って、本当に上がってから残り7割を追加する」安全第一の買い方です。<br>"
-            f"・<b>朝9:05：</b> まず<b>{l_scout:,}株</b>だけを買い、<b>{sl_str}</b>に損切りセット。<br>"
+            f"値動きの荒さ（BVC-VPIN {vpin}）に備え、最初から全額を賭けずに「まず3割だけお試しで買って、本当に上がってから残り7割を追加する」安全第一の買い方です。<br>"
+            f"・<b>朝9:05：</b> まず<b>{l_scout:,}株</b>{odd_note}だけを買い、<b>{sl_str}</b>に損切りセット。<br>"
             f"・<b>上昇確認後：</b> +0.8%以上利益が出始めたら残り<b>{l_main:,}株</b>を追加！もし最初に下がっても被害は3割だけで済みます。目標は<b>{tp_str}</b>（目安：<b>{dur_str}</b>）。"
         )
 
@@ -1847,12 +2120,11 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     if not isinstance(stock_ledger.get("verified"), dict):
         stock_ledger["verified"] = {}
 
-    # ルックアヘッド・バイアス解消済みの厳格検証バージョンへ更新
-    if stock_ledger.get("algo_ver") != "QWM7_HONEST_10D_V2":
+    # 厳格化バージョン V3（同一足即利確禁止 + 往復0.10%コスト控除 + 単元株/総資金上限遵守）
+    if stock_ledger.get("algo_ver") != "QWM7_HONEST_10D_V3":
         stock_ledger["verified"] = {}
-        stock_ledger["algo_ver"] = "QWM7_HONEST_10D_V2"
+        stock_ledger["algo_ver"] = "QWM7_HONEST_10D_V3"
 
-    # 本日分の事前シグナル記録
     stock_ledger["signals"][today_str] = {
         "date": today_str,
         "entry_type": entry_mode,
@@ -1867,7 +2139,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     st_p = style.split(" ")[1] if " " in style else "デイトレード"
     mul_tp, mul_sl = {"スキャルピング": (0.48, 0.85), "スイングトレード": (1.65, 1.35), "バイ＆ホールド": (2.8, 1.8)}.get(st_p, (0.82, 1.15))
     st_mul = {"スキャルピング": 1.5, "スイングトレード": 1.2, "バイ＆ホールド": 0.9}.get(st_p, 1.65)
-    risk_money = float(total_capital) * (float(risk_tolerance_pct) / 100.0)
+    ROUND_TRIP_COST_RATE = 0.0010  # 片道0.05% × 往復 = 0.10%
 
     try:
         df_copy = df.copy()
@@ -1877,16 +2149,14 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
             df_copy["_trade_date"] = pd.to_datetime(df_copy.index).strftime("%Y-%m-%d")
 
         unique_dates = sorted(df_copy["_trade_date"].unique().tolist())
-        # 直近10営業日分の（前日 → 翌営業日）ペアを検証
         if len(unique_dates) >= 2:
             eval_pairs = list(zip(unique_dates[:-1], unique_dates[1:]))[-10:]
-            for idx_pair, (prev_d, next_d) in enumerate(eval_pairs):
+            for prev_d, next_d in eval_pairs:
                 prev_bars = df_copy[df_copy["_trade_date"] == prev_d]
                 next_bars = df_copy[df_copy["_trade_date"] == next_d]
                 if prev_bars.empty or next_bars.empty:
                     continue
 
-                # 前日までのヒストリーのみ抽出（未来データのカンニング完全遮断）
                 hist_until_prev = df_copy[df_copy["_trade_date"] <= prev_d]
                 p_close = float(prev_bars["Close"].iloc[-1])
                 p_high = float(prev_bars["High"].max())
@@ -1895,7 +2165,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 p_typ = (prev_bars["High"].values + prev_bars["Low"].values + prev_bars["Close"].values) / 3.0
                 p_vwap = float(np.sum(p_typ * p_vol) / np.sum(p_vol)) if np.sum(p_vol) > 0 else p_close
 
-                # 前日時点までの日次集計データから当時の14日ATRを厳密に再計算
                 hist_daily = hist_until_prev.groupby("_trade_date").agg(
                     High=("High", "max"),
                     Low=("Low", "min"),
@@ -1922,15 +2191,14 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                     sig_sl = float(saved_sig.get("sl_val", p_close - p_atr * mul_sl))
                     sig_sh = int(saved_sig.get("shares", 1))
                 else:
-                    # 前日時点のデータのみから当時の戦術タイプ・TP/SL・推奨株数を厳密に再現
                     hc = hist_until_prev["Close"].values.astype(float)
                     hh = hist_until_prev["High"].values.astype(float)
                     hl = hist_until_prev["Low"].values.astype(float)
                     hv = hist_until_prev["Volume"].values.astype(float)
                     sf_p = ((2.0 * hc - hh - hl) / np.maximum(hh - hl, 1e-4)) * hv
                     ofi_p = float(np.clip((np.mean(sf_p[-5:]) - np.mean(sf_p[-20:])) / max(float(np.std(sf_p[-20:])), 1.0), -3.0, 3.0)) if len(sf_p) >= 20 else 0.0
-                    qm_p = compute_quantum_wave_metrics(hc, hh, hl, hv) if len(hc) >= 20 else {"q_tunnel": 70.0}
-                    ms_p = compute_inst_microstructure(hc, hh, hl, hv) if len(hc) >= 20 else {"kyle_stealth": 70.0, "hurst": 0.55}
+                    qm_p = compute_quantum_wave_metrics(hc, hh, hl, hv) if len(hc) >= 20 else {"q_tunnel": 50.0}
+                    ms_p = compute_inst_microstructure(hc, hh, hl, hv) if len(hc) >= 20 else {"kyle_stealth": 50.0, "hurst": 0.50}
                     qa_p = compute_advanced_quant_indicators(hc, hh, hl, hv) if len(hc) >= 20 else {"rsi": 50.0}
                     pgap_p = round(float(np.clip(ofi_p * 0.65, -2.5, 3.8)), 2)
                     pest_p = p_close * (1.0 + pgap_p / 100.0)
@@ -1939,22 +2207,19 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                         sig_tactic, sig_mode, sig_plan_px = "Type-A", "2段ロケット成行＋VWAP指値", pest_p
                     elif pgap_p >= 1.8 or qa_p["rsi"] >= 72.0:
                         sig_tactic, sig_mode, sig_plan_px = "Type-B", "寄り天回避VWAP押し目指値", p_vwap
-                    elif ms_p["kyle_stealth"] >= 80.0 or ms_p["hurst"] >= 0.62:
+                    elif ms_p["kyle_stealth"] >= 72.0 or ms_p["hurst"] >= 0.60:
                         sig_tactic, sig_mode, sig_plan_px = "Type-C", "TWAP3回時間分散指値", p_vwap
-                    elif qm_p["q_tunnel"] >= 85.0:
+                    elif qm_p["q_tunnel"] >= 80.0:
                         sig_tactic, sig_mode, sig_plan_px = "Type-D", "節目ブレイク逆指値成行", pest_p * 1.005
                     else:
                         sig_tactic, sig_mode, sig_plan_px = "Type-E", "打診3割＋増し玉7割防衛型", p_vwap
 
                     sig_tp = p_close + (p_atr * mul_tp)
                     sig_sl = p_close - (p_atr * mul_sl)
-                    # 前日時点の終値(p_close)と当時の逆指値幅(p_close - sig_sl)から当時の株数を算出
-                    hist_base_sh = max(1, int(risk_money / max(p_close - sig_sl, p_close * 0.005)))
-                    sig_sh = max(1, int(round(hist_base_sh * st_mul)))
+                    hist_lot = compute_japanese_lot_sizing(p_close, sig_sl, total_capital, risk_tolerance_pct, is_jp, st_mul)
+                    sig_sh = int(hist_lot["shares"])
 
-                # =========================================================
-                # 翌営業日（next_d）の5分足を先頭から順番に走査（改ざんゼロ）
-                # =========================================================
+                # 翌営業日(next_d)の5分足走査（同一足即利確禁止）
                 pos_shares = 0
                 total_cost = 0.0
                 avg_entry_px = 0.0
@@ -1964,7 +2229,8 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 twap_done = set()
                 outcome = ""
                 exit_px = 0.0
-                is_win = None  # None = 未約定(ノートレード)
+                is_win = None
+                entry_bar_idx = -1
 
                 total_bars = len(next_bars)
                 twap_indices = {min(3, total_bars - 1), min(18, total_bars - 1), min(36, total_bars - 1)}
@@ -1974,8 +2240,9 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                     bh = float(bar["High"])
                     bl = float(bar["Low"])
                     bc = float(bar["Close"])
+                    entered_this_bar = False
 
-                    # --- 1. エントリー約定判定（前日の買い方プラン通り） ---
+                    # --- 1. エントリー約定判定 ---
                     if sig_tactic == "Type-A":
                         if b_i == 0:
                             sh_a = max(1, int(round(sig_sh * 0.5)))
@@ -1986,6 +2253,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             sl_diff = max(p_close - sig_sl, bo * 0.006)
                             eff_tp = avg_entry_px + tp_diff
                             eff_sl = avg_entry_px - sl_diff
+                            entered_this_bar = True
                         elif not part2_done and pos_shares > 0 and bl <= p_vwap:
                             sh_b = max(0, sig_sh - pos_shares)
                             if sh_b > 0:
@@ -1993,6 +2261,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                 pos_shares += sh_b
                                 total_cost += sh_b * fill_p
                                 avg_entry_px = total_cost / pos_shares
+                                entered_this_bar = True
                             part2_done = True
 
                     elif sig_tactic == "Type-B":
@@ -2005,6 +2274,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             sl_diff = max(p_close - sig_sl, fill_p * 0.006)
                             eff_tp = avg_entry_px + tp_diff
                             eff_sl = avg_entry_px - sl_diff
+                            entered_this_bar = True
 
                     elif sig_tactic == "Type-C":
                         if b_i in twap_indices and b_i not in twap_done:
@@ -2012,13 +2282,15 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             sh_part = max(1, int(round(sig_sh / 3.0)))
                             if len(twap_done) == 3:
                                 sh_part = max(1, sig_sh - pos_shares)
-                            pos_shares += sh_part
-                            total_cost += sh_part * bo
-                            avg_entry_px = total_cost / pos_shares
-                            tp_diff = max(sig_tp - p_close, bo * 0.006)
-                            sl_diff = max(p_close - sig_sl, bo * 0.006)
-                            eff_tp = avg_entry_px + tp_diff
-                            eff_sl = avg_entry_px - sl_diff
+                            if sh_part > 0 and pos_shares + sh_part <= sig_sh:
+                                pos_shares += sh_part
+                                total_cost += sh_part * bo
+                                avg_entry_px = total_cost / pos_shares
+                                tp_diff = max(sig_tp - p_close, bo * 0.006)
+                                sl_diff = max(p_close - sig_sl, bo * 0.006)
+                                eff_tp = avg_entry_px + tp_diff
+                                eff_sl = avg_entry_px - sl_diff
+                                entered_this_bar = True
 
                     elif sig_tactic == "Type-D":
                         trigger_px = sig_plan_px
@@ -2031,6 +2303,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             sl_diff = max(p_close - sig_sl, fill_p * 0.006)
                             eff_tp = avg_entry_px + tp_diff
                             eff_sl = avg_entry_px - sl_diff
+                            entered_this_bar = True
 
                     else:  # Type-E
                         if pos_shares == 0 and b_i == min(1, total_bars - 1):
@@ -2042,6 +2315,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             sl_diff = max(p_close - sig_sl, bo * 0.006)
                             eff_tp = avg_entry_px + tp_diff
                             eff_sl = avg_entry_px - sl_diff
+                            entered_this_bar = True
                         elif pos_shares > 0 and not part2_done and bh >= avg_entry_px * 1.008:
                             sh_main = max(0, sig_sh - pos_shares)
                             if sh_main > 0:
@@ -2049,11 +2323,16 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                 pos_shares += sh_main
                                 total_cost += sh_main * add_px
                                 avg_entry_px = total_cost / pos_shares
+                                entered_this_bar = True
                             part2_done = True
 
-                    # --- 2. ポジション保有中の利確(TP)・損切(SL)判定 ---
+                    if entered_this_bar:
+                        entry_bar_idx = b_i
+
+                    # --- 2. 利確(TP)・損切(SL)判定（同一足ではSLのみ判定しTPは次足以降から判定） ---
                     if pos_shares > 0:
-                        hit_tp = (bh >= eff_tp)
+                        can_take_profit = (b_i > entry_bar_idx)
+                        hit_tp = (bh >= eff_tp) if can_take_profit else False
                         hit_sl = (bl <= eff_sl)
 
                         if hit_tp and hit_sl:
@@ -2077,7 +2356,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             is_win = True
                             break
 
-                # --- 3. 大引けまでの未決済・または未約定の処理 ---
+                # --- 3. 大引け決済と往復0.10%執行コスト控除 ---
                 if pos_shares == 0:
                     outcome = "⚪ 条件未到達・見送り (NO TRADE)"
                     avg_entry_px = sig_plan_px
@@ -2088,14 +2367,17 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 else:
                     if not outcome:
                         exit_px = float(next_bars["Close"].iloc[-1])
-                        if exit_px >= avg_entry_px:
+                    gross_ret_rate = (exit_px - avg_entry_px) / max(avg_entry_px, 1e-4)
+                    net_ret_rate = gross_ret_rate - ROUND_TRIP_COST_RATE
+                    ret_pct = net_ret_rate * 100.0
+                    profit_val = (avg_entry_px * pos_shares) * net_ret_rate
+                    if outcome == "":
+                        if profit_val >= 0:
                             outcome = "⭕ 大引けプラス決済 (WIN)"
                             is_win = True
                         else:
                             outcome = "🔺 大引けマイナス決済 (LOSE)"
                             is_win = False
-                    ret_pct = ((exit_px - avg_entry_px) / max(avg_entry_px, 1e-4)) * 100.0
-                    profit_val = (exit_px - avg_entry_px) * pos_shares
 
                 rec_row = {
                     "date": next_d,
@@ -2208,67 +2490,103 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         ms = compute_inst_microstructure(c, h, l, v)
         q_adv = compute_advanced_quant_indicators(c, h, l, v, daily_df=daily_df, news_hits=news_hits)
 
+        # 5分足CLV資金フロー不均衡 (Tick-Flow Z)
+        sf = ((2.0 * c - h - l) / np.maximum(h - l, 1e-4)) * v
+        ofi_z = float(np.clip((np.mean(sf[-5:]) - np.mean(sf[-20:])) / max(float(np.std(sf[-20:])), 1.0), -3.0, 3.0))
+
+        # サイドバーのチェックボックス（bal, bms, bi, b5, bagi_q, bhft）を完全連動した加重平均評価
         r20 = int(np.sum(np.diff(c[-21:]) > 0)) if len(c) >= 21 else 10
-        tot_win = float(np.clip(r20 / 20.0 * 100.0 * 0.35 + qm["q_tunnel"] * 0.40 + ms["kyle_stealth"] * 0.25, 50.0, 97.8))
+        base_tech_score = float(np.clip((r20 / 20.0) * 100.0 * 0.65 + (q_adv["eff_pct"] * 0.35), 10.0, 95.0))
+        inst_flow_score = float(np.clip(50.0 + ofi_z * 14.0 + (0.5 - q_adv["vpin"]) * 35.0, 10.0, 98.0))
+
+        weighted_sum = base_tech_score * 1.0
+        total_weight = 1.0
+
+        if bal:
+            weighted_sum += float(qm["q_score"]) * 0.85
+            total_weight += 0.85
+        if bms:
+            weighted_sum += float(ms["ms_score"]) * 0.80
+            total_weight += 0.80
+        if bi:
+            weighted_sum += inst_flow_score * 0.75
+            total_weight += 0.75
+        if b5:
+            weighted_sum += float(q_adv["board5ch_score"]) * 0.65
+            total_weight += 0.65
+
+        tot_win = float(np.clip(weighted_sum / total_weight, 5.0, 97.8))
 
         p_win_prob = tot_win / 100.0
         b_payoff = max(q_adv["payoff"], 0.1)
         kelly_raw = max(0.0, p_win_prob - ((1.0 - p_win_prob) / b_payoff)) * 100.0
         kelly_pct = round(float(np.clip(kelly_raw, 0.0, 35.0)), 1)
 
-        sf = ((2.0 * c - h - l) / np.maximum(h - l, 1e-4)) * v
-        ofi_z = float(np.clip((np.mean(sf[-5:]) - np.mean(sf[-20:])) / max(float(np.std(sf[-20:])), 1.0), -3.0, 3.0))
         m_bias = (float(macro["sox"]["diff"]) * 1.25 if "sox" in macro and ("半導体" in genre or "NVDA" in code) else 0.0) + (float(macro["nk_fut"]["diff"]) * 0.85 if "nk_fut" in macro and ".T" in code else 0.0)
-
-        expect_pct = float(np.clip(56.0 + (tot_win - 50.0) * 0.65 + ofi_z * 4.2 + m_bias * 2.2, 42.0, 99.8))
+        expect_pct = float(np.clip(tot_win * 0.85 + ofi_z * 3.8 + m_bias * 2.0 + 6.0, 5.0, 99.5))
         edge = round((expect_pct - 50.0) / 10.0 + max(ofi_z, 0.0), 2)
 
-        if bagi_q and qm["q_tunnel"] > 75.0:
-            expect_pct = min(99.8, expect_pct + (qm["q_tunnel"] - 75.0) * 0.48)
-            qm["q_score"] = min(99, qm["q_score"] + 6); qm["q_state"] = "🧠 AGI×量子トンネル超連鎖"
-        if bhft and ofi_z > 0.4:
-            expect_pct = min(99.9, expect_pct + ofi_z * 4.8); tot_win = min(99.2, tot_win + ofi_z * 2.6); edge = round(edge + ofi_z * 1.6, 2)
-            ms["ms_score"] = min(99, ms["ms_score"] + 8); ms["ms_regime"] = "⚠️ 極秘HFTステルス大口吸収(先行検知)"
+        if bagi_q and bal and qm["q_tunnel"] >= 65.0:
+            expect_pct = min(99.5, expect_pct + (qm["q_tunnel"] - 65.0) * 0.35)
+            qm["q_score"] = min(99, qm["q_score"] + 5)
+            qm["q_state"] = "🧠 AGI×WKB量子トンネル統合連動"
+        if bhft and (bi or bms) and ofi_z > 0.3:
+            expect_pct = min(99.8, expect_pct + ofi_z * 4.2)
+            tot_win = min(99.0, tot_win + ofi_z * 2.2)
+            edge = round(edge + ofi_z * 1.4, 2)
+            ms["ms_score"] = min(99, ms["ms_score"] + 6)
+            ms["ms_regime"] = "⚠️ 大口機関バケット先行吸収推計 (BVC-VPIN / Amihud)"
 
         pgap = round(float(np.clip(ofi_z * 0.65 + m_bias * 0.45, -2.5, 3.8)), 2)
         pest = cv * (1.0 + pgap / 100.0)
         st_p = style.split(" ")[1] if " " in style else "デイトレード"
         mul_tp, mul_sl = {"スキャルピング": (0.48, 0.85), "スイングトレード": (1.65, 1.35), "バイ＆ホールド": (2.8, 1.8)}.get(st_p, (0.82, 1.15))
+        st_mul = {"スキャルピング": 1.5, "スイングトレード": 1.2, "バイ＆ホールド": 0.9}.get(st_p, 1.65)
         tpv, slv = cv + (atrv * mul_tp), cv - (atrv * mul_sl)
 
-        rm = total_capital * (risk_tolerance_pct / 100.0)
-        base_sh = max(1, int(rm / max(cv - slv, cv * 0.005)))
-        fp = lambda val: f"{val:,.0f}円" if ".T" in code else f"${val:,.2f}"
+        is_jp = ".T" in code
+        lot_info = compute_japanese_lot_sizing(cv, slv, total_capital, risk_tolerance_pct, is_jp, st_mul)
+        fp = lambda val: f"{val:,.0f}円" if is_jp else f"${val:,.2f}"
 
         rel_news_obj = next((n for n in all_impact_news if code in n.get("detail", {}).get("related_codes", [])), None)
         rel_news_title = rel_news_obj["title"] if rel_news_obj else ""
 
         strat = select_dynamic_strategy(
             code.replace(".T", ""), style, tot_win, round(expect_pct, 1), ofi_z, q_adv["vpin"], q_adv["yz_vol"],
-            q_adv["cvar95"], q_adv["rsi"], 0.8, base_sh, fp(pest), fp(vwap_today),
+            q_adv["cvar95"], q_adv["rsi"], 0.8, lot_info, fp(pest), fp(vwap_today),
             f"{fp(tpv)}(+{round((tpv-cv)/max(cv,1e-4)*100,1)}%)", f"{fp(slv)}({round((slv-cv)/max(cv,1e-4)*100,1)}%)",
             kelly_pct, qm, ms, name=name, theme=theme, rel_news_title=rel_news_title, pgap=pgap
         )
 
         forward_test = record_and_verify_daily_Forward_test(
-            df, code, strat, pest, vwap_today, tpv, slv, strat["adj_shares"], style,
+            df, code, strat, pest, vwap_today, tpv, slv, lot_info["shares"], style,
             total_capital=total_capital, risk_tolerance_pct=risk_tolerance_pct
         )
 
-        t_lbl, t_col, t_bg = ("【Lv.10：🔥S級・全ツッパ】", "#fff", "linear-gradient(90deg,#7e22ce,#dc2626)") if expect_pct > 92 else (("【Lv.9：⚡超強気買い】", "#fff", "linear-gradient(90deg,#0369a1,#1d4ed8)") if expect_pct > 85 else ("【Lv.7：⭕押し目買い】", "#e2e8f0", "linear-gradient(90deg,#334155,#1e293b)"))
+        # 正直なティア分類（50%未満は明確に下落警戒・見送り表示）
+        if expect_pct >= 90.0:
+            t_num, t_lbl, t_col, t_bg = 10, "【Lv.10：🔥S級・全力突破】", "#fff", "linear-gradient(90deg,#7e22ce,#dc2626)"
+        elif expect_pct >= 80.0:
+            t_num, t_lbl, t_col, t_bg = 9, "【Lv.9：⚡超強気順張り】", "#fff", "linear-gradient(90deg,#0369a1,#1d4ed8)"
+        elif expect_pct >= 65.0:
+            t_num, t_lbl, t_col, t_bg = 7, "【Lv.7：⭕押し目優位】", "#e2e8f0", "linear-gradient(90deg,#065f46,#0f766e)"
+        elif expect_pct >= 50.0:
+            t_num, t_lbl, t_col, t_bg = 5, "【Lv.5：⚖️中立・様子見監視】", "#e2e8f0", "linear-gradient(90deg,#334155,#1e293b)"
+        else:
+            t_num, t_lbl, t_col, t_bg = 3, "【Lv.3：⚠️見送り・下落警戒】", "#fecaca", "linear-gradient(90deg,#7f1d1d,#450a0a)"
 
         return {
             "full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, "price": fp(cv), "raw_close": cv,
             "tp_price": fp(tpv), "tp_pct": round((tpv - cv) / max(cv, 1e-4) * 100, 1), "sl_price": fp(slv), "sl_pct": round((slv - cv) / max(cv, 1e-4) * 100, 1), "vwap_price": fp(vwap_today),
-            "inst_score": int(np.clip(ms["ms_score"] + ofi_z * 5, 50, 99)), "vpin": q_adv["vpin"], "ofi_z": round(ofi_z, 2), "yz_vol": q_adv["yz_vol"], "cvar95": q_adv["cvar95"], "eff_pct": q_adv["eff_pct"], "kelly_pct": kelly_pct,
+            "inst_score": int(np.clip(round((ms["ms_score"] + inst_flow_score) * 0.5), 10, 99)), "vpin": q_adv["vpin"], "ofi_z": round(ofi_z, 2), "yz_vol": q_adv["yz_vol"], "cvar95": q_adv["cvar95"], "eff_pct": q_adv["eff_pct"], "kelly_pct": kelly_pct,
             "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"],
-            "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_stealth": ms["kyle_stealth"], "luld_magnet": ms["luld_magnet"], "ms_regime": ms["ms_regime"],
+            "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_lambda": ms["kyle_lambda"], "kyle_stealth": ms["kyle_stealth"], "luld_magnet": ms["luld_magnet"], "ms_regime": ms["ms_regime"],
             "expect_pct": round(expect_pct, 1), "board5ch_score": q_adv["board5ch_score"], "rvol": q_adv["rvol"], "news_hits": news_hits, "pts_est_price": fp(pest), "pts_gap_pct": pgap, "diff": round(day_ret, 2),
-            "prob": round(float(np.clip(50.0 + pgap * 10.0, 30.0, 85.0)), 1), "intraday_win_rate": round(float(np.clip(tot_win * 0.95, 40.0, 95.0)), 1),
-            "trend_win_rate": round(float(np.clip(tot_win * 1.05, 45.0, 98.0)), 1), "total_win_rate": round(tot_win, 1), "count": f"{r20}/20回",
-            "rsi": q_adv["rsi"], "payoff": q_adv["payoff"], "edge": edge, "ai_score": int(np.clip(expect_pct * 0.9 + 5, 52, 99)), "survival_power": 90.0,
-            "tier_num": 10 if expect_pct > 92 else (9 if expect_pct > 85 else 7), "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg,
-            "lot_info": {"shares": strat["adj_shares"], "position_value": strat["adj_shares"] * cv, "risk_amount": rm}, "strat": strat,
+            "prob": round(float(np.clip(50.0 + pgap * 10.0, 15.0, 88.0)), 1), "intraday_win_rate": round(float(np.clip(tot_win * 0.95, 10.0, 95.0)), 1),
+            "trend_win_rate": round(float(np.clip(tot_win * 1.02, 10.0, 98.0)), 1), "total_win_rate": round(tot_win, 1), "count": f"{r20}/20回",
+            "rsi": q_adv["rsi"], "payoff": q_adv["payoff"], "edge": edge, "ai_score": int(np.clip(round(expect_pct * 0.92 + 4), 10, 99)), "survival_power": 90.0,
+            "tier_num": t_num, "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg,
+            "lot_info": lot_info, "strat": strat,
             "forward_test": forward_test
         }
     except Exception as e:
@@ -2276,13 +2594,24 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         return None
 
 # ==========================================
-# 14. 市場データスキャン
+# 14. 市場データスキャン（15d 5m 安定取得＆自動フォールバック）
 # ==========================================
 @st.cache_data(ttl=90)
 def fetch_pool_batch(macro, buzz_map, style, bi, b5, bal, bms, bagi_q, bhft, total_cap=1000000, risk_pct=2.0):
     codes = [c for c, _, _, _ in GLOBAL_MARKET_TICKERS]
-    try: raw = yf.download(codes, period="1mo", interval="5m", group_by="ticker", threads=True, progress=False, timeout=5.0)
-    except Exception as e: record_system_error("fetch_pool_batch:download", e); raw = {}
+    raw = {}
+    try:
+        raw = yf.download(codes, period="15d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=5.0)
+        if raw is None or raw.empty:
+            raw = yf.download(codes, period="7d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=5.0)
+    except Exception as e:
+        record_system_error("fetch_pool_batch:download", e)
+        try:
+            raw = yf.download(codes, period="7d", interval="5m", group_by="ticker", threads=True, progress=False, timeout=5.0)
+        except Exception as e2:
+            record_system_error("fetch_pool_batch:fallback", e2)
+            raw = {}
+
     gmap, alist, seen = {g: [] for g in DYNAMIC_GENRES}, [], set()
 
     def _w(c, n, g, t):
@@ -2311,7 +2640,11 @@ def fetch_one(code, macro, buzz_map, style, bi, b5, bal, bms, bagi_q, bhft, tota
         local_buzz = dict(buzz_map or {})
         if code not in local_buzz:
             local_buzz[code] = {"news_hits": len(search_single_query(f"{inf['name']} 株", 5))}
-        return analyze_df(yf.Ticker(code).history(period="1mo", interval="5m"), code, inf["name"], inf["theme"], inf["genre"], macro, local_buzz, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_tolerance_pct=risk_pct)
+        tkr = yf.Ticker(code)
+        hist_df = tkr.history(period="15d", interval="5m")
+        if hist_df is None or hist_df.empty:
+            hist_df = tkr.history(period="7d", interval="5m")
+        return analyze_df(hist_df, code, inf["name"], inf["theme"], inf["genre"], macro, local_buzz, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_tolerance_pct=risk_pct)
     except Exception as e:
         record_system_error("fetch_one", e, f"Code: {code}")
         return None
@@ -2325,7 +2658,7 @@ st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content
 
 _cache_pool_key = f"pool_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
 if _cache_pool_key not in st.session_state:
-    with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】過去1ヶ月5分足・全市場ユニバースを実測スキャン＆10営業日検証中..."):
+    with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】直近15営業日5分足・全市場ユニバースを実測スキャン＆10営業日厳格検証中..."):
         g_res, all_res = fetch_pool_batch(macro_info, market_buzz_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b, total_cap=total_capital, risk_pct=risk_tolerance_pct)
         st.session_state[_cache_pool_key] = (g_res, all_res)
 else:
@@ -2487,14 +2820,14 @@ cin = c1.text_input("🔍 銘柄検索", placeholder="コード入力 (例: 6920
 if c2.button("🔍 診断", use_container_width=True) and cin: st.session_state["custom_search_code"] = clean_k(cin)
 
 if st.session_state.get("custom_search_code"):
-    cr = fetch_one(st.session_state["custom_search_code"], macro_info, market_buzz_map, investment_style, True, True, True, True, "agi_q" in ac_b, "hft_front" in ac_b, total_cap=total_capital, risk_pct=risk_tolerance_pct)
+    cr = fetch_one(st.session_state["custom_search_code"], macro_info, market_buzz_map, investment_style, "inst" in ac_b, "mom" in ac_b, "algo" in ac_b, "ms" in ac_b, "agi_q" in ac_b, "hft_front" in ac_b, total_cap=total_capital, risk_pct=risk_tolerance_pct)
     if cr:
         render_card(cr, is_custom=True, kp="custom")
         if st.button("✖️ 閉じる", use_container_width=True): st.session_state["custom_search_code"] = ""; st.rerun()
 
 def cut_stocks(slist, pct): return slist[:max(3, int(round(len(slist) * (pct / 100.0))))] if slist else []
 
-cats = ["🏆 総合TOP5", "⚛️ 量子トンネル突破TOP10", "🏛️ 機関最新ミクロ構造TOP10", "🚨 重大ニュース＆連動株", "🎟️ 直近IPO・グロース実測分析", "🏦 機関VPIN・OFI", "🔥 出来高サージ＆市場注目度", "📋 監視シート"] + [f"📂 {g}" for g in DYNAMIC_GENRES]
+cats = ["🏆 総合TOP5", "⚛️ 量子トンネル突破TOP10", "🏛️ 機関最新ミクロ構造TOP10", "🚨 重大ニュース＆連動株", "🎟️ 直近IPO・グロース実測分析", "🏦 機関BVC-VPIN・CLV資金フロー", "🔥 出来高サージ＆市場注目度", "📋 監視シート"] + [f"📂 {g}" for g in DYNAMIC_GENRES]
 st.markdown(f'<div class="compact-bar-label"><span>📂 QUANTUM STRATEGY ({investment_style.split(" ")[1]})</span></div>', unsafe_allow_html=True)
 if st.session_state.get("active_category") not in cats: st.session_state["active_category"] = "🏆 総合TOP5"
 
@@ -2558,7 +2891,7 @@ elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
                 st.rerun()
     else:
         st.warning("⚠️ 市場データの取得に失敗しました。しばらくしてから再試行してください。")
-elif sel_cat == "🏦 機関VPIN・OFI":
+elif sel_cat == "🏦 機関BVC-VPIN・CLV資金フロー":
     for i, r in enumerate(sorted(all_res, key=lambda x: x["inst_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
 elif sel_cat == "🔥 出来高サージ＆市場注目度":
     for i, r in enumerate(sorted(all_res, key=lambda x: x["board5ch_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
@@ -2576,4 +2909,4 @@ elif sel_cat.startswith("📂 "):
 # ==========================================
 # 17. 免責事項（法的表示）
 # ==========================================
-st.markdown('<div class="disclaimer-banner"><b>⚖️ 重要免責事項・法的表示</b><br>本システム「YAMASHISHI LAB」が提供するすべての指標、量子力学波動モデル(QWM-7)、期待度パーセンテージ、AI合議ログ、および売買プランは、過去の市場データおよび数理アルゴリズムに基づく研究シミュレーション・情報提供を目的としたものであり、特定の有価証券の売買推奨や投資助言（投資助言・代理業等）を行うものではありません。株式投資には元本割れや市場変動のリスクが伴います。最終的な投資判断および資金配分は、必ず利用者ご自身の自己責任にて行っていただけますようお願い申し上げます。</div>', unsafe_allow_html=True)
+st.markdown('<div class="disclaimer-banner"><b>⚖️ 重要免責事項・法的表示</b><br>本システム「YAMASHISHI LAB」が提供するすべての指標、量子力学波動モデル(QWM-7 / WKB近似)、BVC-VPIN・Kyle-λ推定値、期待度パーセンテージ、AI合議ログ、および売買プランは、過去の四本値・出来高(OHLCV)データおよび数理アルゴリズムに基づく研究シミュレーション・情報提供を目的としたものであり、特定の有価証券の売買推奨や投資助言（投資助言・代理業等）を行うものではありません。株式投資には元本割れや市場変動のリスクが伴います。最終的な投資判断および資金配分は、必ず利用者ご自身の自己責任にて行っていただけますようお願い申し上げます。</div>', unsafe_allow_html=True)
