@@ -557,10 +557,10 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
     rhfp, cfp = get_raw_header_fp(), get_client_fp()
 
     if mode == "register":
-        lbl = "✅ 生体・ワンタップ認証 登録済" if db.get(user_email, {}).get("bio_enabled") else "🧬 この端末をワンタップ登録"
+        lbl = "✅ 端末トークン・ワンタップ登録済" if db.get(user_email, {}).get("bio_enabled") else "🔑 この端末をワンタップ登録"
         if st.button(lbl, key=f"bio_{user_email}", use_container_width=True):
             register_biometric_device_db(user_email, bio_token)
-            st.success("✅ 端末認証を登録しました")
+            st.success("✅ 端末トークン認証を登録しました")
         return
 
     bio_map = sec.get("device_bio_map", {})
@@ -578,7 +578,7 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
             adm_k = ADMIN_EMAIL.strip().lower()
             mp = {"email": adm_k, "token": gen_tok(adm_k, "session_keep"), "fp": cfp}
 
-    if st.button("🧬 登録済み端末：生体認証 / ワンタップで即ログイン", use_container_width=True, type="primary"):
+    if st.button("🔑 登録済み端末：端末トークン / ワンタップで即ログイン", use_container_width=True, type="primary"):
         if mp and mp.get("email"):
             tem = mp["email"].strip().lower(); urec = db.get(tem, {})
             is_b, _ = check_and_log_ban_spoof(tem, urec.get("name", ""), cfp, rhfp, urec.get("pin_hash", ""), "ワンタップログイン")
@@ -689,7 +689,7 @@ def check_auth():
         return True
 
     st.markdown('<style>section[data-testid="stSidebar"]{display:none!important;transform:translateX(-150%)!important;}#yamashishi-floating-sidebar-btn{display:none!important;}</style>', unsafe_allow_html=True)
-    st.markdown('<div class="glass-header" style="text-align:center;padding:18px 12px;"><div class="brand-luxury">YAMASHISHI LAB</div><div class="brand-sub" style="margin-top:4px;">QUANTUM WAVEFUNCTION MULTI-AGENT TERMINAL</div><div style="display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;"><span class="quantum-badge">⚛️ 究極量子力学波動エンジン QWM-7 (Path-Integral)</span><span class="inst-badge">🏛️ 機関最新ミクロ構造 Hasbrouck-λ・MF-DFA Hurst</span><span class="pill-badge" style="color:#10b981;border-color:rgba(16,185,129,0.3);">🧬 生体認証対応</span></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="glass-header" style="text-align:center;padding:18px 12px;"><div class="brand-luxury">YAMASHISHI LAB</div><div class="brand-sub" style="margin-top:4px;">QUANTUM WAVEFUNCTION MULTI-AGENT TERMINAL</div><div style="display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;"><span class="quantum-badge">⚛️ 量子波動モデル QWM-7 (WKB Tunneling)</span><span class="inst-badge">🏛️ 機関ミクロ構造 Hasbrouck-λ・DFA Hurst</span><span class="pill-badge" style="color:#10b981;border-color:rgba(16,185,129,0.3);">🔑 端末トークン認証対応</span></div></div>', unsafe_allow_html=True)
     render_biometric_bridge(mode="login")
 
     tab_login, tab_apply, tab_vault = st.tabs(["🔑 コードログイン", "📩 新規会員登録申請", "🔐 承認確認・暗号化コード照会"])
@@ -960,7 +960,7 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
         )
         risk_note = "米長期金利の急騰や為替の急激な円高進行（1ドルあたり1円以上の急変）、および寄り付きで+4%以上の過度なギャップアップとなった場合は『材料出尽くしの寄り天（大口の利食いぶつけ）』に警戒。必ずVWAP割れに逆指値を置くこと。"
         action_guide = (
-            "① 【寄り付き前（8:45〜9:00）】板気配のOVER/UNDER比率と理論寄付き価格を確認。ギャップアップが+2.5%以内なら寄り付き成行で追随。\n"
+            "① 【寄り付き前（8:45〜9:00）】板気配のOVER/UNDER比率とOFI推計寄付き目安を確認。ギャップアップが+2.5%以内なら寄り付き成行で追随。\n"
             "② 【大幅ギャップアップ時】飛びつき買いは厳禁。9:15〜9:30の最初の押し目で株価がVWAPライン上で下げ止まり、歩み値に大口買い（数千〜数万株単位）が連続点灯した瞬間を狙い撃つ。\n"
             "③ 【出遅れ連動狙い】6857（アドバンテスト）や8035（東エレク）がすでに高騰している場合、連動性の高い5803（フジクラ）や6146（ディスコ）の初動ブレイクを叩くのが最もリスクリワード比が高い。"
         )
@@ -1251,7 +1251,7 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
         return [
             {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": "agree", "text": f"おいおい、{r['name']}の板気配見てみろよ！相対出来高（RVOL）が{r.get('rvol', 1.0)}倍まで膨らんでアグレッサーが喰い上がってきてんぞ！"},
             {"speaker": f"{sn['icon']} {sn['name']}", "score": sn['score'], "tone": "doubt", "text": "相変わらずイナゴ脳だなｗ 寄付きの成り買いなんて大口の売り抜けの格好の的だろ。直近で飛びついた養分が上に捕まってるの忘れてんのか？"},
-            {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"客観的実測データに基づけば、現在の期待値は{r['expect_pct']}%で推移しており、当日VWAP（{r['vwap_price']}）をサポートラインとした反発モメンタムが統計的に有意です。ただし逆指値（{r['sl_price']}）の厳守が前提条件です。"},
+            {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"客観的実測データに基づけば、現在の期待度は{r['expect_pct']}%で推移しており、当日VWAP（{r['vwap_price']}）をサポートラインとした反発モメンタムが統計的に有意です。ただし逆指値（{r['sl_price']}）の厳守が前提条件です。"},
             {"speaker": f"{vk['icon']} {vk['name']}", "score": vk['score'], "tone": "agree", "text": f"寄り直後の乱高下を秒速で抜くのが一番勝率高い！目標値（{r['tp_price']}）付近まできたら色気出さずにサクッと利確して逃げるぞ。"},
             {"speaker": f"{nx['icon']} {nx['name']}", "score": nx['score'], "tone": "normal", "text": f"両論あるが、{st_style}のセオリー通りまずは推奨ロット（{r['lot_info']['shares']:,}株）以内でリスクを固定しろ。計画外のフルレバ特攻だけは絶対に許さん。"}
         ]
@@ -1294,7 +1294,7 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
         ]
     t = [
         {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": "agree", "text": f"迷ってモタモタしてる間に気配値が切り上がって置いてかれるぞ！勢いがある時は成行で飛び乗って、目標値（{r['tp_price']}）まで一気に駆け抜けるのがデイトレの醍醐味だろ！"},
-        {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"客観的には当日VWAP（{r['vwap_price']}）に対する価格乖離とOFI（板注文フロー）が連動しています。エントリーの勝率を高めるには、寄付き直後の乱高下が一段落した後の押し目を確認することが推奨されます。"}
+        {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"客観的には当日VWAP（{r['vwap_price']}）に対する価格乖離とOFI（板注文フロー）が連動しています。エントリーの優位性を高めるには、寄付き直後の乱高下が一段落した後の押し目を確認することが推奨されます。"}
     ]
     if random.random() > 0.4: t.append({"speaker": f"{vk['icon']} {vk['name']}", "score": vk['score'], "tone": "agree", "text": f"スピード重視！もし思惑と逆に動いて逆指値（{r['sl_price']}）を割ったら、1秒も躊躇せず全投げして逃げろよ！"})
     return t
@@ -1519,10 +1519,10 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
         f'<div class="badge-single-line">{rk_h}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ 量子Q {r["q_score"]}点</span><span class="inst-badge">🏛️ 機関ミクロ {r["ms_score"]}点</span></div>'
         f'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div style="min-width:0;flex:1;"><div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;"><span style="font-size:16px;font-weight:800;color:#f8fafc;white-space:nowrap;">{html.escape(r["name"])}</span> <span style="font-size:11.5px;color:#94a3b8;white-space:nowrap;">({r["code"]} / {html.escape(r["genre"])})</span></div><div style="font-size:11px;color:#94a3b8;margin-top:3px;word-break:keep-all;">{html.escape(r["theme"])} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span>)</div></div>'
-        f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;">🔥 期待度 / 勝率</div><div style="white-space:nowrap;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}%</span></div></div></div>'
+        f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;">🔥 期待度 / テク強度</div><div style="white-space:nowrap;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}pt</span></div></div></div>'
         f'{n_banner}'
-        f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ 量子トンネル</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ Kyle吸収</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 翌朝GU / 陽線</div><div style="font-size:12px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
-        f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 理論寄付き</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
+        f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ 量子トンネル</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ Kyle吸収</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 GU指数 / 陽線強度</div><div style="font-size:12px;font-weight:700;">{r["prob"]} / {r["intraday_win_rate"]}</div></div></div>'
+        f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">🌅 OFI推計寄付き目安</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">🎯 利確目標</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} (+{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">🛡️ 逆指値(損切)</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({r["sl_pct"]}%)</div></div></div>'
         f'<div class="sizing-box"><span>📦 <b>推奨ロット: {lot["shares"]:,}株</b> ({st_info["risk_posture"].split("（")[0]}) ｜ 投資額 {lot["position_value"]:,.0f}円</span><span>当日VWAP: <b>{r["vwap_price"]}</b></span></div>'
         f'{ft_bar}'
         f'<details class="quant-detail-drawer"><summary>⚛️ 量子QWM-7 × 機関戦略詳細（実測クオンツ指標）</summary><div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}<br>📊 <b>実測クオンツ値:</b> RSI(14)={r.get("rsi", 50)}% ｜ VPIN={r.get("vpin", 0.5)} ｜ CVaR(99%)={r.get("cvar95", 2.5)}% ｜ YZ年率Vol={round(r.get("yz_vol", 0.0)*100, 1)}% ｜ 効率性ER={r.get("eff_pct", 50)}% ｜ Payoff={r.get("payoff", 1.0)} (Kelly={r.get("kelly_pct", 0.0)}%) ｜ 🔥 出来高サージ・市場注目度={r.get("board5ch_score", 50)}点 (RVOL {r.get("rvol", 1.0)}倍 / 報道{r.get("news_hits", 0)}件)</div></details></div>',
@@ -1537,7 +1537,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
 # ==========================================
 @st.cache_data(ttl=300)
 def fetch_real_market_buzz() -> dict:
-    """GoogleニュースRSSから各銘柄の実測報道件数を取得（MD5乱数・偽5ch指標の完全廃止）"""
+    """GoogleニュースRSSから各銘柄の実測報道件数を取得"""
     buzz_map = {}
 
     def _query_buzz(item):
@@ -1643,11 +1643,9 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
         dc = daily_df["Close"].values.astype(float)
         dv = daily_df["Volume"].values.astype(float)
 
-        # 相対出来高 (RVOL: 直近営業日出来高 ÷ 過去5営業日平均出来高)
         base_dv = float(np.mean(dv[-6:-1])) if len(dv) >= 6 else float(np.mean(dv[:-1]))
         rvol = round(float(dv[-1]) / max(base_dv, 1.0), 2)
 
-        # Yang-Zhang ボラティリティ推定量
         n_yz = min(14, len(dc) - 1)
         if n_yz >= 2:
             o_sub = do[-n_yz:]
@@ -1670,7 +1668,6 @@ def compute_advanced_quant_indicators(c: np.ndarray, h: np.ndarray, l: np.ndarra
             yz_var = max(sigma_o2 + k_yz * sigma_c2 + (1.0 - k_yz) * sigma_rs2, 1e-6)
             yz_vol = round(float(np.clip(np.sqrt(yz_var * 252.0), 0.08, 2.50)), 2)
 
-    # 実測出来高サージ・ニュース熱量スコア（MD5乱数完全廃止）
     surge_score = int(np.clip(45.0 + min(rvol, 4.0) * 14.0 + min(news_hits, 5) * 4.5 + abs(rets[-1]) * 180.0, 35, 99))
 
     return {
@@ -1736,18 +1733,18 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
         algo_name = f"⚠️ [{pfx} / Type-B] 大幅GU過熱・寄り天回避の初押し待ち型"
         risk_posture = f"🛡️ 寄り天回避・初押し指値待ち（ <b>{sh:,}株</b> 指値待機）"
         core_logic = (
-            f"【{html.escape(disp_name)}】は理論寄付きギャップ({pgap:+.2f}%)・RSI({rsi}%)と短期過熱圏に突入。"
+            f"【{html.escape(disp_name)}】はOFI推計寄付きギャップ({pgap:+.2f}%)・RSI({rsi}%)と短期過熱圏に突入。"
             f"朝9:00の成行飛びつきは機関投資家の『寄り天利食いぶつけ』の標的となるため、9:00〜9:15は完全に静観しVWAP（{vwap_str}）への回帰反発のみを叩く防衛戦術。"
         )
         step_plan = (
-            f"① 【9:00〜9:15（絶対静観フェーズ）】朝イチの成行飛びつき買いは厳禁。ギャップアップ（理論寄付き<b>{pest_str}</b>）後の利確売り一巡を冷静に見送る。<br>"
+            f"① 【9:00〜9:15（絶対静観フェーズ）】朝イチの成行飛びつき買いは厳禁。ギャップアップ（OFI推計寄付き目安<b>{pest_str}</b>）後の利確売り一巡を冷静に見送る。<br>"
             f"② 【9:15〜9:45（初押し指値エントリー）】株価がVWAP（<b>{vwap_str}</b>）水準まで降りて下げ止まりを確認した瞬間、<b>{sh:,}株</b>を指値でエントリー。<br>"
             f"③ 【撤退と利確】下抜け時は<b>{sl_str}</b>で即座に機械損切り。反発成功時は<b>{dur_str}</b>の保有枠で<b>{tp_str}</b>を刈り取る。"
         )
         beginner_html = (
             f"{beg_intro}<br>"
             f"<b>【今回の戦術：朝イチ飛びつき禁止・初押し待ち伏せ買い】</b><br>"
-            f"この銘柄は前評判が高く朝から値段が吊り上がっている（ギャップアップ {pgap:+.2f}% / RSI {rsi}%）ため、9:00直後に飛びつくと高値掴み（寄り天）になる危険があります。<br>"
+            f"この銘柄は前評判が高く朝から値段が吊り上がっている（推計ギャップアップ {pgap:+.2f}% / RSI {rsi}%）ため、9:00直後に飛びつくと高値掴み（寄り天）になる危険があります。<br>"
             f"・<b>朝9:00〜9:15：</b> 買わずに画面を見て我慢します。<br>"
             f"・<b>朝9:15以降：</b> 一度値段が落ち着いて<b>{vwap_str}</b>付近まで下がったら<b>{sh:,}株</b>を指値で買い！<br>"
             f"・万一さらに下がれば<b>{sl_str}</b>で自動損切り、上がれば<b>{tp_str}</b>で利確（目安：<b>{dur_str}</b>）。"
@@ -1782,7 +1779,7 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
         risk_posture = f"⚡ ブレイク全玉突破（節目上抜け時に <b>{sh:,}株</b> 一気乗せ）"
         core_logic = (
             f"【{html.escape(disp_name)}】の量子トンネル透過率({qm['q_tunnel']}%)・量子スコア({qm['q_score']}点)が臨界点を突破。"
-            f"上値抵抗線（理論寄付き<b>{pest_str}</b>の+0.5%上）を上抜けた瞬間に加速する特異点を逆指値買い注文で捉える。"
+            f"上値抵抗線（OFI推計寄付き目安<b>{pest_str}</b>の+0.5%上）を上抜けた瞬間に加速する特異点を逆指値買い注文で捉える。"
         )
         step_plan = (
             f"① 【8:55 逆指値買い予約】上値抵抗線（<b>{pest_str}</b>の+0.5%上）に『逆指値成行買い』で<b>{sh:,}株</b>をトリガー設定し、上抜け前のダマシ下落を完全回避。<br>"
@@ -1833,7 +1830,7 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
         "beginner_html": beginner_html
     }
 
-def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat: dict, pest: float, vwap20: float, tpv: float, slv: float, shares: int, style: str) -> dict:
+def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat: dict, pest: float, vwap20: float, tpv: float, slv: float, shares: int, style: str, total_capital: float = 1000000.0, risk_tolerance_pct: float = 2.0) -> dict:
     is_jp = ".T" in full_code
     fp = lambda val: f"{val:,.0f}円" if is_jp else f"${val:,.2f}"
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -1850,10 +1847,10 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     if not isinstance(stock_ledger.get("verified"), dict):
         stock_ledger["verified"] = {}
 
-    # 改ざん排除・10日間ガチ検証バージョンへ強制リセット
-    if stock_ledger.get("algo_ver") != "QWM7_HONEST_10D_V1":
+    # ルックアヘッド・バイアス解消済みの厳格検証バージョンへ更新
+    if stock_ledger.get("algo_ver") != "QWM7_HONEST_10D_V2":
         stock_ledger["verified"] = {}
-        stock_ledger["algo_ver"] = "QWM7_HONEST_10D_V1"
+        stock_ledger["algo_ver"] = "QWM7_HONEST_10D_V2"
 
     # 本日分の事前シグナル記録
     stock_ledger["signals"][today_str] = {
@@ -1869,6 +1866,8 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
 
     st_p = style.split(" ")[1] if " " in style else "デイトレード"
     mul_tp, mul_sl = {"スキャルピング": (0.48, 0.85), "スイングトレード": (1.65, 1.35), "バイ＆ホールド": (2.8, 1.8)}.get(st_p, (0.82, 1.15))
+    st_mul = {"スキャルピング": 1.5, "スイングトレード": 1.2, "バイ＆ホールド": 0.9}.get(st_p, 1.65)
+    risk_money = float(total_capital) * (float(risk_tolerance_pct) / 100.0)
 
     try:
         df_copy = df.copy()
@@ -1896,9 +1895,23 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 p_typ = (prev_bars["High"].values + prev_bars["Low"].values + prev_bars["Close"].values) / 3.0
                 p_vwap = float(np.sum(p_typ * p_vol) / np.sum(p_vol)) if np.sum(p_vol) > 0 else p_close
 
-                # 前日時点の日次レンジ基準ATR
-                p_day_range = max(p_high - p_low, p_close * 0.012)
-                p_atr = p_day_range * 0.45
+                # 前日時点までの日次集計データから当時の14日ATRを厳密に再計算
+                hist_daily = hist_until_prev.groupby("_trade_date").agg(
+                    High=("High", "max"),
+                    Low=("Low", "min"),
+                    Close=("Close", "last")
+                ).sort_index()
+                if len(hist_daily) >= 3:
+                    hd_h = hist_daily["High"].values.astype(float)
+                    hd_l = hist_daily["Low"].values.astype(float)
+                    hd_c = hist_daily["Close"].values.astype(float)
+                    hd_prev_c = np.roll(hd_c, 1)
+                    hd_prev_c[0] = hd_c[0]
+                    tr_hist = np.maximum(hd_h - hd_l, np.maximum(np.abs(hd_h - hd_prev_c), np.abs(hd_l - hd_prev_c)))
+                    p_atr = max(float(np.mean(tr_hist[-14:])) * 0.55, p_close * 0.008)
+                else:
+                    p_day_range = max(p_high - p_low, p_close * 0.012)
+                    p_atr = max(p_day_range * 0.55, p_close * 0.008)
 
                 saved_sig = stock_ledger["signals"].get(prev_d)
                 if saved_sig:
@@ -1907,9 +1920,9 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                     sig_plan_px = float(saved_sig.get("plan_entry_price", p_vwap))
                     sig_tp = float(saved_sig.get("tp_val", p_close + p_atr * mul_tp))
                     sig_sl = float(saved_sig.get("sl_val", p_close - p_atr * mul_sl))
-                    sig_sh = int(saved_sig.get("shares", shares))
+                    sig_sh = int(saved_sig.get("shares", 1))
                 else:
-                    # 前日時点のデータのみから当時の戦術タイプを厳密に再現
+                    # 前日時点のデータのみから当時の戦術タイプ・TP/SL・推奨株数を厳密に再現
                     hc = hist_until_prev["Close"].values.astype(float)
                     hh = hist_until_prev["High"].values.astype(float)
                     hl = hist_until_prev["Low"].values.astype(float)
@@ -1935,7 +1948,9 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
 
                     sig_tp = p_close + (p_atr * mul_tp)
                     sig_sl = p_close - (p_atr * mul_sl)
-                    sig_sh = int(shares)
+                    # 前日時点の終値(p_close)と当時の逆指値幅(p_close - sig_sl)から当時の株数を算出
+                    hist_base_sh = max(1, int(risk_money / max(p_close - sig_sl, p_close * 0.005)))
+                    sig_sh = max(1, int(round(hist_base_sh * st_mul)))
 
                 # =========================================================
                 # 翌営業日（next_d）の5分足を先頭から順番に走査（改ざんゼロ）
@@ -1981,7 +1996,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             part2_done = True
 
                     elif sig_tactic == "Type-B":
-                        # 9:00〜9:15(最初の3本)は静観、4本目以降で前日VWAP以下に降りたら指値約定
                         if pos_shares == 0 and b_i >= 3 and bl <= p_vwap:
                             fill_p = min(bo, p_vwap)
                             pos_shares = sig_sh
@@ -2007,7 +2021,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             eff_sl = avg_entry_px - sl_diff
 
                     elif sig_tactic == "Type-D":
-                        # 節目ブレイク逆指値買い（上抜いた瞬間のみ約定）
                         trigger_px = sig_plan_px
                         if pos_shares == 0 and bh >= trigger_px:
                             fill_p = max(bo, trigger_px)
@@ -2019,7 +2032,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             eff_tp = avg_entry_px + tp_diff
                             eff_sl = avg_entry_px - sl_diff
 
-                    else:  # Type-E（9:05に打診30% → +0.8%上昇確認で残り70%追加）
+                    else:  # Type-E
                         if pos_shares == 0 and b_i == min(1, total_bars - 1):
                             sh_scout = max(1, int(round(sig_sh * 0.3)))
                             pos_shares = sh_scout
@@ -2038,13 +2051,12 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                 avg_entry_px = total_cost / pos_shares
                             part2_done = True
 
-                    # --- 2. ポジション保有中の利確(TP)・損切(SL)判定（改ざんゼロ） ---
+                    # --- 2. ポジション保有中の利確(TP)・損切(SL)判定 ---
                     if pos_shares > 0:
                         hit_tp = (bh >= eff_tp)
                         hit_sl = (bl <= eff_sl)
 
                         if hit_tp and hit_sl:
-                            # 同一5分足で両方到達した場合：陰線または始値がSLに近い場合は厳格にSL(負け)優先
                             if bc < bo or abs(bo - eff_sl) <= abs(eff_tp - bo):
                                 outcome = "🛡️ 逆指値損切 (LOSE)"
                                 exit_px = eff_sl
@@ -2103,7 +2115,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     except Exception as e:
         record_system_error("record_and_verify_daily_Forward_test", e, f"Code: {full_code}")
 
-    # 直近10営業日分を取得
     all_verified = sorted(stock_ledger["verified"].values(), key=lambda x: x.get("date", ""), reverse=True)[:10]
     if len(stock_ledger["verified"]) > 60:
         keep_keys = sorted(stock_ledger["verified"].keys(), reverse=True)[:60]
@@ -2115,7 +2126,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     ledger[full_code] = stock_ledger
     db_set("daily_forward_ledger", ledger)
 
-    # 実際に約定したトレードのみで正直に勝率・損益を集計
     traded_rows = [x for x in all_verified if x.get("is_win") is not None]
     total_days = len(traded_rows)
     win_count = sum(1 for x in traded_rows if x.get("is_win") is True)
@@ -2155,7 +2165,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         else:
             df["_trade_date"] = pd.to_datetime(df.index).strftime("%Y-%m-%d")
 
-        # 日次集計データ（Open, High, Low, Close, Volume）の構築
         daily_df = df.groupby("_trade_date").agg(
             Open=("Open", "first"),
             High=("High", "max"),
@@ -2167,14 +2176,12 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         c, o, h, l, v = [np.asarray(df[col].values, dtype=float).reshape(-1) for col in ["Close", "Open", "High", "Low", "Volume"]]
         cv = float(c[-1])
 
-        # 1. 正確な前日比騰落率（前営業日最終終値 vs 現在値）
         if len(daily_df) >= 2:
             prev_day_close = float(daily_df["Close"].iloc[-2])
             day_ret = float((cv - prev_day_close) / max(prev_day_close, 1e-4) * 100.0)
         else:
             day_ret = float((cv - float(o[0])) / max(float(o[0]), 1e-4) * 100.0)
 
-        # 2. 日次集計ATR（直近14営業日の日足ベース）
         if len(daily_df) >= 3:
             dh = daily_df["High"].values.astype(float)
             dl = daily_df["Low"].values.astype(float)
@@ -2183,13 +2190,11 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
             d_prev_c[0] = dc[0]
             tr_daily = np.maximum(dh - dl, np.maximum(np.abs(dh - d_prev_c), np.abs(dl - d_prev_c)))
             daily_atr_raw = float(np.mean(tr_daily[-14:]))
-            # 日中〜スイングに適した実測ATRスケール
             atrv = max(daily_atr_raw * 0.55, cv * 0.008)
         else:
             prev_c = np.roll(c, 1); prev_c[0] = c[0]
             atrv = float(np.mean(np.maximum(h - l, np.maximum(np.abs(h - prev_c), np.abs(l - prev_c)))[-14:]))
 
-        # 3. 直近営業日1日分（当日寄り付き〜現在まで）の正確な累積VWAP
         latest_date = df["_trade_date"].iloc[-1]
         today_bars = df[df["_trade_date"] == latest_date]
         th = today_bars["High"].values.astype(float)
@@ -2206,7 +2211,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         r20 = int(np.sum(np.diff(c[-21:]) > 0)) if len(c) >= 21 else 10
         tot_win = float(np.clip(r20 / 20.0 * 100.0 * 0.35 + qm["q_tunnel"] * 0.40 + ms["kyle_stealth"] * 0.25, 50.0, 97.8))
 
-        # 4. 実測ペイオフレシオとケリー基準 f* = max(0, p - (1-p)/b) * 100
         p_win_prob = tot_win / 100.0
         b_payoff = max(q_adv["payoff"], 0.1)
         kelly_raw = max(0.0, p_win_prob - ((1.0 - p_win_prob) / b_payoff)) * 100.0
@@ -2246,7 +2250,10 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
             kelly_pct, qm, ms, name=name, theme=theme, rel_news_title=rel_news_title, pgap=pgap
         )
 
-        forward_test = record_and_verify_daily_Forward_test(df, code, strat, pest, vwap_today, tpv, slv, strat["adj_shares"], style)
+        forward_test = record_and_verify_daily_Forward_test(
+            df, code, strat, pest, vwap_today, tpv, slv, strat["adj_shares"], style,
+            total_capital=total_capital, risk_tolerance_pct=risk_tolerance_pct
+        )
 
         t_lbl, t_col, t_bg = ("【Lv.10：🔥S級・全ツッパ】", "#fff", "linear-gradient(90deg,#7e22ce,#dc2626)") if expect_pct > 92 else (("【Lv.9：⚡超強気買い】", "#fff", "linear-gradient(90deg,#0369a1,#1d4ed8)") if expect_pct > 85 else ("【Lv.7：⭕押し目買い】", "#e2e8f0", "linear-gradient(90deg,#334155,#1e293b)"))
 
