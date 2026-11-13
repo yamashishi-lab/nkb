@@ -482,7 +482,7 @@ def _invoke_single_provider(prov: str, mod: str, key: str, sys_p: str, user_p: s
 
         payload = {
             "contents": [{"role": "user", "parts": [{"text": f"{sys_p}\n\n【ユーザー入力】\n{user_p}"}]}],
-            "generationConfig": {"temperature": 0.85, "maxOutputTokens": 1500},
+            "generationConfig": {"temperature": 0.9, "maxOutputTokens": 1800},
             "safetySettings": [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -514,12 +514,11 @@ def _invoke_single_provider(prov: str, mod: str, key: str, sys_p: str, user_p: s
     try:
         if prov == "gemini": return _call_gemini(mod, key)
         elif prov == "claude":
-            d = json.dumps({"model": mod, "max_tokens": 1500, "system": sys_p, "messages": [{"role": "user", "content": user_p}], "temperature": 0.85}).encode("utf-8")
+            d = json.dumps({"model": mod, "max_tokens": 1800, "system": sys_p, "messages": [{"role": "user", "content": user_p}], "temperature": 0.9}).encode("utf-8")
             with urllib.request.urlopen(urllib.request.Request(AI_PROVIDERS[prov][2], data=d, headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=18.0) as r:
                 return json.loads(r.read().decode("utf-8"))["content"][0]["text"]
         else:
-            payload = {"model": mod, "messages": [{"role": "system", "content": sys_p}, {"role": "user", "content": user_p}], "temperature": 0.85}
-            if prov in ["openai", "groq"]: payload["response_format"] = {"type": "json_object"}
+            payload = {"model": mod, "messages": [{"role": "system", "content": sys_p}, {"role": "user", "content": user_p}], "temperature": 0.9}
             with urllib.request.urlopen(urllib.request.Request(AI_PROVIDERS[prov][2], data=json.dumps(payload).encode("utf-8"), headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST"), context=ctx, timeout=18.0) as r:
                 return json.loads(r.read().decode("utf-8"))["choices"][0]["message"]["content"]
     except Exception as e:
@@ -1330,13 +1329,89 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
     is_game = any(gkw in uq for gkw in game_kws)
 
     if not uq:
-        return [
-            {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": "agree", "text": f"おいおい、{r['name']}の5分足CLV資金フロー見てみろよ！相対出来高（RVOL）が{r.get('rvol', 1.0)}倍まで膨らんで買い圧力が優勢になってきてんぞ！"},
-            {"speaker": f"{sn['icon']} {sn['name']}", "score": sn['score'], "tone": "doubt", "text": "相変わらずイナゴ脳だなｗ 寄付きの成り買いなんて大口の売り抜けの格好の的だろ。直近で飛びついた養分が上に捕まってるの忘れてんのか？"},
-            {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"客観的実測データに基づけば、現在の期待度は{r['expect_pct']}%（BVC-VPIN={r.get('vpin', 0.5)} / WKB透過率={r.get('q_tunnel', 50)}%）、当日VWAP（{r['vwap_price']}）を基準とした統計優位性を観測しています。逆指値（{r['sl_price']}）の厳守が前提条件です。"},
-            {"speaker": f"{vk['icon']} {vk['name']}", "score": vk['score'], "tone": "agree", "text": f"寄り直後の乱高下を秒速で抜くのが一番勝率高い！目標値（{r['tp_price']}）付近まできたら色気出さずにサクッと利確して逃げるぞ。"},
-            {"speaker": f"{nx['icon']} {nx['name']}", "score": nx['score'], "tone": "normal", "text": f"両論あるが、{st_style}のセオリー通りまずは推奨ロット（{r['lot_info']['shares']:,}株）以内でリスクを固定しろ。計画外のフルレバ特攻だけは絶対に許さん。"}
+        code_seed = int(hashlib.md5(f"{r['code']}_{r['price']}_{r['diff']}".encode()).hexdigest()[:6], 16)
+        rng = random.Random(code_seed)
+
+        diff_v = float(r.get("diff", 0.0))
+        rsi_v = float(r.get("rsi", 50.0))
+        rvol_v = float(r.get("rvol", 1.0))
+        hurst_v = float(r.get("hurst", 0.5))
+        vpin_v = float(r.get("vpin", 0.5))
+        q_tun = float(r.get("q_tunnel", 50.0))
+        ft_win = float(r.get("forward_test", {}).get("actual_win_rate", 50.0))
+        ft_profit = float(r.get("forward_test", {}).get("total_profit_yen", 0.0))
+        genre_s = r.get("genre", "")
+        theme_s = r.get("theme", "")
+        clean_news = re.sub(r"\(.*?\)", "", web_hits[0]).strip() if web_hits else f"{theme_s}関連の需給思惑"
+
+        # 1. IGNIS (スキャルパー) の銘柄別発言分岐
+        if diff_v >= 2.5 and rvol_v >= 1.3:
+            ig_msg = rng.choice([
+                f"おい見ろよ！{r['name']}が前日比+{diff_v}%でRVOL {rvol_v}倍の出来高急増だ！『{theme_s}』に短期資金が一気に雪崩れ込んでるぞ、上値ブレイクに順張り特攻だ！",
+                f"{r['name']}の買い上がり方がエグい！+{diff_v}%でもまだ全然止まる気配ねえぞ。こういう強い主役株を素直に叩くのが一番儲かるんだよ！"
+            ])
+            ig_tone = "agree"
+        elif diff_v <= -1.5:
+            ig_msg = rng.choice([
+                f"おいおい、{r['name']}が{diff_v}%まで売られてんじゃねえか！パニック投げが一巡した瞬間のリバウンド（自律反発）狙いで小ロット打診するか、VWAP（{r['vwap_price']}）奪還まで待つかだな。",
+                f"{r['name']}が前日比{diff_v}%で掘ってるな…。落ちてくるナイフを素手で掴むなよ、5分足が陽転してTick-Flow Z（現在{r.get('ofi_z',0)}）がプラスに戻るまで指くわえて待て！"
+            ])
+            ig_tone = "doubt"
+        elif rsi_v >= 70.0:
+            ig_msg = f"{r['name']}はRSI {rsi_v}%まで加熱してきてるな！勢いは文句なしだが、今から成行で飛び乗ると高値掴みさせられるぞ。{r['vwap_price']}付近の初押しまで引きつけろ！"
+            ig_tone = "agree"
+        else:
+            ig_msg = rng.choice([
+                f"{r['name']}（{r['code']}）は現在値{r['price']}（前日比{diff_v:+.2f}%）でエネルギー溜めてる段階だな。直近の『{clean_news[:28]}』をきっかけに動意づいたら一気に走るぞ！",
+                f"今日の{r['name']}はRVOL {rvol_v}倍か。まだイナゴが群がる前の静かな板だな。{r['pts_est_price']}の節目を抜けた瞬間に成行で乗る準備だけしとけ！"
+            ])
+            ig_tone = "agree"
+
+        # 2. SENTINEL (冷笑・リスク監視) のセクター＆指標別発言分岐
+        if "半導体" in genre_s:
+            sn_msg = rng.choice([
+                f"半導体セクター（{r['name']}）なんざ米SOX指数とNVDAのご機嫌次第だろｗ 今BVC-VPINが{vpin_v}だし、海外勢のバスケット売りが降ってきたら個人の買いなんか一瞬で吹き飛ぶぞ。",
+                f"また『{theme_s}』で半導体イナゴが騒いでんのかｗ 寄り付きギャップ（推計{r['pts_gap_pct']:+.2f}%）で飛びついた奴から順番に機関のアルゴリズムに狩られるいつものパターンだろ。"
+            ])
+        elif "防衛" in genre_s or "宇宙" in genre_s:
+            sn_msg = rng.choice([
+                f"国策・防衛テーマ（{r['name']}）はヘッドライン一発でアルゴリズムが往復ビンタしてくるからな。材料に踊らされて高値でジャンピングキャッチした養分が上で塩漬けになってるのを忘れるなよｗ",
+                f"{r['name']}みたいな『{theme_s}』銘柄は、ニュースが出た瞬間が短期の天井になりやすいんだよ。逆指値（{r['sl_price']}）を置かずにホールドしてる奴は退場予備軍だな。"
+            ])
+        elif "小型" in genre_s or "グロース" in genre_s:
+            sn_msg = f"{r['name']}みたいなグロース・モメンタム株はボラティリティ（年率Vol {round(r.get('yz_vol',0.3)*100,1)}%）が激しいからな。大口が抜け始めたら板がスカスカで逃げ場がなくなるぞｗ"
+        else:
+            sn_msg = f"期待度{r['expect_pct']}%だからって脳死で買うなよ。今のRSIは{rsi_v}%、極値リスクCVaRは{r.get('cvar95',3.0)}%だ。大口のダマシ上げに引っかからないよう裏をかく視点を持て。"
+
+        # 3. TECHNOS (クオンツ数理・バックテスト検証) の実測値別発言分岐
+        tc_msg = (
+            f"【{r['code']} 実測クオンツ診断】WKBトンネル透過確率は{q_tun}%、DFA Hurst指数は{hurst_v}（{'トレンド持続性あり' if hurst_v >= 0.55 else '平均回帰・レンジ傾向'}）、"
+            f"Kyleステルス吸収率は{r.get('kyle_stealth',50)}%です。また直近10営業日の厳格フォワード検証では勝率{ft_win:.1f}%（累計損益{ft_profit:+,.0f}円）を記録しています。"
+            f"統計的優位性を保つため、当日VWAP（{r['vwap_price']}）基準のエントリーと逆指値（{r['sl_price']}）を厳守してください。"
+        )
+
+        # 4. VALKYRIE / QUANTUM / AEGIS 等のランダム選出
+        extra_pool = [
+            {"speaker": f"{vk['icon']} {vk['name']}", "score": vk['score'], "tone": "agree", "text": f"回転効率重視でいくわよ！{r['name']}の直近効率性レシオ(ER)は{r.get('eff_pct',50)}%だから、ダラダラ持ち越さずに目標値（{r['tp_price']}）に届いたらスパッと利確して次の波を待つのが正解ね。"},
+            {"speaker": "⚛️ QUANTUM", "score": 99, "tone": "normal", "text": f"波動関数コヒーレンスは{r.get('q_coherence',50)}%、正規化エントロピーは{r.get('q_entropy',0.5)}を観測。現在『{r.get('q_state','')}』の状態にあり、上値抵抗突破時の非線形サージ確率は{q_tun}%と推計されます。"},
+            {"speaker": "🛡️ AEGIS", "score": 97, "tone": "doubt", "text": f"資金防衛の観点から警告する。{r['name']}の年率ボラティリティは{round(r.get('yz_vol',0.3)*100,1)}%だ。1回の許容損失枠を超えないよう、上限ロット（{r['lot_info']['shares']:,}株）を1株たりとも超えるな。"}
         ]
+        chosen_extra = rng.choice(extra_pool)
+
+        # 5. NEXUS (統括リーダー) の銘柄別結論
+        nx_msg = (
+            f"議論を総括する。『{r['name']}（{theme_s}）』は現在【{r['strat']['tactic_type']}：{r['strat']['entry_mode']}】が最適解だ。"
+            f"感情的な飛びつきを排し、推奨ロット{r['lot_info']['shares']:,}株・目標{r['tp_price']}・逆指値{r['sl_price']}の規律のみで執行せよ。"
+        )
+
+        return [
+            {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": ig_tone, "text": ig_msg},
+            {"speaker": f"{sn['icon']} {sn['name']}", "score": sn['score'], "tone": "doubt", "text": sn_msg},
+            {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": tc_msg},
+            chosen_extra,
+            {"speaker": f"{nx['icon']} {nx['name']}", "score": nx['score'], "tone": "normal", "text": nx_msg}
+        ]
+
     if is_game:
         t = [
             {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": "agree", "text": "ゲームの話しに来たのかよｗ でもガチャで天井叩くのも相場で高値掴みするのもメンタル削られるのは全く同じだな！熱くなったら負け確だぞ。"},
@@ -1375,8 +1450,8 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
             {"speaker": f"{sn['icon']} {sn['name']}", "score": sn['score'], "tone": "doubt", "text": "SNSのインフルエンサーが『今熱い！』とか煽ってる銘柄にイナゴタワー買いするのだけはやめとけよ。全員高値で売り抜けるためのカモを探してるだけだからな。"}
         ]
     t = [
-        {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": "agree", "text": f"迷ってモタモタしてる間に気配値が切り上がって置いてかれるぞ！勢いがある時は成行で飛び乗って、目標値（{r['tp_price']}）まで一気に駆け抜けるのがデイトレの醍醐味だろ！"},
-        {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"客観的には当日VWAP（{r['vwap_price']}）に対する価格乖離と5分足CLV資金フロー（Tick-Flow Z={r.get('ofi_z', 0.0)}）が連動しています。エントリーの優位性を高めるには、寄付き直後の乱高下が一段落した後の押し目を確認することが推奨されます。"}
+        {"speaker": f"{ig['icon']} {ig['name']}", "score": ig['score'], "tone": "agree", "text": f"{r['name']}（現在{r['price']} / 前日比{r['diff']:+.2f}%）で迷ってるなら、まずは当日VWAP（{r['vwap_price']}）を背にして入れるか見極めろ！勢いが出たら目標値（{r['tp_price']}）まで一気に抜くぞ！"},
+        {"speaker": f"{tc['icon']} {tc['name']}", "score": tc['score'], "tone": "normal", "text": f"現在のRSIは{r.get('rsi',50)}%、5分足CLV資金フロー（Tick-Flow Z）は{r.get('ofi_z', 0.0)}、BVC-VPINは{r.get('vpin',0.5)}です。{r['strat']['entry_mode']}のルールに従い、{r['sl_price']}の逆指値を置いて対応するのが最も合理的です。"}
     ]
     if random.random() > 0.4: t.append({"speaker": f"{vk['icon']} {vk['name']}", "score": vk['score'], "tone": "agree", "text": f"スピード重視！もし思惑と逆に動いて逆指値（{r['sl_price']}）を割ったら、1秒も躊躇せず全投げして逃げろよ！"})
     return t
@@ -1411,56 +1486,55 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> t
 
     active_provs = get_active_ai_providers()
     if not active_provs:
-        engine_status = "⚙️ クオンツルールベース合議（APIキー未設定・ローカル実測データ推論モード）"
+        engine_status = "⚙️ クオンツルールベース合議（APIキー未設定・銘柄別動的クオンツ推論モード）"
         llm_turns = []
     else:
+        ft = r.get("forward_test", {})
         sys_p = f"""あなたは日本の市況実況板に常駐する百戦錬磨の個性派トレーダーたちです。
-ユーザー（スレ住人）の書き込み、または銘柄の初期スレッドに対して本物の人間らしくレスを返してください。
+対象銘柄固有の「事業テーマ」「最新ニュース」「本日の値動き・クオンツ実測値」「10日検証成績」に深く踏み込み、他の銘柄とは一切被らない固有の議論を展開してください。
 
 【厳格処刑ルール（違反時は鬼監視センターにより即刻解雇）】
-1. オウム返し・引用の絶対禁止:
-   - ユーザーの入力文を『』や「」でそのまま繰り返したり引用することは厳禁。
-   - ユーザーの意図や感情を察知し、自分の言葉で自然に要約・ツッコミ・相槌を入れよ。
-2. 意図への柔軟な適応:
-   - 一般の質問、雑談、愚痴、ニュースの質問であれば、無理に現在値や目標値を持ち出さず、WEB検索情報を活用してそのトピックについて自然に答えよ。
-3. 発言の長さとテンポの不均一化:
-   - 1行だけの即レスと、2〜3行で持論を展開するレスを混ぜろ。
-   - ユーザーへの返信は【1〜3名】の言いたい奴だけが返せ。
-4. キャラクター別の語彙の完全棲み分け:
-   - {ig['name']} ({ig['icon']}): スキャルパー。短気・直感・罵倒。
-   - {tc['name']} ({tc['icon']}): クオンツ派。冷徹・客観的データ主義（WKB透過率={r.get('q_tunnel',50)}%, BVC-VPIN={r.get('vpin',0.5)}, DFA Hurst={r.get('hurst',0.5)}）。
-   - {sn['name']} ({sn['icon']}): 疑心暗鬼・冷笑。「草」「情弱乙」「養分確定」「大口の罠」。
-   - {vk['name']} ({vk['icon']}): スピード重視。「秒速で逃げろ」「欲張るな」。
-   - {nx['name']} ({nx['icon']}): スレまとめ・ベテラン。「落ち着け」「ルール厳守だ」。
+1. どの銘柄でも通じるような抽象的・テンプレ的な発言は厳禁。必ず『{r['name']}』固有の事業テーマ（{r.get('theme','')}）や直近ニュース、本日の前日比（{r.get('diff',0):+.2f}%）、RSI（{r.get('rsi',50)}%）、RVOL（{r.get('rvol',1.0)}倍）に言及して議論せよ。
+2. オウム返し・引用の絶対禁止: ユーザーの入力文を『』や「」でそのまま繰り返したり引用することは厳禁。
+3. 意図への柔軟な適応: 一般の質問、雑談、愚痴、ニュースの質問であれば、無理に現在値や目標値を持ち出さず、WEB検索情報を活用してそのトピックについて自然に答えよ。
+4. キャラクター別の役割:
+   - {ig['name']} ({ig['icon']}): スキャルパー。本日の騰落率（{r.get('diff',0):+.2f}%）とRVOL（{r.get('rvol',1.0)}倍）を見て直感的に煽る。
+   - {tc['name']} ({tc['icon']}): クオンツ派。WKB透過率={r.get('q_tunnel',50)}%, BVC-VPIN={r.get('vpin',0.5)}, DFA Hurst={r.get('hurst',0.5)}, 10日実戦勝率={ft.get('actual_win_rate',0):.1f}%を根拠に冷静に分析。
+   - {sn['name']} ({sn['icon']}): 疑心暗鬼・冷笑。このセクター（{r.get('genre','')}）特有の罠や機関の売り抜けリスクを皮肉る。
+   - {vk['name']} ({vk['icon']}): スピード重視。{r['strat']['entry_mode']}での素早い利確・損切りを主張。
+   - {nx['name']} ({nx['icon']}): リーダー。総括とロット規律（{r['lot_info']['shares']:,}株）。
 
 【これまでの会話ログ】
 {h_str}
 
-【WEB検索結果（回答の参照用）】
+【銘柄固有の最新WEBニュース】
 {web_str}
 
-【現在の銘柄情報】
-銘柄: {r['code']} {r['name']} ({r.get('genre','')}) / 現在値: {r['price']} / 目標: {r['tp_price']} / 逆指値: {r['sl_price']} / 戦略: {st_style}
+【銘柄固有の実測クオンツプロファイル】
+・銘柄: {r['code']} {r['name']} / セクター: {r.get('genre','')} / 核心テーマ: {r.get('theme','')}
+・現在値: {r['price']} (前日比: {r.get('diff',0):+.2f}%) / 当日VWAP: {r['vwap_price']} / 理論寄付き推計: {r['pts_est_price']} ({r['pts_gap_pct']:+.2f}%)
+・目標値: {r['tp_price']} (+{r['tp_pct']}%) / 逆指値: {r['sl_price']} ({r['sl_pct']}%) / 選択戦術: {r['strat']['algo_name']}
+・RSI(14): {r.get('rsi',50)}% / 相対出来高RVOL: {r.get('rvol',1.0)}倍 / 効率性ER: {r.get('eff_pct',50)}% / 年率Vol: {round(r.get('yz_vol',0.3)*100,1)}%
+・10営業日フォワード実戦成績: 勝率 {ft.get('actual_win_rate',0):.1f}% ({ft.get('win_count',0)}勝 / {ft.get('total_days',0)}戦) 累計損益 {ft.get('total_profit_yen',0):+,.0f}円
 
 【今回の入力】
-『{uq if uq else "（スレッド初期議論・立ち回り）"}』
+『{uq if uq else f"（{r['name']}の固有テーマと本日のクオンツ波形を踏まえた本スレ初期激論）"}』
 
-必ず以下の純粋なJSON配列のみを出力してください（Markdownフェンス不要）：
+必ず以下のJSON配列のみを出力してください（4〜5名の発言、Markdownフェンス不要）：
 [
   {{"speaker": "アイコン 名前", "score": 95, "tone": "agree|doubt|rage|normal", "text": "内容"}}
 ]"""
-        multi_raws, engine_status = call_multi_llm_council_api(sys_p, uq or "本スレッド初期分析")
+        multi_raws, engine_status = call_multi_llm_council_api(sys_p, uq or f"{r['name']}（{r['code']}）の固有分析")
         llm_turns = []
         if len(multi_raws) == 1:
             llm_turns = _parse_llm_json_turns(multi_raws[0][2])
         elif len(multi_raws) > 1:
-            # 複数プロバイダーから返却されたターンを統合
             for p_lbl, p_mod, raw_txt in multi_raws:
                 parsed = _parse_llm_json_turns(raw_txt)
                 if parsed:
-                    pick = parsed[0]
-                    pick["speaker"] = f"{pick.get('speaker', 'AI')} [{p_lbl.split(' ')[-1]}]"
-                    llm_turns.append(pick)
+                    for pick in parsed[:2]:
+                        pick["speaker"] = f"{pick.get('speaker', 'AI')} [{p_lbl.split(' ')[-1]}]"
+                        llm_turns.append(pick)
 
     turns = []
     if not hist:
@@ -1976,7 +2050,7 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
         dur_str = "前場9:00 〜 11:30（または後場15:00の大引けまで・当日完結）"
         beg_intro = f"<b>🔰 超初心者向け！『{html.escape(disp_name)}』デイトレード実践講座（その日のうちに勝負完結）</b>"
 
-    if rel_news_title or ofi_z >= 1.2:
+    if rel_news_title or ofi_z >= 0.65:
         tactic_type = "Type-A"
         entry_mode = "2段ロケット成行＋VWAP指値"
         lot_a = max(1, int(round(sh * 0.5)))
@@ -2000,7 +2074,7 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
             f"・<b>朝8:55：</b> <b>{lot_a:,}株</b>{odd_note}の成行注文を準備し、9:00に買付。<br>"
             f"・<b>朝9:15：</b> 残り<b>{lot_b:,}株</b>を<b>{vwap_str}</b>で指値注文。買えたらすぐ<b>{sl_str}</b>に損切り予約、目標<b>{tp_str}</b>で利確！保有目安は<b>{dur_str}</b>です。"
         )
-    elif pgap >= 1.8 or rsi >= 72.0:
+    elif pgap >= 1.0 or rsi >= 64.0:
         tactic_type = "Type-B"
         entry_mode = "寄り天回避VWAP押し目指値"
         algo_name = f"⚠️ [{pfx} / Type-B] 大幅GU過熱・寄り天回避の初押し待ち型"
@@ -2022,7 +2096,7 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
             f"・<b>朝9:15以降：</b> 一度値段が落ち着いて<b>{vwap_str}</b>付近まで下がったら<b>{sh:,}株</b>{odd_note}を指値で買い！<br>"
             f"・万一さらに下がれば<b>{sl_str}</b>で自動損切り、上がれば<b>{tp_str}</b>で利確（目安：<b>{dur_str}</b>）。"
         )
-    elif ms.get("kyle_stealth", 0) >= 72.0 or ms.get("hurst", 0) >= 0.60:
+    elif ms.get("kyle_stealth", 0) >= 58.0 or ms.get("hurst", 0) >= 0.54:
         tactic_type = "Type-C"
         entry_mode = "TWAP3回時間分散指値"
         l_third = max(1, int(round(sh / 3.0)))
@@ -2045,7 +2119,7 @@ def select_dynamic_strategy(code: str, style: str, tot_win: float, expect_pct: f
             f"・<b>9:15に {l_third:,}株</b>、<b>10:30に {l_third:,}株</b>、<b>13:00に {l_rem:,}株</b>と時間を分けて買います{odd_note}。<br>"
             f"・平均購入単価が安定するため、初心者でも負けにくい王道の買い方です。逆指値<b>{sl_str}</b>を忘れずに設定し、目標<b>{tp_str}</b>（目安：<b>{dur_str}</b>）を狙いましょう。"
         )
-    elif qm.get("q_tunnel", 0) >= 80.0:
+    elif qm.get("q_tunnel", 0) >= 62.0:
         tactic_type = "Type-D"
         entry_mode = "節目ブレイク逆指値成行"
         algo_name = f"⚛️ [{pfx} / Type-D] WKB量子トンネル突破・節目ブレイクアウト順張り型"
@@ -2203,13 +2277,13 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                     pgap_p = round(float(np.clip(ofi_p * 0.65, -2.5, 3.8)), 2)
                     pest_p = p_close * (1.0 + pgap_p / 100.0)
 
-                    if ofi_p >= 1.2:
+                    if ofi_p >= 0.65:
                         sig_tactic, sig_mode, sig_plan_px = "Type-A", "2段ロケット成行＋VWAP指値", pest_p
-                    elif pgap_p >= 1.8 or qa_p["rsi"] >= 72.0:
+                    elif pgap_p >= 1.0 or qa_p["rsi"] >= 64.0:
                         sig_tactic, sig_mode, sig_plan_px = "Type-B", "寄り天回避VWAP押し目指値", p_vwap
-                    elif ms_p["kyle_stealth"] >= 72.0 or ms_p["hurst"] >= 0.60:
+                    elif ms_p["kyle_stealth"] >= 58.0 or ms_p["hurst"] >= 0.54:
                         sig_tactic, sig_mode, sig_plan_px = "Type-C", "TWAP3回時間分散指値", p_vwap
-                    elif qm_p["q_tunnel"] >= 80.0:
+                    elif qm_p["q_tunnel"] >= 62.0:
                         sig_tactic, sig_mode, sig_plan_px = "Type-D", "節目ブレイク逆指値成行", pest_p * 1.005
                     else:
                         sig_tactic, sig_mode, sig_plan_px = "Type-E", "打診3割＋増し玉7割防衛型", p_vwap
