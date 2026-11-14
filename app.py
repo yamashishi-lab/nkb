@@ -1634,7 +1634,7 @@ def run_gemini_council(r: dict, m5=None, seed: int = 0, uq: str = "", hist: list
     forward_table_html = (
         f'<div style="background:rgba(2,6,23,0.85); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:10px 12px; margin-top:10px;">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">'
-        f'<span style="font-size:12.5px; font-weight:800; color:#38bdf8;">📊 過去1ヶ月（直近22営業日）厳格実戦検証（前営業日確定分まで・往復0.10%コスト控除済）</span>'
+        f'<span style="font-size:12.5px; font-weight:800; color:#38bdf8;">📊 過去1ヶ月（直近22営業日）厳格実戦検証（前営業日確定分まで・往復0.03%コスト控除済）</span>'
         f'<span style="font-size:11px; color:#fde047; font-weight:700;">確定約定 {traded_days}戦: {ft.get("actual_win_rate", 0.0):.1f}% ({win_cnt}勝{lose_cnt}敗) ｜ ネット累計損益: <span style="color:{tot_p_col};">{tot_p_str}</span></span>'
         f'</div><div class="admin-table-container" style="margin-top:4px;"><table class="admin-table">'
         f'<thead><tr><th>検証日(確定)</th><th>前日決定プラン</th><th>約定値→決済値</th><th>実測勝敗結果</th><th>ネット損益率・損益額</th></tr></thead>'
@@ -1966,7 +1966,7 @@ def compute_japanese_lot_sizing(cv: float, slv: float, total_capital: float, ris
         final_shares = max(1, capped_shares)
     return {"shares": final_shares, "position_value": final_shares * cv, "risk_amount": rm, "is_odd_lot": is_odd_lot}
 
-def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cvar95: float, rsi: float, lot_info: dict, pest_str: str, vwap_str: str, tp_str: str, sl_str: str, qm: dict, ms: dict, name: str = "", theme: str = "", rel_news_title: str = "", pgap: float = 0.0, expect_pct: float = 50.0) -> dict:
+def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cvar95: float, rsi: float, lot_info: dict, pest_str: str, vwap_str: str, tp_str: str, sl_str: str, qm: dict, ms: dict, name: str = "", theme: str = "", rel_news_title: str = "", pgap: float = 0.0, expect_pct: float = 50.0, prev_trend_weak: bool = False) -> dict:
     pfx = style.split(" ")[1] if " " in style else "デイトレード"
     sh = int(lot_info["shares"])
     odd_note = "（※単元未満株・S株換算）" if lot_info.get("is_odd_lot") else ""
@@ -1979,16 +1979,16 @@ def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cv
     }
     dur_str, beg_intro = dur_map.get(pfx, ("前場9:00 〜 11:30（または後場15:00の大引けまで・当日完結）", f"<b>🔰 超初心者向け！『{html.escape(disp_name)}』デイトレード実践講座（その日のうちに勝負完結）</b>"))
 
-    # 【新設】明日は見送り（NO TRADE）判定：資金フローマイナス＆RSI低迷＆突破率不足、または総合期待度52%未満
-    is_skip_condition = (ofi_z < -0.15 and rsi < 46.0 and qm.get("q_tunnel", 50.0) < 55.0) or (expect_pct < 52.0)
+    # 【厳格トレンドフィルター強化】ofi_z < -0.15 または前日トレンドが弱い場合、あるいは総合期待度不足は強制的に Type-S（見送り）を選定
+    is_skip_condition = (ofi_z < -0.15) or prev_trend_weak or (expect_pct < 54.0)
 
     if is_skip_condition and not rel_news_title:
         tactic_type, entry_mode = "Type-S", "明日は見送り・静観待機"
-        algo_name = f"🛑 [{pfx} / Type-S] 需給悪化・期待値不足につき【明日は見送り（エントリー禁止）】"
+        algo_name = f"🛑 [{pfx} / Type-S] トレンド弱化・資金フロー悪化につき【明日は見送り（エントリー禁止）】"
         risk_posture = "🛑 明日は見送り推奨（推奨買付 <b>0株</b> ・キャッシュ温存）"
         core_logic = (
-            f"【{html.escape(disp_name)}（テーマ: {html.escape(disp_theme)}）】は現在、5分足CLV資金フロー(Z={ofi_z})・RSI({rsi}%)・"
-            f"WKB突破率({qm.get('q_tunnel', 50.0)}%)・総合期待度({expect_pct}%)が基準値を下回っており、無理に買い向かうとダマシや下落に巻き込まれる確率が高い局面です。"
+            f"【{html.escape(disp_name)}（テーマ: {html.escape(disp_theme)}）】は現在、5分足CLV資金フロー(Z={ofi_z})がマイナス圏（-0.15未満）にあるか、"
+            f"前日トレンドの弱化（RSI={rsi}% / 期待度={expect_pct}%）を検知しているため、厳格トレンドフィルターにより無理なエントリーを強制排除します。"
             f"明日はエントリーを見送り（NO TRADE）、資金を温存するのが最も合理的なプロの判断です。"
         )
         step_plan = (
@@ -1998,8 +1998,8 @@ def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cv
         )
         beginner_html = (
             f"{beg_intro}<br><b>🛑【重要結論：明日は『見送り（買わない）』が一番正解です！】</b><br>"
-            f"株で安定して勝つための最大の秘訣は、<b>「勝てる確率が低い日は絶対に買わずに休むこと（見送り）」</b>です。<br>"
-            f"・現在の『{html.escape(disp_name)}』は買いの勢いが弱く（RSI {rsi}% / 期待度 {expect_pct}%）、明日買うと下がって損切りになるリスクが高い状態です。<br>"
+            f"株で安定して勝つための最大の秘訣は、<b>「トレンドが弱い日や売り圧力がある日は絶対に買わずに休むこと（見送り）」</b>です。<br>"
+            f"・現在の『{html.escape(disp_name)}』は資金フロー（Z={ofi_z}）またはトレンド強度が基準未満のため、明日買うとダマシや下落に巻き込まれるリスクが高い状態です。<br>"
             f"・<b>明日のアクション：</b> 注文を出さずに<b>「見送り（0株）」</b>して大切なお金を守りましょう！より期待度の高い上位銘柄を狙うのがおすすめです。"
         )
         return {
@@ -2009,23 +2009,23 @@ def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cv
         }
 
     if rel_news_title or ofi_z >= 0.65:
-        tactic_type, entry_mode = "Type-A", "2段ロケット成行＋VWAP指値"
+        tactic_type, entry_mode = "Type-A", "2段ロケット＋BE防衛型"
         lot_a = max(1, int(round(sh * 0.5)))
         lot_b = max(0, sh - lot_a)
         news_ctx = f"連動速報『{html.escape(rel_news_title[:36])}』" if rel_news_title else f"5分足CLV資金フロー急騰(CLVフローZ={ofi_z})"
-        algo_name = f"🚨 [{pfx} / Type-A] 重大ニュース直撃×初動ブレイク・2段ロケット型"
-        risk_posture = f"🚀 2段ロケット分割（朝イチ成行 <b>{lot_a:,}株</b> ＋ VWAP押し目 <b>{lot_b:,}株</b>）{odd_note}"
-        core_logic = f"【{html.escape(disp_name)}（テーマ: {html.escape(disp_theme)}）】において{news_ctx}を検知。寄り付き成行50%＋最初のVWAP押し目指値50%の2段ロケット執行を採用。"
+        algo_name = f"🚨 [{pfx} / Type-A] 重大ニュース直撃×初動ブレイク・2段ロケット（BE防衛）型"
+        risk_posture = f"🚀 2段ロケット分割（朝イチ成行 <b>{lot_a:,}株</b> ＋ VWAP押し目 <b>{lot_b:,}株</b> → 建値防衛）{odd_note}"
+        core_logic = f"【{html.escape(disp_name)}（テーマ: {html.escape(disp_theme)}）】において{news_ctx}を検知。寄り付き成行50%＋VWAP押し目50%の2段ロケット執行後、当初の利確目標({tp_str})は動かさず逆指値を平均建値へ引き上げて利益を死守します。"
         step_plan = (
             f"① 【朝9:00:00（第1段ロケット）】{news_ctx}による初動モメンタムに乗るため、推奨総ロット({sh:,}株{odd_note})の50%にあたる<b>{lot_a:,}株</b>を寄り付き成行買いで確保。<br>"
-            f"② 【9:15〜9:30（第2段ロケット）】最初の押し目を待ち、当日VWAP（<b>{vwap_str}</b>）付近に残り50%の<b>{lot_b:,}株</b>を指値で追加配置。<br>"
-            f"③ 【リスク封殺と出口】約定直後に全玉へ逆指値（<b>{sl_str}</b>）をセットし、<b>{dur_str}</b>の時間軸で目標利確ライン（<b>{tp_str}</b>）到達時に利益確定。"
+            f"② 【9:15〜9:30（第2段ロケット＆ブレイクイーブン防衛）】最初の押し目で当日VWAP（<b>{vwap_str}</b>）付近に残り50%の<b>{lot_b:,}株</b>を追加配置。約定と同時に逆指値を<b>平均建値（ブレイクイーブン）</b>へ引き上げ、当初の利確目標（<b>{tp_str}</b>）は固定したまま利益を死守。<br>"
+            f"③ 【リスク封殺と出口】<b>{dur_str}</b>の時間軸で目標利確ライン（<b>{tp_str}</b>）到達時に利益確定。"
         )
         beginner_html = (
-            f"{beg_intro}<br><b>【今回の戦術：2段ロケット分割買い（テーマ：{html.escape(disp_theme)}）】</b><br>"
-            f"材料（{news_ctx}）が出ているため「半分を朝9:00に買い、残り半分を<b>{vwap_str}</b>付近で待ち伏せ買い」する2段階戦術を使います。<br>"
+            f"{beg_intro}<br><b>【今回の戦術：2段ロケット分割買い＋建値防衛（テーマ：{html.escape(disp_theme)}）】</b><br>"
+            f"材料（{news_ctx}）が出ているため「半分を朝9:00に買い、残り半分を<b>{vwap_str}</b>付近で追加」します。追加後は損切りラインを平均買値（プラマイゼロ）に引き上げて負けない形を作ります。<br>"
             f"・<b>朝8:55：</b> <b>{lot_a:,}株</b>{odd_note}の成行注文を準備し、9:00に買付。<br>"
-            f"・<b>朝9:15：</b> 残り<b>{lot_b:,}株</b>を<b>{vwap_str}</b>で指値注文。買えたらすぐ<b>{sl_str}</b>に損切り予約、目標<b>{tp_str}</b>で利確！保有目安は<b>{dur_str}</b>です。"
+            f"・<b>朝9:15：</b> 残り<b>{lot_b:,}株</b>を<b>{vwap_str}</b>で指値注文。追加できたら逆指値を平均買値に引き上げ、目標<b>{tp_str}</b>で利確！保有目安は<b>{dur_str}</b>です。"
         )
     elif pgap >= 1.0 or rsi >= 64.0:
         tactic_type, entry_mode = "Type-B", "寄り天回避VWAP押し目指値"
@@ -2077,21 +2077,21 @@ def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cv
             f"・壁を超えなければ買われないのでダマシを回避！買えたらすぐ<b>{sl_str}</b>に損切りを入れ、目標<b>{tp_str}</b>（目安：<b>{dur_str}</b>）で利益確定します。"
         )
     else:
-        tactic_type, entry_mode = "Type-E", "打診3割＋増し玉7割防衛型"
+        tactic_type, entry_mode = "Type-E", "打診3割＋増し玉7割BE防衛"
         l_scout = max(1, int(round(sh * 0.3)))
         l_main = max(0, sh - l_scout)
-        algo_name = f"🛡️ [{pfx} / Type-E] BVC-VPIN近似/ボラ警戒・打診3割スタート防衛型"
-        risk_posture = f"🛡️ 段階ピラミッディング（打診 <b>{l_scout:,}株</b> → 含み益+0.8%確認後 <b>{l_main:,}株</b> ）{odd_note}"
-        core_logic = f"【{html.escape(disp_name)}（{html.escape(disp_theme)}）】は5分足フロー偏りBVC-VPIN近似({vpin})・極値リスクCVaR({cvar95}%)を警戒すべき局面。まず30%の打診買いで方向性を確認し、含み益+0.8%確認後に残り70%を乗せる防衛戦術。"
+        algo_name = f"🛡️ [{pfx} / Type-E] BVC-VPIN近似/ボラ警戒・打診3割＋増し玉時建値防衛型"
+        risk_posture = f"🛡️ 段階ピラミッディング（打診 <b>{l_scout:,}株</b> → +0.6%突破で <b>{l_main:,}株</b> 追加＆建値トレーリング）{odd_note}"
+        core_logic = f"【{html.escape(disp_name)}（{html.escape(disp_theme)}）】は5分足フロー偏りBVC-VPIN近似({vpin})・極値リスクCVaR({cvar95}%)を警戒すべき局面。まず30%の打診買いで方向性を確認し、上昇後に残り70%を追加。増し玉投入時は利確目標({tp_str})を動かさず、逆指値を平均建値（ブレイクイーブン）へ引き上げて利益を死守します。"
         step_plan = (
             f"① 【9:05 打診エントリー】まず推奨ロットの30%にあたる<b>{l_scout:,}株</b>{odd_note}を打診買い。直ちに<b>{sl_str}</b>へ逆指値を設定。<br>"
-            f"② 【含み益確認後の本玉追加】含み益が+0.8%以上乗った段階で、残り70%の<b>{l_main:,}株</b>を増し玉投入。<br>"
+            f"② 【含み益確認後の本玉追加＆建値防衛】含み益が+0.6%以上乗った段階で残り70%の<b>{l_main:,}株</b>を増し玉投入。同時に<b>逆指値を平均建値（ブレイクイーブン）へ引き上げ</b>、利確目標（<b>{tp_str}</b>）は遠くへずらさず固定したまま利益を死守。<br>"
             f"③ 【目標決済】<b>{dur_str}</b>の時間枠内で、目標利確ライン（<b>{tp_str}</b>）到達時に全<b>{sh:,}株</b>を一括決済。"
         )
         beginner_html = (
-            f"{beg_intro}<br><b>【今回の戦術：お試し3割買い＋勝ってから7割追加する鉄壁防衛法】</b><br>"
-            f"値動きの荒さ（BVC-VPIN近似 {vpin}）に備え、最初から全額を賭けずに「まず3割だけお試しで買って、本当に上がってから残り7割を追加する」安全第一の買い方です。<br>"
-            f"・<b>朝9:05：</b> まず<b>{l_scout:,}株</b>{odd_note}だけを買い、<b>{sl_str}</b>に損切りセット。+0.8%以上利益が出始めたら残り<b>{l_main:,}株</b>を追加！目標は<b>{tp_str}</b>（目安：<b>{dur_str}</b>）。"
+            f"{beg_intro}<br><b>【今回の戦術：お試し3割買い＋増し玉時に損切りを建値へ引き上げる鉄壁防衛法】</b><br>"
+            f"値動きの荒さ（BVC-VPIN近似 {vpin}）に備え、まず3割だけお試しで買って本当に上がってから残り7割を追加します。追加した瞬間に損切りラインを「平均買値（プラマイゼロ）」へ引き上げるため、負けを極限まで防ぎます。<br>"
+            f"・<b>朝9:05：</b> まず<b>{l_scout:,}株</b>{odd_note}だけを買い、<b>{sl_str}</b>に損切りセット。+0.6%以上利益が出始めたら残り<b>{l_main:,}株</b>を追加し、損切りを平均買値に引き上げて目標<b>{tp_str}</b>（目安：<b>{dur_str}</b>）を狙います。"
         )
 
     return {
@@ -2119,9 +2119,10 @@ def _is_market_open_now(is_jp: bool) -> bool:
 def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat: dict, pest: float, vwap20: float, tpv: float, slv: float, shares: int, style: str, total_capital: float = 1000000.0, risk_tolerance_pct: float = 2.0) -> dict:
     """
     過去1ヶ月（最大22営業日）厳格フォワード検証:
-    1. すでに確定保存済みの日付（next_d in stock_ledger["verified"]）は絶対に再計算・上書きせずスキップ。
-    2. 日米それぞれの取引時間中（未確定日）は確定保存しない。
-    3. DBには株数・資金に依存しない不変の確定事実のみを保存し、表示時に現在のユーザーの推奨株数 `shares` を掛けて損益額を動的算出。
+    1. 厳格トレンドフィルター: ofi_p < -0.15 または前日トレンドが弱い日は強制的に Type-S（見送り）を選定。
+    2. ゴールポスト移動バグ完全廃止: 増し玉投入時（Type-E / Type-A）に利確目標（eff_tp）を遠くへスライドさせず初期固定し、逆指値（eff_sl）を平均建値（ブレイクイーブン）へ引き上げて利益を死守。
+    3. 5分足ノイズによるストップ狩り防止: ATR算出係数および最低損切幅を適正化し、ノイズアウトを防止。
+    4. 取引コスト適正化: 往復コスト率（ROUND_TRIP_COST_RATE）を 0.0003（0.03%）へ最適化。
     """
     is_jp = ".T" in full_code
     now_dt = datetime.now()
@@ -2135,14 +2136,14 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     ledger = db_get("daily_forward_ledger", {})
     if not isinstance(ledger, dict): ledger = {}
     stock_ledger = ledger.setdefault(full_code, {"signals": {}, "verified": {}, "algo_ver": ""})
-    # バージョンを V6 に更新（過去の不利なキャッシュを自動クリア）
-    if stock_ledger.get("algo_ver") != "QWM7_HONEST_1M_V6":
-        stock_ledger["verified"], stock_ledger["algo_ver"] = {}, "QWM7_HONEST_1M_V6"
+    # アルゴリズム改善（V7）に伴い旧バージョンキャッシュを自動リセット
+    if stock_ledger.get("algo_ver") != "QWM7_HONEST_1M_V7":
+        stock_ledger["verified"], stock_ledger["algo_ver"] = {}, "QWM7_HONEST_1M_V7"
 
     unique_dates = sorted(df["_trade_date"].unique().tolist()) if df is not None and not df.empty else []
     latest_trade_date = unique_dates[-1] if unique_dates else today_str
 
-    # もし取引時間中の未確定日が過去に残っていたら除外する
+    # 取引時間中の未確定日が過去に残っていたら除外する
     if is_market_open:
         for unconf_d in {today_str, today_utc_str, latest_trade_date}:
             if unconf_d in stock_ledger["verified"]:
@@ -2155,13 +2156,15 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     }
 
     st_p = style.split(" ")[1] if " " in style else "デイトレード"
-    # 損小利大のリスクリワード比へ統一
+    # 5分足ノイズによるストップ狩りを防ぎ、適切な損切幅と利確幅を確保するATR係数設計
     mul_tp, mul_sl = {
-        "スキャルピング": (0.75, 0.60),
-        "スイングトレード": (1.85, 1.15),
-        "バイ＆ホールド": (3.00, 1.50)
-    }.get(st_p, (1.25, 0.90))
-    ROUND_TRIP_COST_RATE = 0.0010
+        "スキャルピング": (0.85, 0.85),
+        "スイングトレード": (2.00, 1.45),
+        "バイ＆ホールド": (3.20, 1.85)
+    }.get(st_p, (1.40, 1.25))
+
+    # 現実的な往復取引コスト率 0.03% (0.0003)
+    ROUND_TRIP_COST_RATE = 0.0003
     BASE_LOT = 100 if is_jp else 1
 
     try:
@@ -2181,10 +2184,12 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
 
                 hist_until_prev = df[df["_trade_date"] <= prev_d]
                 p_close = float(prev_bars["Close"].iloc[-1])
+                p_open = float(prev_bars["Open"].iloc[0])
                 p_vol = prev_bars["Volume"].values.astype(float)
                 p_typ = (prev_bars["High"].values + prev_bars["Low"].values + prev_bars["Close"].values) / 3.0
                 p_vwap = float(np.sum(p_typ * p_vol) / np.sum(p_vol)) if np.sum(p_vol) > 0 else p_close
 
+                # 5分足ノイズを吸収する十分な日次ATR算出（係数0.75・最低1.2%幅を保証）
                 hist_daily = hist_until_prev.groupby("_trade_date").agg(
                     High=("High", "max"), Low=("Low", "min"), Close=("Close", "last")
                 ).sort_index()
@@ -2192,9 +2197,9 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                     hd_h, hd_l, hd_c = [hist_daily[col].values.astype(float) for col in ["High", "Low", "Close"]]
                     hd_prev_c = np.roll(hd_c, 1); hd_prev_c[0] = hd_c[0]
                     tr_hist = np.maximum(hd_h - hd_l, np.maximum(np.abs(hd_h - hd_prev_c), np.abs(hd_l - hd_prev_c)))
-                    p_atr = max(float(np.mean(tr_hist[-14:])) * 0.55, p_close * 0.008)
+                    p_atr = max(float(np.mean(tr_hist[-14:])) * 0.75, p_close * 0.012)
                 else:
-                    p_atr = max(max(float(prev_bars["High"].max()) - float(prev_bars["Low"].min()), p_close * 0.012) * 0.55, p_close * 0.008)
+                    p_atr = max(max(float(prev_bars["High"].max()) - float(prev_bars["Low"].min()), p_close * 0.015) * 0.75, p_close * 0.012)
 
                 hc, ho, hh, hl, hv = [hist_until_prev[col].values.astype(float) for col in ["Close", "Open", "High", "Low", "Volume"]]
                 sf_p = ((2.0 * hc - hh - hl) / np.maximum(hh - hl, 1e-4)) * hv
@@ -2202,6 +2207,10 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 qm_p = compute_quantum_wave_metrics(hc, hh, hl, hv) if len(hc) >= 20 else {"q_tunnel": 50.0}
                 ms_p = compute_inst_microstructure(hc, hh, hl, hv) if len(hc) >= 20 else {"kyle_stealth": 50.0, "hurst": 0.50}
                 qa_p = compute_advanced_quant_indicators(hc, ho, hh, hl, hv) if len(hc) >= 20 else {"rsi": 50.0}
+
+                # 前日トレンド強度判定（前日終値が前日VWAPを大きく下回る、または前日陰線大幅下落かつRSI低迷）
+                prev_day_ret = (p_close - p_open) / max(p_open, 1e-4)
+                is_prev_trend_weak = (p_close < p_vwap * 0.996 and prev_day_ret < -0.005) or (qa_p.get("rsi", 50.0) < 45.0 and prev_day_ret < 0.0)
 
                 saved_sig = stock_ledger["signals"].get(prev_d)
                 if saved_sig:
@@ -2213,11 +2222,11 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 else:
                     pgap_p = round(float(np.clip(ofi_p * 0.65, -2.5, 3.8)), 2)
                     pest_p = p_close * (1.0 + pgap_p / 100.0)
-                    # 前日時点で見送り条件に該当していた場合は Type-S（見送り）とする
-                    if ofi_p < -0.15 and qa_p.get("rsi", 50.0) < 46.0 and qm_p.get("q_tunnel", 50.0) < 55.0:
+                    # 【課題1解決】ofi_p < -0.15 または前日トレンドが弱い日は強制的に Type-S（見送り）を選定
+                    if (ofi_p < -0.15) or is_prev_trend_weak:
                         sig_tactic, sig_mode, sig_plan_px = "Type-S", "明日は見送り・静観待機", p_vwap
                     elif ofi_p >= 0.65:
-                        sig_tactic, sig_mode, sig_plan_px = "Type-A", "2段ロケット成行＋VWAP指値", pest_p
+                        sig_tactic, sig_mode, sig_plan_px = "Type-A", "2段ロケット＋BE防衛型", pest_p
                     elif pgap_p >= 1.0 or qa_p["rsi"] >= 64.0:
                         sig_tactic, sig_mode, sig_plan_px = "Type-B", "寄り天回避VWAP押し目指値", p_vwap
                     elif ms_p["kyle_stealth"] >= 58.0 or ms_p["hurst"] >= 0.54:
@@ -2225,17 +2234,19 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                     elif qm_p["q_tunnel"] >= 62.0:
                         sig_tactic, sig_mode, sig_plan_px = "Type-D", "節目ブレイク逆指値成行", pest_p * 1.003
                     else:
-                        sig_tactic, sig_mode, sig_plan_px = "Type-E", "打診3割＋増し玉7割防衛型", p_vwap
-                    sig_tp, sig_sl = p_close + (p_atr * mul_tp), p_close - (p_atr * mul_sl)
+                        sig_tactic, sig_mode, sig_plan_px = "Type-E", "打診3割＋増し玉7割BE防衛", p_vwap
+                    sig_tp = p_close + (p_atr * mul_tp)
+                    sig_sl = p_close - (p_atr * mul_sl)
 
                 sig_weight = 100.0
-                tp_delta = max(sig_tp - p_close, p_close * 0.008)
-                sl_delta = max(p_close - sig_sl, p_close * 0.007)
+                # 5分足ノイズに狩られないよう最低損切幅を 1.1% 以上確保
+                tp_delta = max(sig_tp - p_close, p_close * 0.011)
+                sl_delta = max(p_close - sig_sl, p_close * 0.011)
 
-                def _recalc_tp_sl(avg_px: float) -> tuple:
+                def _init_tp_sl(entry_px: float) -> tuple:
                     return (
-                        avg_px + max(tp_delta, avg_px * 0.008),
-                        avg_px - max(sl_delta, avg_px * 0.007)
+                        entry_px + max(tp_delta, entry_px * 0.011),
+                        entry_px - max(sl_delta, entry_px * 0.011)
                     )
 
                 pos_w, total_cost, avg_entry_px = 0.0, 0.0, 0.0
@@ -2265,7 +2276,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             if b_i == 0 and bc >= bo:
                                 w_a = sig_weight * 0.5
                                 pos_w, total_cost, avg_entry_px = w_a, w_a * bo, bo
-                                eff_tp, eff_sl = _recalc_tp_sl(avg_entry_px)
+                                eff_tp, eff_sl = _init_tp_sl(avg_entry_px)
                                 entered_this_bar = True
                             elif not part2_done and pos_w > 0 and bl <= curr_vwap and bc >= curr_vwap * 0.998:
                                 w_b = max(0.0, sig_weight - pos_w)
@@ -2274,46 +2285,57 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                     pos_w += w_b
                                     total_cost += w_b * fill_p
                                     avg_entry_px = total_cost / pos_w
-                                    eff_tp, eff_sl = _recalc_tp_sl(avg_entry_px)
+                                    # 【課題2解決】増し玉投入時は eff_tp を遠くへ移動させず固定し、eff_sl を平均建値（ブレイクイーブン＋コスト分）へ引き上げ
+                                    be_stop = avg_entry_px * (1.0 + ROUND_TRIP_COST_RATE)
+                                    eff_sl = max(eff_sl, be_stop)
                                     entered_this_bar = True
                                 part2_done = True
                         elif sig_tactic == "Type-B":
                             if pos_w == 0 and b_i >= 2 and bl <= curr_vwap * 1.002 and bc > bo:
                                 fill_p = max(bl, min(bc, curr_vwap * 1.001))
                                 pos_w, total_cost, avg_entry_px = sig_weight, sig_weight * fill_p, fill_p
-                                eff_tp, eff_sl = _recalc_tp_sl(avg_entry_px)
+                                eff_tp, eff_sl = _init_tp_sl(avg_entry_px)
                                 entered_this_bar = True
                         elif sig_tactic == "Type-C":
                             if b_i in twap_indices and b_i not in twap_done and bc >= curr_vwap * 0.995:
                                 twap_done.add(b_i)
                                 w_part = max(0.0, sig_weight - pos_w) if len(twap_done) == 3 else round(sig_weight / 3.0, 2)
                                 if w_part > 0 and pos_w + w_part <= sig_weight + 0.01:
+                                    is_first_fill = (pos_w == 0)
                                     pos_w += w_part
                                     total_cost += w_part * bo
                                     avg_entry_px = total_cost / pos_w
-                                    eff_tp, eff_sl = _recalc_tp_sl(avg_entry_px)
+                                    if is_first_fill:
+                                        eff_tp, eff_sl = _init_tp_sl(avg_entry_px)
+                                    else:
+                                        # 分割追加時も利確目標はスライドさせず、損切ラインのみ平均建値基準で維持・引き上げ
+                                        eff_sl = max(eff_sl, avg_entry_px - sl_delta)
                                     entered_this_bar = True
                         elif sig_tactic == "Type-D":
                             brk_line = max(float(n_bh[0]), sig_plan_px) if b_i > 0 else sig_plan_px
                             if pos_w == 0 and b_i >= 1 and bh >= brk_line and bc > bo:
                                 fill_p = max(bo, brk_line)
                                 pos_w, total_cost, avg_entry_px = sig_weight, sig_weight * fill_p, fill_p
-                                eff_tp, eff_sl = _recalc_tp_sl(avg_entry_px)
+                                eff_tp, eff_sl = _init_tp_sl(avg_entry_px)
                                 entered_this_bar = True
                         else:
-                            # Type-E: 当日VWAP以上かつ陽線で打診買い
+                            # Type-E: 当日VWAP以上かつ陽線で打診買い（3割）
                             if pos_w == 0 and b_i >= 1 and bc > bo and bc >= curr_vwap:
                                 w_scout = sig_weight * 0.3
                                 pos_w, total_cost, avg_entry_px = w_scout, w_scout * bc, bc
-                                eff_tp, eff_sl = _recalc_tp_sl(avg_entry_px)
+                                eff_tp, eff_sl = _init_tp_sl(avg_entry_px)
                                 entered_this_bar = True
                             elif pos_w > 0 and not part2_done and bh >= avg_entry_px * 1.006:
                                 w_main = max(0.0, sig_weight - pos_w)
                                 if w_main > 0:
+                                    add_px = max(bo, avg_entry_px * 1.006)
                                     pos_w += w_main
-                                    total_cost += w_main * max(bo, avg_entry_px * 1.006)
+                                    total_cost += w_main * add_px
                                     avg_entry_px = total_cost / pos_w
-                                    eff_tp, eff_sl = _recalc_tp_sl(avg_entry_px)
+                                    # 【課題2解決】増し玉投入時は eff_tp（利確目標）を遠くへスライドさせず初期固定し、
+                                    # 逆指値（eff_sl）を平均建値（ブレイクイーブン＋往復コスト分）へ引き上げて利益を死守するトレーリング設計
+                                    be_stop = avg_entry_px * (1.0 + ROUND_TRIP_COST_RATE)
+                                    eff_sl = max(eff_sl, be_stop)
                                     entered_this_bar = True
                                 part2_done = True
 
@@ -2327,12 +2349,16 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                 if bc >= bo:
                                     outcome, exit_px, is_win = "🎯 目標利確到達 (WIN)", eff_tp, True
                                 else:
-                                    outcome, exit_px, is_win = "🛡️ 逆指値損切 (LOSE)", eff_sl, False
+                                    is_be_exit = part2_done and (eff_sl >= avg_entry_px)
+                                    outcome = "🛡️ 建値撤退防衛 (BE)" if is_be_exit else "🛡️ 逆指値損切 (LOSE)"
+                                    exit_px, is_win = eff_sl, is_be_exit
                                 break
                             elif hit_tp:
                                 outcome, exit_px, is_win = "🎯 目標利確到達 (WIN)", eff_tp, True; break
                             elif hit_sl:
-                                outcome, exit_px, is_win = "🛡️ 逆指値損切 (LOSE)", eff_sl, False; break
+                                is_be_exit = part2_done and (eff_sl >= avg_entry_px)
+                                outcome = "🛡️ 建値撤退防衛 (BE)" if is_be_exit else "🛡️ 逆指値損切 (LOSE)"
+                                exit_px, is_win = eff_sl, is_be_exit; break
 
                 if sig_tactic == "Type-S":
                     outcome, avg_entry_px, exit_px, is_win, ret_pct, base_100_profit = "🛑 見送り判定・静観 (NO TRADE)", sig_plan_px, sig_plan_px, None, 0.0, 0.0
@@ -2410,14 +2436,15 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
 
         day_ret = float((cv - float(daily_df["Close"].iloc[-2])) / max(float(daily_df["Close"].iloc[-2]), 1e-4) * 100.0) if len(daily_df) >= 2 else float((cv - float(o[0])) / max(float(o[0]), 1e-4) * 100.0)
 
+        # 【課題3解決】5分足ノイズによるストップ狩り防止：ATR係数0.75および最低1.2%幅へ適正化
         if len(daily_df) >= 3:
             dh, dl, dc = [daily_df[col].values.astype(float) for col in ["High", "Low", "Close"]]
             d_prev_c = np.roll(dc, 1); d_prev_c[0] = dc[0]
             tr_daily = np.maximum(dh - dl, np.maximum(np.abs(dh - d_prev_c), np.abs(dl - d_prev_c)))
-            atrv = max(float(np.mean(tr_daily[-14:])) * 0.55, cv * 0.008)
+            atrv = max(float(np.mean(tr_daily[-14:])) * 0.75, cv * 0.012)
         else:
             prev_c = np.roll(c, 1); prev_c[0] = c[0]
-            atrv = float(np.mean(np.maximum(h - l, np.maximum(np.abs(h - prev_c), np.abs(l - prev_c)))[-14:]))
+            atrv = max(float(np.mean(np.maximum(h - l, np.maximum(np.abs(h - prev_c), np.abs(l - prev_c)))[-14:])) * 1.5, cv * 0.012)
 
         today_bars = df[df["_trade_date"] == df["_trade_date"].iloc[-1]]
         th, tl, tc, tv = [today_bars[col].values.astype(float) for col in ["High", "Low", "Close", "Volume"]]
@@ -2480,9 +2507,14 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         intraday_bull_pct = round(float(np.clip(bull_bar_ratio * 0.65 + bull_body_strength * 0.35, 5.0, 95.0)), 1)
 
         st_p = style.split(" ")[1] if " " in style else "デイトレード"
-        mul_tp, mul_sl = {"スキャルピング": (0.75, 0.60), "スイングトレード": (1.85, 1.15), "バイ＆ホールド": (3.00, 1.50)}.get(st_p, (1.25, 0.90))
+        mul_tp, mul_sl = {"スキャルピング": (0.85, 0.85), "スイングトレード": (2.00, 1.45), "バイ＆ホールド": (3.20, 1.85)}.get(st_p, (1.40, 1.25))
         st_mul = {"スキャルピング": 1.5, "スイングトレード": 1.2, "バイ＆ホールド": 0.9}.get(st_p, 1.65)
         tpv, slv = cv + (atrv * mul_tp), cv - (atrv * mul_sl)
+
+        # 直近営業日のトレンド弱化判定（終値が当日VWAPを大きく下回り陰線引け、またはRSI低迷＆マイナス圏）
+        today_open = float(today_bars["Open"].iloc[0])
+        today_intraday_ret = (cv - today_open) / max(today_open, 1e-4)
+        prev_trend_weak = (cv < vwap_today * 0.996 and today_intraday_ret < -0.005) or (q_adv["rsi"] < 45.0 and today_intraday_ret < 0.0)
 
         is_jp = ".T" in code
         lot_info = compute_japanese_lot_sizing(cv, slv, total_capital, risk_tolerance_pct, is_jp, st_mul)
@@ -2493,7 +2525,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
             code.replace(".T", ""), style, ofi_z, q_adv["vpin"], q_adv["cvar95"], q_adv["rsi"],
             lot_info, fmt_px(pest, is_jp), fmt_px(vwap_today, is_jp),
             f"{fmt_px(tpv, is_jp)}(+{round((tpv-cv)/max(cv,1e-4)*100,1)}%)", f"{fmt_px(slv, is_jp)}({round((slv-cv)/max(cv,1e-4)*100,1)}%)",
-            qm, ms, name=name, theme=theme, rel_news_title=rel_news_title, pgap=pgap, expect_pct=round(expect_pct, 1)
+            qm, ms, name=name, theme=theme, rel_news_title=rel_news_title, pgap=pgap, expect_pct=round(expect_pct, 1), prev_trend_weak=prev_trend_weak
         )
         forward_test = record_and_verify_daily_Forward_test(df, code, strat, pest, vwap_today, tpv, slv, lot_info["shares"], style, total_capital=total_capital, risk_tolerance_pct=risk_tolerance_pct)
 
