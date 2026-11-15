@@ -1525,7 +1525,8 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> t
 ・現在値: {r['price']} ({r.get('diff',0):+.2f}%) / 当日VWAP: {r['vwap_price']} / 目標: {r['tp_price']} / 逆指値: {r['sl_price']} / 戦術: {r['strat']['algo_name']}
 ・RSI: {r.get('rsi',50)}% / RVOL: {r.get('rvol',1.0)}倍 / 確定勝率: {ft.get('actual_win_rate',0):.1f}% ({ft.get('win_count',0)}勝/{ft.get('total_days',0)}戦) 累計損益: {ft.get('total_profit_yen',0):+,.0f}円
 以下のJSON配列のみを出力（5名）：[{{"speaker": "アイコン 名前", "role_label": "専門スタンス", "tone": "agree|doubt|rage|normal", "text": "内容"}}]"""
-        user_msg = f"【今回の入力】\n『{uq if uq else f'（{r[\"name\"]}の固有テーマと本日の5分足OHLCV波形を踏まえた初期合議）'}』"
+                r_name = r["name"]
+        user_msg = f"【今回の入力】\n『{uq if uq else f'（{r_name}の固有テーマと本日の5分足OHLCV波形を踏まえた初期合議）'}』"
         raw_txt, used_mod = call_real_llm_api(sys_p, user_msg, expect_json=True)
         llm_turns = _parse_llm_json_turns(raw_txt)
         engine_status = f"🔵 Gemini マルチペルソナ合議（稼働モデル: {GEMINI_MODEL_DISPLAY_NAMES.get(used_mod, used_mod)}）" if llm_turns else "⚙️ クオンツルールベース合議（Gemini応答フォールバック）"
