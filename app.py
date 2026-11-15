@@ -82,16 +82,16 @@ DB_SQLITE_PATH = "yamashishi_core.db"
 
 GEMINI_MODELS = [
     "gemini-3.8-flash",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-pro"
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite"
 ]
 
 GEMINI_MODEL_DISPLAY_NAMES = {
-    "gemini-3.8-flash": "Gemini 3.8 Flash (最新推奨・高速・高精度モデル)",
-    "gemini-2.5-flash": "Gemini 2.5 Flash (安定・無料枠バランス型)",
-    "gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite (最軽量・無料枠上限最大・超高速)",
-    "gemini-2.5-pro": "Gemini 2.5 Pro (高精度推論 ※無料枠はレート制限厳しめ)"
+    "gemini-3.8-flash": "Gemini 3.8 Flash (最新推奨・高精度フラッグシップ・無料枠対応)",
+    "gemini-3.6-flash": "Gemini 3.6 Flash (高速・高安定バランス型・無料枠対応)",
+    "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite (軽量・高速レスポンス・無料枠上限大)",
+    "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite (超軽量・最速フォールバック用)"
 }
 
 DYNAMIC_GENRES = ["半導体・前工程・検査", "AI・防衛・国策", "AI電力・超電導・電線", "宇宙・量子・次世代テック", "小型急騰・仕手・モメンタム"]
@@ -301,7 +301,6 @@ def encrypt_secret_str(p: str) -> str:
 def _is_valid_gemini_key(k: str) -> bool:
     if not k:
         return False
-    # 新形式 Authキー (AQ.〜) または 旧形式 Standardキー (AIza〜) の両方を正規キーとして認める
     return (k.startswith("AQ.") and len(k) >= 40) or (k.startswith("AIza") and len(k) >= 35)
 
 def decrypt_secret_str(c: str) -> str:
@@ -335,15 +334,12 @@ def sanitize_api_key(k: str) -> str:
     if not k:
         return ""
     norm = unicodedata.normalize("NFKC", str(k)).strip()
-    # 1. 新形式 Google AI Studio Authキー (AQ. + 英数字/記号) をピンポイント抽出（ピリオドを絶対に消さない）
     m_aq = re.search(r"(AQ\.[0-9A-Za-z_\-\.]{40,70})", norm)
     if m_aq:
         return m_aq.group(1)
-    # 2. 旧形式 Google AI Studio Standardキー (AIza + 35文字 = 39文字) を抽出
     m_aiza = re.search(r"(AIza[0-9A-Za-z_\-]{30,45})", norm)
     if m_aiza:
         return m_aiza.group(1)
-    # 3. フォールバック時もピリオド(.)を除去せず保持する
     return re.sub(r"[^A-Za-z0-9_\-\.]", "", clean_k(norm))
 
 def gen_code(em: str) -> str: return hmac.new(SECRET_KEY.encode(), em.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
@@ -387,8 +383,8 @@ def load_gemini_cfg() -> dict:
     raw = db_get("llm", {})
     if not isinstance(raw, dict):
         raw = {}
-    mod = raw.get("gemini_model") or raw.get("models", {}).get("gemini", "gemini-3.8-flash")
-    if mod == "gemini-2.0-flash" or mod not in GEMINI_MODELS:
+    mod = str(raw.get("gemini_model") or raw.get("models", {}).get("gemini", "gemini-3.8-flash")).strip()
+    if not mod or mod.startswith(("gemini-2.", "gemini-1.")) or mod not in GEMINI_MODELS:
         mod = "gemini-3.8-flash"
     enc_k = raw.get("enc_gemini_key") or raw.get("enc_keys", {}).get("gemini", "")
     dec_k = sanitize_api_key(decrypt_secret_str(enc_k))
@@ -401,7 +397,8 @@ def load_gemini_cfg() -> dict:
     return {"model": mod, "api_key": dec_k}
 
 def save_llm_encrypted(model: str, api_key: str):
-    clean_m = model if (model in GEMINI_MODELS and model != "gemini-2.0-flash") else "gemini-3.8-flash"
+    raw_m = str(model or "").strip()
+    clean_m = raw_m if (raw_m and not raw_m.startswith(("gemini-2.", "gemini-1.")) and raw_m in GEMINI_MODELS) else "gemini-3.8-flash"
     clean_api_k = sanitize_api_key(api_key)
     db_set("llm", {
         "provider": "gemini",
@@ -585,15 +582,14 @@ def send_mail(to_em: str, subj: str, body: str, cat: str = "自動通知") -> bo
     return True
 
 # ==========================================
-# 4. Google Gemini API 専用連携関数（BLOCK_NONE・多段フォールバック・systemInstruction・JSONモード対応）
+# 4. Google Gemini API 専用連携関数（BLOCK_NONE・動的モデル検出・多段フォールバック・Thinking対応）
 # ==========================================
 def build_gemini_url(model: str, key: str = "") -> str:
-    clean_m = model.strip()
+    clean_m = str(model or "").strip()
     if clean_m.startswith("models/"):
         clean_m = clean_m[7:]
-    if clean_m == "gemini-2.0-flash" or clean_m not in GEMINI_MODELS:
+    if not clean_m or clean_m.startswith(("gemini-2.", "gemini-1.")):
         clean_m = "gemini-3.8-flash"
-    # 新形式(AQ.)での二重認証エラーを防ぐため、キーはURLではなくヘッダーで渡す
     return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent"
 
 def _gemini_safety_settings() -> list:
@@ -620,12 +616,58 @@ def _gemini_headers(api_key: str = "", use_bearer: bool = False) -> dict:
             h["x-goog-api-key"] = clean_k_val
     return h
 
-def _build_fallback_chain(primary_model: str) -> list:
+def fetch_available_gemini_models(api_key: str) -> list:
+    clean_k_val = sanitize_api_key(api_key)
+    if not clean_k_val:
+        return []
+    url = "https://generativelanguage.googleapis.com/v1beta/models"
+    ctx = ssl.create_default_context()
+    for use_bearer in ([False, True] if clean_k_val.startswith("AQ.") else [False]):
+        try:
+            req = urllib.request.Request(url, headers=_gemini_headers(clean_k_val, use_bearer=use_bearer), method="GET")
+            with urllib.request.urlopen(req, context=ctx, timeout=12.0) as r:
+                data = json.loads(r.read().decode("utf-8"))
+                avail = []
+                for m in data.get("models", []):
+                    name = m.get("name", "").replace("models/", "")
+                    methods = m.get("supportedGenerationMethods", [])
+                    if "generateContent" in methods and "gemini-2." not in name and "gemini-1." not in name:
+                        if any(k in name for k in ["flash", "pro"]) and not any(x in name for x in ["image", "tts", "audio", "embedding", "vision"]):
+                            avail.append(name)
+                if avail:
+                    return avail
+        except Exception:
+            continue
+    return []
+
+def _build_fallback_chain(primary_model: str, api_key: str = "") -> list:
     chain = []
-    for m in [primary_model, "gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]:
-        if m in GEMINI_MODELS and m not in chain:
+    base_candidates = [
+        primary_model,
+        "gemini-3.8-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite"
+    ]
+    for m in base_candidates:
+        if m and not m.startswith("gemini-2.") and not m.startswith("gemini-1.") and m not in chain:
             chain.append(m)
+    if api_key:
+        for dm in fetch_available_gemini_models(api_key):
+            if dm not in chain:
+                chain.append(dm)
     return chain
+
+def _extract_gemini_response_text(resp_data: dict) -> str:
+    cands = resp_data.get("candidates", [])
+    if not cands or "content" not in cands[0]:
+        return ""
+    parts = cands[0]["content"].get("parts", [])
+    non_thought_texts = [p.get("text", "") for p in parts if "text" in p and not p.get("thought")]
+    if non_thought_texts:
+        return "".join(non_thought_texts)
+    any_texts = [p.get("text", "") for p in parts if "text" in p]
+    return "".join(any_texts)
 
 def test_single_llm_api(mod: str, key: str) -> tuple:
     clean_api_k = sanitize_api_key(key)
@@ -641,29 +683,36 @@ def test_single_llm_api(mod: str, key: str) -> tuple:
         )
 
     ctx = ssl.create_default_context()
-    candidates = _build_fallback_chain(mod)
+    candidates = _build_fallback_chain(mod, clean_api_k)
     model_errors = []
     key_preview = f"{clean_api_k[:6]}...{clean_api_k[-4:]} ({len(clean_api_k)}文字)"
-    auth_modes = [False, True] if clean_api_k.startswith("AQ.") else [False]
+    auth_attempts = (
+        [("x-goog-api-key", False, False), ("Authorization: Bearer", True, False), ("URL ?key=", False, True)]
+        if clean_api_k.startswith("AQ.")
+        else [("x-goog-api-key", False, False), ("URL ?key=", False, True)]
+    )
 
     for idx, m_test in enumerate(candidates):
-        url = build_gemini_url(m_test, clean_api_k)
+        base_url = build_gemini_url(m_test, clean_api_k)
         payload = {
             "contents": [{"role": "user", "parts": [{"text": "Respond with OK"}]}],
-            "generationConfig": {"maxOutputTokens": 20},
+            "generationConfig": {"maxOutputTokens": 256},
             "safetySettings": _gemini_safety_settings()
         }
         d = json.dumps(payload).encode("utf-8")
 
-        for use_bearer in auth_modes:
-            auth_label = "Authorization: Bearer" if use_bearer else "x-goog-api-key"
+        for auth_label, use_bearer, use_query_key in auth_attempts:
             try:
-                req = urllib.request.Request(url, data=d, headers=_gemini_headers(clean_api_k, use_bearer=use_bearer), method="POST")
-                with urllib.request.urlopen(req, context=ctx, timeout=15.0) as r:
+                if use_query_key:
+                    url_with_key = f"{base_url}?key={urllib.parse.quote(clean_api_k)}"
+                    req = urllib.request.Request(url_with_key, data=d, headers=_gemini_headers(""), method="POST")
+                else:
+                    req = urllib.request.Request(base_url, data=d, headers=_gemini_headers(clean_api_k, use_bearer=use_bearer), method="POST")
+                with urllib.request.urlopen(req, context=ctx, timeout=35.0) as r:
                     resp_data = json.loads(r.read().decode("utf-8"))
-                    txt = resp_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    txt = _extract_gemini_response_text(resp_data)
                     fb_note = f" (※{mod}から自動フォールバック)" if m_test != mod else ""
-                    auth_note = f" / 認証方式: {auth_label}" if use_bearer else ""
+                    auth_note = f" / 認証方式: {auth_label}" if (use_bearer or use_query_key) else ""
                     return True, f"接続成功 [認識キー: {key_preview}] (稼働モデル: {m_test}{fb_note}{auth_note})\n応答: {txt.strip()[:40]}"
             except urllib.error.HTTPError as he:
                 err_body = ""
@@ -674,19 +723,15 @@ def test_single_llm_api(mod: str, key: str) -> tuple:
                 short_err = re.sub(r"\s+", " ", err_body)[:120] or he.reason
                 model_errors.append(f"・{m_test} [{auth_label}]: HTTP {he.code} ({short_err})")
 
-                if clean_api_k.startswith("AQ.") and not use_bearer and he.code in (401, 403):
+                if he.code in (400, 401, 403):
                     time.sleep(0.3)
                     continue
-
-                if "API_KEY_INVALID" in err_body or "API key not valid" in err_body:
-                    err_summary = "\n".join(model_errors)
-                    return (
-                        False,
-                        f"Google側でAPIキーが無効と判定されました [送信キー: {key_preview}]。\n{err_summary}"
-                    )
                 break
             except Exception as e:
                 model_errors.append(f"・{m_test} [{auth_label}]: 通信例外 ({str(e)})")
+                if not use_query_key:
+                    time.sleep(0.3)
+                    continue
                 break
 
         if idx < len(candidates) - 1:
@@ -703,7 +748,7 @@ def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tup
         return None, ""
 
     ctx = ssl.create_default_context()
-    candidates = _build_fallback_chain(sel_mod)
+    candidates = _build_fallback_chain(sel_mod, api_key)
     gen_cfg = {"temperature": 0.9, "maxOutputTokens": 1800}
     if expect_json:
         gen_cfg["responseMimeType"] = "application/json"
@@ -715,30 +760,39 @@ def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tup
         "safetySettings": _gemini_safety_settings()
     }
     d = json.dumps(payload).encode("utf-8")
-    auth_modes = [False, True] if api_key.startswith("AQ.") else [False]
+    auth_attempts = (
+        [("x-goog-api-key", False, False), ("Authorization: Bearer", True, False), ("URL ?key=", False, True)]
+        if api_key.startswith("AQ.")
+        else [("x-goog-api-key", False, False), ("URL ?key=", False, True)]
+    )
 
     for idx, cand in enumerate(candidates):
-        url = build_gemini_url(cand, api_key)
-        for use_bearer in auth_modes:
-            req = urllib.request.Request(url, data=d, headers=_gemini_headers(api_key, use_bearer=use_bearer), method="POST")
+        base_url = build_gemini_url(cand, api_key)
+        for auth_label, use_bearer, use_query_key in auth_attempts:
+            if use_query_key:
+                url_with_key = f"{base_url}?key={urllib.parse.quote(api_key)}"
+                req = urllib.request.Request(url_with_key, data=d, headers=_gemini_headers(""), method="POST")
+            else:
+                req = urllib.request.Request(base_url, data=d, headers=_gemini_headers(api_key, use_bearer=use_bearer), method="POST")
             try:
-                with urllib.request.urlopen(req, context=ctx, timeout=20.0) as r:
+                with urllib.request.urlopen(req, context=ctx, timeout=45.0) as r:
                     res_json = json.loads(r.read().decode("utf-8"))
-                    cands = res_json.get("candidates", [])
-                    if cands and "content" in cands[0]:
-                        parts = cands[0]["content"].get("parts", [])
-                        if parts and "text" in parts[0]:
-                            return parts[0]["text"], cand
+                    out_txt = _extract_gemini_response_text(res_json)
+                    if out_txt:
+                        return out_txt, cand
             except urllib.error.HTTPError as he:
-                record_system_error("call_real_llm_api:http", he, f"Model: {cand}, AuthBearer: {use_bearer}, Code: {he.code}")
-                if api_key.startswith("AQ.") and not use_bearer and he.code in (401, 403):
+                record_system_error("call_real_llm_api:http", he, f"Model: {cand}, Auth: {auth_label}, Code: {he.code}")
+                if he.code in (400, 401, 403):
                     time.sleep(0.3)
                     continue
-                if he.code in (400, 401, 403, 404, 429, 500, 503):
+                if he.code in (404, 429, 500, 503):
                     break
                 return None, ""
             except Exception as e:
-                record_system_error("call_real_llm_api", e, f"Model: {cand}, AuthBearer: {use_bearer}")
+                record_system_error("call_real_llm_api", e, f"Model: {cand}, Auth: {auth_label}")
+                if not use_query_key:
+                    time.sleep(0.3)
+                    continue
                 break
 
         if idx < len(candidates) - 1:
@@ -2966,7 +3020,6 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         )
         in_gem_key = sanitize_api_key(raw_input_key)
 
-        # リアルタイムキー形式診断バッジ（AQ.新形式 ＆ AIza旧形式 両対応）
         if not in_gem_key:
             st.info("ℹ️ APIキーが未入力です。Google AI Studio (aistudio.google.com) で取得した `AQ.Ab8...` または `AIzaSy...` キーを貼り付けてください。")
         elif in_gem_key.startswith("AQ.") and len(in_gem_key) >= 45:
@@ -2995,7 +3048,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             st.success(f"✅ Gemini API設定を暗号化保存しました（認識キー: {in_gem_key[:6]}...{in_gem_key[-4:] if len(in_gem_key)>=10 else ''}）。")
 
         if col_g2.button("⚡ Gemini API 接続テスト実行", use_container_width=True):
-            with st.spinner("Google Gemini API エンドポイントへ接続テスト実行中（多段フォールバック検証）..."):
+            with st.spinner("Google Gemini API エンドポイントへ接続テスト実行中（動的モデル検出＆多段フォールバック検証）..."):
                 ok, t_msg = test_single_llm_api(in_gem_mod, in_gem_key)
                 if ok:
                     save_llm_encrypted(in_gem_mod, in_gem_key)
