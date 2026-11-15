@@ -11,33 +11,54 @@ from email.mime.text import MIMEText
 from datetime import datetime, timezone
 
 # ==========================================
-# 0. システムエラーロギング機構
+# 0. システムエラーロギング機構（再帰デッドロック防止ガード付）
 # ==========================================
 _ERROR_LOCK = threading.RLock()
+_IN_ERROR_LOGGING = threading.local()
+_FALLBACK_ERROR_LOGS = []
 MAX_ERROR_LOGS = 300
 
 def record_system_error(mod: str, err: Exception, ctx: str = ""):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    e = {
-        "id": hashlib.md5(f"{now}_{mod}_{err}_{time.time_ns()}".encode()).hexdigest()[:8],
-        "time": now, "module": mod, "error_type": type(err).__name__,
-        "message": str(err), "context": ctx, "traceback": traceback.format_exc()
-    }
-    with _ERROR_LOCK:
-        try:
-            cur = db_get("system_error_logs", [])
-            cur = cur if isinstance(cur, list) else []
-            cur.insert(0, e)
-            db_set("system_error_logs", cur[:MAX_ERROR_LOGS])
-        except Exception:
-            pass
+    if getattr(_IN_ERROR_LOGGING, "active", False):
+        return
+    _IN_ERROR_LOGGING.active = True
+    try:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        e = {
+            "id": hashlib.md5(f"{now}_{mod}_{err}_{time.time_ns()}".encode()).hexdigest()[:8],
+            "time": now, "module": mod, "error_type": type(err).__name__,
+            "message": str(err), "context": ctx, "traceback": traceback.format_exc()
+        }
+        with _ERROR_LOCK:
+            _FALLBACK_ERROR_LOGS.insert(0, e)
+            del _FALLBACK_ERROR_LOGS[MAX_ERROR_LOGS:]
+            try:
+                cur = db_get("system_error_logs", [])
+                cur = cur if isinstance(cur, list) else []
+                cur.insert(0, e)
+                db_set("system_error_logs", cur[:MAX_ERROR_LOGS])
+            except Exception:
+                pass
+    finally:
+        _IN_ERROR_LOGGING.active = False
 
 def get_system_error_logs() -> list:
-    l = db_get("system_error_logs", [])
-    return l if isinstance(l, list) else []
+    try:
+        l = db_get("system_error_logs", None)
+        if isinstance(l, list):
+            return l
+    except Exception:
+        pass
+    with _ERROR_LOCK:
+        return list(_FALLBACK_ERROR_LOGS)
 
 def clear_system_error_logs():
-    db_set("system_error_logs", [])
+    with _ERROR_LOCK:
+        _FALLBACK_ERROR_LOGS.clear()
+    try:
+        db_set("system_error_logs", [])
+    except Exception:
+        pass
 
 # ==========================================
 # 1. 初期設定とセキュリティ（Gemini API専用化・無料枠最適化）
@@ -1073,19 +1094,20 @@ defaults = {
     "last_cat": "🏆 総合TOP5", "nav_history": [], "scroll_top_trig": 0, "scroll_target_id": "", "focused_stock_item": None,
     "agent_roster": saved_agents, "inspector_roster": saved_inspectors, "fired_agents": saved_fired, "system_zero_logs": saved_sz_logs,
     "system_zero_active": saved_sz_active, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}, "last_audit_similarity_penalty": 0,
-    "last_working_gemini_model": ""
+    "last_working_gemini_model": "", "force_close_sidebar_trig": 0
 }
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 
 # ==========================================
-# 8. トップナビゲーションとサイドバー開閉JS
+# 8. トップナビゲーションとサイドバー開閉JS（タイポ修正・ADMIN自動クローズ対応）
 # ==========================================
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
     if st.button("トップに戻る", key="top_nav_top", use_container_width=True):
         st.session_state["navigation_page"] = "TOP"
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+        st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000)
         st.session_state["focused_stock_item"] = None
         st.rerun()
 
@@ -1094,6 +1116,14 @@ if st.session_state.get("scroll_target_id"):
     tid = st.session_state.get("scroll_target_id")
     scroll_target_js = f"""setTimeout(function(){{try{{const el=window.parent.document.getElementById('{tid}');if(el){{const win=el.closest('.council-scroll-window');if(win){{win.scrollTo({{top:Math.max(0,el.offsetTop-4),behavior:'smooth'}});}}(el.closest('.ai-council-box')||el).scrollIntoView({{behavior:'smooth',block:'center'}});}}}}catch(e){{}}}},120);"""
     st.session_state["scroll_target_id"] = ""
+
+is_admin_page_active = (st.session_state.get("navigation_page") == "ADMIN")
+force_close_trig = int(st.session_state.get("force_close_sidebar_trig", 0))
+force_close_js = ""
+if is_admin_page_active:
+    force_close_js = "window.parent.sessionStorage.setItem('yamashishi_sb_state','closed'); closeCustomSidebar();"
+elif force_close_trig > 0:
+    force_close_js = f"if(window.parent._lastForceCloseTrig!=={force_close_trig}){{window.parent._lastForceCloseTrig={force_close_trig};window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');closeCustomSidebar();}}"
 
 components.html(
     f"""<script>
@@ -1108,7 +1138,7 @@ components.html(
                     sb.style.setProperty('pointer-events','none','important');
                 }}
                 if(o){{
-                    o.setProperty('display','none','important');
+                    o.style.setProperty('display','none','important');
                     o.style.setProperty('pointer-events','none','important');
                 }}
                 window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');
@@ -1188,6 +1218,8 @@ components.html(
                 doc.addEventListener('pointerdown', doc._yamashishiOutsideHandler, true);
                 doc.addEventListener('click', doc._yamashishiOutsideHandler, true);
 
+                {force_close_js}
+
                 const savedState = window.parent.sessionStorage.getItem('yamashishi_sb_state');
                 if(savedState === 'open'){{
                     openCustomSidebar();
@@ -1234,6 +1266,8 @@ with st.sidebar:
     if is_admin_user:
         if st.button("🖥️ 統合管理コントロールセンター起動", use_container_width=True, type="primary"):
             st.session_state["navigation_page"] = "ADMIN"
+            st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000)
+            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
             st.rerun()
 
     with st.expander("🎯 投資スタイル ＆ アルゴリズム選択", expanded=True):
@@ -1270,6 +1304,208 @@ with st.sidebar:
         db_l = load_mem()
         if cu_l in db_l: db_l[cu_l]["last_seen_ts"] = 0; db_set("mem", db_l)
         st.session_state["authenticated_user"] = None; st.query_params.clear(); st.rerun()
+
+# ==========================================
+# 9.5 管理者専用コントロールセンター早期ルーティング（重い市場スキャン・RSSを完全スキップ）
+# ==========================================
+if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.strip().lower():
+    st.markdown("### 👑 統合管理コントロールセンター (MASTER TERMINAL)")
+    if st.button("⬅️ メイン画面に戻る", use_container_width=True, type="primary"):
+        st.session_state["navigation_page"] = "TOP"
+        st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000)
+        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+        st.rerun()
+
+    tab_gemini_sys, tab_users, tab_employment, tab_apply_wait, tab_error_logs = st.tabs([
+        "🔑 Gemini API・システム設定",
+        "👥 会員情報管理",
+        "🏢 ペルソナ編成・鬼監視情報",
+        "📩 会員申し込み審査",
+        "⚠️ システムエラーログ"
+    ])
+
+    with tab_gemini_sys:
+        st.markdown("#### 🔵 Google Gemini API 暗号化設定（全会員共通エンジン・無料枠多段フォールバック対応）")
+        st.caption("ここで保存された Gemini APIキーとモデル設定は、データベースに暗号化保存され、全会員の『Gemini マルチペルソナ合議』および『ニュースAI深掘り解説』で共通利用されます。")
+        gem_cur = load_gemini_cfg()
+        cur_m = gem_cur.get("model", "gemini-3.8-flash")
+        cur_k = gem_cur.get("api_key", "")
+
+        show_plain_key = st.checkbox("👁️ APIキーを平文表示して確認する（ブラウザの自動入力混入を防ぐため推奨）", value=False, key="chk_show_gem_key")
+        raw_input_key = st.text_input(
+            "🔑 Google Gemini API Key (新形式『AQ.〜』または旧形式『AIza〜』を入力してEnter)",
+            value=cur_k,
+            type="default" if show_plain_key else "password",
+            placeholder="AQ.Ab8RN6... または AIzaSy...",
+            key="admin_gem_key_input"
+        )
+        in_gem_key = sanitize_api_key(raw_input_key)
+
+        if not in_gem_key:
+            st.info("ℹ️ APIキーが未入力です。Google AI Studio (aistudio.google.com) で取得した `AQ.Ab8...` または `AIzaSy...` キーを貼り付けてください。")
+        elif in_gem_key.startswith("AQ.") and len(in_gem_key) >= 45:
+            st.caption(f"🟢 **有効な新形式 Gemini Authキー(AQ.)を認識中:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （正常: {len(in_gem_key)}文字）")
+        elif in_gem_key.startswith("AIza") and len(in_gem_key) == 39:
+            st.caption(f"🟢 **有効な旧形式 Gemini Standardキー(AIza)を認識中:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （正常: 39文字）")
+        elif in_gem_key.startswith(("AQ.", "AIza")):
+            st.warning(f"⚠️ **文字数注意:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （現在 {len(in_gem_key)}文字 / コピー時に末尾が欠けていないか確認してください）")
+        else:
+            st.error(f"🚨 **不正な文字列を検知:** 現在 `{in_gem_key[:4]}...`（{len(in_gem_key)}文字）が入力されています。ブラウザのパスワード自動入力が混入しています！上の「👁️平文表示」にチェックを入れ、中身を全消去してからキーを貼り付けてください。")
+
+        in_gem_mod = st.selectbox(
+            "🧠 デフォルト Gemini モデル選択",
+            GEMINI_MODELS,
+            index=GEMINI_MODELS.index(cur_m) if cur_m in GEMINI_MODELS else 0,
+            format_func=lambda m: GEMINI_MODEL_DISPLAY_NAMES.get(m, m),
+            key="admin_gem_mod_select"
+        )
+
+        col_g1, col_g2 = st.columns([1, 1])
+        if col_g1.button("💾 Gemini API設定を暗号化保存", type="primary", use_container_width=True):
+            save_llm_encrypted(in_gem_mod, in_gem_key)
+            st.session_state["council_threads"] = {}
+            st.session_state["council_meta"] = {}
+            st.session_state["news_ai_deep_cache"] = {}
+            st.success(f"✅ Gemini API設定を暗号化保存しました（認識キー: {in_gem_key[:6]}...{in_gem_key[-4:] if len(in_gem_key)>=10 else ''}）。")
+
+        if col_g2.button("⚡ Gemini API 接続テスト実行", use_container_width=True):
+            with st.spinner("Google Gemini API エンドポイントへ接続テスト実行中（動的モデル検出＆多段フォールバック検証）..."):
+                ok, t_msg = test_single_llm_api(in_gem_mod, in_gem_key)
+                if ok:
+                    save_llm_encrypted(in_gem_mod, in_gem_key)
+                    st.session_state["council_threads"] = {}
+                    st.session_state["council_meta"] = {}
+                    st.session_state["news_ai_deep_cache"] = {}
+                    st.success(f"✅ {t_msg}（設定も自動保存しました）")
+                else:
+                    st.error(f"❌ 接続テスト失敗:\n{t_msg}")
+
+        st.markdown("<hr style='margin:14px 0; border-color:rgba(56,189,248,0.25);'>", unsafe_allow_html=True)
+        st.markdown("#### 📧 SMTPメール通知サーバー設定")
+        smtp_cur = load_smtp()
+        with st.form("admin_smtp_form"):
+            sc1, sc2 = st.columns(2)
+            s_user = sc1.text_input("SMTP ユーザー (送信元メール)", value=smtp_cur.get("smtp_user", ADMIN_EMAIL))
+            s_pass = sc2.text_input("SMTP パスワード / アプリパスワード", value=smtp_cur.get("smtp_pass", ""), type="password")
+            sc3, sc4 = st.columns([3, 1])
+            s_srv = sc3.text_input("SMTP サーバーホスト", value=smtp_cur.get("smtp_server", "smtp.mail.yahoo.co.jp"))
+            s_port = sc4.number_input("ポート番号", min_value=1, max_value=65535, value=int(smtp_cur.get("smtp_port", 465)))
+            if st.form_submit_button("💾 SMTPメール設定を保存", use_container_width=True):
+                save_smtp(s_user, s_pass, s_srv, int(s_port))
+                st.success("✅ SMTPメールサーバー設定を保存しました。")
+
+        st.markdown("<hr style='margin:14px 0; border-color:rgba(56,189,248,0.25);'>", unsafe_allow_html=True)
+        st.markdown("#### ⚔️ 市場サバイバル入れ替え戦ログ（直近履歴）")
+        surv_logs = db_get("market_survival_logs", [])
+        if surv_logs:
+            for sl in surv_logs[:20]:
+                st.markdown(f'<div style="background:rgba(15,23,42,0.85);border-left:3px solid #f59e0b;padding:6px 10px;margin-bottom:6px;border-radius:4px;font-size:11.5px;"><span style="color:#94a3b8;font-size:10px;">{html.escape(sl.get("time",""))}</span><br><span style="color:#f8fafc;">{html.escape(sl.get("msg",""))}</span></div>', unsafe_allow_html=True)
+        else:
+            st.info("現在記録されている市場サバイバル入れ替え戦ログはありません。")
+
+    with tab_users:
+        st.markdown("#### 📋 登録済み会員一覧 (データベース同期中)")
+        db_m, sec_m = load_mem(), load_sec()
+        rows = "".join([f"<tr><td><b>{html.escape(u.get('name',''))}</b></td><td>{html.escape(em)}</td><td style='color:#38bdf8;font-family:monospace;'>{html.escape(u.get('passcode','-'))}</td><td style='color:#94a3b8;font-family:monospace;'>{html.escape(u.get('pin_hash','-')[:8])}...</td><td style='color:#fde047;font-family:monospace;'>{html.escape(u.get('fp','-'))}</td><td>{html.escape(u.get('applied_at','-'))}</td><td><span style='color:{'#10b981' if u.get('status')=='approved' else ('#ef4444' if u.get('status')=='banned' else '#f59e0b')}'><b>{html.escape(u.get('status',''))}</b></span></td></tr>" for em, u in list(db_m.items())[:200]])
+        st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>お名前</th><th>メールアドレス</th><th>専用パスコード</th><th>PINハッシュ</th><th>端末指紋 (FP)</th><th>登録日</th><th>状態</th></tr></thead><tbody>{rows}</tbody></table></div>', unsafe_allow_html=True)
+
+        st.markdown("<br><b>⚡ 会員個別操作パネル</b>", unsafe_allow_html=True)
+        col_u1, _ = st.columns([3, 2])
+        target_em = col_u1.selectbox("操作対象会員を選択", list(db_m.keys()))
+        if target_em and target_em != ADMIN_EMAIL.strip().lower():
+            u_status = db_m[target_em].get("status", "")
+            b1, b2, b3 = st.columns(3)
+            if u_status == "approved":
+                if b1.button("⏸️ アカウント一時停止", use_container_width=True): db_m[target_em]["status"] = "suspended"; db_set("mem", db_m); st.success(f"{target_em} を一時停止しました"); st.rerun()
+            elif b1.button("▶️ 利用再開 (承認)", use_container_width=True): db_m[target_em]["status"] = "approved"; db_set("mem", db_m); st.success(f"{target_em} を再開しました"); st.rerun()
+            if b2.button("🚫 永久BAN (端末/IP遮断)", use_container_width=True):
+                db_m[target_em]["status"] = "banned"
+                now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                for f_k in ("fp", "raw_hfp"):
+                    val = db_m[target_em].get(f_k)
+                    if val and val != "-": sec_m.setdefault("banned_fps", {})[val] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN"}
+                sec_m.setdefault("banned_emails", {})[target_em] = {"banned_at": now_s, "orig": target_em}
+                db_set("mem", db_m); db_set("sec", sec_m); st.error(f"{target_em} を永久BANリストに登録しました"); st.rerun()
+            if b3.button("🗑️ 完全削除", use_container_width=True):
+                del db_m[target_em]; db_set("mem", db_m); st.warning(f"{target_em} のデータを抹消しました"); st.rerun()
+
+    with tab_employment:
+        st.markdown("#### 🏢 SYSTEM-ZERO & ペルソナ品質監視センター")
+        audit_m = _compute_real_audit_metrics()
+        h_col = "#10b981" if audit_m["health_score"] >= 90 else ("#fde047" if audit_m["health_score"] >= 75 else "#ef4444")
+        st.markdown(
+            f'<div style="background:rgba(168,85,247,0.12);border:1px solid #c084fc;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px;">'
+            f'👁️‍🗨️ <b>システム健全性・プロンプト遵守率モニター:</b> <b style="color:{h_col};">{audit_m["health_score"]}点</b> '
+            f'(システムエラー: {audit_m["err_cnt"]}件 / 粛清: {audit_m["fired_cnt"]}件 / 類似度減点: {audit_m["sim_pen"]}pt)'
+            f'</div>', unsafe_allow_html=True
+        )
+
+        c_sz1, c_sz2 = st.columns([3, 1])
+        sz_act = st.session_state.get("system_zero_active", True)
+        c_sz1.markdown(f"**自動品質監視プロトコル:** {'🟢 稼働中 (定型文・オウム返し自動粛清有効)' if sz_act else '🔴 停止中'}")
+        if sz_act:
+            if c_sz2.button("💀 監視プロトコルを停止", type="primary", use_container_width=True):
+                st.session_state["system_zero_active"] = False; save_agi_system(); st.warning("監視プロトコルを停止しました。"); st.rerun()
+        elif c_sz2.button("⚡ 監視プロトコルを再起動", use_container_width=True):
+            st.session_state["system_zero_active"] = True; save_agi_system(); st.success("監視プロトコルを再稼働しました。"); st.rerun()
+
+        st.markdown("<b>🟢 稼働中ペルソナ一覧（プロンプト遵守・健全性スコア）</b>", unsafe_allow_html=True)
+        agents_now = st.session_state.get("agent_roster") or DEFAULT_AGENTS
+        for ak, av in list(agents_now.items())[:10]:
+            real_sc = int(np.clip(int(av.get("score", 95)) - audit_m["sim_pen"] - (1 if audit_m["err_cnt"] > 3 else 0), 60, 99))
+            st.markdown(f'<div style="background:rgba(2,6,23,0.7);border:1px solid rgba(16,185,129,0.25);border-radius:5px;padding:6px 10px;margin-bottom:5px;font-size:11.5px;"><span style="font-weight:700;color:#f8fafc;">{html.escape(av["icon"])} {html.escape(av["name"])}</span> <span style="color:#fde047;float:right;font-weight:800;">プロンプト遵守・健全性スコア: {real_sc}点</span><br><span style="color:#a7f3d0;">専門視点: {html.escape(av["good"])}</span></div>', unsafe_allow_html=True)
+
+        st.markdown("<br><b>💀 過去に解雇・粛清されたペルソナ履歴</b>", unsafe_allow_html=True)
+        fl = st.session_state.get("fired_agents", [])
+        if fl:
+            rows_fl = "".join([f"<tr><td>{html.escape(fa.get('time','-'))}</td><td style='color:#f87171;'><b>{html.escape(fa.get('name',''))}</b></td><td style='color:#fde047;'>{html.escape(str(fa.get('score','')))}点</td><td style='color:#38bdf8;'>{html.escape(fa.get('fired_by','特命監査員'))}</td><td>{html.escape(fa.get('reason',''))}</td></tr>" for fa in fl[:50]])
+            st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>解雇日時</th><th>ペルソナ名</th><th>健全性スコア</th><th>執行者</th><th>解雇理由・違反事項</th></tr></thead><tbody>{rows_fl}</tbody></table></div>', unsafe_allow_html=True)
+        else: st.caption("現在、解雇履歴はありません。全ペルソナがプロンプト遵守基準をクリアして稼働しています。")
+
+    with tab_apply_wait:
+        st.markdown("#### 📩 新規会員登録 審査待ちリスト")
+        db_all = load_mem()
+        pending = {em: u for em, u in db_all.items() if u.get("status") == "pending"}
+        if pending:
+            for pem, pu in list(pending.items()):
+                st.markdown(f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 14px;margin-bottom:8px;"><span style="font-size:13.5px;font-weight:800;color:#f8fafc;">{html.escape(pu.get("name","未入力"))}</span> <span style="font-size:11.5px;color:#94a3b8;">({html.escape(pem)})</span><br><span style="font-size:10.5px;color:#64748b;">申請日: {html.escape(pu.get("applied_at","-"))} ｜ 端末FP: {html.escape(pu.get("fp","-"))}</span></div>', unsafe_allow_html=True)
+                cb1, cb2 = st.columns([1, 1])
+                if cb1.button(f"✅ 承認する ({pu.get('name','')})", key=f"appr_{pem}", use_container_width=True):
+                    db_all[pem]["status"], db_all[pem]["approved_at"] = "approved", datetime.now().strftime("%Y-%m-%d %H:%M"); db_set("mem", db_all)
+                    send_mail(pem, "【YAMASHISHI LAB】会員登録が承認されました", f"{pu.get('name','')} 様\n申請が承認されました。専用アクセスコードは【 {db_all[pem]['passcode']} 】です。")
+                    st.success(f"{pem} を承認しました"); st.rerun()
+                if cb2.button(f"🚫 拒否・却下 ({pu.get('name','')})", key=f"rej_{pem}", use_container_width=True):
+                    del db_all[pem]; db_set("mem", db_all); st.warning(f"{pem} の申請を却下しました"); st.rerun()
+        else: st.info("現在、承認待ちの新規申請はありません。")
+
+    with tab_error_logs:
+        st.markdown("#### ⚠️ システムエラーログ管理 & ダウンロードセンター")
+        err_list = get_system_error_logs()
+        st.caption(f"蓄積されたエラー件数: **{len(err_list)} 件** (最大 {MAX_ERROR_LOGS} 件まで自動リングバッファ保持)")
+        col_down, col_clear = st.columns([2, 2])
+        if err_list:
+            compact_export = [
+                {
+                    "id": e.get("id", ""),
+                    "time": e.get("time", ""),
+                    "module": e.get("module", ""),
+                    "error_type": e.get("error_type", ""),
+                    "message": str(e.get("message", ""))[:300],
+                    "context": str(e.get("context", ""))[:200],
+                    "traceback": str(e.get("traceback", ""))[:1200]
+                }
+                for e in err_list[:100]
+            ]
+            col_down.download_button(label="📥 直近100件のエラーログをJSONでエクスポート", data=json.dumps(compact_export, ensure_ascii=False), file_name=f"yamashishi_error_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json", mime="application/json", use_container_width=True)
+            if col_clear.button("🗑️ エラーログをすべて消去", use_container_width=True):
+                clear_system_error_logs(); st.success("すべてのエラーログを消去しました。"); st.rerun()
+            rows_err = "".join([f"<tr><td>{html.escape(e.get('time','-'))}</td><td style='color:#38bdf8;font-weight:700;'>{html.escape(e.get('module','-'))}</td><td style='color:#ef4444;font-family:monospace;'>{html.escape(e.get('error_type','-'))}</td><td>{html.escape(str(e.get('message','-'))[:60])}</td><td style='color:#94a3b8;'>{html.escape(str(e.get('context','-'))[:40])}</td></tr>" for e in err_list[:20]])
+            st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>発生日時</th><th>モジュール名</th><th>例外タイプ</th><th>メッセージ</th><th>補足情報</th></tr></thead><tbody>{rows_err}</tbody></table></div><br><b>🔍 スタックトレース詳細ビューア (直近5件)</b>', unsafe_allow_html=True)
+            for idx_e, e_item in enumerate(err_list[:5]):
+                with st.expander(f"🔴 #{idx_e+1} [{e_item.get('time','')}] {e_item.get('module','')} - {e_item.get('error_type','')}"):
+                    st.code(str(e_item.get("traceback") or "スタックトレースなし")[:1500], language="python")
+        else: st.success("🎉 現在システム上に記録されたエラー・警告はありません。全モジュールが極めて正常に動作しています。")
+    st.stop()
 
 # ==========================================
 # 10. 高速並列データ収集 ＆ 実測RVOL・騰落率チャレンジャー発掘
@@ -2425,13 +2661,14 @@ def _is_market_open_now(is_jp: bool) -> bool:
         utc_mins = now_utc.hour * 60 + now_utc.minute
         return (13 * 60 + 30) <= utc_mins <= (21 * 60)
 
-def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat: dict, pest: float, vwap20: float, tpv: float, slv: float, shares: int, style: str, total_capital: float = 1000000.0, risk_tolerance_pct: float = 2.0) -> dict:
+def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat: dict, pest: float, vwap20: float, tpv: float, slv: float, shares: int, style: str, total_capital: float = 1000000.0, risk_tolerance_pct: float = 2.0, shared_ledger: dict = None, save_db: bool = True) -> dict:
     """
     【QWM11_STRICT_REAL_EXECUTION】完全ガチ仕様・先読みリーク完全排除＆マルチデイ保有対応検証:
     1. 検証キャッシュバージョン "QWM11_STRICT_REAL_EXECUTION" 更新（スタイル別キー分離）。
     2. Type-A/B/C/E は陽線確定＆VWAP維持を確認した「その確定足の終値 (fill_px = bc)」でリアル約定。
     3. Type-D (ORBブレイク逆指値) は fill_px = max(bo, morning_high) 約定後、同一足内で安値がSL割れかつ陰線上ヒゲ急落 (bl <= eff_sl and bc < bo) なら即座に同一足内で逆指値損切り (LOSE)。
     4. スタイル別マルチデイ連続走査（スキャル/デイトレ: 1営業日、スイング: 最大5営業日、バイ＆ホールド: 最大10営業日）。最終日のみ午後タイムプロテクト・タイムストップ・最終大引け決済を適用し、未確定進行中トレードは確定勝敗から除外。
+    5. save_db=False 時は並列スレッド内でのSQLiteロック競合を回避し、shared_ledger上で完結させる。
     """
     is_jp = ".T" in full_code
     now_dt = datetime.now()
@@ -2451,9 +2688,23 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     plan_entry_price = float(vwap20 if tactic_type in ("Type-A", "Type-B", "Type-C", "Type-E", "Type-S") else pest)
 
     ledger_key = f"{full_code}__{st_p}"
-    ledger = db_get("daily_forward_ledger", {})
-    if not isinstance(ledger, dict): ledger = {}
-    stock_ledger = ledger.setdefault(ledger_key, {"signals": {}, "verified": {}, "algo_ver": ""})
+    if shared_ledger is not None:
+        ledger = shared_ledger
+    else:
+        ledger = db_get("daily_forward_ledger", {})
+        if not isinstance(ledger, dict): ledger = {}
+
+    with _DB_LOCK:
+        existing_sl = ledger.get(ledger_key)
+        if not isinstance(existing_sl, dict):
+            stock_ledger = {"signals": {}, "verified": {}, "algo_ver": ""}
+        else:
+            stock_ledger = {
+                "signals": dict(existing_sl.get("signals", {})),
+                "verified": dict(existing_sl.get("verified", {})),
+                "algo_ver": existing_sl.get("algo_ver", "")
+            }
+
     if stock_ledger.get("algo_ver") != "QWM11_STRICT_REAL_EXECUTION":
         stock_ledger["verified"], stock_ledger["algo_ver"] = {}, "QWM11_STRICT_REAL_EXECUTION"
 
@@ -2823,8 +3074,10 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
             keep = sorted(stock_ledger[k_name].keys(), reverse=True)[:80]
             stock_ledger[k_name] = {k: stock_ledger[k_name][k] for k in keep}
 
-    ledger[ledger_key] = stock_ledger
-    db_set("daily_forward_ledger", ledger)
+    with _DB_LOCK:
+        ledger[ledger_key] = stock_ledger
+        if save_db:
+            db_set("daily_forward_ledger", ledger)
 
     user_shares = max(1, int(shares))
     all_verified = []
@@ -2845,7 +3098,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
 
     return {"win_count": win_count, "total_days": total_days, "actual_win_rate": actual_win_rate, "total_profit_yen": total_profit_yen, "latest_result": latest_result, "history_rows": all_verified}
 
-def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True, b5=True, bal=True, bms=True, bagi_q=False, bhft=False, total_capital=1000000, risk_tolerance_pct=2.0):
+def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True, b5=True, bal=True, bms=True, bagi_q=False, bhft=False, total_capital=1000000, risk_tolerance_pct=2.0, shared_ledger=None, save_db=True):
     try:
         df = normalize_ohlcv_df(df_raw, min_rows=25)
         if df is None: return None
@@ -2951,7 +3204,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
             f"{fmt_px(tpv, is_jp)}(+{round((tpv-cv)/max(cv,1e-4)*100,1)}%)", f"{fmt_px(slv, is_jp)}({round((slv-cv)/max(cv,1e-4)*100,1)}%)",
             qm, ms, name=name, theme=theme, rel_news_title=rel_news_title, pgap=pgap, expect_pct=round(expect_pct, 1), prev_trend_weak=prev_trend_weak
         )
-        forward_test = record_and_verify_daily_Forward_test(df, code, strat, pest, vwap_today, tpv, slv, lot_info["shares"], style, total_capital=total_capital, risk_tolerance_pct=risk_tolerance_pct)
+        forward_test = record_and_verify_daily_Forward_test(df, code, strat, pest, vwap_today, tpv, slv, lot_info["shares"], style, total_capital=total_capital, risk_tolerance_pct=risk_tolerance_pct, shared_ledger=shared_ledger, save_db=save_db)
 
         t_num, t_lbl, t_col, t_bg = (
             (10, "【Lv.10：🔥S級・全力突破】", "#fff", "linear-gradient(90deg,#7e22ce,#dc2626)") if expect_pct >= 90.0 else
@@ -2978,7 +3231,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         return None
 
 # ==========================================
-# 14. 全市場オートディスカバリー＆弱肉強食サバイバル入れ替えスキャン
+# 14. 全市場オートディスカバリー＆弱肉強食サバイバル入れ替えスキャン（並列DBデッドロック解消済）
 # ==========================================
 @st.cache_data(ttl=90)
 def fetch_pool_batch(macro, style, bi, b5, bal, bms, bagi_q, bhft, total_cap=1000000, risk_pct=2.0):
@@ -3005,20 +3258,30 @@ def fetch_pool_batch(macro, style, bi, b5, bal, bms, bagi_q, bhft, total_cap=100
         except Exception as e:
             record_system_error(f"fetch_pool_batch:{p_str}", e)
 
+    shared_ledger = db_get("daily_forward_ledger", {})
+    if not isinstance(shared_ledger, dict):
+        shared_ledger = {}
+
     evaluated_all = []
     def _w(c, n, g, t):
         try: df = raw[c] if (len(codes) > 1 and c in raw) else raw
         except Exception: df = None
-        r = analyze_df(df, c, n, t, g, macro, buzz_map, style, bi, b5, bal, bms, bagi_q, bhft, total_capital=total_cap, risk_tolerance_pct=risk_pct)
+        r = analyze_df(
+            df, c, n, t, g, macro, buzz_map, style, bi, b5, bal, bms, bagi_q, bhft,
+            total_capital=total_cap, risk_tolerance_pct=risk_pct,
+            shared_ledger=shared_ledger, save_db=False
+        )
         if r: r["is_new_challenger"] = (c in challenger_codes_set)
         return r
 
-    with ThreadPoolExecutor(max_workers=min(len(combined_universe), 24)) as ex:
+    with ThreadPoolExecutor(max_workers=min(len(combined_universe), 8)) as ex:
         for f in as_completed([ex.submit(_w, c, n, g, t) for c, n, g, t in combined_universe]):
             try:
                 r = f.result()
                 if r: evaluated_all.append(r)
             except Exception as e: record_system_error("fetch_pool_batch:future", e)
+
+    db_set("daily_forward_ledger", shared_ledger)
 
     evaluated_all.sort(key=lambda x: (x["expect_pct"] * 0.75 + x["surge_attention_score"] * 0.25), reverse=True)
     survivors, survivor_codes = [], set()
@@ -3095,192 +3358,8 @@ else:
     g_res, all_res = st.session_state[_cache_pool_key]
 
 # ==========================================
-# 16. 画面レンダリング（管理者専用コントロールセンター含む）
+# 16. 画面レンダリング（フォーカス・ニュース・メインランキング）
 # ==========================================
-if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.strip().lower():
-    st.markdown("### 👑 統合管理コントロールセンター (MASTER TERMINAL)")
-    if st.button("⬅️ メイン画面に戻る", use_container_width=True, type="primary"):
-        st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
-
-    tab_gemini_sys, tab_users, tab_employment, tab_apply_wait, tab_error_logs = st.tabs([
-        "🔑 Gemini API・システム設定",
-        "👥 会員情報管理",
-        "🏢 ペルソナ編成・鬼監視情報",
-        "📩 会員申し込み審査",
-        "⚠️ システムエラーログ"
-    ])
-
-    with tab_gemini_sys:
-        st.markdown("#### 🔵 Google Gemini API 暗号化設定（全会員共通エンジン・無料枠多段フォールバック対応）")
-        st.caption("ここで保存された Gemini APIキーとモデル設定は、データベースに暗号化保存され、全会員の『Gemini マルチペルソナ合議』および『ニュースAI深掘り解説』で共通利用されます。")
-        gem_cur = load_gemini_cfg()
-        cur_m = gem_cur.get("model", "gemini-3.8-flash")
-        cur_k = gem_cur.get("api_key", "")
-
-        show_plain_key = st.checkbox("👁️ APIキーを平文表示して確認する（ブラウザの自動入力混入を防ぐため推奨）", value=False, key="chk_show_gem_key")
-        raw_input_key = st.text_input(
-            "🔑 Google Gemini API Key (新形式『AQ.〜』または旧形式『AIza〜』を入力してEnter)",
-            value=cur_k,
-            type="default" if show_plain_key else "password",
-            placeholder="AQ.Ab8RN6... または AIzaSy...",
-            key="admin_gem_key_input"
-        )
-        in_gem_key = sanitize_api_key(raw_input_key)
-
-        if not in_gem_key:
-            st.info("ℹ️ APIキーが未入力です。Google AI Studio (aistudio.google.com) で取得した `AQ.Ab8...` または `AIzaSy...` キーを貼り付けてください。")
-        elif in_gem_key.startswith("AQ.") and len(in_gem_key) >= 45:
-            st.caption(f"🟢 **有効な新形式 Gemini Authキー(AQ.)を認識中:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （正常: {len(in_gem_key)}文字）")
-        elif in_gem_key.startswith("AIza") and len(in_gem_key) == 39:
-            st.caption(f"🟢 **有効な旧形式 Gemini Standardキー(AIza)を認識中:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （正常: 39文字）")
-        elif in_gem_key.startswith(("AQ.", "AIza")):
-            st.warning(f"⚠️ **文字数注意:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （現在 {len(in_gem_key)}文字 / コピー時に末尾が欠けていないか確認してください）")
-        else:
-            st.error(f"🚨 **不正な文字列を検知:** 現在 `{in_gem_key[:4]}...`（{len(in_gem_key)}文字）が入力されています。ブラウザのパスワード自動入力が混入しています！上の「👁️平文表示」にチェックを入れ、中身を全消去してからキーを貼り付けてください。")
-
-        in_gem_mod = st.selectbox(
-            "🧠 デフォルト Gemini モデル選択",
-            GEMINI_MODELS,
-            index=GEMINI_MODELS.index(cur_m) if cur_m in GEMINI_MODELS else 0,
-            format_func=lambda m: GEMINI_MODEL_DISPLAY_NAMES.get(m, m),
-            key="admin_gem_mod_select"
-        )
-
-        col_g1, col_g2 = st.columns([1, 1])
-        if col_g1.button("💾 Gemini API設定を暗号化保存", type="primary", use_container_width=True):
-            save_llm_encrypted(in_gem_mod, in_gem_key)
-            st.session_state["council_threads"] = {}
-            st.session_state["council_meta"] = {}
-            st.session_state["news_ai_deep_cache"] = {}
-            st.success(f"✅ Gemini API設定を暗号化保存しました（認識キー: {in_gem_key[:6]}...{in_gem_key[-4:] if len(in_gem_key)>=10 else ''}）。")
-
-        if col_g2.button("⚡ Gemini API 接続テスト実行", use_container_width=True):
-            with st.spinner("Google Gemini API エンドポイントへ接続テスト実行中（動的モデル検出＆多段フォールバック検証）..."):
-                ok, t_msg = test_single_llm_api(in_gem_mod, in_gem_key)
-                if ok:
-                    save_llm_encrypted(in_gem_mod, in_gem_key)
-                    st.session_state["council_threads"] = {}
-                    st.session_state["council_meta"] = {}
-                    st.session_state["news_ai_deep_cache"] = {}
-                    st.success(f"✅ {t_msg}（設定も自動保存しました）")
-                else:
-                    st.error(f"❌ 接続テスト失敗:\n{t_msg}")
-
-        st.markdown("<hr style='margin:14px 0; border-color:rgba(56,189,248,0.25);'>", unsafe_allow_html=True)
-        st.markdown("#### 📧 SMTPメール通知サーバー設定")
-        smtp_cur = load_smtp()
-        with st.form("admin_smtp_form"):
-            sc1, sc2 = st.columns(2)
-            s_user = sc1.text_input("SMTP ユーザー (送信元メール)", value=smtp_cur.get("smtp_user", ADMIN_EMAIL))
-            s_pass = sc2.text_input("SMTP パスワード / アプリパスワード", value=smtp_cur.get("smtp_pass", ""), type="password")
-            sc3, sc4 = st.columns([3, 1])
-            s_srv = sc3.text_input("SMTP サーバーホスト", value=smtp_cur.get("smtp_server", "smtp.mail.yahoo.co.jp"))
-            s_port = sc4.number_input("ポート番号", min_value=1, max_value=65535, value=int(smtp_cur.get("smtp_port", 465)))
-            if st.form_submit_button("💾 SMTPメール設定を保存", use_container_width=True):
-                save_smtp(s_user, s_pass, s_srv, int(s_port))
-                st.success("✅ SMTPメールサーバー設定を保存しました。")
-
-        st.markdown("<hr style='margin:14px 0; border-color:rgba(56,189,248,0.25);'>", unsafe_allow_html=True)
-        st.markdown("#### ⚔️ 市場サバイバル入れ替え戦ログ（直近履歴）")
-        surv_logs = db_get("market_survival_logs", [])
-        if surv_logs:
-            for sl in surv_logs[:20]:
-                st.markdown(f'<div style="background:rgba(15,23,42,0.85);border-left:3px solid #f59e0b;padding:6px 10px;margin-bottom:6px;border-radius:4px;font-size:11.5px;"><span style="color:#94a3b8;font-size:10px;">{html.escape(sl.get("time",""))}</span><br><span style="color:#f8fafc;">{html.escape(sl.get("msg",""))}</span></div>', unsafe_allow_html=True)
-        else:
-            st.info("現在記録されている市場サバイバル入れ替え戦ログはありません。")
-
-    with tab_users:
-        st.markdown("#### 📋 登録済み会員一覧 (データベース同期中)")
-        db_m, sec_m = load_mem(), load_sec()
-        rows = "".join([f"<tr><td><b>{html.escape(u.get('name',''))}</b></td><td>{html.escape(em)}</td><td style='color:#38bdf8;font-family:monospace;'>{html.escape(u.get('passcode','-'))}</td><td style='color:#94a3b8;font-family:monospace;'>{html.escape(u.get('pin_hash','-')[:8])}...</td><td style='color:#fde047;font-family:monospace;'>{html.escape(u.get('fp','-'))}</td><td>{html.escape(u.get('applied_at','-'))}</td><td><span style='color:{'#10b981' if u.get('status')=='approved' else ('#ef4444' if u.get('status')=='banned' else '#f59e0b')}'><b>{html.escape(u.get('status',''))}</b></span></td></tr>" for em, u in db_m.items()])
-        st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>お名前</th><th>メールアドレス</th><th>専用パスコード</th><th>PINハッシュ</th><th>端末指紋 (FP)</th><th>登録日</th><th>状態</th></tr></thead><tbody>{rows}</tbody></table></div>', unsafe_allow_html=True)
-
-        st.markdown("<br><b>⚡ 会員個別操作パネル</b>", unsafe_allow_html=True)
-        col_u1, _ = st.columns([3, 2])
-        target_em = col_u1.selectbox("操作対象会員を選択", list(db_m.keys()))
-        if target_em and target_em != ADMIN_EMAIL.strip().lower():
-            u_status = db_m[target_em].get("status", "")
-            b1, b2, b3 = st.columns(3)
-            if u_status == "approved":
-                if b1.button("⏸️ アカウント一時停止", use_container_width=True): db_m[target_em]["status"] = "suspended"; db_set("mem", db_m); st.success(f"{target_em} を一時停止しました"); st.rerun()
-            elif b1.button("▶️ 利用再開 (承認)", use_container_width=True): db_m[target_em]["status"] = "approved"; db_set("mem", db_m); st.success(f"{target_em} を再開しました"); st.rerun()
-            if b2.button("🚫 永久BAN (端末/IP遮断)", use_container_width=True):
-                db_m[target_em]["status"] = "banned"
-                now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                for f_k in ("fp", "raw_hfp"):
-                    val = db_m[target_em].get(f_k)
-                    if val and val != "-": sec_m.setdefault("banned_fps", {})[val] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN"}
-                sec_m.setdefault("banned_emails", {})[target_em] = {"banned_at": now_s, "orig": target_em}
-                db_set("mem", db_m); db_set("sec", sec_m); st.error(f"{target_em} を永久BANリストに登録しました"); st.rerun()
-            if b3.button("🗑️ 完全削除", use_container_width=True):
-                del db_m[target_em]; db_set("mem", db_m); st.warning(f"{target_em} のデータを抹消しました"); st.rerun()
-
-    with tab_employment:
-        st.markdown("#### 🏢 SYSTEM-ZERO & ペルソナ品質監視センター")
-        audit_m = _compute_real_audit_metrics()
-        h_col = "#10b981" if audit_m["health_score"] >= 90 else ("#fde047" if audit_m["health_score"] >= 75 else "#ef4444")
-        st.markdown(
-            f'<div style="background:rgba(168,85,247,0.12);border:1px solid #c084fc;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px;">'
-            f'👁️‍🗨️ <b>システム健全性・プロンプト遵守率モニター:</b> <b style="color:{h_col};">{audit_m["health_score"]}点</b> '
-            f'(システムエラー: {audit_m["err_cnt"]}件 / 粛清: {audit_m["fired_cnt"]}件 / 類似度減点: {audit_m["sim_pen"]}pt)'
-            f'</div>', unsafe_allow_html=True
-        )
-
-        c_sz1, c_sz2 = st.columns([3, 1])
-        sz_act = st.session_state.get("system_zero_active", True)
-        c_sz1.markdown(f"**自動品質監視プロトコル:** {'🟢 稼働中 (定型文・オウム返し自動粛清有効)' if sz_act else '🔴 停止中'}")
-        if sz_act:
-            if c_sz2.button("💀 監視プロトコルを停止", type="primary", use_container_width=True):
-                st.session_state["system_zero_active"] = False; save_agi_system(); st.warning("監視プロトコルを停止しました。"); st.rerun()
-        elif c_sz2.button("⚡ 監視プロトコルを再起動", use_container_width=True):
-            st.session_state["system_zero_active"] = True; save_agi_system(); st.success("監視プロトコルを再稼働しました。"); st.rerun()
-
-        st.markdown("<b>🟢 稼働中ペルソナ一覧（プロンプト遵守・健全性スコア）</b>", unsafe_allow_html=True)
-        agents_now = st.session_state.get("agent_roster") or DEFAULT_AGENTS
-        for ak, av in list(agents_now.items())[:10]:
-            real_sc = int(np.clip(int(av.get("score", 95)) - audit_m["sim_pen"] - (1 if audit_m["err_cnt"] > 3 else 0), 60, 99))
-            st.markdown(f'<div style="background:rgba(2,6,23,0.7);border:1px solid rgba(16,185,129,0.25);border-radius:5px;padding:6px 10px;margin-bottom:5px;font-size:11.5px;"><span style="font-weight:700;color:#f8fafc;">{html.escape(av["icon"])} {html.escape(av["name"])}</span> <span style="color:#fde047;float:right;font-weight:800;">プロンプト遵守・健全性スコア: {real_sc}点</span><br><span style="color:#a7f3d0;">専門視点: {html.escape(av["good"])}</span></div>', unsafe_allow_html=True)
-
-        st.markdown("<br><b>💀 過去に解雇・粛清されたペルソナ履歴</b>", unsafe_allow_html=True)
-        fl = st.session_state.get("fired_agents", [])
-        if fl:
-            rows_fl = "".join([f"<tr><td>{html.escape(fa.get('time','-'))}</td><td style='color:#f87171;'><b>{html.escape(fa.get('name',''))}</b></td><td style='color:#fde047;'>{html.escape(str(fa.get('score','')))}点</td><td style='color:#38bdf8;'>{html.escape(fa.get('fired_by','特命監査員'))}</td><td>{html.escape(fa.get('reason',''))}</td></tr>" for fa in fl])
-            st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>解雇日時</th><th>ペルソナ名</th><th>健全性スコア</th><th>執行者</th><th>解雇理由・違反事項</th></tr></thead><tbody>{rows_fl}</tbody></table></div>', unsafe_allow_html=True)
-        else: st.caption("現在、解雇履歴はありません。全ペルソナがプロンプト遵守基準をクリアして稼働しています。")
-
-    with tab_apply_wait:
-        st.markdown("#### 📩 新規会員登録 審査待ちリスト")
-        db_all = load_mem()
-        pending = {em: u for em, u in db_all.items() if u.get("status") == "pending"}
-        if pending:
-            for pem, pu in list(pending.items()):
-                st.markdown(f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 14px;margin-bottom:8px;"><span style="font-size:13.5px;font-weight:800;color:#f8fafc;">{html.escape(pu.get("name","未入力"))}</span> <span style="font-size:11.5px;color:#94a3b8;">({html.escape(pem)})</span><br><span style="font-size:10.5px;color:#64748b;">申請日: {html.escape(pu.get("applied_at","-"))} ｜ 端末FP: {html.escape(pu.get("fp","-"))}</span></div>', unsafe_allow_html=True)
-                cb1, cb2 = st.columns([1, 1])
-                if cb1.button(f"✅ 承認する ({pu.get('name','')})", key=f"appr_{pem}", use_container_width=True):
-                    db_all[pem]["status"], db_all[pem]["approved_at"] = "approved", datetime.now().strftime("%Y-%m-%d %H:%M"); db_set("mem", db_all)
-                    send_mail(pem, "【YAMASHISHI LAB】会員登録が承認されました", f"{pu.get('name','')} 様\n申請が承認されました。専用アクセスコードは【 {db_all[pem]['passcode']} 】です。")
-                    st.success(f"{pem} を承認しました"); st.rerun()
-                if cb2.button(f"🚫 拒否・却下 ({pu.get('name','')})", key=f"rej_{pem}", use_container_width=True):
-                    del db_all[pem]; db_set("mem", db_all); st.warning(f"{pem} の申請を却下しました"); st.rerun()
-        else: st.info("現在、承認待ちの新規申請はありません。")
-
-    with tab_error_logs:
-        st.markdown("#### ⚠️ システムエラーログ管理 & ダウンロードセンター")
-        err_list = get_system_error_logs()
-        st.caption(f"蓄積されたエラー件数: **{len(err_list)} 件** (最大 {MAX_ERROR_LOGS} 件まで自動リングバッファ保持)")
-        col_down, col_clear = st.columns([2, 2])
-        if err_list:
-            col_down.download_button(label="📥 エラーログ全件をJSONでエクスポート", data=json.dumps(err_list, ensure_ascii=False, indent=2), file_name=f"yamashishi_error_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json", mime="application/json", use_container_width=True)
-            if col_clear.button("🗑️ エラーログをすべて消去", use_container_width=True):
-                clear_system_error_logs(); st.success("すべてのエラーログを消去しました。"); st.rerun()
-            rows_err = "".join([f"<tr><td>{html.escape(e.get('time','-'))}</td><td style='color:#38bdf8;font-weight:700;'>{html.escape(e.get('module','-'))}</td><td style='color:#ef4444;font-family:monospace;'>{html.escape(e.get('error_type','-'))}</td><td>{html.escape(e.get('message','-')[:60])}</td><td style='color:#94a3b8;'>{html.escape(e.get('context','-'))}</td></tr>" for e in err_list[:30]])
-            st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>発生日時</th><th>モジュール名</th><th>例外タイプ</th><th>メッセージ</th><th>補足情報</th></tr></thead><tbody>{rows_err}</tbody></table></div><br><b>🔍 スタックトレース詳細ビューア (直近10件)</b>', unsafe_allow_html=True)
-            for e_item in err_list[:10]:
-                with st.expander(f"🔴 [{e_item['time']}] {e_item['module']} - {e_item['error_type']}: {e_item['message'][:40]}..."):
-                    st.code(e_item.get("traceback") or "スタックトレースなし", language="python")
-        else: st.success("🎉 現在システム上に記録されたエラー・警告はありません。全モジュールが極めて正常に動作しています。")
-    st.stop()
-
 focused_item = st.session_state.get("focused_stock_item")
 if focused_item:
     st.markdown("### 🔵 銘柄詳細・買い方合議フォーカスモード")
