@@ -40,7 +40,7 @@ def clear_system_error_logs():
     db_set("system_error_logs", [])
 
 # ==========================================
-# 1. 初期設定とセキュリティ（Gemini API専用化）
+# 1. 初期設定とセキュリティ（Gemini API専用化・無料枠最適化）
 # ==========================================
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 
@@ -66,13 +66,15 @@ DB_SQLITE_PATH = "yamashishi_core.db"
 GEMINI_MODELS = [
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
     "gemini-2.5-pro"
 ]
 
 GEMINI_MODEL_DISPLAY_NAMES = {
-    "gemini-2.5-flash": "Gemini 2.5 Flash (推奨・バランス型)",
-    "gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite (最軽量・無料枠安定・高速)",
-    "gemini-2.5-pro": "Gemini 2.5 Pro (高精度・推論特化)"
+    "gemini-2.5-flash": "Gemini 2.5 Flash (推奨・無料枠対応・バランス型)",
+    "gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite (最軽量・無料枠上限最大・超高速)",
+    "gemini-2.0-flash": "Gemini 2.0 Flash (無料枠安定・高レスポンス)",
+    "gemini-2.5-pro": "Gemini 2.5 Pro (高精度推論 ※無料枠はレート制限厳しめ)"
 }
 
 DYNAMIC_GENRES = ["半導体・前工程・検査", "AI・防衛・国策", "AI電力・超電導・電線", "宇宙・量子・次世代テック", "小型急騰・仕手・モメンタム"]
@@ -298,6 +300,7 @@ def decrypt_secret_str(c: str) -> str:
     return ""
 
 def clean_k(k: str) -> str: return re.sub(r"\s+", "", unicodedata.normalize("NFKC", str(k or "")).strip().strip("\"'"))
+def sanitize_api_key(k: str) -> str: return re.sub(r"[^A-Za-z0-9_\-]", "", clean_k(k))
 def gen_code(em: str) -> str: return hmac.new(SECRET_KEY.encode(), em.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
 def gen_tok(em: str, act: str) -> str: return hmac.new(SECRET_KEY.encode(), f"{em.strip().lower()}:{act}:{SECRET_KEY[:16]}:{int(time.time() // 86400)}".encode(), hashlib.sha256).hexdigest()[:16]
 
@@ -342,15 +345,15 @@ def load_gemini_cfg() -> dict:
     if mod not in GEMINI_MODELS:
         mod = "gemini-2.5-flash"
     enc_k = raw.get("enc_gemini_key") or raw.get("enc_keys", {}).get("gemini", "")
-    dec_k = clean_k(decrypt_secret_str(enc_k))
+    dec_k = sanitize_api_key(decrypt_secret_str(enc_k))
     if not dec_k:
         env_k = os.environ.get("GEMINI_API_KEY") or (st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else "")
-        dec_k = clean_k(env_k)
+        dec_k = sanitize_api_key(env_k)
     return {"model": mod, "api_key": dec_k}
 
 def save_llm_encrypted(model: str, api_key: str):
     clean_m = model if model in GEMINI_MODELS else "gemini-2.5-flash"
-    clean_api_k = clean_k(api_key)
+    clean_api_k = sanitize_api_key(api_key)
     db_set("llm", {
         "provider": "gemini",
         "gemini_model": clean_m,
@@ -533,18 +536,19 @@ def send_mail(to_em: str, subj: str, body: str, cat: str = "自動通知") -> bo
     return True
 
 # ==========================================
-# 4. Google Gemini API 専用連携関数（厳格エラー対策・BLOCK_ONLY_HIGH・最大2回試行）
+# 4. Google Gemini API 専用連携関数（BLOCK_NONE・多段フォールバック・systemInstruction・JSONモード対応）
 # ==========================================
 def build_gemini_url(model: str, key: str) -> str:
     clean_m = model.strip()
     if clean_m.startswith("models/"): clean_m = clean_m[7:]
     if clean_m not in GEMINI_MODELS:
         clean_m = "gemini-2.5-flash"
-    return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent?key={urllib.parse.quote(key.strip())}"
+    sanitized_k = sanitize_api_key(key)
+    return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent?key={urllib.parse.quote(sanitized_k)}"
 
 def _gemini_safety_settings() -> list:
     return [
-        {"category": c, "threshold": "BLOCK_ONLY_HIGH"}
+        {"category": c, "threshold": "BLOCK_NONE"}
         for c in [
             "HARM_CATEGORY_HARASSMENT",
             "HARM_CATEGORY_HATE_SPEECH",
@@ -559,13 +563,21 @@ def _gemini_headers() -> dict:
         "User-Agent": "YamashishiLab/2.0"
     }
 
+def _build_fallback_chain(primary_model: str) -> list:
+    chain = []
+    for m in [primary_model, "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]:
+        if m in GEMINI_MODELS and m not in chain:
+            chain.append(m)
+    return chain
+
 def test_single_llm_api(mod: str, key: str) -> tuple:
-    clean_api_k = clean_k(key)
+    clean_api_k = sanitize_api_key(key)
     if not clean_api_k:
-        return False, "Gemini APIキーが入力されていません。"
+        return False, "Gemini APIキーが入力されていません（英数字・ハイフン・アンダースコアのみ有効）。"
     ctx = ssl.create_default_context()
-    candidates = [mod] if mod == "gemini-2.5-flash-lite" else [mod, "gemini-2.5-flash-lite"]
+    candidates = _build_fallback_chain(mod)
     last_err = None
+    last_body = ""
 
     for idx, m_test in enumerate(candidates):
         url = build_gemini_url(m_test, clean_api_k)
@@ -580,37 +592,47 @@ def test_single_llm_api(mod: str, key: str) -> tuple:
             with urllib.request.urlopen(req, context=ctx, timeout=15.0) as r:
                 resp_data = json.loads(r.read().decode("utf-8"))
                 txt = resp_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                return True, f"接続成功 (稼働モデル: {m_test})\n応答: {txt.strip()[:40]}"
+                fb_note = f" (※{mod}から自動フォールバック)" if m_test != mod else ""
+                return True, f"接続成功 (稼働モデル: {m_test}{fb_note})\n応答: {txt.strip()[:40]}"
         except urllib.error.HTTPError as he:
             last_err = he
             err_body = ""
             try: err_body = he.read().decode("utf-8")
             except Exception: pass
-            if he.code in (404, 429, 500, 503) and idx < len(candidates) - 1:
-                time.sleep(3.5)
+            last_body = err_body
+            if he.code in (400, 403, 404, 429, 500, 503) and idx < len(candidates) - 1:
+                time.sleep(1.0)
                 continue
-            return False, f"HTTP {he.code}: {err_body[:140] or he.reason}"
+            return False, f"HTTP {he.code}: {err_body[:160] or he.reason}"
         except Exception as e:
+            if idx < len(candidates) - 1:
+                time.sleep(1.0)
+                continue
             return False, f"通信例外: {str(e)}"
 
     if last_err:
         if last_err.code == 429:
             return False, "HTTP 429: 無料枠の1分あたりリクエスト上限に達しました。しばらく待ってから再試行してください。"
-        return False, f"HTTP {last_err.code}: {last_err.reason}"
+        return False, f"HTTP {last_err.code}: {last_body[:140] or last_err.reason}"
     return False, "Gemini API接続テストに失敗しました。"
 
-def call_real_llm_api(sys_p: str, user_p: str) -> tuple:
+def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tuple:
     cfg = load_gemini_cfg()
-    api_key = cfg.get("api_key", "")
+    api_key = sanitize_api_key(cfg.get("api_key", ""))
     sel_mod = cfg.get("model", "gemini-2.5-flash")
     if not api_key:
         return None, ""
 
     ctx = ssl.create_default_context()
-    candidates = [sel_mod] if sel_mod == "gemini-2.5-flash-lite" else [sel_mod, "gemini-2.5-flash-lite"]
+    candidates = _build_fallback_chain(sel_mod)
+    gen_cfg = {"temperature": 0.9, "maxOutputTokens": 1800}
+    if expect_json:
+        gen_cfg["responseMimeType"] = "application/json"
+
     payload = {
-        "contents": [{"role": "user", "parts": [{"text": f"{sys_p}\n\n【ユーザー入力】\n{user_p}"}]}],
-        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 1800},
+        "systemInstruction": {"parts": [{"text": sys_p}]},
+        "contents": [{"role": "user", "parts": [{"text": user_p}]}],
+        "generationConfig": gen_cfg,
         "safetySettings": _gemini_safety_settings()
     }
     d = json.dumps(payload).encode("utf-8")
@@ -623,15 +645,20 @@ def call_real_llm_api(sys_p: str, user_p: str) -> tuple:
                 res_json = json.loads(r.read().decode("utf-8"))
                 cands = res_json.get("candidates", [])
                 if cands and "content" in cands[0]:
-                    return cands[0]["content"]["parts"][0]["text"], cand
+                    parts = cands[0]["content"].get("parts", [])
+                    if parts and "text" in parts[0]:
+                        return parts[0]["text"], cand
         except urllib.error.HTTPError as he:
             record_system_error("call_real_llm_api:http", he, f"Model: {cand}, Code: {he.code}")
-            if he.code in (404, 429, 500, 503) and idx < len(candidates) - 1:
-                time.sleep(3.5)
+            if he.code in (400, 403, 404, 429, 500, 503) and idx < len(candidates) - 1:
+                time.sleep(1.0)
                 continue
             return None, ""
         except Exception as e:
             record_system_error("call_real_llm_api", e, f"Model: {cand}")
+            if idx < len(candidates) - 1:
+                time.sleep(1.0)
+                continue
             return None, ""
     return None, ""
 
@@ -1134,13 +1161,13 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
         timeline = (
             "・【第1波：寄り付き（9:00〜9:15）】ヘッドラインに反応した短期勢と個人の成行買いが集中。前日高値および心理的節目をブレイクする強いモメンタムが発生。\n"
             "・【第2波：前場中盤（9:15〜11:00）】寄り天警戒の短期利確売りをこなし、VWAP付近で機関投資家のTWAP（時間分散買い）が下値を支える押し目引きつけフェーズ。\n"
-            "・【第3波：後半タイムディケイ（14:30〜大引け）】引け前の投げ売りを回避し、プラス圏の玉を確実に利確・手仕舞うフェーズ。"
+            "・【第3波：午後タイムプロテクト（13:30〜大引け）】13:30時点で含み益+0.20%以上なら逆指値を利益確定ラインへ引き上げ、引け前の反落リスクを完全遮断。"
         )
-        risk_note = "米長期金利の急騰や為替の急激な円高進行、および寄り付きで+3.0%以上の過度なギャップアップとなった場合は高値掴みに警戒。必ずVWAP付近の押し目指値へ切り替え、逆指値を厳守すること。"
+        risk_note = "米長期金利の急騰や為替の急激な円高進行、および寄り付きで+3.0%以上の過度なギャップアップや-1.2%超の大幅ギャップダウン時は無理追いを禁止。必ずVWAP直上の有利な押し目指値へ切り替え、逆指値を厳守すること。"
         action_guide = (
-            "① 【寄り付き直後の見極め（9:00〜9:05）】最初の1本目（ノイズ）は静観し、当日VWAP（出来高加重平均価格）の位置を確認。\n"
-            "② 【VWAP・5本EMA引きつけ指値】大陽線の高値飛びつきは禁止。当日VWAP＋0.3%以内または5本EMA付近まで軽く押した陽線で一括エントリー。\n"
-            "③ 【50%ハーフ利確＆建値ロック】初期リスク幅(1:1)または目標利幅50%到達時に半分(50%)を即座に利確し、残り50%は建値＋0.1%へ逆指値を引き上げてノーリスクで上値を伸ばす。"
+            "① 【寄り付き直後の見極め（9:00〜9:05）】大幅ギャップダウン(-1.2%未満)や朝イチ大陰線(-0.6%以下)の日は見送り。当日VWAPの位置を確認。\n"
+            "② 【VWAP直上・5本EMA引きつけ指値】大陽線の高値飛びつきは禁止。当日VWAP直上（+0.05%〜+0.3%）または5本EMA付近まで軽く押した陽線で一括エントリー。\n"
+            "③ 【40%分割利確＆60%利益ロック追従】リスクリワード1.15:1または目標利幅65%到達時に40%を利確確定し、残り60%は第1利確幅の35%を上乗せした利益確定ラインへ逆指値を引き上げて上値を伸ばす。"
         )
     elif any(w in tu for w in ["防衛", "三菱重", "川崎重", "IHI", "宇宙", "衛星", "地政学", "ミサイル", "ドローン", "安保"]):
         base_codes = ["7011.T", "7012.T", "7013.T", "5595.T", "186A.T", "PLTR"]
@@ -1159,13 +1186,13 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
         timeline = (
             "・【第1波：初動（前場序盤9:05〜9:45）】重工大手3社（7011/7012/7013）に国内外の機関買いが流入し、VWAPをサポートに下値を切り上げ。\n"
             "・【第2波：波及（前場後半〜11:00）】東証グロース市場の宇宙・防衛AI関連に短期モメンタム資金が波及。\n"
-            "・【第3波：後半タイムディケイ（14:30〜大引け）】14:30時点で含み益が+0.25%以上あればタイムディケイ利確で確実に利益を確定。"
+            "・【第3波：午後タイムプロテクト（13:30〜14:30）】13:30時点で含み益+0.20%以上なら逆指値を利益確定ラインへ引き上げ、14:30以降はプラス圏でタイムディケイ利確。"
         )
         risk_note = "停戦報道や地政学リスクの急激な緩和ヘッドラインが出た場合は、短期筋のアルゴリズムが一斉に手仕舞い売りを出すため、直近安値を割れた際は機械的に撤退すること。"
         action_guide = (
-            "① 【主力本命の押し目引きつけ】前場前半（9:05〜11:00）の間に、7011（三菱重工業）等の当日VWAPサポートゾーンへ引きつけて一括エントリー。\n"
-            "② 【50%ハーフ利確＋建値ロック】目標の半分またはリスクリワード1:1到達で半分(50%)を利確確定し、残り半分は建値ロックで無敵状態にして目標価格まで追従。\n"
-            "③ 【14:30タイムストップ徹底】引け前の投げ売りを避けるため、14:30時点でプラス圏なら手仕舞い完了。"
+            "① 【主力本命のVWAP直上引きつけ】前場前半（9:05〜11:00）の間に、7011（三菱重工業）等の当日VWAP直上サポートゾーンへ引きつけて一括エントリー。\n"
+            "② 【40%利確＋60%利益上乗せロック】目標65%またはリスクリワード1.15:1到達で40%を利確確定し、残り60%は利益上乗せ逆指値で無敵状態にして目標価格まで追従。\n"
+            "③ 【13:30タイムプロテクト＆14:30タイムストップ】13:30以降の利益保護と14:30以降のタイムディケイ利確を徹底。"
         )
     else:
         base_codes = ["9984.T", "6857.T", "5803.T", "7011.T", "5253.T", "3350.T"]
@@ -1178,18 +1205,18 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
         )
         mech = (
             "① 【ショートカバー連鎖】サプライズ報道直後は、信用売り残や機関の空売りポジションが買い戻しを余儀なくされ、さらなる株価上昇を呼ぶショートスクイーズが発生します。\n"
-            "② 【VWAP攻防の機関執行】大口アルゴリズムはVWAP付近に買い指値を敷き詰めるため、VWAP引きつけエントリーが極めて高い優位性を持ちます。"
+            "② 【VWAP攻防の機関執行】大口アルゴリズムはVWAP付近に買い指値を敷き詰めるため、VWAP直上引きつけエントリーが極めて高い優位性を持ちます。"
         )
         timeline = (
-            "・【第1波：前場前半（9:05〜11:00）】VWAP付近への押し目または朝イチレンジブレイク初動でエントリー完了。\n"
-            "・【第2波：ハーフ利確＆建値ロック】最初の伸びで50%を利確し、残り50%を建値ロックで伸ばす。\n"
-            "・【第3波：後半タイムディケイ（14:30〜大引け）】14:30以降のプラス圏手仕舞いで着実に利益を積み上げ。"
+            "・【第1波：前場前半（9:05〜11:00）】VWAP直上への押し目または朝イチレンジブレイク初動でエントリー完了。\n"
+            "・【第2波：40%分割利確＆60%利益ロック】最初の伸びで40%を利確し、残り60%を利益上乗せ逆指値で伸ばす。\n"
+            "・【第3波：13:30タイムプロテクト＆14:30手仕舞い】13:30以降の利益保護と14:30以降のプラス圏手仕舞いで着実に利益を積み上げ。"
         )
-        risk_note = "昼休みや後場からの遅すぎる高値飛びつきは往復ビンタの原因となるため禁止。前場前半の優位な価格帯でのみ執行すること。"
+        risk_note = "大幅ギャップダウン日や朝イチ大陰線日の逆張り、および昼休み・後場からの遅すぎる高値飛びつきは往復ビンタの原因となるため禁止。"
         action_guide = (
-            "① 【前場前半の引きつけ約定】9:05〜11:00の間にVWAP・短期EMA付近へ引きつけて100%一括エントリー。\n"
-            "② 【50%ハーフ利確＋建値ロック】初期リスク幅(1:1)到達で半分を利確確定し、残り半分は建値＋0.1%の逆指値でノーリスク運用。\n"
-            "③ 【14:30タイムストップ】大引け前の反落リスクを避けるため、14:30以降はプラス圏で確実手仕舞い。"
+            "① 【前場前半のVWAP直上引きつけ約定】9:05〜11:00の間にVWAP直上・短期EMA付近へ引きつけて100%一括エントリー。\n"
+            "② 【40%分割利確＋60%利益上乗せロック】初期リスク幅(1.15:1)到達で40%を利確確定し、残り60%は第1利確幅の35%を上乗せした逆指値でノーリスク運用。\n"
+            "③ 【13:30タイムプロテクト＆14:30タイムストップ】後場ダレによるマイナス転落を完全に防止。"
         )
 
     return {
@@ -1211,7 +1238,7 @@ def generate_ai_news_deep_report(news_item: dict, style_name: str) -> str:
         "『具体的な注目銘柄・セクターへの波及ルート』『今後数日の値動きシナリオと注意点』を、"
         "具体的かつ濃密な日本語の解説文（400〜600文字程度、箇条書き活用）で出力してください。JSONではなく通常のテキストで返してください。"
     )
-    res, _ = call_real_llm_api(sys_p, f"ニュース見出し: {title}\n概要: {summary}\n投資スタイル: {style_name}")
+    res, _ = call_real_llm_api(sys_p, f"ニュース見出し: {title}\n概要: {summary}\n投資スタイル: {style_name}", expect_json=False)
     if res and len(res.strip()) > 30:
         clean_txt = re.sub(r'```[a-zA-Z]*|```', '', res).strip()
         cache[ck] = clean_txt
@@ -1417,7 +1444,7 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
         code_seed = int(hashlib.md5(f"{r['code']}_{r['price']}_{r['diff']}".encode()).hexdigest()[:6], 16)
         rng = random.Random(code_seed)
         diff_v, rsi_v, rvol_v = float(r.get("diff", 0.0)), float(r.get("rsi", 50.0)), float(r.get("rvol", 1.0))
-        hurst_v, vpin_v, q_tun = float(r.get("hurst", 0.5)), float(r.get("vpin", 0.5)), float(r.get("q_tunnel", 50.0))
+        hurst_v, q_tun = float(r.get("hurst", 0.5)), float(r.get("q_tunnel", 50.0))
         ft_win = float(r.get("forward_test", {}).get("actual_win_rate", 50.0))
         ft_profit = float(r.get("forward_test", {}).get("total_profit_yen", 0.0))
         genre_s, theme_s = r.get("genre", ""), r.get("theme", "")
@@ -1427,37 +1454,37 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
 
         if diff_v >= 2.5 and rvol_v >= 1.3:
             ig_msg = rng.choice([
-                f"おい見ろよ！{r['name']}が前日比+{diff_v}%でRVOL {rvol_v}倍の出来高急増だ！俺の専門『{ig_spec}』から見ても『{theme_s}』に短期資金が雪崩れ込んでるぞ、ただし大陽線の高値飛びつきは厳禁、VWAP（{r['vwap_price']}）引きつけ指値で叩くぞ！",
-                f"{r['name']}の買い上がり方がエグい！+{diff_v}%でも前場前半のVWAP引きつけ指値なら期待値抜群だ、最初の伸びで半分(50%)即利確して残り半分を建値ロックで伸ばすぞ！"
+                f"おい見ろよ！{r['name']}が前日比+{diff_v}%でRVOL {rvol_v}倍の出来高急増だ！俺の専門『{ig_spec}』から見ても『{theme_s}』に短期資金が雪崩れ込んでるぞ、ただし大陽線の高値飛びつきは厳禁、VWAP直上（{r['vwap_price']}）引きつけ指値で叩くぞ！",
+                f"{r['name']}の買い上がり方がエグい！+{diff_v}%でも前場前半のVWAP直上引きつけ指値なら期待値抜群だ、目標65%または1.15:1到達で40%即利確して残り60%を利益上乗せロックで伸ばすぞ！"
             ])
             ig_tone = "agree"
         elif diff_v <= -1.5:
-            ig_msg = f"おいおい、{r['name']}が{diff_v}%まで売られてんじゃねえか！高値飛びつきは論外、VWAP（{r['vwap_price']}）奪還の押し目陽線を確認してから一括エントリーだ。"
+            ig_msg = f"おいおい、{r['name']}が{diff_v}%まで売られてんじゃねえか！高値飛びつきも下落日の逆張りも論外、VWAP（{r['vwap_price']}）奪還の押し目陽線を確認してから一括エントリーだ。"
             ig_tone = "doubt"
         elif rsi_v >= 70.0:
-            ig_msg = f"{r['name']}はRSI {rsi_v}%まで加熱してきてるな！成行飛びつきは高値掴みになるから、前場前半に{r['vwap_price']}付近の初押し反発まで引きつけろ！"
+            ig_msg = f"{r['name']}はRSI {rsi_v}%まで加熱してきてるな！成行飛びつきは高値掴みになるから、前場前半に{r['vwap_price']}直上の初押し反発まで引きつけろ！"
             ig_tone = "agree"
         else:
-            ig_msg = f"{r['name']}（{r['code']}）は現在値{r['price']}（前日比{diff_v:+.2f}%）でエネルギー溜めてる段階だな。『{ig_spec}』視点でも直近の『{clean_news[:26]}』をきっかけにVWAP引きつけから一気に走るぞ！"
+            ig_msg = f"{r['name']}（{r['code']}）は現在値{r['price']}（前日比{diff_v:+.2f}%）でエネルギー溜めてる段階だな。『{ig_spec}』視点でも直近の『{clean_news[:26]}』をきっかけにVWAP直上引きつけから一気に走るぞ！"
             ig_tone = "agree"
 
         if "半導体" in genre_s:
-            sn_msg = f"半導体セクター（{r['name']}）なんざ米SOX指数とNVDAのご機嫌次第だろｗ 大陽線の高値に飛びついたら海外アルゴの利確に焼かれるぞ。必ずVWAP（{r['vwap_price']}）付近まで引きつけて逆指値（{r['sl_price']}）を置け。"
+            sn_msg = f"半導体セクター（{r['name']}）なんざ米SOX指数とNVDAのご機嫌次第だろｗ 大陽線の高値に飛びついたら海外アルゴの利確に焼かれるぞ。必ずVWAP直上（{r['vwap_price']}）まで引きつけて逆指値（{r['sl_price']}）を置け。"
         elif "防衛" in genre_s or "宇宙" in genre_s:
-            sn_msg = f"国策・防衛テーマ（{r['name']}）はヘッドライン一発で往復ビンタしてくるからな。前場前半で決着をつけず14:30以降までダラダラ引っ張ると引け売りに巻き込まれるぞ。"
+            sn_msg = f"国策・防衛テーマ（{r['name']}）はヘッドライン一発で往復ビンタしてくるからな。13:30タイムプロテクトで含み益を保護し、14:30以降までダラダラ引っ張るなよ。"
         else:
-            sn_msg = f"期待度{r['expect_pct']}%だからって成行で高値掴みするなよ（{sn_quirk[:18]}視点）。今のRSIは{rsi_v}%、極値リスクCVaRは{r.get('cvar95',3.0)}%だ。引きつけ指値と50%ハーフ利確を徹底しろ。"
+            sn_msg = f"期待度{r['expect_pct']}%だからって成行で高値掴みするなよ（{sn_quirk[:18]}視点）。今のRSIは{rsi_v}%、極値リスクCVaRは{r.get('cvar95',3.0)}%だ。VWAP直上指値と40%分割利確を徹底しろ。"
 
         tc_msg = (
             f"【{r['code']} 5分足OHLCV実測クオンツ診断】WKB統計近似突破指数は{q_tun}%、DFA Hurst指数は{hurst_v}、平滑化CLV資金フローZは{r.get('ofi_z',0.0)}です。"
             f"過去1ヶ月（直近22営業日・前営業日確定分まで）の厳格フォワード検証では勝率{ft_win:.1f}%（累計損益{ft_profit:+,.0f}円）を記録。"
-            f"前場前半のVWAP引きつけ一括エントリーと、リスクリワード1:1（または目標50%）到達時の50%ハーフ利確＋建値ロックが数学的最適解です。"
+            f"前場前半のVWAP直上引きつけ一括エントリーと、40%利確＋残り60%利益上乗せロック＋13:30タイムプロテクトが数学的最適解です。"
         )
 
         extra_pool = [
-            {"speaker": f"{vk['icon']} {vk['name']}", "role_label": "モメンタム執行", "tone": "agree", "text": f"回転効率重視でいくわよ！{r['name']}は前場前半（11:00頃まで）に引きつけて約定させたら、最初の伸びで50%ハーフ利確して残りを建値ロック！これで負けを消して目標（{r['tp_price']}）を狙うのがプロの手口ね。"},
+            {"speaker": f"{vk['icon']} {vk['name']}", "role_label": "モメンタム執行", "tone": "agree", "text": f"回転効率重視でいくわよ！{r['name']}は前場前半（11:00頃まで）にVWAP直上で約定させたら、最初の伸びで40%利確して残り60%を利益上乗せロック！これで負けを消して目標（{r['tp_price']}）を狙うのがプロの手口ね。"},
             {"speaker": "⚛️ QUANTUM", "role_label": "ボラティリティ解析", "tone": "normal", "text": f"ボラティリティ位相コヒーレンス近似は{r.get('q_coherence',50)}%、正規化エントロピーは{r.get('q_entropy',0.5)}を観測。現在『{r.get('q_state','')}』の状態にあります。"},
-            {"speaker": "🛡️ AEGIS", "role_label": "リスク防衛", "tone": "doubt", "text": f"資金防衛の観点から警告する。{r['name']}の年率ボラティリティは{round(r.get('yz_vol',0.3)*100,1)}%だ。上限ロット（{r['lot_info']['shares']:,}株）を1株たりとも超えず、14:30のタイムストップを厳守せよ。"}
+            {"speaker": "🛡️ AEGIS", "role_label": "リスク防衛", "tone": "doubt", "text": f"資金防衛の観点から警告する。{r['name']}の年率ボラティリティは{round(r.get('yz_vol',0.3)*100,1)}%だ。上限ロット（{r['lot_info']['shares']:,}株）を1株たりとも超えず、13:30タイムプロテクトと14:30タイムストップを厳守せよ。"}
         ]
         if r["strat"].get("tactic_type") == "Type-S":
             nx_msg = (
@@ -1467,7 +1494,7 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
         else:
             nx_msg = (
                 f"議論を総括する。『{r['name']}（{theme_s}）』は現在【{r['strat']['tactic_type']}：{r['strat']['entry_mode']}】が最適解だ。"
-                f"前場前半に一括{r['lot_info']['shares']:,}株を引きつけ約定させ、50%ハーフ利確＋建値ロック（目標{r['tp_price']}・逆指値{r['sl_price']}）の規律のみで執行せよ。"
+                f"前場前半に一括{r['lot_info']['shares']:,}株をVWAP直上で引きつけ約定させ、40%分割利確＋60%利益上乗せロック（目標{r['tp_price']}・逆指値{r['sl_price']}）の規律のみで執行せよ。"
             )
         return [
             {"speaker": f"{ig['icon']} {ig['name']}", "role_label": "短期モメンタム", "tone": ig_tone, "text": ig_msg},
@@ -1505,12 +1532,12 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
         ]
     elif is_novice:
         return [
-            {"speaker": f"{tc['icon']} {tc['name']}", "role_label": "統計クオンツ", "tone": "normal", "text": f"初心者が最初に徹底すべきは『高値飛びつきをせずVWAP付近へ引きつけること』と『目標の半分で50%ハーフ利確＋残り建値ロック』です。{r['name']}の場合、逆指値（{r['sl_price']}）を必ず設定してください。"},
-            {"speaker": f"{ig['icon']} {ig['name']}", "role_label": "短期モメンタム", "tone": "agree", "text": "まずは余剰資金で買える単元未満株(S株)でもいいから、前場前半の押し目指値とハーフ利確の流れを体感してみろ！"}
+            {"speaker": f"{tc['icon']} {tc['name']}", "role_label": "統計クオンツ", "tone": "normal", "text": f"初心者が最初に徹底すべきは『高値飛びつきをせずVWAP直上へ引きつけること』と『40%分割利確＋残り60%利益上乗せロック』です。{r['name']}の場合、逆指値（{r['sl_price']}）を必ず設定してください。"},
+            {"speaker": f"{ig['icon']} {ig['name']}", "role_label": "短期モメンタム", "tone": "agree", "text": "まずは余剰資金で買える単元未満株(S株)でもいいから、前場前半のVWAP直上押し目指値と40%分割利確の流れを体感してみろ！"}
         ]
     return [
-        {"speaker": f"{ig['icon']} {ig['name']}", "role_label": "短期モメンタム", "tone": "agree", "text": f"{r['name']}（現在{r['price']} / 前日比{r['diff']:+.2f}%）なら、大陽線の高値飛びつきはせず前場前半に当日VWAP（{r['vwap_price']}）付近へ引きつけて一括エントリーだ！最初の伸びで半分利確して残りを建値ロックしろ！"},
-        {"speaker": f"{tc['icon']} {tc['name']}", "role_label": "統計クオンツ", "tone": "normal", "text": f"現在のRSIは{r.get('rsi',50)}%、平滑化CLV資金フローZは{r.get('ofi_z', 0.0)}です。{r['strat']['entry_mode']}のルールに従い、{r['sl_price']}の逆指値と50%ハーフ利確＋建値ロックで執行するのが合理的です。"}
+        {"speaker": f"{ig['icon']} {ig['name']}", "role_label": "短期モメンタム", "tone": "agree", "text": f"{r['name']}（現在{r['price']} / 前日比{r['diff']:+.2f}%）なら、大陽線の高値飛びつきはせず前場前半に当日VWAP直上（{r['vwap_price']}）へ引きつけて一括エントリーだ！最初の伸びで40%利確して残り60%を利益上乗せロックしろ！"},
+        {"speaker": f"{tc['icon']} {tc['name']}", "role_label": "統計クオンツ", "tone": "normal", "text": f"現在のRSIは{r.get('rsi',50)}%、平滑化CLV資金フローZは{r.get('ofi_z', 0.0)}です。{r['strat']['entry_mode']}のルールに従い、{r['sl_price']}の逆指値と40%分割利確＋60%利益ロック＋13:30タイムプロテクトで執行するのが合理的です。"}
     ]
 
 def _parse_llm_json_turns(raw_res: str) -> list:
@@ -1555,10 +1582,10 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> t
 2. オウム返し・引用の絶対禁止: ユーザーの入力文を『』や「」でそのまま繰り返したり引用することは厳禁。
 3. 意図への柔軟な適応: 一般の質問、雑談、愚痴、ニュースの質問であれば、無理に現在値や目標値を持ち出さず、WEB検索情報を活用してそのトピックについて自然に答えよ。
 4. 稼働中5人の専門視点プロファイル（強み・性格の癖を必ず発言に反映させること）:
-   - {ig['name']} ({ig['icon']}): 【専門・強み】{ig.get('good','')} / 【性格・口調の癖】{ig.get('bad','')}。高値飛びつきを戒め、前場前半のVWAP引きつけ一括エントリーと50%ハーフ利確＋建値ロックについて熱く議論せよ。
+   - {ig['name']} ({ig['icon']}): 【専門・強み】{ig.get('good','')} / 【性格・口調の癖】{ig.get('bad','')}。高値飛びつき・大幅ギャップダウン日の逆張りを戒め、前場前半のVWAP直上引きつけ一括エントリーと40%分割利確＋60%利益ロックについて熱く議論せよ。
    - {tc['name']} ({tc['icon']}): 【専門・強み】{tc.get('good','')} / 【性格・口調の癖】{tc.get('bad','')}。5分足OHLCV統計近似WKB突破指数={r.get('q_tunnel',50)}%, 平滑化CLVフローZ={r.get('ofi_z',0.0)}, DFA Hurst={r.get('hurst',0.5)}, 確定フォワード勝率={ft.get('actual_win_rate',0):.1f}%を根拠に分析せよ。
    - {sn['name']} ({sn['icon']}): 【専門・強み】{sn.get('good','')} / 【性格・口調の癖】{sn.get('bad','')}。このセクター（{r.get('genre','')}）特有の罠や高値掴み・後場ダレリスクを指摘せよ。
-   - {vk['name']} ({vk['icon']}): 【専門・強み】{vk.get('good','')} / 【性格・口調の癖】{vk.get('bad','')}。{r['strat']['entry_mode']}での素早い50%ハーフ利確＋建値ロック・14:30タイムストップを主張せよ。
+   - {vk['name']} ({vk['icon']}): 【専門・強み】{vk.get('good','')} / 【性格・口調の癖】{vk.get('bad','')}。{r['strat']['entry_mode']}での40%分割利確＋60%利益上乗せロック・13:30タイムプロテクト・14:30タイムストップを主張せよ。
    - {nx['name']} ({nx['icon']}): 【専門・強み】{nx.get('good','')} / 【性格・口調の癖】{nx.get('bad','')}。議論を総括し一括ロット規律（{r['lot_info']['shares']:,}株）を示せ。
 
 【これまでの会話ログ】
@@ -1574,14 +1601,12 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> t
 ・RSI(14): {r.get('rsi',50)}% / 相対出来高RVOL: {r.get('rvol',1.0)}倍 / 効率性ER: {r.get('eff_pct',50)}% / 年率Vol: {round(r.get('yz_vol',0.3)*100,1)}%
 ・確定フォワード実戦成績（過去1ヶ月・直近22営業日・前営業日確定分まで）: 勝率 {ft.get('actual_win_rate',0):.1f}% ({ft.get('win_count',0)}勝 / {ft.get('total_days',0)}戦) 累計損益 {ft.get('total_profit_yen',0):+,.0f}円
 
-【今回の入力】
-『{uq if uq else f"（{r['name']}の固有テーマと本日の5分足OHLCV波形を踏まえた初期合議）"}』
-
-必ず以下のJSON配列のみを出力してください（5名の発言、Markdownフェンス不要）：
+必ず以下のJSON配列のみを出力してください（5名の発言）：
 [
   {{"speaker": "アイコン 名前", "role_label": "専門スタンス", "tone": "agree|doubt|rage|normal", "text": "内容"}}
 ]"""
-        raw_txt, used_mod = call_real_llm_api(sys_p, uq or f"{r['name']}（{r['code']}）の固有分析")
+        user_msg = f"【今回の入力】\n『{uq if uq else f'（{r[\"name\"]}の固有テーマと本日の5分足OHLCV波形を踏まえた初期合議）'}』"
+        raw_txt, used_mod = call_real_llm_api(sys_p, user_msg, expect_json=True)
         llm_turns = _parse_llm_json_turns(raw_txt)
         if llm_turns:
             mod_lbl = GEMINI_MODEL_DISPLAY_NAMES.get(used_mod, used_mod)
@@ -1628,7 +1653,7 @@ def run_gemini_council(r: dict, m5=None, seed: int = 0, uq: str = "", hist: list
     forward_table_html = (
         f'<div style="background:rgba(2,6,23,0.85); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:10px 12px; margin-top:10px;">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">'
-        f'<span style="font-size:12.5px; font-weight:800; color:#38bdf8;">📊 過去1ヶ月（直近22営業日）厳格実戦検証（VWAP引きつけ一括＋50%ハーフ利確＆建値ロック・往復0.03%コスト反映済）</span>'
+        f'<span style="font-size:12.5px; font-weight:800; color:#38bdf8;">📊 過去1ヶ月（直近22営業日）厳格実戦検証（VWAP直上指値一括＋40%利確＆60%利益上乗せロック・午後タイムプロテクト反映済）</span>'
         f'<span style="font-size:11px; color:#fde047; font-weight:700;">確定約定 {traded_days}戦: {ft.get("actual_win_rate", 0.0):.1f}% ({win_cnt}勝{lose_cnt}敗) ｜ ネット累計損益: <span style="color:{tot_p_col};">{tot_p_str}</span></span>'
         f'</div><div class="admin-table-container" style="margin-top:4px;"><table class="admin-table">'
         f'<thead><tr><th>検証日(確定)</th><th>前日決定プラン</th><th>引きつけ約定→分割決済</th><th>実測勝敗結果</th><th>ネット損益率・損益額</th></tr></thead>'
@@ -1793,7 +1818,7 @@ def fetch_macro():
     return res
 
 def compute_smoothed_clv_z(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray, day_bars_count: int = 0) -> float:
-    """【改修仕様1】引け際5本のノイズを除外するため、当日全体の出来高加重CLV平均と直近10本平均の複合スコアで平滑化"""
+    """引け際5本のノイズを除外するため、当日全体の出来高加重CLV平均と直近10本平均の複合スコアで平滑化"""
     if len(c) < 10:
         return 0.0
     clv = (2.0 * c - h - l) / np.maximum(h - l, 1e-4)
@@ -1801,10 +1826,8 @@ def compute_smoothed_clv_z(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.nd
     std_ref = max(float(np.std(sf[-30:])) if len(sf) >= 30 else float(np.std(sf)), 1.0)
     mean_ref = float(np.mean(sf[-30:])) if len(sf) >= 30 else float(np.mean(sf))
 
-    # 直近10本平均のZスコア
     z_recent10 = (float(np.mean(sf[-10:])) - mean_ref) / std_ref
 
-    # 当日全体の出来高加重CLV平均（VW-CLV）
     n_day = day_bars_count if day_bars_count >= 3 else min(len(c), 45)
     c_d, h_d, l_d, v_d = c[-n_day:], h[-n_day:], l[-n_day:], v[-n_day:]
     clv_d = (2.0 * c_d - h_d - l_d) / np.maximum(h_d - l_d, 1e-4)
@@ -1983,22 +2006,21 @@ def compute_japanese_lot_sizing(cv: float, slv: float, total_capital: float, ris
     return {"shares": final_shares, "position_value": final_shares * cv, "risk_amount": rm, "is_odd_lot": is_odd_lot}
 
 def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cvar95: float, rsi: float, lot_info: dict, pest_str: str, vwap_str: str, tp_str: str, sl_str: str, qm: dict, ms: dict, name: str = "", theme: str = "", rel_news_title: str = "", pgap: float = 0.0, expect_pct: float = 50.0, prev_trend_weak: bool = False) -> dict:
-    """【改修仕様1・2・3・5・6】VWAP・短期EMA引きつけ一括エントリー ＋ 50%ハーフ利確＆建値ロック方式に完全刷新"""
+    """【V10最適化版】VWAP直上指値一括エントリー ＋ 40%分割利確＆60%利益上乗せロック ＋ 午後タイムプロテクト方式"""
     pfx = style.split(" ")[1] if " " in style else "デイトレード"
     sh = int(lot_info["shares"])
     odd_note = "（※単元未満株・S株換算）" if lot_info.get("is_odd_lot") else ""
     disp_name, disp_theme = name or code, theme or "成長モメンタム領域"
-    half_sh = max(1, sh // 2)
-    rem_sh = max(0, sh - half_sh)
+    part_sh = max(1, int(round(sh * 0.40)))
+    rem_sh = max(0, sh - part_sh)
 
     dur_map = {
-        "スキャルピング": ("前場前半（9:05〜11:00）引きつけ約定 → 最長5分〜前引け決着", f"<b>🚀 超初心者向け！『{html.escape(disp_name)}』スキャルピング実践講座（押し目引きつけ＆即ハーフ利確）</b>"),
-        "スイングトレード": ("前場前半引きつけ約定 → 3日〜最長2週間程度", f"<b>📈 超初心者向け！『{html.escape(disp_name)}』スイングトレード実践講座（引きつけ一括＆半分利確ロック）</b>"),
+        "スキャルピング": ("前場前半（9:05〜11:00）引きつけ約定 → 最長5分〜前引け決着", f"<b>🚀 超初心者向け！『{html.escape(disp_name)}』スキャルピング実践講座（押し目引きつけ＆40%分割利確）</b>"),
+        "スイングトレード": ("前場前半引きつけ約定 → 3日〜最長2週間程度", f"<b>📈 超初心者向け！『{html.escape(disp_name)}』スイングトレード実践講座（引きつけ一括＆40%利確ロック）</b>"),
         "バイ＆ホールド": ("前場前半引きつけ約定 → 1ヶ月〜6ヶ月以上", f"<b>💎 超初心者向け！『{html.escape(disp_name)}』バイ＆ホールド長期講座（優位価格帯での一括仕込み）</b>")
     }
-    dur_str, beg_intro = dur_map.get(pfx, ("前場前半（9:05〜11:00）約定 → 14:30タイムストップ（当日完結）", f"<b>🔰 超初心者向け！『{html.escape(disp_name)}』デイトレード実践講座（VWAP引きつけ＋50%ハーフ利確＆建値ロック）</b>"))
+    dur_str, beg_intro = dur_map.get(pfx, ("前場前半（9:05〜11:00）約定 → 13:30タイムプロテクト・14:30タイムストップ（当日完結）", f"<b>🔰 超初心者向け！『{html.escape(disp_name)}』デイトレード実践講座（VWAP直上指値＋40%分割利確＆60%利益ロック）</b>"))
 
-    # 【改修仕様1】Type-S発動条件の緩和・適正化
     is_skip_condition = (ofi_z < -0.65) or prev_trend_weak or (expect_pct < 48.0) or (rsi >= 82.0)
 
     if is_skip_condition and not rel_news_title:
@@ -2027,99 +2049,98 @@ def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cv
         }
 
     if rel_news_title or ofi_z >= 0.65:
-        tactic_type, entry_mode = "Type-A", "VWAP・5EMA引きつけ一括＋50%ハーフ利確"
+        tactic_type, entry_mode = "Type-A", "VWAP直上指値一括＋40%利確＆60%利益ロック"
         news_ctx = f"連動速報『{html.escape(rel_news_title[:34])}』" if rel_news_title else f"資金急流入(平滑化CLV Z={ofi_z})"
-        algo_name = f"🚨 [{pfx} / Type-A] 強材料モメンタム・VWAP/5EMA引きつけ一括 ＋ 50%ハーフ利確＆建値ロック型"
-        risk_posture = f"🚀 引きつけ一括 <b>{sh:,}株</b> → 1:1到達で50%(<b>{half_sh:,}株</b>)利確＋残り建値ロック{odd_note}"
+        algo_name = f"🚨 [{pfx} / Type-A] 強材料モメンタム・VWAP直上指値一括 ＋ 40%分割利確＆60%利益上乗せロック型"
+        risk_posture = f"🚀 VWAP直上一括 <b>{sh:,}株</b> → 1.15:1到達で40%(<b>{part_sh:,}株</b>)利確＋残り60%利益ロック{odd_note}"
         core_logic = (
             f"【{html.escape(disp_name)}（{html.escape(disp_theme)}）】において{news_ctx}を検知。"
-            f"大陽線確定後の高値飛びつきを廃止し、前場前半（9:05〜11:00）に株価が当日VWAP以上に位置した状態（setup_ready）から、"
-            f"VWAP＋0.3%以内または5本EMA付近まで軽く押して陽線を作った瞬間に<b>一括100%引きつけ約定</b>。"
-            f"初期リスク幅(1:1)または目標利幅50%到達で即座に<b>50%ハーフ利確</b>し、残り50%は建値＋コスト＋0.1%へ逆指値を引き上げて無敵状態で伸ばします。"
+            f"大幅ギャップダウン(-1.2%未満)や朝イチ大陰線(-0.6%以下)の日は自動見送りとし、前場前半（9:05〜11:00）に当日VWAP直上（+0.05%〜+0.3%）へ引きつけて<b>一括100%約定</b>。"
+            f"初期リスク幅(1.15:1)または目標利幅65%到達で<b>40%を利確</b>し、残り60%は第1利確幅の35%を上乗せした利益確定ラインへ逆指値を引き上げて伸ばします。"
         )
         step_plan = (
-            f"① 【9:05〜11:00 VWAP・5本EMA引きつけ一括エントリー】寄り付き直後（1本目）のノイズを見送り、当日VWAP（<b>{vwap_str}</b>）＋0.3%以内または5本EMA付近へ軽く押して陽線を作った有利価格で<b>{sh:,}株</b>{odd_note}を一括約定。<br>"
-            f"② 【第1利確：50%ハーフ利確＋建値ロック】含み益が「初期リスク幅(1:1)または目標利幅の50%」に達した瞬間に<b>{half_sh:,}株（50%）</b>を利益確定し、残り<b>{rem_sh:,}株</b>の逆指値を<b>平均建値＋0.1%</b>へ引き上げ。<br>"
-            f"③ 【第2利確＆14:30タイムストップ】残り50%で最終目標<b>{tp_str}</b>を狙い、14:30時点で未到達でも含み益+0.25%以上ならタイムディケイ利確完了。"
+            f"① 【9:05〜11:00 VWAP直上引きつけ一括エントリー】大幅GD・朝イチ大陰線日は見送り。当日VWAP直上（<b>{vwap_str}</b>付近）へ軽く押した陽線で<b>{sh:,}株</b>{odd_note}を一括約定。<br>"
+            f"② 【第1利確：40%分割利確＋60%利益上乗せロック】含み益が「初期リスク幅(1.15:1)または目標利幅65%」到達で<b>{part_sh:,}株（40%）</b>を利確し、残り<b>{rem_sh:,}株（60%）</b>の逆指値を<b>第1利確幅35%上乗せ利益確定ライン</b>へ引き上げ。<br>"
+            f"③ 【13:30タイムプロテクト＆14:30タイムストップ】13:30時点で含み益+0.20%以上なら逆指値を利益確定ラインへ保護し、残り60%で最終目標<b>{tp_str}</b>を狙います。"
         )
         beginner_html = (
-            f"{beg_intro}<br><b>【今回の戦術：高値飛びつき禁止！VWAP引きつけ一括 ＋ 半分利確＆建値ロック法】</b><br>"
-            f"・<b>買い方：</b> 朝9:05〜11:00の間に、<b>{vwap_str}</b>付近まで軽く押した陽線で<b>{sh:,}株</b>{odd_note}を一括で買います（初期逆指値<b>{sl_str}</b>）。<br>"
-            f"・<b>負けを消す秘訣：</b> 目標の半分まで伸びたら即座に半分（<b>{half_sh:,}株</b>）を利確し、残りの逆指値を『買値＋0.1%』に引き上げます。これで急落してもトータル勝ち確定！最終目標<b>{tp_str}</b>（14:30タイムストップ）。"
+            f"{beg_intro}<br><b>【今回の戦術：VWAP直上有利指値 ＋ 40%分割利確＆60%利益ロック法】</b><br>"
+            f"・<b>買い方：</b> 朝9:05〜11:00の間に、<b>{vwap_str}</b>直上まで軽く押した陽線で<b>{sh:,}株</b>{odd_note}を一括で買います（初期逆指値<b>{sl_str}</b>）。<br>"
+            f"・<b>利益を伸ばす秘訣：</b> 目標の65%まで伸びたら40%（<b>{part_sh:,}株</b>）を利確し、残り60%の逆指値を『買値＋利益上乗せライン』に引き上げます。13:30以降はプラス圏なら逆指値保護で負けを完全遮断！最終目標<b>{tp_str}</b>。"
         )
     elif pgap >= 1.0 or rsi >= 64.0:
-        tactic_type, entry_mode = "Type-B", "2ステップVWAP押し目反発一括＋ハーフ利確"
-        algo_name = f"⚠️ [{pfx} / Type-B] 2ステップVWAP初押し反発一括 ＋ 50%ハーフ利確＆建値ロック型"
-        risk_posture = f"🛡️ 2ステップ押し目一括 <b>{sh:,}株</b> → 1:1到達で50%(<b>{half_sh:,}株</b>)利確＋残り建値ロック{odd_note}"
+        tactic_type, entry_mode = "Type-B", "2ステップVWAP直上反発一括＋40%利確"
+        algo_name = f"⚠️ [{pfx} / Type-B] 2ステップVWAP直上押し目反発一括 ＋ 40%分割利確＆60%利益ロック型"
+        risk_posture = f"🛡️ 2ステップ押し目一括 <b>{sh:,}株</b> → 1.15:1到達で40%(<b>{part_sh:,}株</b>)利確＋残り60%利益ロック{odd_note}"
         core_logic = (
             f"【{html.escape(disp_name)}】はギャップアップ・短期過熱圏（理論試算 {pgap:+.2f}% / RSI {rsi}%）。"
-            f"2ステップ判定を採用し、①前場前半に安値で当日VWAP＋0.5%以内へ押した足（pullback_touched）を確認後、②同足または以降の5分足で終値VWAP以上の陽線が出た瞬間に<b>100%一括約定</b>。"
-            f"初期リスク幅(1:1)到達で50%をハーフ利確し、残り50%を建値ロックして安全に上値を追います。"
+            f"2ステップ判定を採用し、①前場前半に安値で当日VWAP＋0.5%以内へ押した足を確認後、②終値VWAP以上の陽線が出た瞬間に<b>VWAP直上の有利価格で100%一括約定</b>。"
+            f"初期リスク幅(1.15:1)到達で40%を利確し、残り60%を利益上乗せロックして安全に上値を追います。"
         )
         step_plan = (
             f"① 【Step1：VWAP押し目タッチ検知（9:05〜11:00）】過熱スタート後の初押しで、安値が当日VWAP（<b>{vwap_str}</b>）＋0.5%以内まで降りてくるのを待機。<br>"
-            f"② 【Step2：VWAP上陽線での一括約定】押し目タッチ後、終値が当日VWAP以上の陽線が確定した瞬間に<b>{sh:,}株</b>{odd_note}を一括エントリー（逆指値<b>{sl_str}</b>）。<br>"
-            f"③ 【50%ハーフ利確＋建値ロック＆14:30タイムストップ】初期リスク幅(1:1)到達で<b>{half_sh:,}株</b>を即利確し、残り<b>{rem_sh:,}株</b>を建値＋0.1%へロックして目標<b>{tp_str}</b>へ。"
+            f"② 【Step2：VWAP直上陽線での一括約定】押し目タッチ後、終値が当日VWAP以上の陽線が確定した瞬間に<b>{sh:,}株</b>{odd_note}をVWAP直上で一括エントリー（逆指値<b>{sl_str}</b>）。<br>"
+            f"③ 【40%利確＋60%利益ロック＆13:30タイムプロテクト】目標65%到達で<b>{part_sh:,}株</b>を即利確し、残り<b>{rem_sh:,}株</b>を利益上乗せラインへロックして目標<b>{tp_str}</b>へ。"
         )
         beginner_html = (
-            f"{beg_intro}<br><b>【今回の戦術：2ステップ押し目待ち ＋ 半分利確＆建値ロック法】</b><br>"
-            f"・<b>Step1（待つ）：</b> 朝イチの急騰には飛び乗らず、<b>{vwap_str}</b>付近まで下がってくるのを待ちます。<br>"
-            f"・<b>Step2（買う）：</b> VWAPより上で陽線が出たら<b>{sh:,}株</b>{odd_note}を一括買い（逆指値<b>{sl_str}</b>）！半分伸びたら<b>{half_sh:,}株</b>を利確して残りを建値ロック、目標<b>{tp_str}</b>を狙います。"
+            f"{beg_intro}<br><b>【今回の戦術：2ステップ押し目待ち ＋ 40%分割利確＆60%利益ロック法】</b><br>"
+            f"・<b>Step1（待つ）：</b> 朝イチの急騰には飛び乗らず、<b>{vwap_str}</b>直上まで下がってくるのを待ちます。<br>"
+            f"・<b>Step2（買う）：</b> VWAPより上で陽線が出たら<b>{sh:,}株</b>{odd_note}を一括買い（逆指値<b>{sl_str}</b>）！65%伸びたら<b>{part_sh:,}株</b>を利確して残りを利益ロック、目標<b>{tp_str}</b>を狙います。"
         )
     elif ms.get("kyle_stealth", 0) >= 58.0 or ms.get("hurst", 0) >= 0.54:
-        tactic_type, entry_mode = "Type-C", "VWAPサポート帯指値一括＋50%ハーフ利確"
-        algo_name = f"🏛️ [{pfx} / Type-C] 5分足ステルス集積・VWAPサポート帯指値一括 ＋ 50%ハーフ利確型"
-        risk_posture = f"🏦 VWAPサポート指値一括 <b>{sh:,}株</b> → 1:1到達で50%(<b>{half_sh:,}株</b>)利確＋残り建値ロック{odd_note}"
+        tactic_type, entry_mode = "Type-C", "VWAP直上サポート指値一括＋40%利確"
+        algo_name = f"🏛️ [{pfx} / Type-C] 5分足ステルス集積・VWAP直上サポート帯指値一括 ＋ 40%分割利確型"
+        risk_posture = f"🏦 VWAP直上サポート一括 <b>{sh:,}株</b> → 1.15:1到達で40%(<b>{part_sh:,}株</b>)利確＋残り60%利益ロック{odd_note}"
         core_logic = (
             f"【{html.escape(disp_name)}（{html.escape(disp_theme)}）】に低インパクト集積近似（Kyle近似吸収率={ms['kyle_stealth']}% / DFA Hurst={ms['hurst']}）を検出。"
-            f"大口のVWAP買い支えゾーン（VWAPの-0.3%〜+0.4%）に安値が入り、終値VWAP以上を維持して陽線・下ヒゲをつけた瞬間に<b>VWAP＋0.1%で一括指値約定</b>し、50%ハーフ利確＋建値ロックで着実に収益化します。"
+            f"大口のVWAP買い支えゾーンに安値が入り、終値VWAP以上を維持して陽線・下ヒゲをつけた瞬間に<b>VWAP直上で一括指値約定</b>し、40%分割利確＋60%利益上乗せロックで着実に収益化します。"
         )
         step_plan = (
-            f"① 【9:10〜11:00 VWAPサポート帯引きつけ指値】当日VWAP（<b>{vwap_str}</b>）の-0.3%〜+0.4%ゾーンに引きつけ、VWAP上陽線・下ヒゲ確定で<b>{sh:,}株</b>{odd_note}を一括指値約定（逆指値<b>{sl_str}</b>）。<br>"
-            f"② 【50%ハーフ利確＋建値ロック】含み益が初期リスク幅(1:1)または目標利幅50%に達した瞬間に<b>{half_sh:,}株（50%）</b>を利益確定し、残り<b>{rem_sh:,}株</b>を建値＋0.1%へロック。<br>"
-            f"③ 【最終目標決済＆14:30タイムストップ】残り50%で<b>{tp_str}</b>を目指し、14:30以降に+0.25%以上の利益が残っていれば時間軸手仕舞い完了。"
+            f"① 【9:10〜11:00 VWAP直上サポート帯引きつけ指値】当日VWAP（<b>{vwap_str}</b>）のサポートゾーンに引きつけ、VWAP上陽線・下ヒゲ確定で<b>{sh:,}株</b>{odd_note}を一括指値約定（逆指値<b>{sl_str}</b>）。<br>"
+            f"② 【40%分割利確＋60%利益ロック】含み益が初期リスク幅(1.15:1)または目標利幅65%に達した瞬間に<b>{part_sh:,}株（40%）</b>を利益確定し、残り<b>{rem_sh:,}株（60%）</b>を利益上乗せロック。<br>"
+            f"③ 【13:30タイムプロテクト＆14:30手仕舞い】残り60%で<b>{tp_str}</b>を目指し、13:30以降はプラス圏なら逆指値保護を徹底。"
         )
         beginner_html = (
-            f"{beg_intro}<br><b>【今回の戦術：大口の買い支えライン（VWAP）で待って一括買い ＋ 半分利確ロック】</b><br>"
-            f"・<b>買い方：</b> 前場前半（9:10〜11:00）に、<b>{vwap_str}</b>付近のサポート帯へ引きつけて<b>{sh:,}株</b>{odd_note}を一括指値買い（逆指値<b>{sl_str}</b>）。<br>"
-            f"・<b>利確：</b> 目標の半分到達で<b>{half_sh:,}株</b>を利確確定し、残りは買値＋0.1%の逆指値で負けない状態にして最終目標<b>{tp_str}</b>を狙います。"
+            f"{beg_intro}<br><b>【今回の戦術：大口の買い支えライン（VWAP直上）で一括買い ＋ 40%利確ロック】</b><br>"
+            f"・<b>買い方：</b> 前場前半（9:10〜11:00）に、<b>{vwap_str}</b>直上のサポート帯へ引きつけて<b>{sh:,}株</b>{odd_note}を一括指値買い（逆指値<b>{sl_str}</b>）。<br>"
+            f"・<b>利確：</b> 目標65%到達で<b>{part_sh:,}株</b>を利確確定し、残りは利益上乗せ逆指値で無敵状態にして最終目標<b>{tp_str}</b>を狙います。"
         )
     elif qm.get("q_tunnel", 0) >= 62.0:
-        tactic_type, entry_mode = "Type-D", "ORB朝イチ高値ブレイク逆指値＋ハーフ利確"
-        algo_name = f"⚛️ [{pfx} / Type-D] WKB統計近似突破・ORB朝イチレンジブレイク逆指値 ＋ 50%ハーフ利確型"
-        risk_posture = f"⚡ ORBブレイク逆指値一括 <b>{sh:,}株</b> → 1:1到達で50%(<b>{half_sh:,}株</b>)利確＋残り建値ロック{odd_note}"
+        tactic_type, entry_mode = "Type-D", "ORB朝イチ高値ブレイク逆指値＋40%利確"
+        algo_name = f"⚛️ [{pfx} / Type-D] WKB統計近似突破・ORB朝イチレンジブレイク逆指値 ＋ 40%分割利確型"
+        risk_posture = f"⚡ ORBブレイク逆指値一括 <b>{sh:,}株</b> → 1.15:1到達で40%(<b>{part_sh:,}株</b>)利確＋残り60%利益ロック{odd_note}"
         core_logic = (
             f"【{html.escape(disp_name)}】のWKB統計近似突破率({qm['q_tunnel']}%)が臨界点を突破。"
-            f"9:00〜9:10の朝イチ高値（Morning High）突破と同時に終値を待たず<b>ブレイク逆指値価格で一括約定</b>し、大陽線の天井掴みを回避します（なお寄り付きギャップが+3.0%超の場合はVWAP＋0.3%への押し目指値へ自動切替）。"
+            f"9:00〜9:10の朝イチ高値（Morning High）突破と同時に<b>ブレイク逆指値価格で一括約定</b>し、40%分割利確＋60%利益上乗せロックで上値を追います（GU +3.0%超時はVWAP直上押し目指値へ自動切替）。"
         )
         step_plan = (
-            f"① 【9:00〜9:10 ORBレンジ計測】最初の2本（10分間）の高値（Morning High）を計測（GU +3.0%超時は<b>{vwap_str}</b>＋0.3%への押し目指値へ自動切替）。<br>"
+            f"① 【9:00〜9:10 ORBレンジ計測】最初の2本（10分間）の高値（Morning High）を計測（GU +3.0%超時は<b>{vwap_str}</b>直上への押し目指値へ自動切替）。<br>"
             f"② 【9:10〜11:00 ブレイク初動逆指値約定】Morning Highかつ当日VWAP（<b>{vwap_str}</b>）突破の瞬間に、ブレイク価格で<b>{sh:,}株</b>{odd_note}を一括約定（逆指値<b>{sl_str}</b>）。<br>"
-            f"③ 【50%ハーフ利確＋建値ロック】初期リスク幅(1:1)到達で<b>{half_sh:,}株</b>を即利確、残り<b>{rem_sh:,}株</b>を建値＋0.1%へロックして目標<b>{tp_str}</b>（14:30タイムストップ）。"
+            f"③ 【40%分割利確＋60%利益ロック】初期リスク幅(1.15:1)到達で<b>{part_sh:,}株</b>を即利確、残り<b>{rem_sh:,}株</b>を利益上乗せラインへロックして目標<b>{tp_str}</b>へ。"
         )
         beginner_html = (
-            f"{beg_intro}<br><b>【今回の戦術：朝イチ10分間の高値を抜けた瞬間に乗るORBブレイク ＋ 半分利確ロック】</b><br>"
-            f"・<b>買い方：</b> 9:10〜11:00の間に朝イチ高値を超えた瞬間に<b>{sh:,}株</b>{odd_note}を逆指値買い（初期損切り<b>{sl_str}</b>）。※朝から+3%以上高く始まった日はVWAP押し目待ちに切り替えます。<br>"
-            f"・<b>利確：</b> 最初の伸びで半分（<b>{half_sh:,}株</b>）を利確確定し、残りを建値ロックして目標<b>{tp_str}</b>を狙います。"
+            f"{beg_intro}<br><b>【今回の戦術：朝イチ10分間の高値を抜けた瞬間に乗るORBブレイク ＋ 40%利確ロック】</b><br>"
+            f"・<b>買い方：</b> 9:10〜11:00の間に朝イチ高値を超えた瞬間に<b>{sh:,}株</b>{odd_note}を逆指値買い（初期損切り<b>{sl_str}</b>）。<br>"
+            f"・<b>利確：</b> 最初の伸びで40%（<b>{part_sh:,}株</b>）を利確確定し、残りを利益上乗せロックして目標<b>{tp_str}</b>を狙います。"
         )
     else:
-        tactic_type, entry_mode = "Type-E", "3本安値切り上げ順張り一括＋50%ハーフ利確"
-        algo_name = f"🛡️ [{pfx} / Type-E] 3本安値切り上げ(Higher Low)×VWAP上トレンド一括 ＋ 50%ハーフ利確型"
-        risk_posture = f"🛡️ 安値切り上げ一括 <b>{sh:,}株</b> → 1:1到達で50%(<b>{half_sh:,}株</b>)利確＋残り建値ロック{odd_note}"
+        tactic_type, entry_mode = "Type-E", "3本安値切り上げ順張り一括＋40%利確"
+        algo_name = f"🛡️ [{pfx} / Type-E] 3本安値切り上げ(Higher Low)×VWAP直上トレンド一括 ＋ 40%分割利確型"
+        risk_posture = f"🛡️ 安値切り上げ一括 <b>{sh:,}株</b> → 1.15:1到達で40%(<b>{part_sh:,}株</b>)利確＋残り60%利益ロック{odd_note}"
         core_logic = (
             f"【{html.escape(disp_name)}（{html.escape(disp_theme)}）】は安定トレンドフォロー局面。"
-            f"前場前半（9:05〜11:00）において、直近3本の5分足が『安値を切り上げ（Higher Low）』かつ終値が当日VWAP（{vwap_str}）以上の陽線を確定させた瞬間に<b>100%一括約定</b>。"
-            f"その後、初期リスク幅(1:1)または目標利幅50%到達で即座に<b>50%ハーフ利確＋残り50%建値ロック</b>を発動します。"
+            f"前場前半（9:05〜11:00）において、直近3本の5分足が『安値を切り上げ（Higher Low）』かつ終値が当日VWAP（{vwap_str}）以上の陽線を確定させた瞬間に<b>VWAP直上の有利価格で100%一括約定</b>。"
+            f"その後、初期リスク幅(1.15:1)または目標利幅65%到達で即座に<b>40%利確＋残り60%利益上乗せロック</b>を発動します。"
         )
         step_plan = (
             f"① 【9:05〜11:00 安値切り上げ確認・一括約定】直近3本の5分足で安値を切り上げつつ、当日VWAP（<b>{vwap_str}</b>）上の陽線が確定した瞬間に<b>{sh:,}株</b>{odd_note}を一括約定（逆指値<b>{sl_str}</b>）。<br>"
-            f"② 【第1利確：50%ハーフ利確＋建値ロック】含み益が初期リスク幅(1:1)または目標利幅50%に達した瞬間に<b>{half_sh:,}株</b>を利益確定し、残り<b>{rem_sh:,}株</b>の逆指値を<b>買値＋0.1%</b>へ引き上げ。<br>"
-            f"③ 【第2利確＆14:30タイムストップ】残り50%で最終目標<b>{tp_str}</b>を狙い、14:30時点で含み益+0.25%以上なら時間軸手仕舞い完了。"
+            f"② 【第1利確：40%分割利確＋60%利益ロック】含み益が初期リスク幅(1.15:1)または目標利幅65%に達した瞬間に<b>{part_sh:,}株</b>を利益確定し、残り<b>{rem_sh:,}株</b>の逆指値を<b>利益上乗せライン</b>へ引き上げ。<br>"
+            f"③ 【13:30タイムプロテクト＆14:30手仕舞い】残り60%で最終目標<b>{tp_str}</b>を狙い、13:30以降はプラス圏なら逆指値保護で利益を死守。"
         )
         beginner_html = (
-            f"{beg_intro}<br><b>【今回の戦術：下値切り上げを確認してから一括買い ＋ 半分利確＆建値ロック法】</b><br>"
+            f"{beg_intro}<br><b>【今回の戦術：下値切り上げを確認してからVWAP直上で一括買い ＋ 40%利確＆60%利益ロック法】</b><br>"
             f"・<b>買い方：</b> 9:05〜11:00の間に、5分足が3本連続で安値を切り上げながら<b>{vwap_str}</b>より上で陽線になったら<b>{sh:,}株</b>{odd_note}を一括買い（逆指値<b>{sl_str}</b>）。<br>"
-            f"・<b>利確：</b> 目標の半分到達で<b>{half_sh:,}株</b>を利確して負けを消し、残りで目標<b>{tp_str}</b>（14:30タイムストップ）を狙います。"
+            f"・<b>利確：</b> 目標65%到達で<b>{part_sh:,}株</b>を利確して残りを利益ロックし、目標<b>{tp_str}</b>を狙います。"
         )
 
     return {
@@ -2145,12 +2166,12 @@ def _is_market_open_now(is_jp: bool) -> bool:
 
 def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat: dict, pest: float, vwap20: float, tpv: float, slv: float, shares: int, style: str, total_capital: float = 1000000.0, risk_tolerance_pct: float = 2.0) -> dict:
     """
-    【改修仕様1〜6完全実装】過去1ヶ月（最大22営業日）厳格フォワード検証 (QWM9_PRO_EXECUTION_V9):
-    1. 平滑化CLV複合スコア（当日VW-CLV 60% + 直近10本 40%）と適正Type-S条件（ofi < -0.65 / 日足5日線-2.5%割れ / 期待度<48% / RSI>=82%）。
-    2. VWAP・短期EMA引きつけ一括エントリー（Type-A〜E 状態フラグ＆有利指値/逆指値約定）。
-    3. 50%ハーフ利確（初期リスク幅1:1または目標利幅50%の小さい方到達で50%決済）＋残り50%建値＋コスト＋0.1%ロック。
-    4. 日中到達可能な動的TP/SL補正（tp_delta = clamp(p_atr*0.65, 0.75%, 2.5%), sl_delta = clamp(p_atr*0.45, 0.55%, 1.5%)）。
-    5. 前場勝負（場の前半45%まで新規エントリー許可）＆場の80%以降で+0.25%以上のタイムディケイ利確。
+    【QWM9_PRO_EXECUTION_V10】過去1ヶ月（最大22営業日）厳格フォワード検証:
+    1. 検証キャッシュバージョン QWM9_PRO_EXECUTION_V10 更新（旧キャッシュ自動クリア）。
+    2. 動的TP/SLのペイオフ比改善（raw_tp_d = rem_atr * 0.85, raw_sl_d = rem_atr * 0.42）。
+    3. オープニング・トレンドフィルター（大幅GD < -1.2% または 朝イチ1本目大陰線 <= -0.6% 日の見送り、共通順張り条件 bc >= p_close*0.994 and bc >= day_open_px*0.997）。
+    4. VWAP直上の有利な引きつけ指値約定（fill_px = min(bc, max(bo, curr_vwap * 1.0005))）。
+    5. 40%分割利確（PARTIAL_RATIO = 0.40, half_target_span = min(sl_delta * 1.15, tp_delta * 0.65)）＋残り60%利益上乗せロック＋13:30午後タイムプロテクト。
     """
     is_jp = ".T" in full_code
     now_dt = datetime.now()
@@ -2158,15 +2179,14 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     today_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     is_market_open = _is_market_open_now(is_jp)
 
-    tactic_type, entry_mode = strat.get("tactic_type", "Type-E"), strat.get("entry_mode", "VWAP引きつけ指値")
+    tactic_type, entry_mode = strat.get("tactic_type", "Type-E"), strat.get("entry_mode", "VWAP直上引きつけ指値")
     plan_entry_price = float(vwap20 if tactic_type in ("Type-A", "Type-B", "Type-C", "Type-E", "Type-S") else pest)
 
     ledger = db_get("daily_forward_ledger", {})
     if not isinstance(ledger, dict): ledger = {}
     stock_ledger = ledger.setdefault(full_code, {"signals": {}, "verified": {}, "algo_ver": ""})
-    # 【改修仕様6】バージョンを QWM9_PRO_EXECUTION_V9 へ更新し旧キャッシュを自動クリア
-    if stock_ledger.get("algo_ver") != "QWM9_PRO_EXECUTION_V9":
-        stock_ledger["verified"], stock_ledger["algo_ver"] = {}, "QWM9_PRO_EXECUTION_V9"
+    if stock_ledger.get("algo_ver") != "QWM9_PRO_EXECUTION_V10":
+        stock_ledger["verified"], stock_ledger["algo_ver"] = {}, "QWM9_PRO_EXECUTION_V10"
 
     unique_dates = sorted(df["_trade_date"].unique().tolist()) if df is not None and not df.empty else []
     latest_trade_date = unique_dates[-1] if unique_dates else today_str
@@ -2190,6 +2210,8 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     }.get(st_p, (1.00, 1.00))
 
     ROUND_TRIP_COST_RATE = 0.0003
+    PARTIAL_RATIO = 0.40
+    REMAINING_RATIO = 1.0 - PARTIAL_RATIO
     BASE_LOT = 100 if is_jp else 1
 
     try:
@@ -2222,7 +2244,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 else:
                     p_atr = max(float(prev_bars["High"].max()) - float(prev_bars["Low"].min()), p_close * 0.012)
 
-                # 【改修仕様1】日足5日移動平均線を -2.5% 以上下回っている場合のみ prev_trend_weak = True
                 if len(hist_daily) >= 5:
                     sma5_p = float(np.mean(hist_daily["Close"].values[-5:].astype(float)))
                     is_prev_trend_weak = (p_close < sma5_p * 0.975)
@@ -2249,28 +2270,27 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 else:
                     pgap_p = round(float(np.clip(ofi_p * 0.65, -2.5, 3.8)), 2)
                     pest_p = p_close * (1.0 + pgap_p / 100.0)
-                    # 【改修仕様1】緩和・適正化された Type-S 条件
                     if (ofi_p < -0.65) or is_prev_trend_weak or (expect_pct_p < 48.0) or (qa_p.get("rsi", 50.0) >= 82.0):
                         sig_tactic, sig_mode, sig_plan_px = "Type-S", "明日は見送り・静観待機", p_vwap
                     elif ofi_p >= 0.65:
-                        sig_tactic, sig_mode, sig_plan_px = "Type-A", "VWAP・5EMA引きつけ一括＋50%ハーフ利確", p_vwap
+                        sig_tactic, sig_mode, sig_plan_px = "Type-A", "VWAP直上指値一括＋40%利確＆60%利益ロック", p_vwap
                     elif pgap_p >= 1.0 or qa_p["rsi"] >= 64.0:
-                        sig_tactic, sig_mode, sig_plan_px = "Type-B", "2ステップVWAP押し目反発一括＋ハーフ利確", p_vwap
+                        sig_tactic, sig_mode, sig_plan_px = "Type-B", "2ステップVWAP直上反発一括＋40%利確", p_vwap
                     elif ms_p["kyle_stealth"] >= 58.0 or ms_p["hurst"] >= 0.54:
-                        sig_tactic, sig_mode, sig_plan_px = "Type-C", "VWAPサポート帯指値一括＋50%ハーフ利確", p_vwap
+                        sig_tactic, sig_mode, sig_plan_px = "Type-C", "VWAP直上サポート指値一括＋40%利確", p_vwap
                     elif qm_p["q_tunnel"] >= 62.0:
-                        sig_tactic, sig_mode, sig_plan_px = "Type-D", "ORB朝イチ高値ブレイク逆指値＋ハーフ利確", pest_p
+                        sig_tactic, sig_mode, sig_plan_px = "Type-D", "ORB朝イチ高値ブレイク逆指値＋40%利確", pest_p
                     else:
-                        sig_tactic, sig_mode, sig_plan_px = "Type-E", "3本安値切り上げ順張り一括＋50%ハーフ利確", p_vwap
+                        sig_tactic, sig_mode, sig_plan_px = "Type-E", "3本安値切り上げ順張り一括＋40%利確", p_vwap
 
-                # 【改修仕様4】日中残りATR（デイリーレンジ消化率）に応じた動的TP/SL補正関数
+                # 【改修要件2-2】動的TP/SLのペイオフ比（リスクリワード）改善
                 def _calc_dynamic_tp_sl(entry_px: float) -> tuple:
                     gap_used = max(0.0, entry_px - p_close)
                     rem_atr = max(p_atr - gap_used * 0.45, p_atr * 0.65)
-                    raw_tp_d = rem_atr * 0.65 * style_tp_scale
-                    raw_sl_d = rem_atr * 0.45 * style_sl_scale
-                    tp_d = float(np.clip(raw_tp_d, entry_px * 0.0075, entry_px * 0.025))
-                    sl_d = float(np.clip(raw_sl_d, entry_px * 0.0055, entry_px * 0.015))
+                    raw_tp_d = rem_atr * 0.85 * style_tp_scale
+                    raw_sl_d = rem_atr * 0.42 * style_sl_scale
+                    tp_d = float(np.clip(raw_tp_d, entry_px * 0.0095, entry_px * 0.032))
+                    sl_d = float(np.clip(raw_sl_d, entry_px * 0.0050, entry_px * 0.012))
                     return (entry_px + tp_d, entry_px - sl_d, tp_d, sl_d)
 
                 entered = False
@@ -2280,7 +2300,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 half_tp_done = False
                 half_tp_px = 0.0
 
-                # 状態フラグ（複数本の5分足にまたがる自然な値動き判定用）
                 setup_ready = False
                 pullback_touched = False
 
@@ -2298,7 +2317,11 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 day_open_px = float(n_bo[0]) if total_bars > 0 else p_close
                 open_gap_pct = ((day_open_px - p_close) / max(p_close, 1e-4)) * 100.0
 
-                if sig_tactic != "Type-S":
+                # 【改修要件2-3】オープニング・トレンドフィルター（大幅GD < -1.2% または 朝イチ1本目大陰線 <= -0.6% の日は見送り）
+                first_bar_drop = ((float(n_bc[0]) - day_open_px) / max(day_open_px, 1e-4)) <= -0.006 if total_bars > 0 else True
+                is_opening_weak_day = (open_gap_pct < -1.2) or first_bar_drop
+
+                if sig_tactic != "Type-S" and not is_opening_weak_day:
                     for b_i in range(total_bars):
                         bo, bh, bl, bc, bv = float(n_bo[b_i]), float(n_bh[b_i]), float(n_bl[b_i]), float(n_bc[b_i]), float(n_bv[b_i])
                         typ_b = (bh + bl + bc) / 3.0
@@ -2307,24 +2330,29 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                         curr_vwap = cum_pv / cum_v
                         ema5 = bc if b_i == 0 else (bc * alpha_ema5 + ema5 * (1.0 - alpha_ema5))
 
-                        # 【改修仕様5】前場勝負の徹底（最初の1本目のノイズを除き、場の前半45%まで新規エントリー許可）
                         can_enter = (1 <= b_i <= max(3, int(total_bars * 0.45)))
+                        is_afternoon_protect = (b_i >= int(total_bars * 0.65))
                         is_late_session = (b_i >= int(total_bars * 0.80))
 
                         # ------------------------------------------------------------
-                        # 【1】既存ポジションの分割イグジット（50%ハーフ利確＋建値ロック）＆決済判定
+                        # 【1】既存ポジションの分割イグジット（40%利確＋60%利益上乗せロック）＆午後タイムプロテクト
                         # ------------------------------------------------------------
                         if entered and b_i > first_entry_bar:
-                            # 第1利確：初期リスク幅(sl_delta)1.0倍 または 目標利幅(tp_delta)50% の小さい方に到達で50%ハーフ利確
-                            half_target_span = min(sl_delta * 1.0, tp_delta * 0.50)
+                            # 【改修要件2-5】第1利確トリガー（リスク幅の1.15倍 または 目標利幅の65%）
+                            half_target_span = min(sl_delta * 1.15, tp_delta * 0.65)
                             half_trigger_px = avg_entry_px + half_target_span
 
                             if not half_tp_done and bh >= half_trigger_px:
                                 half_tp_done = True
                                 half_tp_px = half_trigger_px
-                                # 残り50%の逆指値を「建値＋往復コスト＋0.1%（絶対負けないライン）」へ引き上げ
-                                lock_stop = avg_entry_px * (1.0 + ROUND_TRIP_COST_RATE + 0.0010)
-                                eff_sl = max(eff_sl, lock_stop)
+                                # 残り60%の逆指値を「第1利確幅の35%を上乗せした利益確定ライン」へ引き上げ
+                                profit_lock_stop = avg_entry_px + max(half_target_span * 0.35, avg_entry_px * (ROUND_TRIP_COST_RATE + 0.0015))
+                                eff_sl = max(eff_sl, profit_lock_stop)
+
+                            # 【改修要件2-5】午後タイムプロテクト（場の65%経過時点以降で含み益+0.20%以上なら逆指値を利益確定ラインへ保護）
+                            if is_afternoon_protect and bc >= avg_entry_px * 1.0020:
+                                pm_protect_stop = avg_entry_px * (1.0 + ROUND_TRIP_COST_RATE + 0.0008)
+                                eff_sl = max(eff_sl, pm_protect_stop)
 
                             hit_tp = (bh >= eff_tp)
                             hit_sl = (bl <= eff_sl)
@@ -2333,8 +2361,8 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                 if half_tp_done:
                                     r1 = ((half_tp_px - avg_entry_px) / max(avg_entry_px, 1e-4)) - ROUND_TRIP_COST_RATE
                                     r2 = ((rem_exit_px - avg_entry_px) / max(avg_entry_px, 1e-4)) - ROUND_TRIP_COST_RATE
-                                    net_r = 0.5 * r1 + 0.5 * r2
-                                    w_avg_exit = 0.5 * half_tp_px + 0.5 * rem_exit_px
+                                    net_r = PARTIAL_RATIO * r1 + REMAINING_RATIO * r2
+                                    w_avg_exit = PARTIAL_RATIO * half_tp_px + REMAINING_RATIO * rem_exit_px
                                     return net_r, w_avg_exit
                                 else:
                                     net_r = ((rem_exit_px - avg_entry_px) / max(avg_entry_px, 1e-4)) - ROUND_TRIP_COST_RATE
@@ -2343,70 +2371,75 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             if hit_tp and hit_sl:
                                 if bc >= bo:
                                     realized_ret_rate, exit_px = _finalize_split_exit(eff_tp)
-                                    outcome, is_win = ("🎯 分割ハーフ＋最終目標到達 (WIN)" if half_tp_done else "🎯 目標利確到達 (WIN)"), True
+                                    outcome, is_win = ("🎯 40%分割＋最終目標到達 (WIN)" if half_tp_done else "🎯 目標利確到達 (WIN)"), True
                                 else:
                                     realized_ret_rate, exit_px = _finalize_split_exit(eff_sl)
                                     if half_tp_done:
-                                        outcome, is_win = "⭕ 50%ハーフ利確＆建値ロック完遂 (WIN)", (realized_ret_rate >= 0)
+                                        outcome, is_win = "⭕ 40%利確＆60%利益ロック完遂 (WIN)", (realized_ret_rate >= 0)
+                                    elif realized_ret_rate >= 0:
+                                        outcome, is_win = "⭕ 午後タイムプロテクト利益確定 (WIN)", True
                                     else:
                                         outcome, is_win = "🛡️ 初期逆指値損切 (LOSE)", False
                                 break
                             elif hit_tp:
                                 realized_ret_rate, exit_px = _finalize_split_exit(eff_tp)
-                                outcome, is_win = ("🎯 分割ハーフ＋最終目標到達 (WIN)" if half_tp_done else "🎯 目標利確到達 (WIN)"), True
+                                outcome, is_win = ("🎯 40%分割＋最終目標到達 (WIN)" if half_tp_done else "🎯 目標利確到達 (WIN)"), True
                                 break
                             elif hit_sl:
                                 realized_ret_rate, exit_px = _finalize_split_exit(eff_sl)
                                 if half_tp_done:
-                                    outcome, is_win = "⭕ 50%ハーフ利確＆建値ロック完遂 (WIN)", (realized_ret_rate >= 0)
+                                    outcome, is_win = "⭕ 40%利確＆60%利益ロック完遂 (WIN)", (realized_ret_rate >= 0)
+                                elif realized_ret_rate >= 0:
+                                    outcome, is_win = "⭕ 午後タイムプロテクト利益確定 (WIN)", True
                                 else:
                                     outcome, is_win = "🛡️ 初期逆指値損切 (LOSE)", False
                                 break
 
-                            # 【改修仕様5】場の80%時間帯（東証14:30頃）以降で+0.25%以上の含み益がある場合はタイムディケイ利確
                             if is_late_session and bc >= avg_entry_px * 1.0025:
                                 realized_ret_rate, exit_px = _finalize_split_exit(bc)
                                 outcome, is_win = "⭕ 時間軸プラス手仕舞い (WIN)", True
                                 break
 
                         # ------------------------------------------------------------
-                        # 【2】新規エントリー（VWAP・短期EMA引きつけ一括約定・全戦術刷新）
+                        # 【2】新規エントリー（共通順張りフィルター ＋ VWAP直上の有利な引きつけ指値約定）
                         # ------------------------------------------------------------
                         if not entered and can_enter:
+                            # 【改修要件2-3】前日終値・当日始値から崩れていない順張り共通条件
+                            intraday_bull_guard = (bc >= p_close * 0.994) and (bc >= day_open_px * 0.997)
+                            if not intraday_bull_guard:
+                                continue
+
                             prev_low = float(n_bl[b_i - 1]) if b_i >= 1 else bl
 
                             if sig_tactic == "Type-A":
-                                # 強材料モメンタム型：当日VWAP以上を確認(setup_ready)後、VWAP+0.3%以内または直前安値を割らずに5EMA付近まで押して陽線(bc>=bo)で一括約定
                                 if bc >= curr_vwap:
                                     setup_ready = True
                                 near_vwap_or_ema = (bl <= curr_vwap * 1.003) or (bl >= prev_low and bl <= ema5 * 1.002)
                                 if setup_ready and near_vwap_or_ema and bc >= bo and bc >= curr_vwap:
-                                    fill_px = min(bc, max((bo + bc) / 2.0, curr_vwap * 1.002))
+                                    # 【改修要件2-4】VWAP直上の有利な指値約定価格
+                                    fill_px = min(bc, max(bo, curr_vwap * 1.0005))
                                     entered, avg_entry_px, first_entry_bar = True, fill_px, b_i
                                     eff_tp, eff_sl, tp_delta, sl_delta = _calc_dynamic_tp_sl(avg_entry_px)
 
                             elif sig_tactic == "Type-B":
-                                # 過熱・GU後の初押し反発型（2ステップ判定）
                                 if bl <= curr_vwap * 1.005:
                                     pullback_touched = True
                                 if pullback_touched and bc >= curr_vwap and bc > bo:
-                                    fill_px = min(bc, max((bo + bc) / 2.0, curr_vwap * 1.0015))
+                                    fill_px = min(bc, max(bo, curr_vwap * 1.0005))
                                     entered, avg_entry_px, first_entry_bar = True, fill_px, b_i
                                     eff_tp, eff_sl, tp_delta, sl_delta = _calc_dynamic_tp_sl(avg_entry_px)
 
                             elif sig_tactic == "Type-C":
-                                # 大口ステルス集積・VWAPサポート順張り型
                                 if b_i >= 2 and (curr_vwap * 0.997 <= bl <= curr_vwap * 1.004) and bc >= curr_vwap and (bc >= bo or (bc - bl) > (bh - bc)):
-                                    fill_px = min(bh, max(bl, curr_vwap * 1.001))
+                                    fill_px = min(bc, max(bl, curr_vwap * 1.0005))
                                     entered, avg_entry_px, first_entry_bar = True, fill_px, b_i
                                     eff_tp, eff_sl, tp_delta, sl_delta = _calc_dynamic_tp_sl(avg_entry_px)
 
                             elif sig_tactic == "Type-D":
-                                # ORB朝イチレンジブレイク逆指値型（GU +3.0%超時はVWAP+0.3%押し目指値へ切替）
                                 if b_i >= 2:
                                     if open_gap_pct > 3.0:
                                         if bl <= curr_vwap * 1.003 and bc >= curr_vwap and bc >= bo:
-                                            fill_px = min(bh, max(bl, curr_vwap * 1.003))
+                                            fill_px = min(bc, max(bo, curr_vwap * 1.0005))
                                             entered, avg_entry_px, first_entry_bar = True, fill_px, b_i
                                             eff_tp, eff_sl, tp_delta, sl_delta = _calc_dynamic_tp_sl(avg_entry_px)
                                     else:
@@ -2416,16 +2449,17 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                             eff_tp, eff_sl, tp_delta, sl_delta = _calc_dynamic_tp_sl(avg_entry_px)
 
                             else:
-                                # Type-E（標準・安定トレンドフォロー型：直近3本安値切り上げ Higher Low ＆ VWAP上陽線）
                                 if b_i >= 3:
                                     higher_low = (n_bl[b_i] >= n_bl[b_i - 1]) and (n_bl[b_i - 1] >= n_bl[b_i - 2])
                                     if higher_low and bc >= curr_vwap and bc > bo:
-                                        fill_px = min(bc, max((bo + bc) / 2.0, curr_vwap * 1.002))
+                                        fill_px = min(bc, max(bo, curr_vwap * 1.0005))
                                         entered, avg_entry_px, first_entry_bar = True, fill_px, b_i
                                         eff_tp, eff_sl, tp_delta, sl_delta = _calc_dynamic_tp_sl(avg_entry_px)
 
                 if sig_tactic == "Type-S":
                     outcome, avg_entry_px, exit_px, is_win, ret_pct, base_100_profit = "🛑 見送り判定・静観 (NO TRADE)", sig_plan_px, sig_plan_px, None, 0.0, 0.0
+                elif is_opening_weak_day:
+                    outcome, avg_entry_px, exit_px, is_win, ret_pct, base_100_profit = "🛡️ 寄り弱気フィルター見送り (NO TRADE)", sig_plan_px, sig_plan_px, None, 0.0, 0.0
                 elif not entered:
                     outcome, avg_entry_px, exit_px, is_win, ret_pct, base_100_profit = "⚪ 引きつけ未到達・見送り (NO TRADE)", sig_plan_px, sig_plan_px, None, 0.0, 0.0
                 else:
@@ -2434,9 +2468,9 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                         if half_tp_done:
                             r1 = ((half_tp_px - avg_entry_px) / max(avg_entry_px, 1e-4)) - ROUND_TRIP_COST_RATE
                             r2 = ((last_bc - avg_entry_px) / max(avg_entry_px, 1e-4)) - ROUND_TRIP_COST_RATE
-                            realized_ret_rate = 0.5 * r1 + 0.5 * r2
-                            exit_px = 0.5 * half_tp_px + 0.5 * last_bc
-                            outcome = "⭕ 50%ハーフ利確＋大引け決済 (WIN)" if realized_ret_rate >= 0 else "🔺 大引けマイナス決済 (LOSE)"
+                            realized_ret_rate = PARTIAL_RATIO * r1 + REMAINING_RATIO * r2
+                            exit_px = PARTIAL_RATIO * half_tp_px + REMAINING_RATIO * last_bc
+                            outcome = "⭕ 40%利確＋大引け決済 (WIN)" if realized_ret_rate >= 0 else "🔺 大引けマイナス決済 (LOSE)"
                         else:
                             realized_ret_rate = ((last_bc - avg_entry_px) / max(avg_entry_px, 1e-4)) - ROUND_TRIP_COST_RATE
                             exit_px = last_bc
@@ -2507,7 +2541,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
 
         day_ret = float((cv - float(daily_df["Close"].iloc[-2])) / max(float(daily_df["Close"].iloc[-2]), 1e-4) * 100.0) if len(daily_df) >= 2 else float((cv - float(o[0])) / max(float(o[0]), 1e-4) * 100.0)
 
-        # 日次ATR算出
         if len(daily_df) >= 3:
             dh, dl, dc = [daily_df[col].values.astype(float) for col in ["High", "Low", "Close"]]
             d_prev_c = np.roll(dc, 1); d_prev_c[0] = dc[0]
@@ -2526,7 +2559,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         ms = compute_inst_microstructure(c, h, l, v)
         q_adv = compute_advanced_quant_indicators(c, o, h, l, v, daily_df=daily_df, news_hits=news_hits)
 
-        # 【改修仕様1】当日全体の出来高加重CLV平均と直近10本平均の複合スコアで平滑化
         ofi_z = compute_smoothed_clv_z(c, h, l, v, day_bars_count=len(today_bars))
 
         r20 = int(np.sum(np.diff(c[-21:]) > 0)) if len(c) >= 21 else 10
@@ -2583,12 +2615,11 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         }.get(st_p, (1.00, 1.00))
         st_mul = {"スキャルピング": 1.5, "スイングトレード": 1.2, "バイ＆ホールド": 0.9}.get(st_p, 1.65)
 
-        # 【改修仕様4】実戦的な日中到達可能TP/SL幅へ統一
-        tp_delta_cur = float(np.clip(atrv * 0.65 * style_tp_scale, cv * 0.0075, cv * 0.025))
-        sl_delta_cur = float(np.clip(atrv * 0.45 * style_sl_scale, cv * 0.0055, cv * 0.015))
+        # 【改修要件2-2】動的TP/SLのペイオフ比改善（0.85x / 0.42x・レンジ0.95%〜3.2% / 0.50%〜1.2%）
+        tp_delta_cur = float(np.clip(atrv * 0.85 * style_tp_scale, cv * 0.0095, cv * 0.032))
+        sl_delta_cur = float(np.clip(atrv * 0.42 * style_sl_scale, cv * 0.0050, cv * 0.012))
         tpv, slv = cv + tp_delta_cur, cv - sl_delta_cur
 
-        # 【改修仕様1】終値が日足5日移動平均線を大きく（-2.5%以上）下回っている場合のみ prev_trend_weak = True
         if len(daily_df) >= 5:
             sma5_cur = float(np.mean(daily_df["Close"].values[-5:].astype(float)))
             prev_trend_weak = (cv < sma5_cur * 0.975)
@@ -2766,13 +2797,13 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
     ])
 
     with tab_gemini_sys:
-        st.markdown("#### 🔵 Google Gemini API 暗号化設定（全会員共通エンジン）")
+        st.markdown("#### 🔵 Google Gemini API 暗号化設定（全会員共通エンジン・無料枠多段フォールバック対応）")
         st.caption("ここで保存された Gemini APIキーとモデル設定は、データベースに暗号化保存され、全会員の『Gemini マルチペルソナ合議』および『ニュースAI深掘り解説』で共通利用されます。")
         gem_cur = load_gemini_cfg()
         cur_m = gem_cur.get("model", "gemini-2.5-flash")
         cur_k = gem_cur.get("api_key", "")
 
-        in_gem_key = clean_k(st.text_input("🔑 Google Gemini API Key (🔒暗号化保存)", value=cur_k, type="password", placeholder="AIzaSy...", key="admin_gem_key_input"))
+        in_gem_key = sanitize_api_key(st.text_input("🔑 Google Gemini API Key (🔒暗号化保存・不可視文字自動除去)", value=cur_k, type="password", placeholder="AIzaSy...", key="admin_gem_key_input"))
         in_gem_mod = st.selectbox(
             "🧠 デフォルト Gemini モデル選択",
             GEMINI_MODELS,
@@ -2787,10 +2818,10 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             st.session_state["council_threads"] = {}
             st.session_state["council_meta"] = {}
             st.session_state["news_ai_deep_cache"] = {}
-            st.success("✅ Gemini API設定を暗号化して保存しました。")
+            st.success("✅ Gemini API設定をサニタイズ＆暗号化して保存しました。")
 
         if col_g2.button("⚡ Gemini API 接続テスト実行", use_container_width=True):
-            with st.spinner("Google Gemini API エンドポイントへ接続テスト実行中..."):
+            with st.spinner("Google Gemini API エンドポイントへ接続テスト実行中（多段フォールバック検証）..."):
                 ok, t_msg = test_single_llm_api(in_gem_mod, in_gem_key)
                 if ok:
                     st.success(f"✅ {t_msg}")
