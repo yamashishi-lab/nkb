@@ -81,16 +81,16 @@ ADMIN_PASS = _get_sec_val("ADMIN_PASS", ".yamashishi_cred.lock", lambda: "ADMIN7
 DB_SQLITE_PATH = "yamashishi_core.db"
 
 GEMINI_MODELS = [
+    "gemini-3.8-flash",
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
-    "gemini-2.0-flash",
     "gemini-2.5-pro"
 ]
 
 GEMINI_MODEL_DISPLAY_NAMES = {
-    "gemini-2.5-flash": "Gemini 2.5 Flash (推奨・無料枠対応・バランス型)",
+    "gemini-3.8-flash": "Gemini 3.8 Flash (最新推奨・高速・高精度モデル)",
+    "gemini-2.5-flash": "Gemini 2.5 Flash (安定・無料枠バランス型)",
     "gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite (最軽量・無料枠上限最大・超高速)",
-    "gemini-2.0-flash": "Gemini 2.0 Flash (無料枠安定・高レスポンス)",
     "gemini-2.5-pro": "Gemini 2.5 Pro (高精度推論 ※無料枠はレート制限厳しめ)"
 }
 
@@ -387,9 +387,9 @@ def load_gemini_cfg() -> dict:
     raw = db_get("llm", {})
     if not isinstance(raw, dict):
         raw = {}
-    mod = raw.get("gemini_model") or raw.get("models", {}).get("gemini", "gemini-2.5-flash")
-    if mod not in GEMINI_MODELS:
-        mod = "gemini-2.5-flash"
+    mod = raw.get("gemini_model") or raw.get("models", {}).get("gemini", "gemini-3.8-flash")
+    if mod == "gemini-2.0-flash" or mod not in GEMINI_MODELS:
+        mod = "gemini-3.8-flash"
     enc_k = raw.get("enc_gemini_key") or raw.get("enc_keys", {}).get("gemini", "")
     dec_k = sanitize_api_key(decrypt_secret_str(enc_k))
     if not _is_valid_gemini_key(dec_k):
@@ -401,7 +401,7 @@ def load_gemini_cfg() -> dict:
     return {"model": mod, "api_key": dec_k}
 
 def save_llm_encrypted(model: str, api_key: str):
-    clean_m = model if model in GEMINI_MODELS else "gemini-2.5-flash"
+    clean_m = model if (model in GEMINI_MODELS and model != "gemini-2.0-flash") else "gemini-3.8-flash"
     clean_api_k = sanitize_api_key(api_key)
     db_set("llm", {
         "provider": "gemini",
@@ -591,9 +591,9 @@ def build_gemini_url(model: str, key: str = "") -> str:
     clean_m = model.strip()
     if clean_m.startswith("models/"):
         clean_m = clean_m[7:]
-    if clean_m not in GEMINI_MODELS:
-        clean_m = "gemini-2.5-flash"
-    # 新形式(AQ.)での二重認証エラーを防ぐため、キーはURLではなく x-goog-api-key ヘッダーで渡す
+    if clean_m == "gemini-2.0-flash" or clean_m not in GEMINI_MODELS:
+        clean_m = "gemini-3.8-flash"
+    # 新形式(AQ.)での二重認証エラーを防ぐため、キーはURLではなくヘッダーで渡す
     return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent"
 
 def _gemini_safety_settings() -> list:
@@ -607,19 +607,22 @@ def _gemini_safety_settings() -> list:
         ]
     ]
 
-def _gemini_headers(api_key: str = "") -> dict:
+def _gemini_headers(api_key: str = "", use_bearer: bool = False) -> dict:
     h = {
         "Content-Type": "application/json",
         "User-Agent": "YamashishiLab/2.0"
     }
     clean_k_val = sanitize_api_key(api_key)
     if clean_k_val:
-        h["x-goog-api-key"] = clean_k_val
+        if use_bearer:
+            h["Authorization"] = f"Bearer {clean_k_val}"
+        else:
+            h["x-goog-api-key"] = clean_k_val
     return h
 
 def _build_fallback_chain(primary_model: str) -> list:
     chain = []
-    for m in [primary_model, "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]:
+    for m in [primary_model, "gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]:
         if m in GEMINI_MODELS and m not in chain:
             chain.append(m)
     return chain
@@ -639,9 +642,9 @@ def test_single_llm_api(mod: str, key: str) -> tuple:
 
     ctx = ssl.create_default_context()
     candidates = _build_fallback_chain(mod)
-    last_err = None
-    last_body = ""
+    model_errors = []
     key_preview = f"{clean_api_k[:6]}...{clean_api_k[-4:]} ({len(clean_api_k)}文字)"
+    auth_modes = [False, True] if clean_api_k.startswith("AQ.") else [False]
 
     for idx, m_test in enumerate(candidates):
         url = build_gemini_url(m_test, clean_api_k)
@@ -651,47 +654,51 @@ def test_single_llm_api(mod: str, key: str) -> tuple:
             "safetySettings": _gemini_safety_settings()
         }
         d = json.dumps(payload).encode("utf-8")
-        try:
-            req = urllib.request.Request(url, data=d, headers=_gemini_headers(clean_api_k), method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=15.0) as r:
-                resp_data = json.loads(r.read().decode("utf-8"))
-                txt = resp_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                fb_note = f" (※{mod}から自動フォールバック)" if m_test != mod else ""
-                return True, f"接続成功 [認識キー: {key_preview}] (稼働モデル: {m_test}{fb_note})\n応答: {txt.strip()[:40]}"
-        except urllib.error.HTTPError as he:
-            last_err = he
-            err_body = ""
-            try:
-                err_body = he.read().decode("utf-8")
-            except Exception:
-                pass
-            last_body = err_body
-            if "API_KEY_INVALID" in err_body or "API key not valid" in err_body:
-                return (
-                    False,
-                    f"Google側でAPIキーが無効と判定されました [送信キー: {key_preview}]。\n"
-                    f"応答詳細: {err_body[:140]}"
-                )
-            if he.code in (400, 403, 404, 429, 500, 503) and idx < len(candidates) - 1:
-                time.sleep(0.8)
-                continue
-            return False, f"HTTP {he.code} [送信キー: {key_preview}]: {err_body[:160] or he.reason}"
-        except Exception as e:
-            if idx < len(candidates) - 1:
-                time.sleep(0.8)
-                continue
-            return False, f"通信例外: {str(e)}"
 
-    if last_err:
-        if last_err.code == 429:
-            return False, "HTTP 429: 無料枠の1分あたりリクエスト上限に達しました。しばらく待ってから再試行してください。"
-        return False, f"HTTP {last_err.code} [送信キー: {key_preview}]: {last_body[:140] or last_err.reason}"
-    return False, "Gemini API接続テストに失敗しました。"
+        for use_bearer in auth_modes:
+            auth_label = "Authorization: Bearer" if use_bearer else "x-goog-api-key"
+            try:
+                req = urllib.request.Request(url, data=d, headers=_gemini_headers(clean_api_k, use_bearer=use_bearer), method="POST")
+                with urllib.request.urlopen(req, context=ctx, timeout=15.0) as r:
+                    resp_data = json.loads(r.read().decode("utf-8"))
+                    txt = resp_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    fb_note = f" (※{mod}から自動フォールバック)" if m_test != mod else ""
+                    auth_note = f" / 認証方式: {auth_label}" if use_bearer else ""
+                    return True, f"接続成功 [認識キー: {key_preview}] (稼働モデル: {m_test}{fb_note}{auth_note})\n応答: {txt.strip()[:40]}"
+            except urllib.error.HTTPError as he:
+                err_body = ""
+                try:
+                    err_body = he.read().decode("utf-8")
+                except Exception:
+                    pass
+                short_err = re.sub(r"\s+", " ", err_body)[:120] or he.reason
+                model_errors.append(f"・{m_test} [{auth_label}]: HTTP {he.code} ({short_err})")
+
+                if clean_api_k.startswith("AQ.") and not use_bearer and he.code in (401, 403):
+                    time.sleep(0.3)
+                    continue
+
+                if "API_KEY_INVALID" in err_body or "API key not valid" in err_body:
+                    err_summary = "\n".join(model_errors)
+                    return (
+                        False,
+                        f"Google側でAPIキーが無効と判定されました [送信キー: {key_preview}]。\n{err_summary}"
+                    )
+                break
+            except Exception as e:
+                model_errors.append(f"・{m_test} [{auth_label}]: 通信例外 ({str(e)})")
+                break
+
+        if idx < len(candidates) - 1:
+            time.sleep(0.6)
+
+    err_list_str = "\n".join(model_errors) if model_errors else "詳細エラー情報なし"
+    return False, f"全候補モデルの接続テストに失敗しました [送信キー: {key_preview}]:\n{err_list_str}"
 
 def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tuple:
     cfg = load_gemini_cfg()
     api_key = sanitize_api_key(cfg.get("api_key", ""))
-    sel_mod = cfg.get("model", "gemini-2.5-flash")
+    sel_mod = cfg.get("model", "gemini-3.8-flash")
     if not api_key:
         return None, ""
 
@@ -708,30 +715,34 @@ def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tup
         "safetySettings": _gemini_safety_settings()
     }
     d = json.dumps(payload).encode("utf-8")
+    auth_modes = [False, True] if api_key.startswith("AQ.") else [False]
 
     for idx, cand in enumerate(candidates):
         url = build_gemini_url(cand, api_key)
-        req = urllib.request.Request(url, data=d, headers=_gemini_headers(api_key), method="POST")
-        try:
-            with urllib.request.urlopen(req, context=ctx, timeout=20.0) as r:
-                res_json = json.loads(r.read().decode("utf-8"))
-                cands = res_json.get("candidates", [])
-                if cands and "content" in cands[0]:
-                    parts = cands[0]["content"].get("parts", [])
-                    if parts and "text" in parts[0]:
-                        return parts[0]["text"], cand
-        except urllib.error.HTTPError as he:
-            record_system_error("call_real_llm_api:http", he, f"Model: {cand}, Code: {he.code}")
-            if he.code in (400, 403, 404, 429, 500, 503) and idx < len(candidates) - 1:
-                time.sleep(1.0)
-                continue
-            return None, ""
-        except Exception as e:
-            record_system_error("call_real_llm_api", e, f"Model: {cand}")
-            if idx < len(candidates) - 1:
-                time.sleep(1.0)
-                continue
-            return None, ""
+        for use_bearer in auth_modes:
+            req = urllib.request.Request(url, data=d, headers=_gemini_headers(api_key, use_bearer=use_bearer), method="POST")
+            try:
+                with urllib.request.urlopen(req, context=ctx, timeout=20.0) as r:
+                    res_json = json.loads(r.read().decode("utf-8"))
+                    cands = res_json.get("candidates", [])
+                    if cands and "content" in cands[0]:
+                        parts = cands[0]["content"].get("parts", [])
+                        if parts and "text" in parts[0]:
+                            return parts[0]["text"], cand
+            except urllib.error.HTTPError as he:
+                record_system_error("call_real_llm_api:http", he, f"Model: {cand}, AuthBearer: {use_bearer}, Code: {he.code}")
+                if api_key.startswith("AQ.") and not use_bearer and he.code in (401, 403):
+                    time.sleep(0.3)
+                    continue
+                if he.code in (400, 401, 403, 404, 429, 500, 503):
+                    break
+                return None, ""
+            except Exception as e:
+                record_system_error("call_real_llm_api", e, f"Model: {cand}, AuthBearer: {use_bearer}")
+                break
+
+        if idx < len(candidates) - 1:
+            time.sleep(0.8)
     return None, ""
 
 # ==========================================
@@ -1007,24 +1018,100 @@ components.html(
     f"""<script>
     (function(){{
         const doc = window.parent.document;
-        function closeCustomSidebar(){{try{{const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');if(sb){{sb.setAttribute('aria-expanded','false');sb.style.setProperty('transform','translateX(-120%)','important');sb.style.setProperty('pointer-events','none','important');}}if(o)o.style.display='none';window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');}}catch(e){{}}}}
-        function openCustomSidebar(){{try{{const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');if(sb){{sb.setAttribute('aria-expanded','true');sb.style.setProperty('transform','translateX(0)','important');sb.style.setProperty('pointer-events','auto','important');}}if(o)o.style.display='block';window.parent.sessionStorage.setItem('yamashishi_sb_state','open');}}catch(e){{}}}}
+        function closeCustomSidebar(){{
+            try{{
+                const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');
+                if(sb){{
+                    sb.setAttribute('aria-expanded','false');
+                    sb.style.setProperty('transform','translateX(-120%)','important');
+                    sb.style.setProperty('pointer-events','none','important');
+                }}
+                if(o){{
+                    o.style.setProperty('display','none','important');
+                    o.style.setProperty('pointer-events','none','important');
+                }}
+                window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');
+            }}catch(e){{}}
+        }}
+        function openCustomSidebar(){{
+            try{{
+                const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');
+                if(sb){{
+                    sb.setAttribute('aria-expanded','true');
+                    sb.style.setProperty('transform','translateX(0)','important');
+                    sb.style.setProperty('pointer-events','auto','important');
+                }}
+                if(o){{
+                    o.style.setProperty('display','block','important');
+                    o.style.setProperty('pointer-events','auto','important');
+                }}
+                window.parent.sessionStorage.setItem('yamashishi_sb_state','open');
+            }}catch(e){{}}
+        }}
+        window.parent._yamashishiCloseSidebar = closeCustomSidebar;
+        window.parent._yamashishiOpenSidebar = openCustomSidebar;
+
         function setupCustomSidebar(){{
             try{{
                 if(!doc.getElementById('yamashishi-custom-sidebar-styles')){{
                     const s=doc.createElement('style');s.id='yamashishi-custom-sidebar-styles';
-                    s.textContent=`#yamashishi-floating-sidebar-btn{{position:fixed!important;top:8px!important;left:10px!important;z-index:2147483647!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:4px!important;height:28px!important;padding:0 10px 0 8px!important;background:rgba(11,15,25,0.95)!important;backdrop-filter:blur(16px)!important;border:1.5px solid rgba(56,189,248,0.7)!important;border-radius:8px!important;cursor:pointer!important;box-shadow:0 4px 18px rgba(0,0,0,0.75),0 0 12px rgba(56,189,248,0.3)!important;user-select:none!important;transition:transform 0.1s ease!important;color:#38bdf8!important;pointer-events:auto!important;outline:none!important;-webkit-tap-highlight-color:transparent!important;}}#yamashishi-floating-sidebar-btn:hover{{border-color:rgba(56,189,248,0.7)!important;color:#38bdf8!important;box-shadow:0 4px 18px rgba(0,0,0,0.75),0 0 12px rgba(56,189,248,0.3)!important;}}#yamashishi-floating-sidebar-btn:active{{border-color:#fde047!important;color:#fde047!important;box-shadow:0 6px 22px rgba(0,0,0,0.9),0 0 18px rgba(253,224,71,0.4)!important;transform:scale(0.95)!important;}}#yamashishi-floating-sidebar-btn svg{{width:15px!important;height:15px!important;}}#yamashishi-floating-sidebar-btn span{{font-family:'JetBrains Mono',monospace!important;font-size:11px!important;font-weight:800!important;}}#yamashishi-sidebar-backdrop{{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;background:rgba(0,0,0,0.4)!important;backdrop-filter:blur(2px)!important;z-index:999990!important;display:none;}}`;
+                    s.textContent=`#yamashishi-floating-sidebar-btn{{position:fixed!important;top:8px!important;left:10px!important;z-index:2147483647!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:4px!important;height:28px!important;padding:0 10px 0 8px!important;background:rgba(11,15,25,0.95)!important;backdrop-filter:blur(16px)!important;border:1.5px solid rgba(56,189,248,0.7)!important;border-radius:8px!important;cursor:pointer!important;box-shadow:0 4px 18px rgba(0,0,0,0.75),0 0 12px rgba(56,189,248,0.3)!important;user-select:none!important;transition:transform 0.1s ease!important;color:#38bdf8!important;pointer-events:auto!important;outline:none!important;-webkit-tap-highlight-color:transparent!important;}}#yamashishi-floating-sidebar-btn:hover{{border-color:rgba(56,189,248,0.7)!important;color:#38bdf8!important;box-shadow:0 4px 18px rgba(0,0,0,0.75),0 0 12px rgba(56,189,248,0.3)!important;}}#yamashishi-floating-sidebar-btn:active{{border-color:#fde047!important;color:#fde047!important;box-shadow:0 6px 22px rgba(0,0,0,0.9),0 0 18px rgba(253,224,71,0.4)!important;transform:scale(0.95)!important;}}#yamashishi-floating-sidebar-btn svg{{width:15px!important;height:15px!important;}}#yamashishi-floating-sidebar-btn span{{font-family:'JetBrains Mono',monospace!important;font-size:11px!important;font-weight:800!important;}}#yamashishi-sidebar-backdrop{{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;background:rgba(0,0,0,0.45)!important;backdrop-filter:blur(2px)!important;z-index:999990!important;display:none;pointer-events:auto!important;cursor:pointer!important;}}`;
                     doc.head.appendChild(s);
                 }}
                 let o=doc.getElementById('yamashishi-sidebar-backdrop');
-                if(!o){{o=doc.createElement('div');o.id='yamashishi-sidebar-backdrop';doc.body.appendChild(o);o.addEventListener('click',function(e){{e.preventDefault();e.stopPropagation();closeCustomSidebar();}});}}
+                if(!o){{
+                    o=doc.createElement('div');
+                    o.id='yamashishi-sidebar-backdrop';
+                    doc.body.appendChild(o);
+                }}
+                o.onclick=function(e){{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.parent._yamashishiCloseSidebar();
+                }};
+
                 let b=doc.getElementById('yamashishi-floating-sidebar-btn');
-                if(!b){{b=doc.createElement('div');b.id='yamashishi-floating-sidebar-btn';b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span>MENU</span>';doc.body.appendChild(b);}}
-                b.onclick=function(e){{e.preventDefault();e.stopPropagation();const sb=doc.querySelector('section[data-testid="stSidebar"]');if(sb){{sb.getAttribute('aria-expanded')==='true'?closeCustomSidebar():openCustomSidebar();}}}};
-                if(!doc._yamashishiGlobalOutsideBound){{doc.addEventListener('click',function(e){{const sb=doc.querySelector('section[data-testid="stSidebar"]'),btn=doc.getElementById('yamashishi-floating-sidebar-btn');if(sb&&sb.getAttribute('aria-expanded')==='true'&&!sb.contains(e.target)&&(!btn||!btn.contains(e.target)))closeCustomSidebar();}},true);doc._yamashishiGlobalOutsideBound=true;}}
+                if(!b){{
+                    b=doc.createElement('div');
+                    b.id='yamashishi-floating-sidebar-btn';
+                    b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span>MENU</span>';
+                    doc.body.appendChild(b);
+                }}
+                b.onclick=function(e){{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const sb=doc.querySelector('section[data-testid="stSidebar"]');
+                    const isOpen = sb && (sb.getAttribute('aria-expanded')==='true' || window.parent.sessionStorage.getItem('yamashishi_sb_state')==='open');
+                    if(isOpen){{
+                        window.parent._yamashishiCloseSidebar();
+                    }}else{{
+                        window.parent._yamashishiOpenSidebar();
+                    }}
+                }};
+
+                if(doc._yamashishiOutsideHandler){{
+                    doc.removeEventListener('pointerdown', doc._yamashishiOutsideHandler, true);
+                    doc.removeEventListener('click', doc._yamashishiOutsideHandler, true);
+                }}
+                doc._yamashishiOutsideHandler = function(e){{
+                    const sb=doc.querySelector('section[data-testid="stSidebar"]');
+                    const btn=doc.getElementById('yamashishi-floating-sidebar-btn');
+                    const isOpen = sb && (sb.getAttribute('aria-expanded')==='true' || window.parent.sessionStorage.getItem('yamashishi_sb_state')==='open');
+                    if(!isOpen) return;
+                    const t = e.target;
+                    if(sb && sb.contains(t)) return;
+                    if(btn && btn.contains(t)) return;
+                    if(t && t.closest && t.closest('[data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"], ul[role="listbox"]')) return;
+                    window.parent._yamashishiCloseSidebar();
+                }};
+                doc.addEventListener('pointerdown', doc._yamashishiOutsideHandler, true);
+                doc.addEventListener('click', doc._yamashishiOutsideHandler, true);
+
                 const savedState = window.parent.sessionStorage.getItem('yamashishi_sb_state');
                 if(savedState === 'open'){{
-                    openCustomSidebar();setTimeout(openCustomSidebar, 50);setTimeout(openCustomSidebar, 150);setTimeout(openCustomSidebar, 300);
+                    openCustomSidebar();
+                }}else{{
+                    closeCustomSidebar();
                 }}
             }}catch(e){{}}
         }}
@@ -2866,7 +2953,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         st.markdown("#### 🔵 Google Gemini API 暗号化設定（全会員共通エンジン・無料枠多段フォールバック対応）")
         st.caption("ここで保存された Gemini APIキーとモデル設定は、データベースに暗号化保存され、全会員の『Gemini マルチペルソナ合議』および『ニュースAI深掘り解説』で共通利用されます。")
         gem_cur = load_gemini_cfg()
-        cur_m = gem_cur.get("model", "gemini-2.5-flash")
+        cur_m = gem_cur.get("model", "gemini-3.8-flash")
         cur_k = gem_cur.get("api_key", "")
 
         show_plain_key = st.checkbox("👁️ APIキーを平文表示して確認する（ブラウザの自動入力混入を防ぐため推奨）", value=False, key="chk_show_gem_key")
@@ -2917,7 +3004,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                     st.session_state["news_ai_deep_cache"] = {}
                     st.success(f"✅ {t_msg}（設定も自動保存しました）")
                 else:
-                    st.error(f"❌ 接続テスト失敗: {t_msg}")
+                    st.error(f"❌ 接続テスト失敗:\n{t_msg}")
 
         st.markdown("<hr style='margin:14px 0; border-color:rgba(56,189,248,0.25);'>", unsafe_allow_html=True)
         st.markdown("#### 📧 SMTPメール通知サーバー設定")
