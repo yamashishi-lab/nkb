@@ -298,10 +298,16 @@ def encrypt_secret_str(p: str) -> str:
         xb = bytes([b ^ s[i] for i, b in enumerate(d)])
         return "xor:" + (salt + hmac.new(k, xb, hashlib.sha256).digest()[:16] + xb).hex()
 
+def _is_valid_gemini_key(k: str) -> bool:
+    if not k:
+        return False
+    # 新形式 Authキー (AQ.〜) または 旧形式 Standardキー (AIza〜) の両方を正規キーとして認める
+    return (k.startswith("AQ.") and len(k) >= 40) or (k.startswith("AIza") and len(k) >= 35)
+
 def decrypt_secret_str(c: str) -> str:
     if not c or not (c.startswith("enc:") or c.startswith("xor:")):
         raw_plain = str(c or "").strip()
-        return raw_plain if raw_plain.startswith("AIza") else ""
+        return raw_plain if _is_valid_gemini_key(raw_plain) else ""
     try:
         sch, hd = c.split(":", 1)
         raw = bytes.fromhex(hd)
@@ -317,7 +323,7 @@ def decrypt_secret_str(c: str) -> str:
             while len(s) < len(xb): s += hashlib.sha256(s + k).digest()
             res_str = bytes([b ^ s[i] for i, b in enumerate(xb)]).decode("utf-8")
         clean_res = res_str.strip()
-        return clean_res if clean_res.startswith("AIza") else ""
+        return clean_res if _is_valid_gemini_key(clean_res) else ""
     except Exception as e:
         record_system_error("decrypt_secret_str", e)
     return ""
@@ -329,16 +335,16 @@ def sanitize_api_key(k: str) -> str:
     if not k:
         return ""
     norm = unicodedata.normalize("NFKC", str(k)).strip()
-    # 1. Google AI Studio標準のAPIキー形式 (AIza + 35文字 = 39文字) を最優先でピンポイント抽出
-    # ※パスワード自動入力(ADMIN777等)や "GEMINI_API_KEY=" が前後に連結されていてもAIzaキーのみを正確に抜き出す
-    m = re.search(r"(AIza[0-9A-Za-z_\-]{35})", norm)
-    if m:
-        return m.group(1)
-    # 2. 文字数がわずかに異なるAIzaキーのフォールバック抽出
-    m2 = re.search(r"(AIza[0-9A-Za-z_\-]{30,45})", norm)
-    if m2:
-        return m2.group(1)
-    return re.sub(r"[^A-Za-z0-9_\-]", "", clean_k(norm))
+    # 1. 新形式 Google AI Studio Authキー (AQ. + 英数字/記号) をピンポイント抽出（ピリオドを絶対に消さない）
+    m_aq = re.search(r"(AQ\.[0-9A-Za-z_\-\.]{40,70})", norm)
+    if m_aq:
+        return m_aq.group(1)
+    # 2. 旧形式 Google AI Studio Standardキー (AIza + 35文字 = 39文字) を抽出
+    m_aiza = re.search(r"(AIza[0-9A-Za-z_\-]{30,45})", norm)
+    if m_aiza:
+        return m_aiza.group(1)
+    # 3. フォールバック時もピリオド(.)を除去せず保持する
+    return re.sub(r"[^A-Za-z0-9_\-\.]", "", clean_k(norm))
 
 def gen_code(em: str) -> str: return hmac.new(SECRET_KEY.encode(), em.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
 def gen_tok(em: str, act: str) -> str: return hmac.new(SECRET_KEY.encode(), f"{em.strip().lower()}:{act}:{SECRET_KEY[:16]}:{int(time.time() // 86400)}".encode(), hashlib.sha256).hexdigest()[:16]
@@ -386,12 +392,11 @@ def load_gemini_cfg() -> dict:
         mod = "gemini-2.5-flash"
     enc_k = raw.get("enc_gemini_key") or raw.get("enc_keys", {}).get("gemini", "")
     dec_k = sanitize_api_key(decrypt_secret_str(enc_k))
-    # AIzaで始まらないゴミデータ（旧DBキャッシュや自動入力誤保存）は破棄
-    if not dec_k.startswith("AIza"):
+    if not _is_valid_gemini_key(dec_k):
         dec_k = ""
     if not dec_k:
         env_k = sanitize_api_key(_safe_get_env_or_secret("GEMINI_API_KEY"))
-        if env_k.startswith("AIza"):
+        if _is_valid_gemini_key(env_k):
             dec_k = env_k
     return {"model": mod, "api_key": dec_k}
 
@@ -582,14 +587,14 @@ def send_mail(to_em: str, subj: str, body: str, cat: str = "自動通知") -> bo
 # ==========================================
 # 4. Google Gemini API 専用連携関数（BLOCK_NONE・多段フォールバック・systemInstruction・JSONモード対応）
 # ==========================================
-def build_gemini_url(model: str, key: str) -> str:
+def build_gemini_url(model: str, key: str = "") -> str:
     clean_m = model.strip()
     if clean_m.startswith("models/"):
         clean_m = clean_m[7:]
     if clean_m not in GEMINI_MODELS:
         clean_m = "gemini-2.5-flash"
-    sanitized_k = sanitize_api_key(key)
-    return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent?key={urllib.parse.quote(sanitized_k)}"
+    # 新形式(AQ.)での二重認証エラーを防ぐため、キーはURLではなく x-goog-api-key ヘッダーで渡す
+    return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent"
 
 def _gemini_safety_settings() -> list:
     return [
@@ -623,12 +628,12 @@ def test_single_llm_api(mod: str, key: str) -> tuple:
     clean_api_k = sanitize_api_key(key)
     if not clean_api_k:
         return False, "Gemini APIキーが空です。キーを入力してからEnterを押してください。"
-    if not clean_api_k.startswith("AIza") or len(clean_api_k) < 35:
+    if not _is_valid_gemini_key(clean_api_k):
         masked = f"{clean_api_k[:4]}...({len(clean_api_k)}文字)"
         return (
             False,
             f"APIキーの形式が正しくありません（現在の入力値: {masked}）。"
-            "Google AI StudioのAPIキーは『AIza』から始まる39文字です。"
+            "Google AI StudioのAPIキーは『AQ.』から始まる新形式（約53文字）または『AIza』から始まる39文字です。"
             "ブラウザのパスワード自動入力が混入している可能性があるため、入力欄を一度空にしてから貼り直してください。"
         )
 
@@ -661,14 +666,11 @@ def test_single_llm_api(mod: str, key: str) -> tuple:
             except Exception:
                 pass
             last_body = err_body
-            # APIキー自体が無効(API_KEY_INVALID)の場合は別モデルでリトライしても無意味なため即座に診断結果を返す
             if "API_KEY_INVALID" in err_body or "API key not valid" in err_body:
                 return (
                     False,
                     f"Google側でAPIキーが無効と判定されました [送信キー: {key_preview}]。\n"
-                    "① Google AI Studio (aistudio.google.com/app/apikey) で発行した有効なキーか\n"
-                    "② コピー時に末尾の文字が欠けていないか（通常39文字）\n"
-                    "③ キーが削除・制限されていないか を確認してください。"
+                    f"応答詳細: {err_body[:140]}"
                 )
             if he.code in (400, 403, 404, 429, 500, 503) and idx < len(candidates) - 1:
                 time.sleep(0.8)
@@ -2869,23 +2871,25 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
 
         show_plain_key = st.checkbox("👁️ APIキーを平文表示して確認する（ブラウザの自動入力混入を防ぐため推奨）", value=False, key="chk_show_gem_key")
         raw_input_key = st.text_input(
-            "🔑 Google Gemini API Key (AIzaから始まる39文字を入力してEnter)",
+            "🔑 Google Gemini API Key (新形式『AQ.〜』または旧形式『AIza〜』を入力してEnter)",
             value=cur_k,
             type="default" if show_plain_key else "password",
-            placeholder="AIzaSy...",
+            placeholder="AQ.Ab8RN6... または AIzaSy...",
             key="admin_gem_key_input"
         )
         in_gem_key = sanitize_api_key(raw_input_key)
 
-        # リアルタイムキー形式診断バッジ
+        # リアルタイムキー形式診断バッジ（AQ.新形式 ＆ AIza旧形式 両対応）
         if not in_gem_key:
-            st.info("ℹ️ APIキーが未入力です。Google AI Studio (aistudio.google.com) で取得した `AIzaSy...` キーを貼り付けてください。")
+            st.info("ℹ️ APIキーが未入力です。Google AI Studio (aistudio.google.com) で取得した `AQ.Ab8...` または `AIzaSy...` キーを貼り付けてください。")
+        elif in_gem_key.startswith("AQ.") and len(in_gem_key) >= 45:
+            st.caption(f"🟢 **有効な新形式 Gemini Authキー(AQ.)を認識中:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （正常: {len(in_gem_key)}文字）")
         elif in_gem_key.startswith("AIza") and len(in_gem_key) == 39:
-            st.caption(f"🟢 **有効なGemini APIキー形式を認識中:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （正常: 39文字）")
-        elif in_gem_key.startswith("AIza"):
-            st.warning(f"⚠️ **文字数注意:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （現在 {len(in_gem_key)}文字 / 標準は39文字です。末尾が欠けていないか確認してください）")
+            st.caption(f"🟢 **有効な旧形式 Gemini Standardキー(AIza)を認識中:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （正常: 39文字）")
+        elif in_gem_key.startswith(("AQ.", "AIza")):
+            st.warning(f"⚠️ **文字数注意:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （現在 {len(in_gem_key)}文字 / コピー時に末尾が欠けていないか確認してください）")
         else:
-            st.error(f"🚨 **不正な文字列を検知:** 現在 `{in_gem_key[:4]}...`（{len(in_gem_key)}文字）が入力されています。ブラウザのパスワード自動入力が混入しています！上の「👁️平文表示」にチェックを入れ、中身を全消去してから `AIza...` のキーを貼り付けてください。")
+            st.error(f"🚨 **不正な文字列を検知:** 現在 `{in_gem_key[:4]}...`（{len(in_gem_key)}文字）が入力されています。ブラウザのパスワード自動入力が混入しています！上の「👁️平文表示」にチェックを入れ、中身を全消去してからキーを貼り付けてください。")
 
         in_gem_mod = st.selectbox(
             "🧠 デフォルト Gemini モデル選択",
