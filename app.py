@@ -84,14 +84,20 @@ GEMINI_MODELS = [
     "gemini-3.8-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite"
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash"
 ]
 
 GEMINI_MODEL_DISPLAY_NAMES = {
     "gemini-3.8-flash": "Gemini 3.8 Flash (最新推奨・高精度フラッグシップ・無料枠対応)",
     "gemini-3.6-flash": "Gemini 3.6 Flash (高速・高安定バランス型・無料枠対応)",
     "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite (軽量・高速レスポンス・無料枠上限大)",
-    "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite (超軽量・最速フォールバック用)"
+    "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite (超軽量・最速フォールバック用)",
+    "gemini-2.5-flash": "Gemini 2.5 Flash (実在高速マルチモーダル標準モデル)",
+    "gemini-2.5-pro": "Gemini 2.5 Pro (実在高推論フラッグシップモデル)",
+    "gemini-2.0-flash": "Gemini 2.0 Flash (実在安定高速レスポンスモデル)"
 }
 
 DYNAMIC_GENRES = ["半導体・前工程・検査", "AI・防衛・国策", "AI電力・超電導・電線", "宇宙・量子・次世代テック", "小型急騰・仕手・モメンタム"]
@@ -384,7 +390,7 @@ def load_gemini_cfg() -> dict:
     if not isinstance(raw, dict):
         raw = {}
     mod = str(raw.get("gemini_model") or raw.get("models", {}).get("gemini", "gemini-3.8-flash")).strip()
-    if not mod or mod.startswith(("gemini-2.", "gemini-1.")) or mod not in GEMINI_MODELS:
+    if not mod or mod.startswith("gemini-1.") or mod not in GEMINI_MODELS:
         mod = "gemini-3.8-flash"
     enc_k = raw.get("enc_gemini_key") or raw.get("enc_keys", {}).get("gemini", "")
     dec_k = sanitize_api_key(decrypt_secret_str(enc_k))
@@ -398,13 +404,14 @@ def load_gemini_cfg() -> dict:
 
 def save_llm_encrypted(model: str, api_key: str):
     raw_m = str(model or "").strip()
-    clean_m = raw_m if (raw_m and not raw_m.startswith(("gemini-2.", "gemini-1.")) and raw_m in GEMINI_MODELS) else "gemini-3.8-flash"
+    clean_m = raw_m if (raw_m and not raw_m.startswith("gemini-1.") and raw_m in GEMINI_MODELS) else "gemini-3.8-flash"
     clean_api_k = sanitize_api_key(api_key)
     db_set("llm", {
         "provider": "gemini",
         "gemini_model": clean_m,
         "enc_gemini_key": encrypt_secret_str(clean_api_k) if clean_api_k else ""
     })
+    st.session_state["last_working_gemini_model"] = ""
 
 def load_sec(): return db_get("sec", {"banned_fps": {}, "banned_emails": {}, "banned_pins": {}, "banned_names": [], "spoof_logs": [], "device_bio_map": {}})
 def load_mail_db(): return db_get("mail", {"logs": [], "messages": []})
@@ -588,7 +595,7 @@ def build_gemini_url(model: str, key: str = "") -> str:
     clean_m = str(model or "").strip()
     if clean_m.startswith("models/"):
         clean_m = clean_m[7:]
-    if not clean_m or clean_m.startswith(("gemini-2.", "gemini-1.")):
+    if not clean_m or clean_m.startswith("gemini-1."):
         clean_m = "gemini-3.8-flash"
     return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent"
 
@@ -616,6 +623,7 @@ def _gemini_headers(api_key: str = "", use_bearer: bool = False) -> dict:
             h["x-goog-api-key"] = clean_k_val
     return h
 
+@st.cache_data(ttl=3600)
 def fetch_available_gemini_models(api_key: str) -> list:
     clean_k_val = sanitize_api_key(api_key)
     if not clean_k_val:
@@ -625,16 +633,17 @@ def fetch_available_gemini_models(api_key: str) -> list:
     for use_bearer in ([False, True] if clean_k_val.startswith("AQ.") else [False]):
         try:
             req = urllib.request.Request(url, headers=_gemini_headers(clean_k_val, use_bearer=use_bearer), method="GET")
-            with urllib.request.urlopen(req, context=ctx, timeout=12.0) as r:
+            with urllib.request.urlopen(req, context=ctx, timeout=8.0) as r:
                 data = json.loads(r.read().decode("utf-8"))
                 avail = []
                 for m in data.get("models", []):
                     name = m.get("name", "").replace("models/", "")
                     methods = m.get("supportedGenerationMethods", [])
-                    if "generateContent" in methods and "gemini-2." not in name and "gemini-1." not in name:
+                    if "generateContent" in methods and "gemini-1." not in name:
                         if any(k in name for k in ["flash", "pro"]) and not any(x in name for x in ["image", "tts", "audio", "embedding", "vision"]):
                             avail.append(name)
                 if avail:
+                    avail.sort(key=lambda x: (0 if "2.5-flash" in x else (1 if "flash" in x else 2), x))
                     return avail
         except Exception:
             continue
@@ -642,21 +651,32 @@ def fetch_available_gemini_models(api_key: str) -> list:
 
 def _build_fallback_chain(primary_model: str, api_key: str = "") -> list:
     chain = []
-    base_candidates = [
-        primary_model,
-        "gemini-3.8-flash",
-        "gemini-3.6-flash",
-        "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite"
-    ]
-    for m in base_candidates:
-        if m and not m.startswith("gemini-2.") and not m.startswith("gemini-1.") and m not in chain:
-            chain.append(m)
-    if api_key:
-        for dm in fetch_available_gemini_models(api_key):
+    last_working = str(st.session_state.get("last_working_gemini_model", "") or "").strip()
+    if last_working and not last_working.startswith("gemini-1."):
+        chain.append(last_working)
+
+    avail_models = fetch_available_gemini_models(api_key) if api_key else []
+    if avail_models:
+        if primary_model in avail_models and primary_model not in chain:
+            chain.append(primary_model)
+        for dm in avail_models:
             if dm not in chain:
                 chain.append(dm)
-    return chain
+    else:
+        base_candidates = [
+            primary_model,
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.0-flash",
+            "gemini-3.8-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite"
+        ]
+        for m in base_candidates:
+            if m and not m.startswith("gemini-1.") and m not in chain:
+                chain.append(m)
+    return chain[:6]
 
 def _extract_gemini_response_text(resp_data: dict) -> str:
     cands = resp_data.get("candidates", [])
@@ -708,9 +728,10 @@ def test_single_llm_api(mod: str, key: str) -> tuple:
                     req = urllib.request.Request(url_with_key, data=d, headers=_gemini_headers(""), method="POST")
                 else:
                     req = urllib.request.Request(base_url, data=d, headers=_gemini_headers(clean_api_k, use_bearer=use_bearer), method="POST")
-                with urllib.request.urlopen(req, context=ctx, timeout=35.0) as r:
+                with urllib.request.urlopen(req, context=ctx, timeout=12.0) as r:
                     resp_data = json.loads(r.read().decode("utf-8"))
                     txt = _extract_gemini_response_text(resp_data)
+                    st.session_state["last_working_gemini_model"] = m_test
                     fb_note = f" (※{mod}から自動フォールバック)" if m_test != mod else ""
                     auth_note = f" / 認証方式: {auth_label}" if (use_bearer or use_query_key) else ""
                     return True, f"接続成功 [認識キー: {key_preview}] (稼働モデル: {m_test}{fb_note}{auth_note})\n応答: {txt.strip()[:40]}"
@@ -723,19 +744,21 @@ def test_single_llm_api(mod: str, key: str) -> tuple:
                 short_err = re.sub(r"\s+", " ", err_body)[:120] or he.reason
                 model_errors.append(f"・{m_test} [{auth_label}]: HTTP {he.code} ({short_err})")
 
+                if he.code == 404:
+                    break
                 if he.code in (400, 401, 403):
-                    time.sleep(0.3)
+                    time.sleep(0.05)
                     continue
                 break
             except Exception as e:
                 model_errors.append(f"・{m_test} [{auth_label}]: 通信例外 ({str(e)})")
                 if not use_query_key:
-                    time.sleep(0.3)
+                    time.sleep(0.05)
                     continue
                 break
 
         if idx < len(candidates) - 1:
-            time.sleep(0.6)
+            time.sleep(0.05)
 
     err_list_str = "\n".join(model_errors) if model_errors else "詳細エラー情報なし"
     return False, f"全候補モデルの接続テストに失敗しました [送信キー: {key_preview}]:\n{err_list_str}"
@@ -749,7 +772,7 @@ def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tup
 
     ctx = ssl.create_default_context()
     candidates = _build_fallback_chain(sel_mod, api_key)
-    gen_cfg = {"temperature": 0.9, "maxOutputTokens": 1800}
+    gen_cfg = {"temperature": 0.9, "maxOutputTokens": 4096}
     if expect_json:
         gen_cfg["responseMimeType"] = "application/json"
 
@@ -775,28 +798,31 @@ def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tup
             else:
                 req = urllib.request.Request(base_url, data=d, headers=_gemini_headers(api_key, use_bearer=use_bearer), method="POST")
             try:
-                with urllib.request.urlopen(req, context=ctx, timeout=45.0) as r:
+                with urllib.request.urlopen(req, context=ctx, timeout=12.0) as r:
                     res_json = json.loads(r.read().decode("utf-8"))
                     out_txt = _extract_gemini_response_text(res_json)
                     if out_txt:
+                        st.session_state["last_working_gemini_model"] = cand
                         return out_txt, cand
             except urllib.error.HTTPError as he:
                 record_system_error("call_real_llm_api:http", he, f"Model: {cand}, Auth: {auth_label}, Code: {he.code}")
+                if he.code == 404:
+                    break
                 if he.code in (400, 401, 403):
-                    time.sleep(0.3)
+                    time.sleep(0.05)
                     continue
-                if he.code in (404, 429, 500, 503):
+                if he.code in (429, 500, 503):
                     break
                 return None, ""
             except Exception as e:
                 record_system_error("call_real_llm_api", e, f"Model: {cand}, Auth: {auth_label}")
                 if not use_query_key:
-                    time.sleep(0.3)
+                    time.sleep(0.05)
                     continue
                 break
 
         if idx < len(candidates) - 1:
-            time.sleep(0.8)
+            time.sleep(0.05)
     return None, ""
 
 # ==========================================
@@ -1046,7 +1072,8 @@ defaults = {
     "navigation_page": "TOP", "selected_news_item": None, "custom_search_code": "", "active_category": "🏆 総合TOP5",
     "last_cat": "🏆 総合TOP5", "nav_history": [], "scroll_top_trig": 0, "scroll_target_id": "", "focused_stock_item": None,
     "agent_roster": saved_agents, "inspector_roster": saved_inspectors, "fired_agents": saved_fired, "system_zero_logs": saved_sz_logs,
-    "system_zero_active": saved_sz_active, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}, "last_audit_similarity_penalty": 0
+    "system_zero_active": saved_sz_active, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}, "last_audit_similarity_penalty": 0,
+    "last_working_gemini_model": ""
 }
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
@@ -1081,7 +1108,7 @@ components.html(
                     sb.style.setProperty('pointer-events','none','important');
                 }}
                 if(o){{
-                    o.style.setProperty('display','none','important');
+                    o.setProperty('display','none','important');
                     o.style.setProperty('pointer-events','none','important');
                 }}
                 window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');
@@ -1252,7 +1279,7 @@ def search_single_query(q: str, max_r: int) -> list:
     res = []
     try:
         req = urllib.request.Request(f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=ja&gl=JP&ceid=JP:ja", headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=2.5, context=ssl.create_default_context()) as r:
+        with urllib.request.urlopen(req, timeout=1.5, context=ssl.create_default_context()) as r:
             for it in ET.fromstring(r.read()).findall("./channel/item")[:max_r]:
                 t = re.sub(r"\s*-\s*[^-]+$", "", re.sub(r"<[^>]+>", "", it.findtext("title") or "").strip())
                 d = re.sub(r"<[^>]+>", "", it.findtext("description") or "").strip()
@@ -1469,7 +1496,7 @@ def fetch_single_news_rss(cat, q):
     out = []
     try:
         req = urllib.request.Request(f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=ja&gl=JP&ceid=JP:ja", headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        with urllib.request.urlopen(req, timeout=2.5, context=ssl.create_default_context()) as res:
+        with urllib.request.urlopen(req, timeout=1.5, context=ssl.create_default_context()) as res:
             for it in ET.fromstring(res.read()).findall("./channel/item")[:4]:
                 t = re.sub(r"\s*-\s*[^-]+$", "", (it.findtext("title") or "").strip())
                 desc = (it.findtext("description") or "").strip()
@@ -1770,6 +1797,57 @@ def _parse_llm_json_turns(raw_res: str) -> list:
         record_system_error("_parse_llm_json_turns", e)
     return []
 
+def build_instant_verdict_html(r: dict) -> str:
+    ft = r.get("forward_test", {})
+    hist_rows = ft.get("history_rows", [])
+    is_jp = ".T" in r.get("full_code", "")
+
+    table_rows_html = ""
+    for hr in hist_rows:
+        is_w = hr.get("is_win")
+        res_color = "#10b981" if is_w is True else ("#ef4444" if is_w is False else "#94a3b8")
+        ret_v, prof_v = float(hr.get("return_pct", 0.0)), float(hr.get("profit_val", 0.0))
+        ret_s = "-" if is_w is None else f"{'+' if ret_v >= 0 else ''}{ret_v:.2f}%"
+        prof_s = "未約定" if is_w is None else (f"{'+' if prof_v >= 0 else ''}{prof_v:,.0f}円" if is_jp else f"{'+' if prof_v >= 0 else ''}${prof_v:,.2f}")
+        hold_days = int(hr.get("hold_days", 1))
+        date_disp = f"{hr.get('date', '-')} ({hold_days}日保有)" if (is_w is not None and hold_days > 1) else str(hr.get("date", "-"))
+        table_rows_html += (
+            f"<tr><td>{html.escape(date_disp)}</td>"
+            f"<td style='color:#38bdf8;'>{html.escape(str(hr.get('plan_short', '-')))}</td>"
+            f"<td style='font-family:monospace;'>{html.escape(str(hr.get('entry_str', '-')))} → {html.escape(str(hr.get('exit_str', '-')))}</td>"
+            f"<td style='color:{res_color};font-weight:800;'>{html.escape(str(hr.get('outcome', '-')))}</td>"
+            f"<td style='color:{res_color};font-family:monospace;font-weight:800;'>{ret_s} ({prof_s})</td></tr>"
+        )
+    if not table_rows_html:
+        table_rows_html = "<tr><td colspan='5' style='text-align:center;color:#94a3b8;'>確定決済済みの市場データ蓄積後に自動検証ログが追記されます。</td></tr>"
+
+    tot_p = float(ft.get("total_profit_yen", 0.0))
+    tot_p_str = f"{'+' if tot_p >= 0 else ''}{tot_p:,.0f}円" if is_jp else f"{'+' if tot_p >= 0 else ''}${tot_p:,.2f}"
+    tot_p_col = "#10b981" if tot_p >= 0 else "#ef4444"
+    traded_days, win_cnt = int(ft.get("total_days", 0)), int(ft.get("win_count", 0))
+    lose_cnt = max(0, traded_days - win_cnt)
+
+    forward_table_html = (
+        f'<div style="background:rgba(2,6,23,0.85); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:10px 12px; margin-top:10px;">'
+        f'<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">'
+        f'<span style="font-size:12.5px; font-weight:800; color:#38bdf8;">📊 過去1ヶ月（直近22営業日）厳格実戦検証（確定足終値／逆指値リアル約定＋40%利確＆60%利益上乗せロック・スタイル別保有日数対応）</span>'
+        f'<span style="font-size:11px; color:#fde047; font-weight:700;">確定約定 {traded_days}戦: {ft.get("actual_win_rate", 0.0):.1f}% ({win_cnt}勝{lose_cnt}敗) ｜ ネット累計損益: <span style="color:{tot_p_col};">{tot_p_str}</span></span>'
+        f'</div><div class="admin-table-container" style="margin-top:4px;"><table class="admin-table">'
+        f'<thead><tr><th>検証日(確定)</th><th>前日決定プラン</th><th>リアル約定→分割決済</th><th>実測勝敗結果</th><th>ネット損益率・損益額</th></tr></thead>'
+        f'<tbody>{table_rows_html}</tbody></table></div></div>'
+    )
+
+    v_html = (
+        f'<div style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:12px; margin-top:5px;">'
+        f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px; text-align:center; margin-bottom:10px;">'
+        f'<div style="background:rgba(16,185,129,0.15); padding:6px; border-radius:6px; border:1px solid rgba(16,185,129,0.4);"><div style="font-size:10px; color:#a7f3d0;">🎯 最終目標利確価格</div><div style="font-size:14px; font-weight:800; color:#10b981;">{r["tp_price"]}</div></div>'
+        f'<div style="background:rgba(239,68,68,0.15); padding:6px; border-radius:6px; border:1px solid rgba(239,68,68,0.4);"><div style="font-size:10px; color:#fca5a5;">🛡️ 初期逆指値(損切)</div><div style="font-size:14px; font-weight:800; color:#ef4444;">{r["sl_price"]}</div></div>'
+        f'<div style="background:rgba(56,189,248,0.15); padding:6px; border-radius:6px; border:1px solid rgba(56,189,248,0.4);"><div style="font-size:10px; color:#bae6fd;">⏱️ 想定保有期間</div><div style="font-size:12.5px; font-weight:800; color:#38bdf8;">{r["strat"]["trade_duration"]}</div></div>'
+        f'</div><div style="font-size:12px; line-height:1.7; color:#e2e8f0;"><b>⚡ プロ執行アクション詳細プラン ({r["strat"]["style_name"]}専科):</b><br>{r["strat"]["step_plan"]}</div>'
+        f'</div><div class="beginner-action-box" style="margin-top:10px;">{r["strat"]["beginner_html"]}</div>{forward_table_html}'
+    )
+    return v_html
+
 def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> tuple:
     uq = (uq or "").strip()
     st_style = r.get("strat", {}).get("style_name", "デイトレード")
@@ -1840,54 +1918,7 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> t
 
 def run_gemini_council(r: dict, m5=None, seed: int = 0, uq: str = "", hist: list = None) -> dict:
     turns, engine_status = generate_humanlike_2ch_debate(r, uq, hist)
-    ft = r.get("forward_test", {})
-    hist_rows = ft.get("history_rows", [])
-    is_jp = ".T" in r.get("full_code", "")
-
-    table_rows_html = ""
-    for hr in hist_rows:
-        is_w = hr.get("is_win")
-        res_color = "#10b981" if is_w is True else ("#ef4444" if is_w is False else "#94a3b8")
-        ret_v, prof_v = float(hr.get("return_pct", 0.0)), float(hr.get("profit_val", 0.0))
-        ret_s = "-" if is_w is None else f"{'+' if ret_v >= 0 else ''}{ret_v:.2f}%"
-        prof_s = "未約定" if is_w is None else (f"{'+' if prof_v >= 0 else ''}{prof_v:,.0f}円" if is_jp else f"{'+' if prof_v >= 0 else ''}${prof_v:,.2f}")
-        hold_days = int(hr.get("hold_days", 1))
-        date_disp = f"{hr.get('date', '-')} ({hold_days}日保有)" if (is_w is not None and hold_days > 1) else str(hr.get("date", "-"))
-        table_rows_html += (
-            f"<tr><td>{html.escape(date_disp)}</td>"
-            f"<td style='color:#38bdf8;'>{html.escape(str(hr.get('plan_short', '-')))}</td>"
-            f"<td style='font-family:monospace;'>{html.escape(str(hr.get('entry_str', '-')))} → {html.escape(str(hr.get('exit_str', '-')))}</td>"
-            f"<td style='color:{res_color};font-weight:800;'>{html.escape(str(hr.get('outcome', '-')))}</td>"
-            f"<td style='color:{res_color};font-family:monospace;font-weight:800;'>{ret_s} ({prof_s})</td></tr>"
-        )
-    if not table_rows_html:
-        table_rows_html = "<tr><td colspan='5' style='text-align:center;color:#94a3b8;'>確定決済済みの市場データ蓄積後に自動検証ログが追記されます。</td></tr>"
-
-    tot_p = float(ft.get("total_profit_yen", 0.0))
-    tot_p_str = f"{'+' if tot_p >= 0 else ''}{tot_p:,.0f}円" if is_jp else f"{'+' if tot_p >= 0 else ''}${tot_p:,.2f}"
-    tot_p_col = "#10b981" if tot_p >= 0 else "#ef4444"
-    traded_days, win_cnt = int(ft.get("total_days", 0)), int(ft.get("win_count", 0))
-    lose_cnt = max(0, traded_days - win_cnt)
-
-    forward_table_html = (
-        f'<div style="background:rgba(2,6,23,0.85); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:10px 12px; margin-top:10px;">'
-        f'<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">'
-        f'<span style="font-size:12.5px; font-weight:800; color:#38bdf8;">📊 過去1ヶ月（直近22営業日）厳格実戦検証（確定足終値／逆指値リアル約定＋40%利確＆60%利益上乗せロック・スタイル別保有日数対応）</span>'
-        f'<span style="font-size:11px; color:#fde047; font-weight:700;">確定約定 {traded_days}戦: {ft.get("actual_win_rate", 0.0):.1f}% ({win_cnt}勝{lose_cnt}敗) ｜ ネット累計損益: <span style="color:{tot_p_col};">{tot_p_str}</span></span>'
-        f'</div><div class="admin-table-container" style="margin-top:4px;"><table class="admin-table">'
-        f'<thead><tr><th>検証日(確定)</th><th>前日決定プラン</th><th>リアル約定→分割決済</th><th>実測勝敗結果</th><th>ネット損益率・損益額</th></tr></thead>'
-        f'<tbody>{table_rows_html}</tbody></table></div></div>'
-    )
-
-    v_html = (
-        f'<div style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:12px; margin-top:5px;">'
-        f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px; text-align:center; margin-bottom:10px;">'
-        f'<div style="background:rgba(16,185,129,0.15); padding:6px; border-radius:6px; border:1px solid rgba(16,185,129,0.4);"><div style="font-size:10px; color:#a7f3d0;">🎯 最終目標利確価格</div><div style="font-size:14px; font-weight:800; color:#10b981;">{r["tp_price"]}</div></div>'
-        f'<div style="background:rgba(239,68,68,0.15); padding:6px; border-radius:6px; border:1px solid rgba(239,68,68,0.4);"><div style="font-size:10px; color:#fca5a5;">🛡️ 初期逆指値(損切)</div><div style="font-size:14px; font-weight:800; color:#ef4444;">{r["sl_price"]}</div></div>'
-        f'<div style="background:rgba(56,189,248,0.15); padding:6px; border-radius:6px; border:1px solid rgba(56,189,248,0.4);"><div style="font-size:10px; color:#bae6fd;">⏱️ 想定保有期間</div><div style="font-size:12.5px; font-weight:800; color:#38bdf8;">{r["strat"]["trade_duration"]}</div></div>'
-        f'</div><div style="font-size:12px; line-height:1.7; color:#e2e8f0;"><b>⚡ プロ執行アクション詳細プラン ({r["strat"]["style_name"]}専科):</b><br>{r["strat"]["step_plan"]}</div>'
-        f'</div><div class="beginner-action-box" style="margin-top:10px;">{r["strat"]["beginner_html"]}</div>{forward_table_html}'
-    )
+    v_html = build_instant_verdict_html(r)
     return {"final_score": r["ai_score"], "dialogue": turns, "verdict_html": v_html, "engine_status": engine_status}
 
 def _fmt_turn(t: dict, idx: int = 0) -> str:
@@ -1916,10 +1947,20 @@ def render_council_sec(r, uk, auto_open=False):
             st.rerun()
 
     if not is_open: return
+
+    instant_verdict_html = build_instant_verdict_html(r)
+    st.markdown(
+        f'<div class="consensus-banner">'
+        f'<div style="font-weight:800;color:#fde047;font-size:13px;margin-bottom:6px;">🏛️ 最終結論 ＆ プロ推奨買い方アクションプラン（{r["strat"]["style_name"]}専科）</div>'
+        f'{instant_verdict_html}</div>',
+        unsafe_allow_html=True
+    )
+
     ck = f"{uk}_{r.get('strat', {}).get('style_name', 'default')}"
     if ck not in st.session_state["council_threads"]:
-        deb = run_gemini_council(r, None, 0, "", hist=[])
-        st.session_state["council_threads"][ck], st.session_state["council_meta"][ck] = deb["dialogue"], deb
+        with st.spinner("🔵 5人の専門ペルソナがリアルタイム合議を生成中..."):
+            deb = run_gemini_council(r, None, 0, "", hist=[])
+            st.session_state["council_threads"][ck], st.session_state["council_meta"][ck] = deb["dialogue"], deb
 
     meta, turns = st.session_state["council_meta"][ck], st.session_state["council_threads"][ck]
     eng_stat = meta.get("engine_status", "🔵 Gemini マルチペルソナ合議")
@@ -1937,12 +1978,12 @@ def render_council_sec(r, uk, auto_open=False):
             ut, nid = uop.strip(), f"user_q_anchor_{uk}_{int(time.time()*1000)}"
             cur_t = list(st.session_state["council_threads"][ck])
             st.session_state["council_threads"][ck].append({"is_user": True, "text": ut, "dom_id": nid})
-            deb_u = run_gemini_council(r, None, 0, uq=ut, hist=cur_t)
+            with st.spinner("🔵 5人の専門ペルソナが質問に対する追加合議を生成中..."):
+                deb_u = run_gemini_council(r, None, 0, uq=ut, hist=cur_t)
             for nt in deb_u["dialogue"]: st.session_state["council_threads"][ck].append(nt)
             st.session_state["council_meta"][ck] = deb_u; st.session_state["scroll_target_id"] = nid; st.rerun()
 
-    st.markdown(f'<div class="consensus-banner"><div style="font-weight:800;color:#fde047;font-size:13px;margin-bottom:6px;">🏛️ 最終結論 ＆ プロ推奨買い方アクションプラン（{r["strat"]["style_name"]}専科）</div>{meta["verdict_html"]}</div>', unsafe_allow_html=True)
-    if auto_open:
+    if auto_open and not st.session_state.get("custom_search_code"):
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", key=f"btn_back_bottom_{uk}", use_container_width=True, type="primary"):
             st.session_state["focused_stock_item"] = None; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
@@ -1995,7 +2036,8 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False):
     )
     if rel_news and st.button("🚨【速報】重大ニュースの詳細分析を開く", key=f"nb_{kp}_{r['code']}", use_container_width=True):
         st.session_state["selected_news_item"] = rel_news; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
-    render_council_sec(r, f"foc_{r['code']}" if is_focused else f"{kp}_{r['code']}", auto_open=is_focused)
+    open_now = bool(is_focused or is_custom)
+    render_council_sec(r, f"foc_{r['code']}" if open_now else f"{kp}_{r['code']}", auto_open=open_now)
 
 # ==========================================
 # 13. 数理クオンツ・エンジン & 日次フォワード自動検証エンジン
@@ -2607,9 +2649,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                 net_r = ((rem_exit_px - avg_entry_px) / max(avg_entry_px, 1e-4)) - ROUND_TRIP_COST_RATE
                                 return net_r, rem_exit_px
 
-                        # ------------------------------------------------------------
-                        # 【1】既存ポジションの分割イグジット＆マルチデイ決済判定
-                        # ------------------------------------------------------------
                         if entered and b_i > first_entry_bar:
                             curr_hold_days = hold_slice_dates.index(b_date) + 1 if b_date in hold_slice_dates else 1
                             day_tag = f" [{curr_hold_days}日保有]" if max_hold_days > 1 else ""
@@ -2666,9 +2705,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                 outcome, is_win = f"⭕ 時間軸プラス手仕舞い{day_tag} (WIN)", True
                                 break
 
-                        # ------------------------------------------------------------
-                        # 【2】新規エントリー（先読みリーク完全排除・確定足終値 or ブレイク逆指値）
-                        # ------------------------------------------------------------
                         if not entered and can_enter:
                             intraday_bull_guard = (bc >= p_close * 0.994) and (bc >= day_open_px * 0.997)
                             if not intraday_bull_guard:
@@ -2727,9 +2763,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                         entered, avg_entry_px, first_entry_bar = True, fill_px, b_i
                                         eff_tp, eff_sl, tp_delta, sl_delta = _calc_dynamic_tp_sl(avg_entry_px)
 
-                # ------------------------------------------------------------
-                # 【3】未決済（タイムアウト）時のマルチデイ未確定判定＆最終大引け決済
-                # ------------------------------------------------------------
                 if sig_tactic == "Type-S":
                     outcome, avg_entry_px, exit_px, is_win, ret_pct, base_100_profit = "🛑 見送り判定・静観 (NO TRADE)", sig_plan_px, sig_plan_px, None, 0.0, 0.0
                 elif is_opening_weak_day:
