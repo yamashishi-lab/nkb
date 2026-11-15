@@ -1605,7 +1605,9 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> t
 [
   {{"speaker": "アイコン 名前", "role_label": "専門スタンス", "tone": "agree|doubt|rage|normal", "text": "内容"}}
 ]"""
-        user_msg = f"【今回の入力】\n『{uq if uq else f'（{r[\"name\"]}の固有テーマと本日の5分足OHLCV波形を踏まえた初期合議）'}』"
+        r_name = r["name"]
+        default_prompt = f"（{r_name}の固有テーマと本日の5分足OHLCV波形を踏まえた初期合議）"
+        user_msg = f"【今回の入力】\n『{uq if uq else default_prompt}』"
         raw_txt, used_mod = call_real_llm_api(sys_p, user_msg, expect_json=True)
         llm_turns = _parse_llm_json_turns(raw_txt)
         if llm_turns:
@@ -2283,7 +2285,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                     else:
                         sig_tactic, sig_mode, sig_plan_px = "Type-E", "3本安値切り上げ順張り一括＋40%利確", p_vwap
 
-                # 【改修要件2-2】動的TP/SLのペイオフ比（リスクリワード）改善
                 def _calc_dynamic_tp_sl(entry_px: float) -> tuple:
                     gap_used = max(0.0, entry_px - p_close)
                     rem_atr = max(p_atr - gap_used * 0.45, p_atr * 0.65)
@@ -2317,7 +2318,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 day_open_px = float(n_bo[0]) if total_bars > 0 else p_close
                 open_gap_pct = ((day_open_px - p_close) / max(p_close, 1e-4)) * 100.0
 
-                # 【改修要件2-3】オープニング・トレンドフィルター（大幅GD < -1.2% または 朝イチ1本目大陰線 <= -0.6% の日は見送り）
                 first_bar_drop = ((float(n_bc[0]) - day_open_px) / max(day_open_px, 1e-4)) <= -0.006 if total_bars > 0 else True
                 is_opening_weak_day = (open_gap_pct < -1.2) or first_bar_drop
 
@@ -2338,18 +2338,15 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                         # 【1】既存ポジションの分割イグジット（40%利確＋60%利益上乗せロック）＆午後タイムプロテクト
                         # ------------------------------------------------------------
                         if entered and b_i > first_entry_bar:
-                            # 【改修要件2-5】第1利確トリガー（リスク幅の1.15倍 または 目標利幅の65%）
                             half_target_span = min(sl_delta * 1.15, tp_delta * 0.65)
                             half_trigger_px = avg_entry_px + half_target_span
 
                             if not half_tp_done and bh >= half_trigger_px:
                                 half_tp_done = True
                                 half_tp_px = half_trigger_px
-                                # 残り60%の逆指値を「第1利確幅の35%を上乗せした利益確定ライン」へ引き上げ
                                 profit_lock_stop = avg_entry_px + max(half_target_span * 0.35, avg_entry_px * (ROUND_TRIP_COST_RATE + 0.0015))
                                 eff_sl = max(eff_sl, profit_lock_stop)
 
-                            # 【改修要件2-5】午後タイムプロテクト（場の65%経過時点以降で含み益+0.20%以上なら逆指値を利益確定ラインへ保護）
                             if is_afternoon_protect and bc >= avg_entry_px * 1.0020:
                                 pm_protect_stop = avg_entry_px * (1.0 + ROUND_TRIP_COST_RATE + 0.0008)
                                 eff_sl = max(eff_sl, pm_protect_stop)
@@ -2404,7 +2401,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                         # 【2】新規エントリー（共通順張りフィルター ＋ VWAP直上の有利な引きつけ指値約定）
                         # ------------------------------------------------------------
                         if not entered and can_enter:
-                            # 【改修要件2-3】前日終値・当日始値から崩れていない順張り共通条件
                             intraday_bull_guard = (bc >= p_close * 0.994) and (bc >= day_open_px * 0.997)
                             if not intraday_bull_guard:
                                 continue
@@ -2416,7 +2412,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                     setup_ready = True
                                 near_vwap_or_ema = (bl <= curr_vwap * 1.003) or (bl >= prev_low and bl <= ema5 * 1.002)
                                 if setup_ready and near_vwap_or_ema and bc >= bo and bc >= curr_vwap:
-                                    # 【改修要件2-4】VWAP直上の有利な指値約定価格
                                     fill_px = min(bc, max(bo, curr_vwap * 1.0005))
                                     entered, avg_entry_px, first_entry_bar = True, fill_px, b_i
                                     eff_tp, eff_sl, tp_delta, sl_delta = _calc_dynamic_tp_sl(avg_entry_px)
@@ -2615,7 +2610,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, bi=True
         }.get(st_p, (1.00, 1.00))
         st_mul = {"スキャルピング": 1.5, "スイングトレード": 1.2, "バイ＆ホールド": 0.9}.get(st_p, 1.65)
 
-        # 【改修要件2-2】動的TP/SLのペイオフ比改善（0.85x / 0.42x・レンジ0.95%〜3.2% / 0.50%〜1.2%）
         tp_delta_cur = float(np.clip(atrv * 0.85 * style_tp_scale, cv * 0.0095, cv * 0.032))
         sl_delta_cur = float(np.clip(atrv * 0.42 * style_sl_scale, cv * 0.0050, cv * 0.012))
         tpv, slv = cv + tp_delta_cur, cv - sl_delta_cur
