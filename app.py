@@ -45,7 +45,13 @@ def clear_system_error_logs():
 st.set_page_config(page_title="YAMASHISHI LAB", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 
 def _get_sec_val(env_k: str, fpath: str, gen_fn):
-    val = os.environ.get(env_k) or (st.secrets.get(env_k) if hasattr(st, "secrets") else None)
+    val = os.environ.get(env_k)
+    if not val:
+        try:
+            if hasattr(st, "secrets") and env_k in st.secrets:
+                val = st.secrets[env_k]
+        except Exception:
+            val = None
     if not val:
         if os.path.exists(fpath):
             try:
@@ -58,8 +64,19 @@ def _get_sec_val(env_k: str, fpath: str, gen_fn):
             except Exception: pass
     return val
 
+def _safe_get_env_or_secret(k: str) -> str:
+    val = os.environ.get(k)
+    if val:
+        return str(val).strip()
+    try:
+        if hasattr(st, "secrets") and k in st.secrets:
+            return str(st.secrets[k]).strip()
+    except Exception:
+        pass
+    return ""
+
 SECRET_KEY = _get_sec_val("SECRET_KEY", ".yamashishi_sys_seed.key", lambda: hashlib.sha3_512(f"{secrets.token_hex(64)}:{time.time_ns()}".encode()).hexdigest())
-ADMIN_EMAIL = (os.environ.get("ADMIN_EMAIL") or (st.secrets.get("ADMIN_EMAIL") if hasattr(st, "secrets") else None) or "nthbh399@ybb.ne.jp").strip().lower()
+ADMIN_EMAIL = (_safe_get_env_or_secret("ADMIN_EMAIL") or "nthbh399@ybb.ne.jp").strip().lower()
 ADMIN_PASS = _get_sec_val("ADMIN_PASS", ".yamashishi_cred.lock", lambda: "ADMIN777").strip()
 DB_SQLITE_PATH = "yamashishi_core.db"
 
@@ -282,25 +299,47 @@ def encrypt_secret_str(p: str) -> str:
         return "xor:" + (salt + hmac.new(k, xb, hashlib.sha256).digest()[:16] + xb).hex()
 
 def decrypt_secret_str(c: str) -> str:
-    if not c or not (c.startswith("enc:") or c.startswith("xor:")): return c or ""
+    if not c or not (c.startswith("enc:") or c.startswith("xor:")):
+        raw_plain = str(c or "").strip()
+        return raw_plain if raw_plain.startswith("AIza") else ""
     try:
         sch, hd = c.split(":", 1)
         raw = bytes.fromhex(hd)
+        res_str = ""
         if sch == "enc":
             from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-            return AESGCM(_derive_crypto_key(raw[:16])).decrypt(raw[16:28], raw[28:], None).decode("utf-8")
+            res_str = AESGCM(_derive_crypto_key(raw[:16])).decrypt(raw[16:28], raw[28:], None).decode("utf-8")
         elif sch == "xor":
             salt, mac, xb = raw[:16], raw[16:32], raw[32:]
             k = _derive_crypto_key(salt)
             if not hmac.compare_digest(mac, hmac.new(k, xb, hashlib.sha256).digest()[:16]): return ""
             s = hashlib.sha256(k + salt).digest()
             while len(s) < len(xb): s += hashlib.sha256(s + k).digest()
-            return bytes([b ^ s[i] for i, b in enumerate(xb)]).decode("utf-8")
-    except Exception as e: record_system_error("decrypt_secret_str", e)
+            res_str = bytes([b ^ s[i] for i, b in enumerate(xb)]).decode("utf-8")
+        clean_res = res_str.strip()
+        return clean_res if clean_res.startswith("AIza") else ""
+    except Exception as e:
+        record_system_error("decrypt_secret_str", e)
     return ""
 
-def clean_k(k: str) -> str: return re.sub(r"\s+", "", unicodedata.normalize("NFKC", str(k or "")).strip().strip("\"'"))
-def sanitize_api_key(k: str) -> str: return re.sub(r"[^A-Za-z0-9_\-]", "", clean_k(k))
+def clean_k(k: str) -> str:
+    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", str(k or "")).strip().strip("\"'"))
+
+def sanitize_api_key(k: str) -> str:
+    if not k:
+        return ""
+    norm = unicodedata.normalize("NFKC", str(k)).strip()
+    # 1. Google AI Studio標準のAPIキー形式 (AIza + 35文字 = 39文字) を最優先でピンポイント抽出
+    # ※パスワード自動入力(ADMIN777等)や "GEMINI_API_KEY=" が前後に連結されていてもAIzaキーのみを正確に抜き出す
+    m = re.search(r"(AIza[0-9A-Za-z_\-]{35})", norm)
+    if m:
+        return m.group(1)
+    # 2. 文字数がわずかに異なるAIzaキーのフォールバック抽出
+    m2 = re.search(r"(AIza[0-9A-Za-z_\-]{30,45})", norm)
+    if m2:
+        return m2.group(1)
+    return re.sub(r"[^A-Za-z0-9_\-]", "", clean_k(norm))
+
 def gen_code(em: str) -> str: return hmac.new(SECRET_KEY.encode(), em.strip().lower().encode(), hashlib.sha256).hexdigest()[:8].upper()
 def gen_tok(em: str, act: str) -> str: return hmac.new(SECRET_KEY.encode(), f"{em.strip().lower()}:{act}:{SECRET_KEY[:16]}:{int(time.time() // 86400)}".encode(), hashlib.sha256).hexdigest()[:16]
 
@@ -340,15 +379,20 @@ def save_smtp(user: str, pw: str, srv: str, port: int):
 
 def load_gemini_cfg() -> dict:
     raw = db_get("llm", {})
-    if not isinstance(raw, dict): raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
     mod = raw.get("gemini_model") or raw.get("models", {}).get("gemini", "gemini-2.5-flash")
     if mod not in GEMINI_MODELS:
         mod = "gemini-2.5-flash"
     enc_k = raw.get("enc_gemini_key") or raw.get("enc_keys", {}).get("gemini", "")
     dec_k = sanitize_api_key(decrypt_secret_str(enc_k))
+    # AIzaで始まらないゴミデータ（旧DBキャッシュや自動入力誤保存）は破棄
+    if not dec_k.startswith("AIza"):
+        dec_k = ""
     if not dec_k:
-        env_k = os.environ.get("GEMINI_API_KEY") or (st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else "")
-        dec_k = sanitize_api_key(env_k)
+        env_k = sanitize_api_key(_safe_get_env_or_secret("GEMINI_API_KEY"))
+        if env_k.startswith("AIza"):
+            dec_k = env_k
     return {"model": mod, "api_key": dec_k}
 
 def save_llm_encrypted(model: str, api_key: str):
@@ -540,7 +584,8 @@ def send_mail(to_em: str, subj: str, body: str, cat: str = "自動通知") -> bo
 # ==========================================
 def build_gemini_url(model: str, key: str) -> str:
     clean_m = model.strip()
-    if clean_m.startswith("models/"): clean_m = clean_m[7:]
+    if clean_m.startswith("models/"):
+        clean_m = clean_m[7:]
     if clean_m not in GEMINI_MODELS:
         clean_m = "gemini-2.5-flash"
     sanitized_k = sanitize_api_key(key)
@@ -557,11 +602,15 @@ def _gemini_safety_settings() -> list:
         ]
     ]
 
-def _gemini_headers() -> dict:
-    return {
+def _gemini_headers(api_key: str = "") -> dict:
+    h = {
         "Content-Type": "application/json",
         "User-Agent": "YamashishiLab/2.0"
     }
+    clean_k_val = sanitize_api_key(api_key)
+    if clean_k_val:
+        h["x-goog-api-key"] = clean_k_val
+    return h
 
 def _build_fallback_chain(primary_model: str) -> list:
     chain = []
@@ -573,11 +622,21 @@ def _build_fallback_chain(primary_model: str) -> list:
 def test_single_llm_api(mod: str, key: str) -> tuple:
     clean_api_k = sanitize_api_key(key)
     if not clean_api_k:
-        return False, "Gemini APIキーが入力されていません（英数字・ハイフン・アンダースコアのみ有効）。"
+        return False, "Gemini APIキーが空です。キーを入力してからEnterを押してください。"
+    if not clean_api_k.startswith("AIza") or len(clean_api_k) < 35:
+        masked = f"{clean_api_k[:4]}...({len(clean_api_k)}文字)"
+        return (
+            False,
+            f"APIキーの形式が正しくありません（現在の入力値: {masked}）。"
+            "Google AI StudioのAPIキーは『AIza』から始まる39文字です。"
+            "ブラウザのパスワード自動入力が混入している可能性があるため、入力欄を一度空にしてから貼り直してください。"
+        )
+
     ctx = ssl.create_default_context()
     candidates = _build_fallback_chain(mod)
     last_err = None
     last_body = ""
+    key_preview = f"{clean_api_k[:6]}...{clean_api_k[-4:]} ({len(clean_api_k)}文字)"
 
     for idx, m_test in enumerate(candidates):
         url = build_gemini_url(m_test, clean_api_k)
@@ -588,32 +647,43 @@ def test_single_llm_api(mod: str, key: str) -> tuple:
         }
         d = json.dumps(payload).encode("utf-8")
         try:
-            req = urllib.request.Request(url, data=d, headers=_gemini_headers(), method="POST")
+            req = urllib.request.Request(url, data=d, headers=_gemini_headers(clean_api_k), method="POST")
             with urllib.request.urlopen(req, context=ctx, timeout=15.0) as r:
                 resp_data = json.loads(r.read().decode("utf-8"))
                 txt = resp_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                 fb_note = f" (※{mod}から自動フォールバック)" if m_test != mod else ""
-                return True, f"接続成功 (稼働モデル: {m_test}{fb_note})\n応答: {txt.strip()[:40]}"
+                return True, f"接続成功 [認識キー: {key_preview}] (稼働モデル: {m_test}{fb_note})\n応答: {txt.strip()[:40]}"
         except urllib.error.HTTPError as he:
             last_err = he
             err_body = ""
-            try: err_body = he.read().decode("utf-8")
-            except Exception: pass
+            try:
+                err_body = he.read().decode("utf-8")
+            except Exception:
+                pass
             last_body = err_body
+            # APIキー自体が無効(API_KEY_INVALID)の場合は別モデルでリトライしても無意味なため即座に診断結果を返す
+            if "API_KEY_INVALID" in err_body or "API key not valid" in err_body:
+                return (
+                    False,
+                    f"Google側でAPIキーが無効と判定されました [送信キー: {key_preview}]。\n"
+                    "① Google AI Studio (aistudio.google.com/app/apikey) で発行した有効なキーか\n"
+                    "② コピー時に末尾の文字が欠けていないか（通常39文字）\n"
+                    "③ キーが削除・制限されていないか を確認してください。"
+                )
             if he.code in (400, 403, 404, 429, 500, 503) and idx < len(candidates) - 1:
-                time.sleep(1.0)
+                time.sleep(0.8)
                 continue
-            return False, f"HTTP {he.code}: {err_body[:160] or he.reason}"
+            return False, f"HTTP {he.code} [送信キー: {key_preview}]: {err_body[:160] or he.reason}"
         except Exception as e:
             if idx < len(candidates) - 1:
-                time.sleep(1.0)
+                time.sleep(0.8)
                 continue
             return False, f"通信例外: {str(e)}"
 
     if last_err:
         if last_err.code == 429:
             return False, "HTTP 429: 無料枠の1分あたりリクエスト上限に達しました。しばらく待ってから再試行してください。"
-        return False, f"HTTP {last_err.code}: {last_body[:140] or last_err.reason}"
+        return False, f"HTTP {last_err.code} [送信キー: {key_preview}]: {last_body[:140] or last_err.reason}"
     return False, "Gemini API接続テストに失敗しました。"
 
 def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tuple:
@@ -639,7 +709,7 @@ def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tup
 
     for idx, cand in enumerate(candidates):
         url = build_gemini_url(cand, api_key)
-        req = urllib.request.Request(url, data=d, headers=_gemini_headers(), method="POST")
+        req = urllib.request.Request(url, data=d, headers=_gemini_headers(api_key), method="POST")
         try:
             with urllib.request.urlopen(req, context=ctx, timeout=20.0) as r:
                 res_json = json.loads(r.read().decode("utf-8"))
@@ -2797,7 +2867,26 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         cur_m = gem_cur.get("model", "gemini-2.5-flash")
         cur_k = gem_cur.get("api_key", "")
 
-        in_gem_key = sanitize_api_key(st.text_input("🔑 Google Gemini API Key (🔒暗号化保存・不可視文字自動除去)", value=cur_k, type="password", placeholder="AIzaSy...", key="admin_gem_key_input"))
+        show_plain_key = st.checkbox("👁️ APIキーを平文表示して確認する（ブラウザの自動入力混入を防ぐため推奨）", value=False, key="chk_show_gem_key")
+        raw_input_key = st.text_input(
+            "🔑 Google Gemini API Key (AIzaから始まる39文字を入力してEnter)",
+            value=cur_k,
+            type="default" if show_plain_key else "password",
+            placeholder="AIzaSy...",
+            key="admin_gem_key_input"
+        )
+        in_gem_key = sanitize_api_key(raw_input_key)
+
+        # リアルタイムキー形式診断バッジ
+        if not in_gem_key:
+            st.info("ℹ️ APIキーが未入力です。Google AI Studio (aistudio.google.com) で取得した `AIzaSy...` キーを貼り付けてください。")
+        elif in_gem_key.startswith("AIza") and len(in_gem_key) == 39:
+            st.caption(f"🟢 **有効なGemini APIキー形式を認識中:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （正常: 39文字）")
+        elif in_gem_key.startswith("AIza"):
+            st.warning(f"⚠️ **文字数注意:** `{in_gem_key[:6]}...{in_gem_key[-4:]}` （現在 {len(in_gem_key)}文字 / 標準は39文字です。末尾が欠けていないか確認してください）")
+        else:
+            st.error(f"🚨 **不正な文字列を検知:** 現在 `{in_gem_key[:4]}...`（{len(in_gem_key)}文字）が入力されています。ブラウザのパスワード自動入力が混入しています！上の「👁️平文表示」にチェックを入れ、中身を全消去してから `AIza...` のキーを貼り付けてください。")
+
         in_gem_mod = st.selectbox(
             "🧠 デフォルト Gemini モデル選択",
             GEMINI_MODELS,
@@ -2812,13 +2901,17 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             st.session_state["council_threads"] = {}
             st.session_state["council_meta"] = {}
             st.session_state["news_ai_deep_cache"] = {}
-            st.success("✅ Gemini API設定をサニタイズ＆暗号化して保存しました。")
+            st.success(f"✅ Gemini API設定を暗号化保存しました（認識キー: {in_gem_key[:6]}...{in_gem_key[-4:] if len(in_gem_key)>=10 else ''}）。")
 
         if col_g2.button("⚡ Gemini API 接続テスト実行", use_container_width=True):
             with st.spinner("Google Gemini API エンドポイントへ接続テスト実行中（多段フォールバック検証）..."):
                 ok, t_msg = test_single_llm_api(in_gem_mod, in_gem_key)
                 if ok:
-                    st.success(f"✅ {t_msg}")
+                    save_llm_encrypted(in_gem_mod, in_gem_key)
+                    st.session_state["council_threads"] = {}
+                    st.session_state["council_meta"] = {}
+                    st.session_state["news_ai_deep_cache"] = {}
+                    st.success(f"✅ {t_msg}（設定も自動保存しました）")
                 else:
                     st.error(f"❌ 接続テスト失敗: {t_msg}")
 
