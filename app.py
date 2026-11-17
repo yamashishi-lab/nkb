@@ -82,10 +82,10 @@ GEMINI_MODEL_DISPLAY_NAMES = {
     "gemini-3.8-flash": "Gemini 3.8 Flash (推奨・最新高速フラッグシップモデル)",
     "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite (超軽量・高速フォールバック用モデル)",
     "gemini-3.6-flash": "Gemini 3.6 Flash (高安定・高速レスポンスモデル)",
-    "gemini-3.1-pro-preview": "Gemini 3.1 Pro (高推論・複雑構造解析モデル)"
-}   "gemini-2.5-pro": "Gemini 2.5 Pro (高推論・複雑構造解析フラッグシップモデル)",
+    "gemini-3.1-pro-preview": "Gemini 3.1 Pro (高推論・複雑構造解析モデル)",
+    "gemini-2.5-pro": "Gemini 2.5 Pro (高推論・複雑構造解析フラッグシップモデル)",
     "gemini-2.0-flash": "Gemini 2.0 Flash (高安定・高速レスポンスモデル)",
-    "gemini-2.0-flash-lite": "Gemini 2.0 Flash-Lite (超軽量・高速フォールバック用モデル)"}
+    "gemini-2.0-flash-lite": "Gemini 2.0 Flash-Lite (超軽量・高速フォールバック用モデル)",
 
 DYNAMIC_GENRES = ["半導体・前工程・検査", "AI・防衛・国策", "AI電力・超電導・電線", "宇宙・量子・次世代テック", "小型急騰・仕手・モメンタム"]
 
