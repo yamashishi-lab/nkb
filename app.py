@@ -77,12 +77,19 @@ ADMIN_EMAIL = (_safe_get_env_or_secret("ADMIN_EMAIL") or "nthbh399@ybb.ne.jp").s
 ADMIN_PASS = _get_sec_val("ADMIN_PASS", ".yamashishi_cred.lock", lambda: "ADMIN777").strip()
 DB_SQLITE_PATH = "yamashishi_core.db"
 
-GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
+GEMINI_MODELS = [
+    "gemini-3-flash-preview",
+    "gemini-3.1-pro-preview",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+]
 GEMINI_MODEL_DISPLAY_NAMES = {
-    "gemini-2.5-flash": "Gemini 2.5 Flash (推奨・最新高速マルチモーダル標準モデル)",
-    "gemini-2.5-pro": "Gemini 2.5 Pro (高推論・複雑構造解析フラッグシップモデル)",
-    "gemini-2.0-flash": "Gemini 2.0 Flash (高安定・高速レスポンスモデル)",
-    "gemini-2.0-flash-lite": "Gemini 2.0 Flash-Lite (超軽量・高速フォールバック用モデル)"
+    "gemini-3-flash-preview": "Gemini 3 Flash Preview (推奨・最新高速マルチモーダル)",
+    "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview (最新フラッグシップ高推論モデル)",
+    "gemini-3.1-flash-lite-preview": "Gemini 3.1 Flash-Lite Preview (超軽量・高速モデル)",
+    "gemini-2.5-flash": "Gemini 2.5 Flash (従来標準モデル)",
+    "gemini-2.5-pro": "Gemini 2.5 Pro (従来高推論モデル)",
 }
 DYNAMIC_GENRES = ["半導体・前工程・検査", "AI・防衛・国策", "AI電力・超電導・電線", "宇宙・量子・次世代テック", "小型急騰・仕手・モメンタム"]
 
@@ -348,8 +355,8 @@ def save_smtp(user: str, pw: str, srv: str, port: int): db_set("smtp", {"smtp_us
 def load_gemini_cfg() -> dict:
     raw = db_get("llm", {})
     if not isinstance(raw, dict): raw = {}
-    mod = str(raw.get("gemini_model") or raw.get("models", {}).get("gemini", "gemini-2.5-flash")).strip()
-    if not mod or mod not in GEMINI_MODELS: mod = "gemini-2.5-flash"
+    mod = str(raw.get("gemini_model") or raw.get("models", {}).get("gemini", "gemini-3-flash-preview")).strip()
+    if not mod: mod = "gemini-3-flash-preview"
     dec_k = sanitize_api_key(decrypt_secret_str(raw.get("enc_gemini_key") or raw.get("enc_keys", {}).get("gemini", "")))
     if not _is_valid_gemini_key(dec_k): dec_k = ""
     if not dec_k:
@@ -358,8 +365,8 @@ def load_gemini_cfg() -> dict:
     return {"model": mod, "api_key": dec_k}
 
 def save_llm_encrypted(model: str, api_key: str):
-    raw_m = str(model or "").strip()
-    clean_m = raw_m if (raw_m and raw_m in GEMINI_MODELS) else "gemini-2.5-flash"
+    raw_m = re.sub(r"[^A-Za-z0-9_\-\.]", "", str(model or "").strip())
+    clean_m = raw_m if raw_m else "gemini-3-flash-preview"
     clean_api_k = sanitize_api_key(api_key)
     db_set("llm", {"provider": "gemini", "gemini_model": clean_m, "enc_gemini_key": encrypt_secret_str(clean_api_k) if clean_api_k else ""})
     st.session_state["last_working_gemini_model"] = ""
@@ -510,7 +517,8 @@ def send_mail(to_em: str, subj: str, body: str, cat: str = "自動通知") -> bo
 def build_gemini_url(model: str, key: str = "") -> str:
     clean_m = str(model or "").strip()
     if clean_m.startswith("models/"): clean_m = clean_m[7:]
-    if not clean_m or clean_m not in GEMINI_MODELS: clean_m = "gemini-2.5-flash"
+    clean_m = re.sub(r"[^A-Za-z0-9_\-\.]", "", clean_m)
+    if not clean_m: clean_m = "gemini-3-flash-preview"
     return f"https://generativelanguage.googleapis.com/v1beta/models/{clean_m}:generateContent"
 
 def _gemini_safety_settings() -> list: return [{"category": c, "threshold": "BLOCK_NONE"} for c in ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]]
@@ -532,9 +540,23 @@ def fetch_available_gemini_models(api_key: str) -> list:
             req = urllib.request.Request(url, headers=_gemini_headers(clean_k_val, use_bearer=use_bearer), method="GET")
             with urllib.request.urlopen(req, context=ctx, timeout=8.0) as r:
                 data = json.loads(r.read().decode("utf-8"))
-                avail = [m.get("name", "").replace("models/", "") for m in data.get("models", []) if "generateContent" in m.get("supportedGenerationMethods", []) and "gemini-1." not in m.get("name", "") and any(k in m.get("name", "") for k in ["flash", "pro"]) and not any(x in m.get("name", "") for x in ["image", "tts", "audio", "embedding", "vision"])]
+                avail = [
+                    m.get("name", "").replace("models/", "")
+                    for m in data.get("models", [])
+                    if "generateContent" in m.get("supportedGenerationMethods", [])
+                    and not any(old in m.get("name", "") for old in ["gemini-1.", "gemini-2.0"])
+                    and any(k in m.get("name", "") for k in ["flash", "pro"])
+                    and not any(x in m.get("name", "") for x in ["image", "tts", "audio", "embedding", "vision", "deep-research"])
+                ]
                 if avail:
-                    avail.sort(key=lambda x: (0 if x == "gemini-2.5-flash" else (1 if x == "gemini-2.5-pro" else (2 if x == "gemini-2.0-flash" else 3)), x))
+                    def _rank_model(name: str) -> tuple:
+                        if "gemini-3" in name and "flash" in name and "lite" not in name: return (0, name)
+                        if "gemini-3" in name and "pro" in name: return (1, name)
+                        if "gemini-3" in name: return (2, name)
+                        if "gemini-2.5-flash" == name: return (3, name)
+                        if "gemini-2.5-pro" == name: return (4, name)
+                        return (5, name)
+                    avail.sort(key=_rank_model)
                     return avail
         except Exception: continue
     return []
@@ -542,19 +564,18 @@ def fetch_available_gemini_models(api_key: str) -> list:
 def _build_fallback_chain(primary_model: str, api_key: str = "") -> list:
     chain = []
     last_working = str(st.session_state.get("last_working_gemini_model", "") or "").strip()
-    if last_working and last_working in GEMINI_MODELS:
+    if last_working:
         chain.append(last_working)
+    avail_models = fetch_available_gemini_models(api_key) if api_key else []
+    for dm in avail_models:
+        if dm and dm not in chain:
+            chain.append(dm)
     clean_primary = str(primary_model or "").strip()
-    if clean_primary and clean_primary in GEMINI_MODELS and clean_primary not in chain:
+    if clean_primary and clean_primary not in chain:
         chain.append(clean_primary)
     for m in GEMINI_MODELS:
         if m not in chain:
             chain.append(m)
-    avail_models = fetch_available_gemini_models(api_key) if api_key else []
-    if avail_models:
-        for dm in avail_models:
-            if dm and not dm.startswith("gemini-1.") and dm not in chain:
-                chain.append(dm)
     return chain[:6]
 
 def _extract_gemini_response_text(resp_data: dict) -> str:
@@ -598,7 +619,7 @@ def test_single_llm_api(mod: str, key: str) -> tuple:
     return False, f"全候補モデルの接続テストに失敗しました [送信キー: {key_preview}]:\n" + ("\n".join(model_errors) if model_errors else "詳細エラー情報なし")
 
 def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tuple:
-    cfg = load_gemini_cfg(); api_key, sel_mod = sanitize_api_key(cfg.get("api_key", "")), cfg.get("model", "gemini-2.5-flash")
+    cfg = load_gemini_cfg(); api_key, sel_mod = sanitize_api_key(cfg.get("api_key", "")), cfg.get("model", "gemini-3-flash-preview")
     if not api_key: return None, ""
     ctx, candidates, gen_cfg = ssl.create_default_context(), _build_fallback_chain(sel_mod, api_key), {"temperature": 0.9, "maxOutputTokens": 4096}
     if expect_json: gen_cfg["responseMimeType"] = "application/json"
@@ -824,7 +845,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
     tab_gemini_sys, tab_users, tab_employment, tab_apply_wait, tab_error_logs = st.tabs(["🔑 Gemini API・システム設定", "👥 会員情報管理", "🏢 ペルソナ編成・鬼監視情報", "📩 会員申し込み審査", "⚠️ システムエラーログ"])
     with tab_gemini_sys:
         st.markdown("#### 🔵 Google Gemini API 暗号化設定")
-        gem_cur = load_gemini_cfg(); cur_m, cur_k = gem_cur.get("model", "gemini-2.5-flash"), gem_cur.get("api_key", "")
+        gem_cur = load_gemini_cfg(); cur_m, cur_k = gem_cur.get("model", "gemini-3-flash-preview"), gem_cur.get("api_key", "")
         show_plain_key = st.checkbox("👁️ APIキーを平文表示して確認する", value=False, key="chk_show_gem_key")
         in_gem_key = sanitize_api_key(st.text_input("🔑 Google Gemini API Key (AQ.〜 または AIza〜)", value=cur_k, type="default" if show_plain_key else "password", key="admin_gem_key_input"))
         in_gem_mod = st.selectbox("🧠 デフォルト Gemini モデル選択", GEMINI_MODELS, index=GEMINI_MODELS.index(cur_m) if cur_m in GEMINI_MODELS else 0, format_func=lambda m: GEMINI_MODEL_DISPLAY_NAMES.get(m, m), key="admin_gem_mod_select")
