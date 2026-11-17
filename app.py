@@ -78,7 +78,7 @@ ADMIN_PASS = _get_sec_val("ADMIN_PASS", ".yamashishi_cred.lock", lambda: "ADMIN7
 DB_SQLITE_PATH = "yamashishi_core.db"
 
 GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.1-pro-preview"]
-GEMINI_MODEL_DISPLAY_NAMES = {
+GEMINI_MODEL_DISPLAY_NAMES = 
     "gemini-3.8-flash": "Gemini 3.8 Flash (推奨・最新高速フラッグシップモデル)",
     "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite (超軽量・高速フォールバック用モデル)",
     "gemini-3.6-flash": "Gemini 3.6 Flash (高安定・高速レスポンスモデル)",
