@@ -410,6 +410,14 @@ def load_watchlist(em: str) -> dict:
 def save_watchlist(em: str, wl: dict):
     if em: db_set(_user_store_key("watchlist", em), wl)
 
+def load_trade_journal(em: str) -> list:
+    if not em: return []
+    j = db_get(_user_store_key("trade_journal", em), [])
+    return j if isinstance(j, list) else []
+
+def save_trade_journal(em: str, entries: list):
+    if em: db_set(_user_store_key("trade_journal", em), entries[:200])
+
 def load_active_market_roster() -> list:
     roster = db_get("active_market_roster", None)
     if not isinstance(roster, list) or len(roster) < 15:
@@ -619,7 +627,7 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
             else: st.warning("⚠️ この端末は未登録です。初回は下のフォームから専用コードでログインしてください（次回から自動登録されます）。")
 
 def inject_css():
-    css = """@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}div[data-baseweb="popover"],div[data-baseweb="menu"],div[role="listbox"],ul[role="listbox"]{z-index:2147483647!important;pointer-events:auto!important;}header[data-testid="stHeader"]{background:transparent!important;pointer-events:none!important;height:3.5rem!important;z-index:999980!important;}header[data-testid="stHeader"] [data-testid="stToolbar"],header[data-testid="stHeader"] [data-testid="stActionButtons"]{display:none!important;}section[data-testid="stSidebar"]{position:fixed!important;top:0!important;left:0!important;height:100vh!important;z-index:999995!important;width:330px!important;max-width:88vw!important;min-width:320px!important;background:rgba(8,12,22,0.98)!important;backdrop-filter:blur(25px)!important;border-right:1px solid rgba(56,189,248,0.35)!important;visibility:visible!important;transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)!important;}section[data-testid="stSidebar"]:not([aria-expanded="true"]){transform:translateX(-120%)!important;pointer-events:none!important;}section[data-testid="stSidebar"][aria-expanded="true"]{transform:translateX(0)!important;pointer-events:auto!important;}section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"]{pointer-events:auto!important;}[data-testid="collapsedControl"],[data-testid="stSidebarCollapsedControl"],[data-testid="stSidebarCollapseButton"],header button[kind="headerNoPadding"],section[data-testid="stSidebar"] button[aria-label*="Close"],section[data-testid="stSidebar"] button[aria-label*="閉じる"],section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]{display:none!important;opacity:0!important;position:absolute!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none!important;z-index:-1!important;}section[data-testid="stSidebar"]+div,section.main,.stApp>header+div>div{margin-left:0!important;width:100%!important;max-width:100%!important;}.sidebar-section-card{background:rgba(15,23,42,0.65);border:1px solid rgba(56,189,248,0.18);border-radius:10px;padding:10px 12px;margin-bottom:12px;}.sidebar-header-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#38bdf8;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:5px;}.fixed-top-nav-bar{position:fixed!important;top:10px!important;left:50%!important;transform:translateX(-50%)!important;z-index:999980!important;width:min(170px,calc(100vw - 4rem))!important;background:transparent!important;border:none!important;margin:0!important;padding:0!important;pointer-events:auto!important;}div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}.fixed-top-nav-bar div[data-testid="stHorizontalBlock"]{background:transparent!important;border:none!important;width:100%!important;display:flex!important;justify-content:center!important;}.fixed-top-nav-bar button{width:100%!important;height:30px!important;min-height:30px!important;max-height:30px!important;background:rgba(15,23,42,0.75)!important;color:#93c5fd!important;border:1px solid rgba(56,189,248,0.35)!important;border-radius:20px!important;box-shadow:0 0 8px rgba(56,189,248,0.25)!important;font-size:11.5px!important;font-weight:700!important;letter-spacing:0.5px!important;cursor:pointer!important;transition:all 0.15s ease!important;}.fixed-top-nav-bar button:hover{background:rgba(15,23,42,0.8)!important;border-color:rgba(56,189,248,0.45)!important;color:#93c5fd!important;box-shadow:0 0 10px rgba(56,189,248,0.3)!important;}.fixed-top-nav-bar button:active{background:rgba(56,189,248,0.25)!important;border-color:#38bdf8!important;color:#ffffff!important;box-shadow:0 0 25px rgba(56,189,248,0.95),inset 0 0 12px rgba(56,189,248,0.6)!important;transform:scale(0.96)!important;}.brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,24px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;display:block;width:100%;}.glass-header{background:radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);border:1px solid rgba(148,163,184,0.18);border-radius:14px;padding:14px;margin-bottom:16px;box-shadow:0 10px 28px rgba(0,0,0,0.45);}.rank-card,.search-result-card{background:linear-gradient(180deg,#0f172a 0%,#090d16 100%)!important;color:#f8fafc!important;border-radius:16px;padding:16px 18px;margin-top:14px;margin-bottom:24px;box-shadow:0 12px 32px rgba(0,0,0,0.65);border:1px solid rgba(148,163,184,0.22);border-left:5px solid #38bdf8;}.search-result-card{border-left-color:#f59e0b;}.prob-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:800;color:#38bdf8!important;}.expect-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:900;color:#fde047!important;}.winrate-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(65px,1fr));gap:6px;background:rgba(15,23,42,0.85)!important;border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:7px 6px;margin-top:5px!important;text-align:center;}.trade-plan-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:6px;margin-top:5px!important;background:rgba(2,6,23,0.7)!important;padding:7px 6px;border-radius:8px;border:1px solid rgba(148,163,184,0.18);text-align:center;}.admin-table-container{width:100%;overflow-x:auto;background:#0b0f19;border:1px solid rgba(56,189,248,0.25);border-radius:10px;margin-top:10px;}.admin-table{width:100%;border-collapse:collapse;font-size:11.5px;text-align:left;color:#e2e8f0;}.admin-table th{background:#1e293b;color:#38bdf8;padding:8px 10px;border-bottom:1px solid rgba(56,189,248,0.3);font-weight:700;white-space:nowrap;}.admin-table td{padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.1);white-space:nowrap;}.admin-table tr:hover{background:rgba(56,189,248,0.05);}.ai-council-box{background:rgba(8,12,22,0.98);border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-top:12px;}.ai-engine-status-pill{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:6px;margin-bottom:8px;display:block;}.council-scroll-window{max-height:440px!important;height:400px!important;overflow-y:auto!important;overflow-x:hidden!important;padding-right:8px;padding-top:4px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth;will-change:scroll-position;}.council-scroll-window::-webkit-scrollbar{width:6px;}.council-scroll-window::-webkit-scrollbar-track{background:rgba(15,23,42,0.6);border-radius:4px;}.council-scroll-window::-webkit-scrollbar-thumb{background:#38bdf8;border-radius:4px;}.chat-bubble-ai,.chat-bubble-user,.chat-bubble-agree,.chat-bubble-doubt,.chat-bubble-rage{padding:9px 12px;border-radius:8px;margin-bottom:4px;font-size:12px;line-height:1.5;word-break:break-word;}.chat-bubble-ai{background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;}.chat-bubble-agree{background:rgba(6,78,59,0.65);border-left:3px solid #10b981;}.chat-bubble-doubt{background:rgba(120,53,15,0.65);border-left:3px solid #f59e0b;}.chat-bubble-rage{background:rgba(127,29,29,0.65);border-left:3px solid #ef4444;}.chat-bubble-user{background:rgba(56,189,248,0.24);border-left:4px solid #38bdf8;border-right:2px solid rgba(56,189,248,0.4);text-align:left;padding:10px 14px;margin-bottom:6px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.4);scroll-margin-top:6px!important;}.round-divider{font-size:11px;font-weight:800;color:#94a3b8;text-align:center;margin:6px 0;letter-spacing:1px;}.beginner-action-box{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;color:#d1fae5;}.sizing-box{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;background:rgba(2,6,23,0.7);border:1px solid rgba(148,163,184,0.16);padding:7px 12px;border-radius:6px;margin-top:5px;font-size:11.5px;}.combat-guide-box{background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.28);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#bae6fd;line-height:1.5;}.macro10y-box{background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.34);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#e9d5ff;line-height:1.5;}.daily2y-box{background:rgba(14,165,233,0.10);border:1px solid rgba(14,165,233,0.36);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#bae6fd;line-height:1.5;}.forward-verify-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px;background:linear-gradient(90deg,rgba(16,185,129,0.14),rgba(56,189,248,0.14));border:1px solid rgba(56,189,248,0.35);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:11px;color:#e2e8f0;}.quant-detail-drawer{margin-top:6px;font-size:11.5px;cursor:pointer;}.signal-10tier-badge{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;display:flex;justify-content:space-between;margin-bottom:6px;}.pill-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;border:1px solid rgba(148,163,184,0.3);margin-right:3px;display:inline-block;white-space:nowrap!important;}.quantum-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);color:#c084fc;margin-right:3px;display:inline-block;white-space:nowrap!important;}.inst-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;margin-right:0px;display:inline-block;white-space:nowrap!important;}.badge-single-line{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scrollbar-width:none!important;margin-bottom:6px!important;gap:2px!important;white-space:nowrap!important;}.badge-single-line::-webkit-scrollbar{display:none!important;}.ipo-link-btn{display:inline-block;padding:5px 12px;background:rgba(245,158,11,0.2);border:1px solid #f59e0b;border-radius:6px;color:#fde047;text-decoration:none;font-size:11.5px;font-weight:700;margin-right:6px;margin-top:4px;}.consensus-banner{background:rgba(15,23,42,0.95);border:1px solid rgba(250,204,21,0.4);border-radius:10px;padding:12px;margin-top:12px;}.disclaimer-banner{background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:8px;padding:10px 14px;margin-top:25px;margin-bottom:15px;font-size:11px;line-height:1.6;color:#94a3b8;}@keyframes alert-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,0.8);}70%{box-shadow:0 0 0 10px rgba(239,68,68,0);}100%{box-shadow:0 0 0 0 rgba(239,68,68,0);}}"""
+    css = """@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}div[data-baseweb="popover"],div[data-baseweb="menu"],div[role="listbox"],ul[role="listbox"]{z-index:2147483647!important;pointer-events:auto!important;}header[data-testid="stHeader"]{background:transparent!important;pointer-events:none!important;height:3.5rem!important;z-index:999980!important;}header[data-testid="stHeader"] [data-testid="stToolbar"],header[data-testid="stHeader"] [data-testid="stActionButtons"]{display:none!important;}section[data-testid="stSidebar"]{position:fixed!important;top:0!important;left:0!important;height:100vh!important;z-index:999995!important;width:330px!important;max-width:88vw!important;min-width:320px!important;background:rgba(8,12,22,0.98)!important;backdrop-filter:blur(25px)!important;border-right:1px solid rgba(56,189,248,0.35)!important;visibility:visible!important;transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)!important;}section[data-testid="stSidebar"]:not([aria-expanded="true"]){transform:translateX(-120%)!important;pointer-events:none!important;}section[data-testid="stSidebar"][aria-expanded="true"]{transform:translateX(0)!important;pointer-events:auto!important;}section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"]{pointer-events:auto!important;}[data-testid="collapsedControl"],[data-testid="stSidebarCollapsedControl"],[data-testid="stSidebarCollapseButton"],header button[kind="headerNoPadding"],section[data-testid="stSidebar"] button[aria-label*="Close"],section[data-testid="stSidebar"] button[aria-label*="閉じる"],section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]{display:none!important;opacity:0!important;position:absolute!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none!important;z-index:-1!important;}section[data-testid="stSidebar"]+div,section.main,.stApp>header+div>div{margin-left:0!important;width:100%!important;max-width:100%!important;}.sidebar-section-card{background:rgba(15,23,42,0.65);border:1px solid rgba(56,189,248,0.18);border-radius:10px;padding:10px 12px;margin-bottom:12px;}.sidebar-header-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#38bdf8;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:5px;}.fixed-top-nav-bar{position:fixed!important;top:10px!important;left:50%!important;transform:translateX(-50%)!important;z-index:999980!important;width:min(170px,calc(100vw - 4rem))!important;background:transparent!important;border:none!important;margin:0!important;padding:0!important;pointer-events:auto!important;}div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}.fixed-top-nav-bar div[data-testid="stHorizontalBlock"]{background:transparent!important;border:none!important;width:100%!important;display:flex!important;justify-content:center!important;}.fixed-top-nav-bar button{width:100%!important;height:30px!important;min-height:30px!important;max-height:30px!important;background:rgba(15,23,42,0.75)!important;color:#93c5fd!important;border:1px solid rgba(56,189,248,0.35)!important;border-radius:20px!important;box-shadow:0 0 8px rgba(56,189,248,0.25)!important;font-size:11.5px!important;font-weight:700!important;letter-spacing:0.5px!important;cursor:pointer!important;transition:all 0.15s ease!important;}.fixed-top-nav-bar button:hover{background:rgba(15,23,42,0.8)!important;border-color:rgba(56,189,248,0.45)!important;color:#93c5fd!important;box-shadow:0 0 10px rgba(56,189,248,0.3)!important;}.fixed-top-nav-bar button:active{background:rgba(56,189,248,0.25)!important;border-color:#38bdf8!important;color:#ffffff!important;box-shadow:0 0 25px rgba(56,189,248,0.95),inset 0 0 12px rgba(56,189,248,0.6)!important;transform:scale(0.96)!important;}.brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,24px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;display:block;width:100%;}.glass-header{background:radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);border:1px solid rgba(148,163,184,0.18);border-radius:14px;padding:14px;margin-bottom:16px;box-shadow:0 10px 28px rgba(0,0,0,0.45);}.rank-card,.search-result-card{background:linear-gradient(180deg,#0f172a 0%,#090d16 100%)!important;color:#f8fafc!important;border-radius:16px;padding:16px 18px;margin-top:14px;margin-bottom:24px;box-shadow:0 12px 32px rgba(0,0,0,0.65);border:1px solid rgba(148,163,184,0.22);border-left:5px solid #38bdf8;}.search-result-card{border-left-color:#f59e0b;}.prob-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:800;color:#38bdf8!important;}.expect-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:900;color:#fde047!important;}.winrate-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(65px,1fr));gap:6px;background:rgba(15,23,42,0.85)!important;border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:7px 6px;margin-top:5px!important;text-align:center;}.trade-plan-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:6px;margin-top:5px!important;background:rgba(2,6,23,0.7)!important;padding:7px 6px;border-radius:8px;border:1px solid rgba(148,163,184,0.18);text-align:center;}.admin-table-container{width:100%;overflow-x:auto;background:#0b0f19;border:1px solid rgba(56,189,248,0.25);border-radius:10px;margin-top:10px;}.admin-table{width:100%;border-collapse:collapse;font-size:11.5px;text-align:left;color:#e2e8f0;}.admin-table th{background:#1e293b;color:#38bdf8;padding:8px 10px;border-bottom:1px solid rgba(56,189,248,0.3);font-weight:700;white-space:nowrap;}.admin-table td{padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.1);white-space:nowrap;}.admin-table tr:hover{background:rgba(56,189,248,0.05);}.ai-council-box{background:rgba(8,12,22,0.98);border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-top:12px;}.ai-engine-status-pill{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:6px;margin-bottom:8px;display:block;}.council-scroll-window{max-height:440px!important;height:400px!important;overflow-y:auto!important;overflow-x:hidden!important;padding-right:8px;padding-top:4px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth;will-change:scroll-position;}.council-scroll-window::-webkit-scrollbar{width:6px;}.council-scroll-window::-webkit-scrollbar-track{background:rgba(15,23,42,0.6);border-radius:4px;}.council-scroll-window::-webkit-scrollbar-thumb{background:#38bdf8;border-radius:4px;}.chat-bubble-ai,.chat-bubble-user,.chat-bubble-agree,.chat-bubble-doubt,.chat-bubble-rage{padding:9px 12px;border-radius:8px;margin-bottom:4px;font-size:12px;line-height:1.5;word-break:break-word;}.chat-bubble-ai{background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;}.chat-bubble-agree{background:rgba(6,78,59,0.65);border-left:3px solid #10b981;}.chat-bubble-doubt{background:rgba(120,53,15,0.65);border-left:3px solid #f59e0b;}.chat-bubble-rage{background:rgba(127,29,29,0.65);border-left:3px solid #ef4444;}.chat-bubble-user{background:rgba(56,189,248,0.24);border-left:4px solid #38bdf8;border-right:2px solid rgba(56,189,248,0.4);text-align:left;padding:10px 14px;margin-bottom:6px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.4);scroll-margin-top:6px!important;}.round-divider{font-size:11px;font-weight:800;color:#94a3b8;text-align:center;margin:6px 0;letter-spacing:1px;}.beginner-action-box{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;color:#d1fae5;}.sizing-box{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;background:rgba(2,6,23,0.7);border:1px solid rgba(148,163,184,0.16);padding:7px 12px;border-radius:6px;margin-top:5px;font-size:11.5px;}.combat-guide-box{background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.28);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#bae6fd;line-height:1.5;}.macro10y-box{background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.34);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#e9d5ff;line-height:1.5;}.daily2y-box{background:rgba(14,165,233,0.10);border:1px solid rgba(14,165,233,0.36);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#bae6fd;line-height:1.5;}.forward-verify-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px;background:linear-gradient(90deg,rgba(16,185,129,0.14),rgba(56,189,248,0.14));border:1px solid rgba(56,189,248,0.35);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:11px;color:#e2e8f0;}.quant-detail-drawer{margin-top:6px;font-size:11.5px;cursor:pointer;}.signal-10tier-badge{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;display:flex;justify-content:space-between;margin-bottom:6px;}.pill-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;border:1px solid rgba(148,163,184,0.3);margin-right:3px;display:inline-block;white-space:nowrap!important;}.quantum-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);color:#c084fc;margin-right:3px;display:inline-block;white-space:nowrap!important;}.inst-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;margin-right:0px;display:inline-block;white-space:nowrap!important;}.badge-single-line{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scrollbar-width:none!important;margin-bottom:6px!important;gap:2px!important;white-space:nowrap!important;}.badge-single-line::-webkit-scrollbar{display:none!important;}.ipo-link-btn{display:inline-block;padding:5px 12px;background:rgba(245,158,11,0.2);border:1px solid #f59e0b;border-radius:6px;color:#fde047;text-decoration:none;font-size:11.5px;font-weight:700;margin-right:6px;margin-top:4px;}.consensus-banner{background:rgba(15,23,42,0.95);border:1px solid rgba(250,204,21,0.4);border-radius:10px;padding:12px;margin-top:12px;}.disclaimer-banner{background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:8px;padding:10px 14px;margin-top:25px;margin-bottom:15px;font-size:11px;line-height:1.6;color:#94a3b8;}.svg-chart-wrap{background:rgba(2,6,23,0.88);border:1px solid rgba(56,189,248,0.32);border-radius:10px;padding:8px 10px;margin-top:8px;margin-bottom:8px;overflow-x:auto;}@keyframes alert-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,0.8);}70%{box-shadow:0 0 0 10px rgba(239,68,68,0);}100%{box-shadow:0 0 0 0 rgba(239,68,68,0);}}"""
     st.markdown(f'<div id="page_top_anchor"></div><style>{css}</style>', unsafe_allow_html=True)
 
 inject_css()
@@ -697,7 +705,7 @@ if "user_prefs_loaded" not in st.session_state or st.session_state.get("last_loa
     for bk in ["core_vol", "core_inst", "core_mom"]: st.session_state[f"chk_{bk}"] = (bk in saved_boosts)
     st.session_state["watchlist"] = user_saved_watchlist; st.session_state["user_prefs_loaded"] = True; st.session_state["last_loaded_user"] = cu_active
 
-defaults = {"active_debates": {}, "council_threads": {}, "council_meta": {}, "debate_round_seed": {}, "watchlist": user_saved_watchlist, "navigation_page": "TOP", "selected_news_item": None, "custom_search_code": "", "active_category": "🏆 総合TOP5", "last_cat": "🏆 総合TOP5", "nav_history": [], "scroll_top_trig": 0, "scroll_target_id": "", "focused_stock_item": None, "agent_roster": saved_agents, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}, "last_audit_similarity_penalty": 0, "last_working_gemini_model": "", "force_close_sidebar_trig": 0, "last_synced_style": ""}
+defaults = {"active_debates": {}, "council_threads": {}, "council_meta": {}, "debate_round_seed": {}, "watchlist": user_saved_watchlist, "navigation_page": "TOP", "selected_news_item": None, "custom_search_code": "", "active_category": "🏆 総合TOP5", "last_cat": "🏆 総合TOP5", "nav_history": [], "scroll_top_trig": 0, "scroll_target_id": "", "focused_stock_item": None, "agent_roster": saved_agents, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}, "last_audit_similarity_penalty": 0, "last_working_gemini_model": "", "force_close_sidebar_trig": 0, "last_synced_style": "", "journal_audit_results": {}}
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 st.session_state["agent_roster"] = dict(DEFAULT_AGENTS)
@@ -861,17 +869,17 @@ def _parse_news_age_hours(pub_str: str) -> float:
     return 12.0
 
 @st.cache_data(ttl=300)
-def search_single_query(q: str, max_r: int, trusted_only: bool = False) -> list:
+def search_single_query(q: str, max_r: int, trusted_only: bool = False, max_age_hours: float = 36.0) -> list:
     res = []
     effective_q = f"{q} (site:kabutan.jp OR site:jp.reuters.com OR site:bloomberg.co.jp OR site:minkabu.jp OR site:prtimes.jp)" if trusted_only else q
     try:
         req = urllib.request.Request(f"https://news.google.com/rss/search?q={urllib.parse.quote(effective_q)}&hl=ja&gl=JP&ceid=JP:ja", headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=1.8, context=ssl.create_default_context()) as r:
-            for it in ET.fromstring(r.read()).findall("./channel/item")[:max_r * 2]:
+        with urllib.request.urlopen(req, timeout=2.5, context=ssl.create_default_context()) as r:
+            for it in ET.fromstring(r.read()).findall("./channel/item")[:max_r * 3]:
                 t = re.sub(r"\s*-\s*[^-]+$", "", re.sub(r"<[^>]+>", "", it.findtext("title") or "").strip())
                 d = re.sub(r"<[^>]+>", "", it.findtext("description") or "").strip()
                 pub = (it.findtext("pubDate") or "").strip()
-                if _parse_news_age_hours(pub) > 36.0: continue
+                if _parse_news_age_hours(pub) > float(max_age_hours): continue
                 if t:
                     res.append(f"{t} ({d[:80]}...) [{pub[:16]}]")
                     if len(res) >= max_r: break
@@ -1060,7 +1068,7 @@ def fetch_single_news_rss(cat: str, q: str, stream_tag: str = "broad") -> list:
     try:
         url = "https://feeds.finance.yahoo.com/rss/2.0/headline?s=NVDA,TSM,AVGO,AMD&region=US&lang=en-US" if stream_tag == "us_semi" else f"https://news.google.com/rss/search?q={urllib.parse.quote(f'{q} (site:kabutan.jp OR site:jp.reuters.com OR site:bloomberg.co.jp OR site:minkabu.jp OR site:prtimes.jp)' if stream_tag == 'trusted' else q)}&hl=ja&gl=JP&ceid=JP:ja"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=1.8, context=ssl.create_default_context()) as res:
+        with urllib.request.urlopen(req, timeout=2.0, context=ssl.create_default_context()) as res:
             for it in ET.fromstring(res.read()).findall("./channel/item")[:6]:
                 raw_title = (it.findtext("title") or "").strip()
                 t = re.sub(r"\s*-\s*[^-]+$", "", raw_title) if stream_tag != "us_semi" else raw_title
@@ -1118,19 +1126,22 @@ def _extract_ipo_schedule_details(text_blob: str, is_unlisted_rumor: bool = Fals
 def fetch_upcoming_jpx_ipo_schedule() -> list:
     schedule_items, seen_titles = [], set()
     for q in ['("新規上場" OR "上場承認") ("上場日" OR "上場予定" OR "公開価格" OR "ブックビルディング") 東証', 'site:finance.yahoo.co.jp/stocks/ipo OR site:kabutan.jp "新規上場"']:
-        for h in search_single_query(q, 6, trusted_only=False):
+        for h in search_single_query(q, 8, trusted_only=False, max_age_hours=720.0):
             clean_h = re.sub(r"\[.*?\]", "", h).strip()
             if not clean_h or clean_h in seen_titles: continue
             seen_titles.add(clean_h)
             det = _extract_ipo_schedule_details(clean_h, is_unlisted_rumor=False)
             codes_found = [dc for dc in dict.fromkeys(re.findall(r"(?<![0-9A-Za-z])([1-9][0-9]{2}[0-9A-Z])(?![0-9A-Za-z])", clean_h)) if not re.match(r"^202[0-9]$", dc)]
-            if det["listing_date_disp"] != "直近承認・スケジュール確認中（JPX公式参照）" or codes_found:
+            if det["listing_date_disp"] != "直近承認・スケジュール確認中（JPX公式参照）" or codes_found or any(k in clean_h for k in ["新規上場", "上場承認", "初値", "ブックビルディング"]):
                 schedule_items.append({"headline": clean_h, "codes": codes_found[:3], "listing_date_disp": det["listing_date_disp"], "offer_info": det["offer_info"], "bb_info": det["bb_info"]})
             if len(schedule_items) >= 4: return schedule_items
     return schedule_items
 
 @st.cache_data(ttl=86400)
 def _resolve_dynamic_ipo_listing_info(full_code: str) -> dict:
+    if full_code in IPO_HISTORICAL_META:
+        return dict(IPO_HISTORICAL_META[full_code])
+
     df_max = None
     try:
         df_max = yf.Ticker(full_code).history(period="max", interval="1d", auto_adjust=True)
@@ -1142,30 +1153,25 @@ def _resolve_dynamic_ipo_listing_info(full_code: str) -> dict:
     yf_first_open = float(df_max["Open"].iloc[0]) if (df_max is not None and not df_max.empty and float(df_max["Open"].iloc[0]) > 0) else None
     yf_first_dt = df_max.index[0].strftime("%Y-%m-%d") if (df_max is not None and not df_max.empty and hasattr(df_max.index[0], "strftime")) else ""
 
-    if full_code in IPO_HISTORICAL_META:
-        meta = dict(IPO_HISTORICAL_META[full_code])
-        raw_offer = meta.get("offer_price")
-        raw_init = meta.get("initial_price")
-        if yf_first_open is not None and raw_init is not None and float(raw_init) > 0:
-            split_ratio = float(yf_first_open) / float(raw_init)
-            if split_ratio < 0.85 or split_ratio > 1.15:
-                meta["initial_price"] = round(float(raw_init) * split_ratio, 1)
-                if raw_offer is not None and float(raw_offer) > 0:
-                    meta["offer_price"] = round(float(raw_offer) * split_ratio, 1)
-                meta["note"] = "※株式分割調整後基準で補正済"
-        return meta
-
     if yf_first_open is not None:
         return {"listing_date": yf_first_dt or datetime.now().strftime("%Y-%m-%d"), "offer_price": None, "initial_price": round(yf_first_open, 1), "lead_underwriter": "東証新規上場（実測履歴特定）", "absorption_scale": "市場データ自動検出", "note": "※公開価格は非公表/未登録のため初日始値を初値（実測）として表示"}
     return {"listing_date": datetime.now().strftime("%Y-%m-%d"), "offer_price": None, "initial_price": None, "lead_underwriter": "東証グロース/新規発掘", "absorption_scale": "市場データ自動検出", "note": ""}
+
+def _extract_ticker_df(raw_df, code: str, total_codes: int):
+    if raw_df is None or raw_df.empty: return None
+    if isinstance(raw_df.columns, pd.MultiIndex):
+        if code in raw_df.columns.get_level_values(0): return raw_df[code]
+        if code in raw_df.columns.get_level_values(1): return raw_df.xs(code, axis=1, level=1)
+        return None
+    return raw_df if total_codes == 1 else (raw_df[code] if code in raw_df else None)
 
 @st.cache_data(ttl=300)
 def fetch_real_ipo_growth_analysis() -> dict:
     pre_ipo_list, today_tag = [], datetime.now().strftime("%d %b %Y")
     jpx_schedules = fetch_upcoming_jpx_ipo_schedule()
     def _scan_pre_ipo(cand):
-        hits = search_single_query(cand["query"], 15, trusted_only=False)
-        headline = re.sub(r"\(.*?\)|\[.*?\]", "", hits[0]).strip() if hits else "直近の東証新規上場承認・関連報道を継続モニタリング中"
+        hits = search_single_query(cand["query"], 15, trusted_only=False, max_age_hours=720.0)
+        headline = re.sub(r"\(.*?\)|\[.*?\]", "", hits[0]).strip() if hits else (jpx_schedules[0]["headline"] if jpx_schedules else "直近の東証新規上場承認・関連報道を継続モニタリング中")
         buzz_cnt, recent_cnt = len(hits), sum(1 for h in hits if today_tag in h or "時間前" in h or "分前" in h)
         discovered_codes = [dc for dc in dict.fromkeys(re.findall(r"(?<![0-9A-Za-z])([1-9][0-9]{2}[0-9A-Z])(?![0-9A-Za-z])", " ".join(hits))) if not re.match(r"^202[0-9]$", dc)]
         sched_det = _extract_ipo_schedule_details(" ".join(hits[:5]), is_unlisted_rumor=False)
@@ -1178,35 +1184,36 @@ def fetch_real_ipo_growth_analysis() -> dict:
         for f in as_completed([ex.submit(_scan_pre_ipo, c) for c in PRE_IPO_RADAR_CANDIDATES]):
             try: pre_ipo_list.append(f.result())
             except Exception as e: record_system_error("fetch_real_ipo_growth_analysis:pre_ipo", e)
+    if not pre_ipo_list:
+        for cand in PRE_IPO_RADAR_CANDIDATES:
+            pre_ipo_list.append({"code": cand["code"], "name": cand["name"], "market": cand["market"], "theme": cand["theme"], "status": cand["status"], "heat_score": 50, "buzz_cnt": 0, "recent_cnt": 0, "latest_headline": "JPX新規上場公式スケジュール監視中", "listing_date_disp": "直近承認・スケジュール確認中（JPX公式参照）", "offer_info": "未公表 / 観測中", "bb_info": "スケジュール確認中"})
     pre_ipo_list.sort(key=lambda x: (x["heat_score"], x["buzz_cnt"]), reverse=True)
 
     dynamic_ipo_pool, seen_ipo_codes = list(REAL_IPO_GROWTH_UNIVERSE), {it[0] for it in REAL_IPO_GROWTH_UNIVERSE} | DELISTED_OR_INVALID_CODES
-    for snip in search_single_query('("IPO" OR "新規上場" OR "東証グロース") 株価 急騰', 8, trusted_only=False):
-        for fc, nm, _, th in _extract_tickers_from_text(snip):
-            if fc.endswith(".T") and fc not in seen_ipo_codes:
-                seen_ipo_codes.add(fc); dynamic_ipo_pool.append((fc, nm, "東証グロース/新規発掘", th))
-                if len(dynamic_ipo_pool) >= 22: break
+    try:
+        for snip in search_single_query('("IPO" OR "新規上場" OR "東証グロース") 株価 急騰', 8, trusted_only=False, max_age_hours=720.0):
+            for fc, nm, _, th in _extract_tickers_from_text(snip):
+                if fc.endswith(".T") and fc not in seen_ipo_codes:
+                    seen_ipo_codes.add(fc); dynamic_ipo_pool.append((fc, nm, "東証グロース/新規発掘", th))
+                    if len(dynamic_ipo_pool) >= 22: break
+    except Exception as e_disc:
+        record_system_error("fetch_real_ipo_growth_analysis:discover", e_disc)
     codes = [c for c, _, _, _ in dynamic_ipo_pool]
-    try: raw = yf.download(codes, period="1mo", interval="1d", group_by="ticker", threads=True, progress=False, timeout=4.5)
-    except Exception as e: record_system_error("fetch_real_ipo_growth_analysis:download", e); raw = {}
+    raw = None
+    try: raw = yf.download(codes, period="1mo", interval="1d", group_by="ticker", threads=True, progress=False, timeout=10.0)
+    except Exception as e: record_system_error("fetch_real_ipo_growth_analysis:download", e); raw = None
     all_evaluated, today_dt = [], datetime.now()
 
     def _analyze_ipo_item(item):
         c, name, mkt, theme = item
         try:
-            df = normalize_ohlcv_df(raw[c] if (len(codes) > 1 and c in raw) else raw, min_rows=5)
-            if df is None: return None
-            cl, hi, lo, vo = [df[col].values.astype(float) for col in ["Close", "High", "Low", "Volume"]]
-            curr_px, prev_px = float(cl[-1]), float(cl[-2]) if len(cl) >= 2 else float(cl[-1])
-            chg_pct = round(((curr_px - prev_px) / max(prev_px, 1e-4)) * 100.0, 2)
-            period_high, period_low = float(np.max(hi)), float(np.min(lo))
-            from_high_pct = round(((curr_px - period_high) / max(period_high, 1e-4)) * 100.0, 2)
-            rvol = round(float(vo[-1]) / max(float(np.mean(vo[-6:-1])) if len(vo) >= 6 else float(np.mean(vo)), 1.0), 2)
-            rets = np.diff(cl) / np.maximum(cl[:-1], 1e-4)
-            ann_vol = round(float(np.std(rets) * np.sqrt(252) * 100.0), 1) if len(rets) >= 3 else 0.0
-            news_items = search_single_query(f"{name} 株価", 4, trusted_only=False)
-            score = int(np.clip(50 + chg_pct * 3.5 + (rvol - 1.0) * 18.0 + (20.0 + from_high_pct) * 0.6 + len(news_items) * 2.0, 15, 99))
-            tier = "🔥 S級サバイバー：出来高急増・高値圏ブレイク態勢" if score >= 80 else ("⚡ A級サバイバー：順張り・押し目需給良好" if score >= 65 else ("🛡️ B級残留：底値固め・出来高待ちフェーズ" if score >= 52 else "💀 C級脱落圏：モメンタム低下・圏外淘汰候補"))
+            df_raw_c = _extract_ticker_df(raw, c, len(codes))
+            if df_raw_c is None or df_raw_c.dropna(subset=["Close"]).empty:
+                try:
+                    df_raw_c = yf.Ticker(c).history(period="1mo", interval="1d", auto_adjust=True)
+                except Exception:
+                    df_raw_c = None
+            df = normalize_ohlcv_df(df_raw_c, min_rows=3)
             code4 = c.replace(".T", "")
             hist_meta = _resolve_dynamic_ipo_listing_info(c)
             listing_date_str = str(hist_meta.get("listing_date") or "")
@@ -1219,6 +1226,24 @@ def fetch_real_ipo_growth_analysis() -> dict:
                         lockup_note = f"⚠️ ロックアップ期間（{90 if days_since_listing <= 120 else 180}日）節目チェック推奨（上場後 {days_since_listing}日経過）"
                 except Exception: pass
             offer_px, init_px = hist_meta.get("offer_price"), hist_meta.get("initial_price")
+
+            if df is None:
+                fallback_px = float(init_px) if (init_px is not None and float(init_px) > 0) else (float(offer_px) if (offer_px is not None and float(offer_px) > 0) else 0.0)
+                offer_str = f"{float(offer_px):,.0f}円" if (offer_px is not None and float(offer_px) > 0) else "非公表 / 市場実測"
+                init_str = f"{float(init_px):,.0f}円 ({round(((float(init_px) - float(offer_px)) / float(offer_px)) * 100.0, 1):+.1f}%)" if (offer_px and init_px and float(offer_px) > 0 and float(init_px) > 0) else (f"{float(init_px):,.0f}円" if init_px else "実測中")
+                return {"code": code4, "full_code": c, "name": name, "market": mkt, "theme": theme, "listing_date": listing_date_str, "days_since_listing": days_since_listing, "lockup_alert": lockup_alert, "lockup_note": lockup_note, "offer_price_str": offer_str, "initial_price_str": init_str, "curr_vs_init_str": "0.0%", "lead_underwriter": hist_meta.get("lead_underwriter", "-"), "absorption_scale": hist_meta.get("absorption_scale", "-"), "ipo_meta_note": hist_meta.get("note", "※相場データ取得待機中・基本メタデータ表示"), "price": f"{fallback_px:,.0f}円" if fallback_px > 0 else "データ取得中", "chg_pct": 0.0, "period_range": "-", "from_high_pct": 0.0, "curr_vol": 0, "rvol": 1.0, "ann_vol": 0.0, "turnover_m_yen": 0.0, "score": 55, "tier": "🛡️ B級残留：基準メタデータ監視モード", "latest_headline": "直近の特段の悪材料なし・需給推移中", "kabutan_url": f"https://kabutan.jp/stock/?code={code4}", "yahoo_url": f"https://finance.yahoo.co.jp/quote/{code4}.T", "jpx_ipo_url": "https://www.jpx.co.jp/listing/stocks/new/index.html"}
+
+            cl, hi, lo, vo = [df[col].values.astype(float) for col in ["Close", "High", "Low", "Volume"]]
+            curr_px, prev_px = float(cl[-1]), float(cl[-2]) if len(cl) >= 2 else float(cl[-1])
+            chg_pct = round(((curr_px - prev_px) / max(prev_px, 1e-4)) * 100.0, 2)
+            period_high, period_low = float(np.max(hi)), float(np.min(lo))
+            from_high_pct = round(((curr_px - period_high) / max(period_high, 1e-4)) * 100.0, 2)
+            rvol = round(float(vo[-1]) / max(float(np.mean(vo[-6:-1])) if len(vo) >= 6 else float(np.mean(vo)), 1.0), 2)
+            rets = np.diff(cl) / np.maximum(cl[:-1], 1e-4)
+            ann_vol = round(float(np.std(rets) * np.sqrt(252) * 100.0), 1) if len(rets) >= 3 else 0.0
+            news_items = search_single_query(f"{name} 株価", 4, trusted_only=False, max_age_hours=168.0)
+            score = int(np.clip(50 + chg_pct * 3.5 + (rvol - 1.0) * 18.0 + (20.0 + from_high_pct) * 0.6 + len(news_items) * 2.0, 15, 99))
+            tier = "🔥 S級サバイバー：出来高急増・高値圏ブレイク態勢" if score >= 80 else ("⚡ A級サバイバー：順張り・押し目需給良好" if score >= 65 else ("🛡️ B級残留：底値固め・出来高待ちフェーズ" if score >= 52 else "💀 C級脱落圏：モメンタム低下・圏外淘汰候補"))
             if offer_px is not None and float(offer_px) > 0:
                 offer_str = f"{float(offer_px):,.0f}円"
                 init_str = f"{float(init_px):,.0f}円 ({round(((float(init_px) - float(offer_px)) / float(offer_px)) * 100.0, 1):+.1f}%)" if (init_px is not None and float(init_px) > 0) else "算出中"
@@ -1364,6 +1389,231 @@ def _parse_llm_json_turns(raw_res: str) -> list:
     except Exception as e: record_system_error("_parse_llm_json_turns", e)
     return []
 
+@st.cache_data(ttl=1800)
+def fetch_earnings_days_left(full_code: str):
+    try:
+        cal = yf.Ticker(str(full_code).strip().upper()).calendar
+        if cal is None: return None
+        dates_found = []
+        if isinstance(cal, dict):
+            ev = cal.get("Earnings Date")
+            if isinstance(ev, (list, tuple)): dates_found.extend(ev)
+            elif ev is not None: dates_found.append(ev)
+        elif hasattr(cal, "loc") and "Earnings Date" in cal.index:
+            row = cal.loc["Earnings Date"]
+            dates_found.extend(row.tolist() if hasattr(row, "tolist") else [row])
+        today_d = datetime.now().date()
+        future_days = []
+        for d_item in dates_found:
+            if d_item is None: continue
+            dt_obj = d_item.date() if hasattr(d_item, "date") else pd.to_datetime(str(d_item), errors="coerce").date()
+            if dt_obj is not None:
+                diff_d = (dt_obj - today_d).days
+                if 0 <= diff_d <= 7:
+                    bdays = int(np.busday_count(today_d.isoformat(), dt_obj.isoformat()))
+                    future_days.append(bdays)
+        return min(future_days) if future_days else None
+    except Exception:
+        return None
+
+def build_tomorrow_forecast_svg(r: dict) -> str:
+    try:
+        is_jp = ".T" in str(r.get("full_code", ""))
+        fc = str(r.get("full_code", ""))
+        cv = float(r.get("raw_close", 0.0))
+        tp = float(r.get("raw_tp", cv * 1.03))
+        sl = float(r.get("raw_sl", cv * 0.985))
+        vwap = float(r.get("raw_vwap", cv))
+        is_short = (r.get("strat", {}).get("side") == "SHORT")
+        if cv <= 0: return ""
+
+        if is_short:
+            entry_pt = round_to_tse_tick(max(cv, vwap), fc, "nearest")
+            half_pt = round_to_tse_tick(entry_pt - abs(sl - entry_pt), fc, "floor")
+            all_p = [cv, entry_pt, half_pt, tp, sl]
+            p_min, p_max = min(all_p) * 0.996, max(all_p) * 1.004
+            span = max(p_max - p_min, 1e-4)
+            def to_y(val): return round(155.0 - ((val - p_min) / span) * 125.0, 1)
+            y_cur, y_ent, y_half, y_tp, y_sl = to_y(cv), to_y(entry_pt), to_y(half_pt), to_y(tp), to_y(sl)
+            path_d = f"M 45 {y_cur} Q 95 {round((y_cur+y_ent)/2 - 6,1)}, 135 {y_ent} Q 185 {round((y_ent+y_half)/2,1)}, 225 {y_half} T 305 {y_tp}"
+            entry_lbl = f"📉 ここで空売り ({fmt_px(entry_pt, is_jp, fc)})"
+            path_col = "#fb7185"
+        else:
+            entry_pt = round_to_tse_tick(min(cv, vwap) if vwap > 0 else cv * 0.995, fc, "nearest")
+            if entry_pt <= sl: entry_pt = round_to_tse_tick(cv * 0.997, fc, "nearest")
+            half_pt = round_to_tse_tick(entry_pt + abs(entry_pt - sl), fc, "ceil")
+            all_p = [cv, entry_pt, half_pt, tp, sl]
+            p_min, p_max = min(all_p) * 0.996, max(all_p) * 1.004
+            span = max(p_max - p_min, 1e-4)
+            def to_y(val): return round(155.0 - ((val - p_min) / span) * 125.0, 1)
+            y_cur, y_ent, y_half, y_tp, y_sl = to_y(cv), to_y(entry_pt), to_y(half_pt), to_y(tp), to_y(sl)
+            path_d = f"M 45 {y_cur} Q 95 {round(max(y_cur, y_ent)+8,1)}, 135 {y_ent} Q 185 {round((y_ent+y_half)/2,1)}, 225 {y_half} T 305 {y_tp}"
+            entry_lbl = f"🛒 ここで買う ({fmt_px(entry_pt, is_jp, fc)})"
+            path_col = "#34d399"
+
+        return (
+            f'<div class="svg-chart-wrap" style="border-color:rgba(16,185,129,0.45);margin-top:10px;">'
+            f'<div style="font-size:11px;font-weight:800;color:#6ee7b7;margin-bottom:4px;">🗺️ 初心者向け・明日の想定値動きナビゲーション図（売買ポイント可視化）</div>'
+            f'<svg viewBox="0 0 360 180" width="100%" style="max-height:185px;display:block;">'
+            f'<line x1="35" y1="{y_tp}" x2="345" y2="{y_tp}" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3"/>'
+            f'<text x="342" y="{max(12.0, y_tp-3)}" fill="#6ee7b7" font-size="9.5" font-weight="bold" text-anchor="end">🎯 最終利確 ({fmt_px(tp, is_jp, fc)})</text>'
+            f'<line x1="35" y1="{y_half}" x2="345" y2="{y_half}" stroke="#facc15" stroke-width="1" stroke-dasharray="3,3"/>'
+            f'<text x="342" y="{max(22.0, y_half-3)}" fill="#fde047" font-size="9" font-weight="bold" text-anchor="end">💰 半分利確 +1.0R ({fmt_px(half_pt, is_jp, fc)})</text>'
+            f'<line x1="35" y1="{y_sl}" x2="345" y2="{y_sl}" stroke="#ef4444" stroke-width="1.4" stroke-dasharray="4,2"/>'
+            f'<text x="342" y="{min(174.0, y_sl+11)}" fill="#fca5a5" font-size="9.5" font-weight="bold" text-anchor="end">🛡️ 損切りライン ({fmt_px(sl, is_jp, fc)})</text>'
+            f'<path d="{path_d}" fill="none" stroke="{path_col}" stroke-width="2.6" stroke-dasharray="5,3"/>'
+            f'<circle cx="45" cy="{y_cur}" r="4" fill="#94a3b8"/><text x="45" y="{max(12.0, y_cur-7)}" fill="#cbd5e1" font-size="9" text-anchor="middle">現在値</text>'
+            f'<circle cx="135" cy="{y_ent}" r="5.5" fill="#38bdf8" stroke="#fff" stroke-width="1.2"/>'
+            f'<rect x="70" y="{min(156.0, max(18.0, y_ent+7))}" width="132" height="16" rx="4" fill="rgba(15,23,42,0.92)" stroke="#38bdf8" stroke-width="1"/>'
+            f'<text x="136" y="{min(167.0, max(29.0, y_ent+18))}" fill="#7dd3fc" font-size="9" font-weight="bold" text-anchor="middle">{html.escape(entry_lbl)}</text>'
+            f'<circle cx="225" cy="{y_half}" r="4.5" fill="#facc15"/>'
+            f'<circle cx="305" cy="{y_tp}" r="5.5" fill="#10b981" stroke="#fff" stroke-width="1.2"/>'
+            f'</svg></div>'
+        )
+    except Exception:
+        return ""
+
+def build_intraday_svg_chart(df: pd.DataFrame, r: dict) -> str:
+    try:
+        if df is None or df.empty: return ""
+        is_jp = ".T" in str(r.get("full_code", ""))
+        fc = str(r.get("full_code", ""))
+        latest_d = df["_trade_date"].iloc[-1]
+        sub = df[df["_trade_date"] == latest_d].copy()
+        if len(sub) < 3: sub = df.tail(40).copy()
+        o, h, l, c, v = [sub[col].values.astype(float) for col in ["Open", "High", "Low", "Close", "Volume"]]
+        n = len(c)
+        cum_pv = np.cumsum(((h + l + c) / 3.0) * np.maximum(v, 1.0))
+        cum_v = np.cumsum(np.maximum(v, 1.0))
+        vwap_arr = cum_pv / cum_v
+
+        or15_hi = float(r.get("or15_high", np.max(h[:min(3, n)])))
+        or15_lo = float(r.get("or15_low", np.min(l[:min(3, n)])))
+        cv = float(r.get("raw_close", c[-1]))
+        tp = float(r.get("raw_tp", cv * 1.02))
+        sl = float(r.get("raw_sl", cv * 0.99))
+        hvn_wall = float(r.get("daily_2y", {}).get("hvn_wall_price", 0.0))
+
+        price_refs = [float(np.min(l)), float(np.max(h)), or15_hi, or15_lo, cv, tp, sl]
+        if hvn_wall > 0: price_refs.append(hvn_wall)
+        p_min, p_max = min(price_refs) * 0.9985, max(price_refs) * 1.0015
+        span = max(p_max - p_min, 1e-4)
+
+        W, H, chart_r, vp_w = 420.0, 215.0, 325.0, 62.0
+        def to_y(val): return round(192.0 - ((val - p_min) / span) * 168.0, 1)
+        def to_x(idx): return round(18.0 + (idx / max(n - 1, 1)) * (chart_r - 24.0), 1)
+
+        y_or_hi, y_or_lo = to_y(or15_hi), to_y(or15_lo)
+        or_rect_y = min(y_or_hi, y_or_lo)
+        or_rect_h = max(abs(y_or_lo - y_or_hi), 2.0)
+
+        # Volume Profile (12 bins) on right side
+        vp_bins = np.linspace(p_min, p_max, 13)
+        vp_hist = np.bincount(np.clip(np.digitize((h + l + c) / 3.0, vp_bins) - 1, 0, 11), weights=np.maximum(v, 1.0), minlength=12)
+        vp_max = max(float(np.max(vp_hist)), 1.0)
+        vp_bars_svg = ""
+        for bi in range(12):
+            bw = round((float(vp_hist[bi]) / vp_max) * vp_w, 1)
+            by1, by2 = to_y(vp_bins[bi + 1]), to_y(vp_bins[bi])
+            bh = max(abs(by2 - by1) - 1.0, 2.0)
+            vp_bars_svg += f'<rect x="{round(W - 10.0 - bw, 1)}" y="{min(by1, by2)}" width="{bw}" height="{bh}" fill="rgba(56,189,248,0.35)" stroke="rgba(56,189,248,0.6)" stroke-width="0.5"/>'
+
+        bar_w = max(2.2, min(7.0, (chart_r - 24.0) / max(n * 1.45, 1.0)))
+        candles_svg, vwap_pts = "", []
+        for i in range(n):
+            cx = to_x(i)
+            yo, yh, yl, yc = to_y(o[i]), to_y(h[i]), to_y(l[i]), to_y(c[i])
+            col = "#10b981" if c[i] >= o[i] else "#ef4444"
+            candles_svg += f'<line x1="{cx}" y1="{yh}" x2="{cx}" y2="{yl}" stroke="{col}" stroke-width="1"/><rect x="{round(cx - bar_w/2, 1)}" y="{min(yo, yc)}" width="{round(bar_w, 1)}" height="{max(abs(yc - yo), 1.4)}" fill="{col}"/>'
+            vwap_pts.append(f"{cx},{to_y(vwap_arr[i])}")
+
+        y_tp, y_sl, y_cv = to_y(tp), to_y(sl), to_y(cv)
+        hvn_svg = ""
+        if hvn_wall > 0:
+            yhvn = to_y(hvn_wall)
+            hvn_svg = f'<line x1="15" y1="{yhvn}" x2="{chart_r}" y2="{yhvn}" stroke="#f59e0b" stroke-width="1.3" stroke-dasharray="4,2"/><text x="18" y="{max(12.0, yhvn-3)}" fill="#fde047" font-size="8.5" font-weight="bold">🧱 HVNしこり壁 ({fmt_px(hvn_wall, is_jp, fc)})</text>'
+
+        return (
+            f'<div class="svg-chart-wrap">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:800;color:#38bdf8;margin-bottom:4px;">'
+            f'<span>📊 当日5分足チャート × OR15レンジ × VWAP × 価格帯別出来高(VP)</span>'
+            f'<span style="font-size:9.5px;color:#94a3b8;">右端棒: 価格帯出来高</span></div>'
+            f'<svg viewBox="0 0 {int(W)} {int(H)}" width="100%" style="max-height:220px;display:block;">'
+            f'<rect x="15" y="{or_rect_y}" width="{chart_r - 15}" height="{or_rect_h}" fill="rgba(168,85,247,0.14)" stroke="rgba(168,85,247,0.4)" stroke-width="0.8" stroke-dasharray="2,2"/>'
+            f'<text x="18" y="{max(11.0, or_rect_y + 9)}" fill="#d8b4fe" font-size="8">OR15帯 ({fmt_px(or15_lo, is_jp, fc)}〜{fmt_px(or15_hi, is_jp, fc)})</text>'
+            f'{vp_bars_svg}{candles_svg}'
+            f'<polyline fill="none" stroke="#38bdf8" stroke-width="1.8" points="{" ".join(vwap_pts)}"/>'
+            f'{hvn_svg}'
+            f'<line x1="15" y1="{y_tp}" x2="{chart_r}" y2="{y_tp}" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,2"/>'
+            f'<text x="{chart_r - 2}" y="{max(11.0, y_tp - 2)}" fill="#6ee7b7" font-size="8.5" font-weight="bold" text-anchor="end">TP {fmt_px(tp, is_jp, fc)}</text>'
+            f'<line x1="15" y1="{y_sl}" x2="{chart_r}" y2="{y_sl}" stroke="#ef4444" stroke-width="1.2" stroke-dasharray="4,2"/>'
+            f'<text x="{chart_r - 2}" y="{min(208.0, y_sl + 9)}" fill="#fca5a5" font-size="8.5" font-weight="bold" text-anchor="end">SL {fmt_px(sl, is_jp, fc)}</text>'
+            f'<line x1="15" y1="{y_cv}" x2="{chart_r}" y2="{y_cv}" stroke="#f8fafc" stroke-width="0.9" stroke-dasharray="2,2"/>'
+            f'</svg></div>'
+        )
+    except Exception:
+        return ""
+
+def _build_equity_and_session_html(hist_rows: list, is_jp: bool) -> str:
+    traded = [x for x in reversed(hist_rows) if x.get("result_category") != "NOTRADE"]
+    if not traded:
+        return ""
+    # 1. Equity curve SVG
+    cum_vals = [0.0]
+    acc = 0.0
+    for tr in traded:
+        acc += float(tr.get("return_pct", 0.0))
+        cum_vals.append(round(acc, 2))
+    c_min, c_max = min(cum_vals), max(cum_vals)
+    span = max(c_max - c_min, 0.5)
+    W, H = 340.0, 68.0
+    pts = []
+    for idx, val in enumerate(cum_vals):
+        px = round(10.0 + (idx / max(len(cum_vals) - 1, 1)) * (W - 20.0), 1)
+        py = round(56.0 - ((val - c_min) / span) * 44.0, 1)
+        pts.append(f"{px},{py}")
+    y_zero = round(56.0 - ((0.0 - c_min) / span) * 44.0, 1)
+    line_col = "#10b981" if cum_vals[-1] >= 0 else "#ef4444"
+    eq_svg = (
+        f'<svg viewBox="0 0 {int(W)} {int(H)}" width="100%" style="max-height:72px;display:block;">'
+        f'<line x1="10" y1="{y_zero}" x2="{int(W-10)}" y2="{y_zero}" stroke="rgba(148,163,184,0.35)" stroke-width="1" stroke-dasharray="3,2"/>'
+        f'<polyline fill="none" stroke="{line_col}" stroke-width="2.2" points="{" ".join(pts)}"/>'
+        f'<text x="12" y="12" fill="#94a3b8" font-size="8.5">累積リターン推移 ({len(traded)}戦)</text>'
+        f'<text x="{int(W-12)}" y="12" fill="{line_col}" font-size="9.5" font-weight="bold" text-anchor="end">{cum_vals[-1]:+.2f}%</text>'
+        f'</svg>'
+    )
+
+    # 2. Time-band win rate
+    buckets = {"前場初動 9:05-9:30": [0, 0], "前場トレンド 9:30-11:30": [0, 0], "後場 12:30-14:30": [0, 0]}
+    for tr in traded:
+        hm = str(tr.get("entry_hm", ""))
+        rcat = tr.get("result_category", "")
+        if rcat not in ("WIN", "LOSE"): continue
+        b_key = "前場トレンド 9:30-11:30"
+        if ":" in hm:
+            try:
+                hh, mm = [int(p) for p in hm.split(":")[:2]]
+                mins = hh * 60 + mm
+                if mins < 9 * 60 + 30: b_key = "前場初動 9:05-9:30"
+                elif mins < 12 * 60: b_key = "前場トレンド 9:30-11:30"
+                else: b_key = "後場 12:30-14:30"
+            except Exception: pass
+        buckets[b_key][1] += 1
+        if rcat == "WIN": buckets[b_key][0] += 1
+
+    sess_pills = ""
+    for lbl, (w_n, tot_n) in buckets.items():
+        wr_s = f"{(w_n / tot_n * 100.0):.0f}%" if tot_n > 0 else "-"
+        col_s = "#6ee7b7" if (tot_n > 0 and (w_n / tot_n) >= 0.5) else "#cbd5e1"
+        sess_pills += f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.22);border-radius:6px;padding:4px 6px;text-align:center;"><div style="font-size:9px;color:#94a3b8;">{lbl}</div><div style="font-size:11px;font-weight:800;color:{col_s};">{tot_n}戦 / 勝率 {wr_s}</div></div>'
+
+    return (
+        f'<div style="background:rgba(15,23,42,0.65);border:1px solid rgba(56,189,248,0.25);border-radius:8px;padding:7px 9px;margin-bottom:7px;">'
+        f'{eq_svg}'
+        f'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:5px;">{sess_pills}</div>'
+        f'</div>'
+    )
+
 def build_instant_verdict_html(r: dict) -> str:
     ft = r.get("forward_test", {}); hist_rows = ft.get("history_rows", []); is_jp = ".T" in r.get("full_code", ""); is_short = (r.get("strat", {}).get("side") == "SHORT")
     m10 = r.get("macro_10y", {}); d2y = r.get("daily_2y", {})
@@ -1376,7 +1626,9 @@ def build_instant_verdict_html(r: dict) -> str:
         ret_s = "-" if res_cat == "NOTRADE" else f"{'+' if ret_v >= 0 else ''}{ret_v:.2f}%"
         prof_s = "未約定" if res_cat == "NOTRADE" else (f"{'+' if prof_v >= 0 else ''}{prof_v:,.0f}円" if is_jp else f"{'+' if prof_v >= 0 else ''}${prof_v:,.2f}")
         hold_days = int(hr.get("hold_days", 1))
-        date_disp = f"{hr.get('date', '-')} ({hold_days}日保有)" if (res_cat != "NOTRADE" and hold_days > 1) else str(hr.get("date", "-"))
+        ehm = str(hr.get("entry_hm", ""))
+        hm_tag = f" {ehm}" if (res_cat != "NOTRADE" and ehm and ehm != "-") else ""
+        date_disp = f"{hr.get('date', '-')}{hm_tag} ({hold_days}日保有)" if (res_cat != "NOTRADE" and hold_days > 1) else f"{hr.get('date', '-')}{hm_tag}"
         table_rows_html += f"<tr><td>{html.escape(date_disp)}</td><td style='color:#38bdf8;'>{html.escape(str(hr.get('plan_short', '-')))}</td><td style='font-family:monospace;'>{html.escape(str(hr.get('entry_str', '-')))} → {html.escape(str(hr.get('exit_str', '-')))}</td><td style='color:{res_color};font-weight:800;'>{html.escape(str(hr.get('outcome', '-')))}</td><td style='color:{res_color};font-family:monospace;font-weight:800;'>{ret_s} ({prof_s})</td></tr>"
     if not table_rows_html: table_rows_html = "<tr><td colspan='5' style='text-align:center;color:#94a3b8;'>確定決済済みの市場データ蓄積後に自動検証ログが追記されます。</td></tr>"
 
@@ -1391,6 +1643,8 @@ def build_instant_verdict_html(r: dict) -> str:
     tp_lbl = "🎯 空売り利確目標(買い戻し)" if is_short else "🎯 最終目標利確価格"
     sl_lbl = "🛡️ 構造的踏み上げ逆指値" if is_short else "🛡️ 構造的初期逆指値(損切)"
     tf_note = "日足マルチデイ検証" if r.get("strat", {}).get("tf") == "1d" else "5分足デイトレ検証"
+    eq_sess_html = _build_equity_and_session_html(hist_rows, is_jp)
+    forecast_svg_html = build_tomorrow_forecast_svg(r)
 
     daily2y_verdict_html = (
         f'<div style="background:rgba(14,165,233,0.14); border:1px solid rgba(14,165,233,0.42); border-radius:8px; padding:8px 11px; margin-bottom:8px; font-size:11.5px; line-height:1.65; color:#e0f2fe;">'
@@ -1415,9 +1669,10 @@ def build_instant_verdict_html(r: dict) -> str:
         f'<span style="font-size:12.5px; font-weight:800; color:#38bdf8;">📊 直近{verified_span_days}営業日 完全リークフリー検証（{tf_note}・次バー始値+不利1ティックスリップ・コスト {r.get("combat_cost_pct",0.1)}%反映）</span>'
         f'<span style="font-size:11px; color:#fde047; font-weight:700;">約定 {traded_days}戦 / 見送り {notrade_cnt}日 ｜ 実質勝率: {ft.get("actual_win_rate", 0.0):.1f}% ({win_cnt}勝{lose_cnt}敗 / 建値{scratch_cnt}件) ｜ PF: <b style="color:#38bdf8;">{pf_str}</b> ｜ SQN: <b style="color:#c084fc;">{sqn_val:.2f}</b> ｜ 平均R: <b style="color:#6ee7b7;">{avg_r_val:+.2f}R</b> ｜ 最大DD: <b style="color:#f87171;">{max_dd_val:.1f}%</b> ｜ 累計純損益: <span style="color:{tot_p_col};">{tot_p_str}</span></span>'
         f'</div>'
+        f'{eq_sess_html}'
         f'<div style="font-size:10.5px; color:#94a3b8; margin-bottom:6px;">※5分足・日足・週足四本値（OHLCV）から算出した統計モデル検証ログ（未来データ参照ゼロ・+1.0R半分利確加重反映）</div>'
         f'<div class="admin-table-container" style="margin-top:4px;"><table class="admin-table">'
-        f'<thead><tr><th>検証日(確定)</th><th>前日決定プラン</th><th>約定→50%分割決済</th><th>実測勝敗結果(±0.15R基準)</th><th>ネット損益率・純損益額</th></tr></thead>'
+        f'<thead><tr><th>検証日・約定時刻</th><th>前日決定プラン</th><th>約定→50%分割決済</th><th>実測勝敗結果(±0.15R基準)</th><th>ネット損益率・純損益額</th></tr></thead>'
         f'<tbody>{table_rows_html}</tbody></table></div></div>'
     )
     return (
@@ -1428,7 +1683,7 @@ def build_instant_verdict_html(r: dict) -> str:
         f'<div style="background:rgba(239,68,68,0.15); padding:6px; border-radius:6px; border:1px solid rgba(239,68,68,0.4);"><div style="font-size:10px; color:#fca5a5;">{sl_lbl}</div><div style="font-size:14px; font-weight:800; color:#ef4444;">{r["sl_price"]}</div></div>'
         f'<div style="background:rgba(56,189,248,0.15); padding:6px; border-radius:6px; border:1px solid rgba(56,189,248,0.4);"><div style="font-size:10px; color:#bae6fd;">⏱️ 想定保有期間</div><div style="font-size:12.5px; font-weight:800; color:#38bdf8;">{r["strat"]["trade_duration"]}</div></div>'
         f'</div><div style="font-size:12px; line-height:1.7; color:#e2e8f0;"><b>⚡ プロ執行アクション詳細プラン ({r["strat"]["style_name"]}専科 / {r["strat"].get("side","LONG")} / {html.escape(r.get("exec_grade",""))}):</b><br>{r["strat"]["step_plan"]}</div>'
-        f'</div><div class="beginner-action-box" style="margin-top:10px;">{r["strat"]["beginner_html"]}</div>{forward_table_html}'
+        f'</div><div class="beginner-action-box" style="margin-top:10px;">{r["strat"]["beginner_html"]}{forecast_svg_html}</div>{forward_table_html}'
     )
 
 def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> tuple:
@@ -1527,7 +1782,7 @@ def render_council_sec(r, uk, auto_open=False):
         if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", key=f"btn_back_bottom_{uk}", use_container_width=True, type="primary"):
             st.session_state["focused_stock_item"] = None; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
 
-def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extra_origin_badge: str = ""):
+def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extra_origin_badge: str = "", intraday_df: pd.DataFrame = None):
     rel_news = next((n for n in all_impact_news if r["full_code"] in n["detail"]["related_codes"]), None)
     dc, ds, ps = "#10b981" if r["diff"] >= 0 else "#ef4444", ("+" if r["diff"] > 0 else ""), ("+" if r["pts_gap_pct"] > 0 else "")
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
@@ -1537,6 +1792,9 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     spec = get_style_spec(st_info.get("style_name", "デイトレード"))
     is_long_only_guard = (not spec["allow_short"]) or is_jp_tier3_short_restricted(r.get("full_code", ""), r.get("genre", ""))
     n_banner = f'<div style="margin-top:6px; margin-bottom:4px;"><span style="display:inline-block; width:100%; text-align:center; background:linear-gradient(90deg, #b91c1c 0%, #ef4444 50%, #b91c1c 100%); color:#ffffff; font-weight:800; font-size:11.5px; padding:5px 8px; border-radius:6px; border:1px solid #fca5a5; animation:alert-pulse 2s infinite;">🚨【重大情報】{html.escape(rel_news["title"][:32] + "..." if len(rel_news["title"]) > 32 else rel_news["title"])}</span></div>' if rel_news else ""
+
+    earnings_days = r.get("earnings_days_left")
+    earnings_badge = f'<span class="pill-badge" style="background:rgba(239,68,68,0.25);border-color:#ef4444;color:#fca5a5;font-weight:900;">⚠️ 決算跨ぎ警戒（残り{int(earnings_days)}日）</span>' if (earnings_days is not None and 0 <= int(earnings_days) <= 3) else ""
 
     exec_grade = str(r.get("exec_grade", "🔵 Grade-B: 標準執行（VWAP厳守）"))
     exec_score = int(r.get("exec_score", 3))
@@ -1593,13 +1851,15 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     disp_name = html.escape(str(r.get("name", r["code"]))); disp_code = html.escape(str(r["code"]))
     title_block = f'<span style="font-size:16.5px;font-weight:800;color:#f8fafc;white-space:nowrap;">{disp_name}</span> <span style="font-size:11.5px;color:#38bdf8;font-family:\'JetBrains Mono\',monospace;font-weight:700;white-space:nowrap;">[{disp_code}]</span> <span style="font-size:11px;color:#94a3b8;white-space:nowrap;">/ {html.escape(r["genre"])}</span>' if disp_name != disp_code else f'<span style="font-size:16.5px;font-weight:800;color:#f8fafc;white-space:nowrap;">{disp_code}</span> <span style="font-size:11px;color:#94a3b8;white-space:nowrap;">/ {html.escape(r["genre"])}</span>'
 
+    intraday_svg_block = build_intraday_svg_chart(intraday_df, r) if (is_focused or is_custom) and intraday_df is not None else ""
+
     st.markdown(
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
         f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
-        f'<div class="badge-single-line">{rk_h}{extra_origin_badge}{side_badge}{exec_badge_html}{vp_badge_html}{rs30_badge_html}{m10_badge_html}{d2y_badge_html}{t3_guard_badge}{new_badge}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ ボラ突破指数 {r["q_score"]}点</span><span class="inst-badge">🏛️ 5分足需給 {r["ms_score"]}点</span></div>'
+        f'<div class="badge-single-line">{rk_h}{extra_origin_badge}{earnings_badge}{side_badge}{exec_badge_html}{vp_badge_html}{rs30_badge_html}{m10_badge_html}{d2y_badge_html}{t3_guard_badge}{new_badge}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ ボラ突破指数 {r["q_score"]}点</span><span class="inst-badge">🏛️ 5分足需給 {r["ms_score"]}点</span></div>'
         f'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div style="min-width:0;flex:1;"><div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;">{title_block}</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;word-break:keep-all;">{html.escape(r["theme"])} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span> / 日次RSα: <b style="color:{"#34d399" if r.get("rs_alpha",0)>=0 else "#fb7185"};">{r.get("rs_alpha",0):+.2f}%</b> / 30分RS: <b style="color:{"#34d399" if rs_30m_v>=0 else "#fb7185"};">{rs_30m_v:+.2f}%</b>)</div></div>'
         f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;">🔥 期待度 / テク強度</div><div style="white-space:nowrap;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}pt</span></div></div></div>'
-        f'{n_banner}'
+        f'{n_banner}{intraday_svg_block}'
         f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ WKB統計近似突破率</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ 5分足Kyle近似吸収率</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 GU指数 / 陽線強度</div><div style="font-size:12px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
         f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">{html.escape(gap_box_title)}</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">{tp_lbl_card}</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} ({tp_sign_c}{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">{sl_lbl_card}</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({sl_sign_c}{r["sl_pct"]}%)</div></div></div>'
         f'<div class="sizing-box">{sizing_label_html}<span>当日VWAP(5分足算出): <b>{r["vwap_price"]}</b></span></div>'
@@ -1607,18 +1867,40 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
         f'<details class="quant-detail-drawer"><summary>⚛️ 週足10年 × 日足2年 × 5分足60日 3階層MTFアルゴリズム戦略詳細（OHLCV統計モデル）</summary><div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}<br>📅 <b>第1層・過去10年週足大局解析:</b> {html.escape(str(m10.get("regime_10y_label", "")))} ｜ 10年スコア={int(m10.get("long_10y_score", 50))}点 ｜ 10年CAGR={m10.get("cagr_10y", 0.0):+.1f}% ｜ 10年レンジ位置={m10.get("pos_10y_pct", 50.0):.1f}%（10年安値:{html.escape(str(m10.get("low_10y_str", "-")))} 〜 10年高値:{html.escape(str(m10.get("high_10y_str", "-")))}） ｜ 200週MA乖離={m10.get("ma200w_dev_pct", 0.0):+.1f}% ｜ 10年最大出来高POC={html.escape(str(m10.get("poc_10y_str", "-")))}<br>📈 <b>第2層・日足2年中期トレンド＆Volume Profile解析:</b> {html.escape(str(d2y.get("regime_1d_label", "")))} ｜ 上値出来高構造={html.escape(vp_struct_lbl)} ｜ 日足スコア={int(d2y.get("daily_trend_score", 50))}点 ｜ {html.escape(str(d2y.get("ma_align_label", "")))} ｜ MA5={html.escape(str(d2y.get("ma5_str", "-")))} / MA25={html.escape(str(d2y.get("ma25_str", "-")))}({d2y.get("ma25_dev_pct", 0.0):+.1f}%) / MA75={html.escape(str(d2y.get("ma75_str", "-")))}({d2y.get("ma75_dev_pct", 0.0):+.1f}%) / MA200={html.escape(str(d2y.get("ma200_str", "-")))} ｜ 日足MACD={d2y.get("macd_line", 0.0):+.2f} (Signal={d2y.get("macd_signal", 0.0):+.2f} / Hist={d2y.get("macd_hist", 0.0):+.2f}) ｜ 日足RSI(14)={d2y.get("daily_rsi14", 50.0):.1f}% ｜ 52週位置={d2y.get("pos_52w_pct", 50.0):.1f}% ｜ 日足ATR14={html.escape(str(d2y.get("daily_atr14_str", "-")))} (日足YZ Vol={round(d2y.get("daily_yz_vol", 0.3)*100, 1)}%)<br>⚖️ <b>双方向需給優位性比較:</b> <span style="color:#34d399;font-weight:700;">LONG優勢度 = {r.get("bull_edge", 0.0):+.1f}pt</span> vs <span style="color:#fb7185;font-weight:700;">SHORT優勢度 = {r.get("bear_edge", 0.0):+.1f}pt</span> ｜ <b>スタイル適合補正 = {r.get("style_fit_bonus", 0.0):+.1f}pt</b> ｜ <b>日次RSα = {r.get("rs_alpha", 0.0):+.2f}%</b> ｜ <b>30分イントラデイRS = {rs_30m_v:+.2f}%</b><br>🚦 <b>3階層MTF執行品質ゲート ({exec_score}/5達成):</b> {html.escape(r.get("exec_detail", ""))}<br>📊 <b>第3層・5分足60日OHLCV実測値 & 検証統計:</b> RSI(14)={r.get("rsi", 50)}% ｜ BVC-VPIN近似={r.get("vpin", 0.5)} ｜ 平滑化CLVフローZ={r.get("ofi_z", 0.0)} ｜ DFA Hurst={r.get("hurst", 0.5)} ｜ Kyle-λ近似={r.get("kyle_lambda", 0.0):.2e} ｜ BB拡大初動率={r.get("bb_exp_ratio", 1.0)}x ｜ 出来高スパイク陽線頻度={r.get("vol_spike_bull_pct", 0.0)}% ｜ CVaR(99%)={r.get("cvar95", 2.5)}% ｜ YZ年率Vol={round(r.get('yz_vol', 0.0)*100, 1)}% ｜ 効率性ER={r.get("eff_pct", 50)}% ｜ Payoff={r.get("payoff", 1.0)} (Kelly={r.get("kelly_pct", 0.0)}%) ｜ SQN={sqn_val:.2f} / 平均R={avg_r_val:+.2f}R / 最大DD={max_dd_val:.1f}% ｜ 🔥 時間帯補正RVOL={r.get("rvol", 1.0)}倍 / 報道{r.get("news_hits", 0)}件</div></details></div>',
         unsafe_allow_html=True
     )
+    if st.button(f"🎯 このプランでエントリー記録 ({r['name']})", key=f"btn_journal_add_{kp}_{r['code']}", use_container_width=True):
+        cu_j = st.session_state.get("authenticated_user", "")
+        if cu_j:
+            j_list = load_trade_journal(cu_j)
+            j_entry = {
+                "id": hashlib.md5(f"{r['full_code']}_{time.time_ns()}".encode()).hexdigest()[:10],
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "full_code": r["full_code"],
+                "code": r["code"],
+                "name": r["name"],
+                "genre": r["genre"],
+                "style": st_info.get("style_name", "デイトレード"),
+                "side": st_info.get("side", "LONG"),
+                "tactic_type": st_info.get("tactic_type", "Type-E"),
+                "exec_grade": exec_grade,
+                "entry_price": float(r.get("raw_close", 0.0)),
+                "tp_price": float(r.get("raw_tp", 0.0)),
+                "sl_price": float(r.get("raw_sl", 0.0)),
+                "vwap_price": float(r.get("raw_vwap", 0.0)),
+                "shares": int(lot.get("shares", 100)),
+                "status": "OPEN",
+                "exit_price": None,
+                "closed_at": None,
+                "pnl_yen": 0.0,
+                "pnl_pct": 0.0,
+                "ai_feedback": ""
+            }
+            j_list.insert(0, j_entry)
+            save_trade_journal(cu_j, j_list)
+            st.success(f"✅ 『{r['name']} ({r['code']})』をトレード日誌に記録しました！（『📓 トレード日誌＆AI監査』タブで確認・決済採点できます）")
     if rel_news and st.button("🚨【速報】重大ニュースの詳細分析を開く", key=f"nb_{kp}_{r['code']}", use_container_width=True):
         st.session_state["selected_news_item"] = rel_news; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
     open_now = bool(is_focused or is_custom)
     render_council_sec(r, f"foc_{r['code']}" if open_now else f"{kp}_{r['code']}", auto_open=open_now)
-
-def _extract_ticker_df(raw_df, code: str, total_codes: int):
-    if raw_df is None or raw_df.empty: return None
-    if isinstance(raw_df.columns, pd.MultiIndex):
-        if code in raw_df.columns.get_level_values(0): return raw_df[code]
-        if code in raw_df.columns.get_level_values(1): return raw_df.xs(code, axis=1, level=1)
-        return None
-    return raw_df if total_codes == 1 else (raw_df[code] if code in raw_df else None)
 
 def _compute_single_10y_metrics(df_w: pd.DataFrame, full_code: str) -> dict:
     is_jp = ".T" in str(full_code)
@@ -1676,7 +1958,7 @@ def fetch_10y_macro_metrics(codes_tuple: tuple) -> dict:
 
 def _compute_single_daily_metrics(df_d: pd.DataFrame, bench_ret_series: pd.Series, full_code: str) -> dict:
     is_jp = ".T" in str(full_code)
-    default_res = {"ma5": 0.0, "ma25": 0.0, "ma75": 0.0, "ma200": 0.0, "ma5_str": "-", "ma25_str": "-", "ma75_str": "-", "ma200_str": "-", "ma5_dev_pct": 0.0, "ma25_dev_pct": 0.0, "ma75_dev_pct": 0.0, "ma200_dev_pct": 0.0, "ma25_slope_up": True, "ma75_slope_up": True, "bull_po": False, "bear_po": False, "ma_align_label": "MA均衡", "macd_line": 0.0, "macd_signal": 0.0, "macd_hist": 0.0, "daily_rsi14": 50.0, "pos_52w_pct": 50.0, "is_52w_break": False, "daily_atr14": 0.0, "daily_atr14_str": "-", "daily_yz_vol": 0.30, "daily_rs_alpha_map": {}, "latest_rs_alpha": 0.0, "daily_trend_score": 50, "regime_1d_label": "⚖️ 日足中期レンジ均衡", "is_lvn_breakout": False, "hvn_wall_price": 0.0, "vp_struct_label": "⚖️ 標準出来高分布", "df_daily_clean": None, "has_data": False}
+    default_res = {"ma5": 0.0, "ma25": 0.0, "ma75": 0.0, "ma200": 0.0, "ma5_str": "-", "ma25_str": "-", "ma75_str": "-", "ma200_str": "-", "ma5_dev_pct": 0.0, "ma25_dev_pct": 0.0, "ma75_dev_pct": 0.0, "ma200_dev_pct": 0.0, "ma25_slope_up": True, "ma75_slope_up": True, "bull_po": False, "bear_po": False, "ma_align_label": "MA均衡", "macd_line": 0.0, "macd_signal": 0.0, "macd_hist": 0.0, "daily_rsi14": 50.0, "pos_52w_pct": 50.0, "is_52w_break": False, "daily_atr14": 0.0, "daily_atr14_str": "-", "daily_yz_vol": 0.30, "daily_rs_alpha_map": {}, "latest_rs_alpha": 0.0, "daily_trend_score": 50, "regime_1d_label": "⚖️ 日足中期レンジ均衡", "is_lvn_breakout": False, "hvn_wall_price": 0.0, "vp_struct_label": "⚖️ 標準出来高分布", "recent_close_60": [], "df_daily_clean": None, "has_data": False}
     if df_d is None or df_d.empty: return default_res
     df = df_d.dropna(subset=["Open", "High", "Low", "Close", "Volume"]).copy()
     if len(df) < 15: return default_res
@@ -1703,7 +1985,6 @@ def _compute_single_daily_metrics(df_d: pd.DataFrame, bench_ret_series: pd.Serie
     n_52w = min(252, len(c)); hi_52w, lo_52w = float(np.max(h[-n_52w:])), float(np.min(l[-n_52w:]))
     pos_52w_pct = round(float(np.clip(((curr_px - lo_52w) / max(hi_52w - lo_52w, 1e-4)) * 100.0, 0.0, 100.0)), 1); is_52w_break = bool(curr_px >= hi_52w * 0.992)
 
-    # 価格帯別出来高（Volume Profile）による上値真空地帯（LVN）＆直上しこり壁（HVN）検知
     h_vp, l_vp, c_vp, v_vp = h[-n_52w:], l[-n_52w:], c[-n_52w:], np.maximum(v[-n_52w:], 1.0)
     vp_bins = np.linspace(lo_52w, hi_52w + 1e-4, 21)
     vp_typ = (h_vp + l_vp + c_vp) / 3.0
@@ -1748,7 +2029,8 @@ def _compute_single_daily_metrics(df_d: pd.DataFrame, bench_ret_series: pd.Serie
     lvn_pts = 5.0 if is_lvn_breakout else 0.0
     daily_trend_score = int(np.clip(round(50.0 + po_pts + macd_pts + w52_pts + lvn_pts + (6.0 if ma200_dev_pct >= 0 else -5.0) + float(np.clip(latest_rs_alpha * 1.5, -6.0, 6.0))), 10, 99))
     regime_1d_label = "🚀 日足強気PO＋52週高値ブレイク" if (bull_po and is_52w_break) else ("🔥 日足強気パーフェクトオーダー上昇" if bull_po else ("❄️ 日足弱気パーフェクトオーダー下落" if bear_po else ("📈 日足MA25上・MACD好転トレンド" if (curr_px >= ma25 and macd_hist > 0) else ("📉 日足MA25・MA75割れ調整局面" if (curr_px < ma25 and curr_px < ma75) else "⚖️ 日足中期レンジ・方向感模索"))))
-    return {"ma5": ma5, "ma25": ma25, "ma75": ma75, "ma200": ma200, "ma5_str": fmt_px(ma5, is_jp, full_code), "ma25_str": fmt_px(ma25, is_jp, full_code), "ma75_str": fmt_px(ma75, is_jp, full_code), "ma200_str": fmt_px(ma200, is_jp, full_code), "ma5_dev_pct": ma5_dev_pct, "ma25_dev_pct": ma25_dev_pct, "ma75_dev_pct": ma75_dev_pct, "ma200_dev_pct": ma200_dev_pct, "ma25_slope_up": ma25_slope_up, "ma75_slope_up": ma75_slope_up, "bull_po": bull_po, "bear_po": bear_po, "ma_align_label": ma_align_label, "macd_line": macd_line, "macd_signal": macd_signal, "macd_hist": macd_hist, "daily_rsi14": daily_rsi14, "pos_52w_pct": pos_52w_pct, "is_52w_break": is_52w_break, "daily_atr14": daily_atr14, "daily_atr14_str": fmt_px(daily_atr14, is_jp, full_code), "daily_yz_vol": daily_yz_vol, "daily_rs_alpha_map": daily_rs_alpha_map, "latest_rs_alpha": latest_rs_alpha, "daily_trend_score": daily_trend_score, "regime_1d_label": regime_1d_label, "is_lvn_breakout": is_lvn_breakout, "hvn_wall_price": hvn_wall_price, "vp_struct_label": vp_struct_label, "df_daily_clean": df[["Open", "High", "Low", "Close", "Volume", "_d_str"]].copy(), "has_data": True}
+    recent_close_60 = [round(float(x), 4) for x in c[-61:]]
+    return {"ma5": ma5, "ma25": ma25, "ma75": ma75, "ma200": ma200, "ma5_str": fmt_px(ma5, is_jp, full_code), "ma25_str": fmt_px(ma25, is_jp, full_code), "ma75_str": fmt_px(ma75, is_jp, full_code), "ma200_str": fmt_px(ma200, is_jp, full_code), "ma5_dev_pct": ma5_dev_pct, "ma25_dev_pct": ma25_dev_pct, "ma75_dev_pct": ma75_dev_pct, "ma200_dev_pct": ma200_dev_pct, "ma25_slope_up": ma25_slope_up, "ma75_slope_up": ma75_slope_up, "bull_po": bull_po, "bear_po": bear_po, "ma_align_label": ma_align_label, "macd_line": macd_line, "macd_signal": macd_signal, "macd_hist": macd_hist, "daily_rsi14": daily_rsi14, "pos_52w_pct": pos_52w_pct, "is_52w_break": is_52w_break, "daily_atr14": daily_atr14, "daily_atr14_str": fmt_px(daily_atr14, is_jp, full_code), "daily_yz_vol": daily_yz_vol, "daily_rs_alpha_map": daily_rs_alpha_map, "latest_rs_alpha": latest_rs_alpha, "daily_trend_score": daily_trend_score, "regime_1d_label": regime_1d_label, "is_lvn_breakout": is_lvn_breakout, "hvn_wall_price": hvn_wall_price, "vp_struct_label": vp_struct_label, "recent_close_60": recent_close_60, "df_daily_clean": df[["Open", "High", "Low", "Close", "Volume", "_d_str"]].copy(), "has_data": True}
 
 @st.cache_data(ttl=1800)
 def fetch_2y_daily_metrics(codes_tuple: tuple) -> dict:
@@ -1948,9 +2230,14 @@ def compute_style_tp_sl_deltas(ref_px: float, atrv: float, is_short: bool, style
     tp_d = float(np.clip(sl_d * float(spec["rr_mult"]) * tp_mult, sl_d * 1.5, ref_px * spec["tp_max_pct"]))
     return sl_d, tp_d
 
-def compute_japanese_lot_sizing(cv: float, slv: float, total_capital: float, risk_tolerance_pct: float, is_jp: bool, style_mul: float = 1.0, lot_cap_mult: float = 1.0) -> dict:
-    rm = float(total_capital) * (float(risk_tolerance_pct) / 100.0); risk_per_share = max(abs(cv - slv), cv * 0.005)
-    raw_shares = int((rm / risk_per_share) * style_mul * lot_cap_mult); max_affordable = int((float(total_capital) * lot_cap_mult) // max(cv, 1e-4))
+def compute_japanese_lot_sizing(cv: float, slv: float, total_capital: float, risk_tolerance_pct: float, is_jp: bool, style_mul: float = 1.0, lot_cap_mult: float = 1.0, earnings_days_left=None) -> dict:
+    earnings_mult = 0.5 if (earnings_days_left is not None and 0 <= int(earnings_days_left) <= 3) else 1.0
+    eff_cap_mult = float(lot_cap_mult) * earnings_mult
+    rm = float(total_capital) * (float(risk_tolerance_pct) / 100.0) * earnings_mult
+    risk_per_share = max(abs(cv - slv), cv * 0.005)
+    raw_shares = int((rm / risk_per_share) * style_mul)
+    max_affordable = int((float(total_capital) * eff_cap_mult) // max(cv, 1e-4))
+    if max_affordable < 1: max_affordable = int((float(total_capital) * earnings_mult) // max(cv, 1e-4))
     if max_affordable < 1: max_affordable = int(float(total_capital) // max(cv, 1e-4))
     capped_shares = max(1, min(raw_shares, max_affordable)); is_odd_lot = False
     if is_jp:
@@ -1994,7 +2281,7 @@ def compute_directional_edges(ofi_z: float, rsi: float, prev_trend_weak: bool, h
         else: bull_edge += 15.0; bear_edge -= 20.0
     return round(float(bull_edge), 2), round(float(bear_edge), 2)
 
-def evaluate_execution_quality_gate(is_short: bool, prev_trend_weak: bool, cv: float, vwap_today: float, eff_pct: int, bull_edge: float, bear_edge: float, rvol: float, min_rvol_req: float, upper_wick_pressure: float, lower_wick_support: float, daily_ctx: dict = None, macro_10y: dict = None, macro: dict = None, rs_alpha: float = 0.0) -> tuple:
+def evaluate_execution_quality_gate(is_short: bool, prev_trend_weak: bool, cv: float, vwap_today: float, eff_pct: int, bull_edge: float, bear_edge: float, rvol: float, min_rvol_req: float, upper_wick_pressure: float, lower_wick_support: float, daily_ctx: dict = None, macro_10y: dict = None, macro: dict = None, rs_alpha: float = 0.0, earnings_days_left=None) -> tuple:
     d_ctx, m10 = daily_ctx or {}, macro_10y or {}
     ma25_v, poc_10y = float(d_ctx.get("ma25", 0.0)), float(m10.get("poc_10y_price", 0.0))
     daily_bull_ok = (cv >= ma25_v * 0.992) if ma25_v > 0 else (not prev_trend_weak)
@@ -2010,10 +2297,14 @@ def evaluate_execution_quality_gate(is_short: bool, prev_trend_weak: bool, cv: f
         nk_d, sp_d = float(macro.get("nk_fut", {}).get("diff", 0.0)), float(macro.get("sp500", {}).get("diff", 0.0))
         if (nk_d <= -1.2 or sp_d <= -1.2) and float(rs_alpha) < 1.5:
             macro_risk_off = True; macro_note = f" / ⚠️指数リスクオフ減点(-1: 先物{nk_d:+.1f}%/SP{sp_d:+.1f}%, RSα={rs_alpha:+.1f}%<1.5%)"
-    exec_score = max(0, raw_exec_score - (1 if macro_risk_off else 0))
+    earnings_penalty, earnings_note = 0, ""
+    if earnings_days_left is not None and 0 <= int(earnings_days_left) <= 3:
+        earnings_penalty = 1
+        earnings_note = f" / ⚠️決算跨ぎ減点(-1: 残り{int(earnings_days_left)}日・建玉半減)"
+    exec_score = max(0, raw_exec_score - (1 if macro_risk_off else 0) - earnings_penalty)
     exec_grade = "🟢 Grade-A: 即時執行適格（3階層MTF全5条件クリア）" if exec_score >= 5 else ("🔵 Grade-B: 標準執行（基準厳守）" if exec_score == 4 else "🟡 Grade-C: 様子見・押し目/戻り待機（厳選フィルタ/MTF注意）")
     wick_tag = f"下ヒゲ支持({lower_wick_support:.0f}<45)={'OK' if cond5_wick else 'NG(底堅い)'}" if is_short else f"上ヒゲ拒絶({upper_wick_pressure:.0f}<45)={'OK' if cond5_wick else 'NG(寄り天警戒)'}"
-    return exec_score, exec_grade, f"3階層MTF(10Y/1D/5m)={'OK' if cond1_mtf else 'NG'} / 効率性ER({eff_pct}%)={'OK' if cond2_er else 'NG'} / 優位差({abs(bull_edge-bear_edge):.1f}pt)={'OK' if cond3_spread else 'NG'} / 時間帯RVOL({rvol}x)={'OK' if cond4_rvol else 'NG'} / {wick_tag}{macro_note}"
+    return exec_score, exec_grade, f"3階層MTF(10Y/1D/5m)={'OK' if cond1_mtf else 'NG'} / 効率性ER({eff_pct}%)={'OK' if cond2_er else 'NG'} / 優位差({abs(bull_edge-bear_edge):.1f}pt)={'OK' if cond3_spread else 'NG'} / 時間帯RVOL({rvol}x)={'OK' if cond4_rvol else 'NG'} / {wick_tag}{macro_note}{earnings_note}"
 
 def determine_tactic_classification(full_code: str, genre: str, ofi_z: float, vpin: float, rsi: float, pgap: float, expect_pct: float, prev_trend_weak: bool, qm: dict, ms: dict, rel_news_title: str = "", style: str = "", upper_wick_pressure: float = 0.0, lower_wick_support: float = 0.0, cv: float = 0.0, vwap_today: float = 0.0, rs_alpha: float = 0.0, daily_ctx: dict = None, macro_10y: dict = None) -> str:
     spec = get_style_spec(style)
@@ -2196,7 +2487,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
         existing_sl = ledger.get(ledger_key)
         stock_ledger = {"signals": dict(existing_sl.get("signals", {})), "verified": dict(existing_sl.get("verified", {})), "algo_ver": existing_sl.get("algo_ver", "")} if isinstance(existing_sl, dict) else {"signals": {}, "verified": {}, "algo_ver": ""}
 
-    ALGO_VERSION_TAG = "QWM25_PARTIAL_FIX_OR15_SQN"
+    ALGO_VERSION_TAG = "QWM26_ENTRY_HM_EQUITY"
     if stock_ledger.get("algo_ver") != ALGO_VERSION_TAG:
         stock_ledger["verified"], stock_ledger["algo_ver"] = {}, ALGO_VERSION_TAG
 
@@ -2238,7 +2529,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 span_d = df_daily_clean[df_daily_clean["_d_str"].isin(hold_dates)]
                 if span_d.empty: continue
                 if not sig_ok:
-                    stock_ledger["verified"][entry_d] = {"date": entry_d, "entry_date": entry_d, "exit_date": entry_d, "hold_days": 1, "signal_date": prev_d, "plan_short": plan_lbl, "entry_price": round(p_close, 4), "exit_price": round(p_close, 4), "entry_str": f"待機 {fmt_px(p_close, is_jp, full_code)}", "exit_str": "未約定", "outcome": "⚪ 日足押し目/支持条件未到達・見送り (NO TRADE)", "result_category": "NOTRADE", "is_win": None, "return_pct": 0.0, "r_mult": 0.0, "base_100_profit": 0.0}
+                    stock_ledger["verified"][entry_d] = {"date": entry_d, "entry_date": entry_d, "entry_hm": "09:00", "exit_date": entry_d, "hold_days": 1, "signal_date": prev_d, "plan_short": plan_lbl, "entry_price": round(p_close, 4), "exit_price": round(p_close, 4), "entry_str": f"待機 {fmt_px(p_close, is_jp, full_code)}", "exit_str": "未約定", "outcome": "⚪ 日足押し目/支持条件未到達・見送り (NO TRADE)", "result_category": "NOTRADE", "is_win": None, "return_pct": 0.0, "r_mult": 0.0, "base_100_profit": 0.0}
                     continue
 
                 look_lb = 5 if st_p == "スイングトレード" else 20
@@ -2299,7 +2590,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
 
                 ret_pct = realized_ret * 100.0; base_100_profit = (entry_px * BASE_LOT) * realized_ret
                 is_win_bool = True if result_cat == "WIN" else (False if result_cat == "LOSE" else None)
-                stock_ledger["verified"][entry_d] = {"date": exit_date_act, "entry_date": entry_d, "exit_date": exit_date_act, "hold_days": hold_days_act, "signal_date": prev_d, "plan_short": plan_lbl, "entry_price": round(entry_px, 4), "exit_price": round(exit_px, 4), "entry_str": fmt_px(entry_px, is_jp, full_code), "exit_str": fmt_px(exit_px, is_jp, full_code), "outcome": outcome, "result_category": result_cat, "is_win": is_win_bool, "return_pct": round(ret_pct, 2), "r_mult": round(float(r_mult), 2), "base_100_profit": round(base_100_profit, 2)}
+                stock_ledger["verified"][entry_d] = {"date": exit_date_act, "entry_date": entry_d, "entry_hm": "09:00", "exit_date": exit_date_act, "hold_days": hold_days_act, "signal_date": prev_d, "plan_short": plan_lbl, "entry_price": round(entry_px, 4), "exit_price": round(exit_px, 4), "entry_str": fmt_px(entry_px, is_jp, full_code), "exit_str": fmt_px(exit_px, is_jp, full_code), "outcome": outcome, "result_category": result_cat, "is_win": is_win_bool, "return_pct": round(ret_pct, 2), "r_mult": round(float(r_mult), 2), "base_100_profit": round(base_100_profit, 2)}
         except Exception as e_1d: record_system_error("record_and_verify_daily_Forward_test:1d", e_1d, f"Code: {full_code}")
     else:
         unique_dates = sorted(df["_trade_date"].unique().tolist()) if df is not None and not df.empty else []
@@ -2364,13 +2655,14 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                         span_bars = df[df["_trade_date"] == entry_d].copy()
                         if span_bars.empty: continue
                         n_bo, n_bh, n_bl, n_bc, n_bv = [span_bars[col].values.astype(float) for col in ["Open", "High", "Low", "Close", "Volume"]]
+                        n_hms = span_bars["_bar_hm"].values.tolist() if "_bar_hm" in span_bars.columns else ["-"] * len(n_bo)
                         total_span_bars = len(n_bo)
                         or15_bars = min(3, total_span_bars)
                         or15_high = round_to_tse_tick(float(np.max(n_bh[:or15_bars])) if or15_bars > 0 else p_close, full_code, "ceil")
                         or15_low = round_to_tse_tick(float(np.min(n_bl[:or15_bars])) if or15_bars > 0 else p_close, full_code, "floor")
                         open_gap_pct = ((float(n_bo[0]) - p_close) / max(p_close, 1e-4)) * 100.0 if total_span_bars > 0 else 0.0
 
-                        entered, avg_entry_px, first_entry_bar = False, 0.0, -1
+                        entered, avg_entry_px, first_entry_bar, entry_hm_act = False, 0.0, -1, "-"
                         pending_entry_side, pending_entry_lows, pending_entry_highs, pending_exit_reason = "", np.array([]), np.array([]), ""
                         half_tp_done, half_tp_px, half_tp_bar_idx, pending_be_sl = False, 0.0, -1, None
                         eff_tp, eff_sl, tp_delta, sl_delta, pullback_touched = 0.0, 0.0, 0.0, 0.0, False
@@ -2398,7 +2690,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             if (not entered) and pending_entry_side:
                                 is_long_dir = (pending_entry_side == "LONG")
                                 avg_entry_px = apply_unfavorable_tick_slip(bo, full_code, is_long_entry_or_short_exit=is_long_dir)
-                                entered, first_entry_bar = True, b_i
+                                entered, first_entry_bar, entry_hm_act = True, b_i, str(n_hms[b_i])
                                 eff_tp, eff_sl, tp_delta, sl_delta = _calc_structural_tp_sl(avg_entry_px, not is_long_dir, pending_entry_lows, pending_entry_highs)
                                 pending_entry_side = ""
 
@@ -2463,7 +2755,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                     if ((bc <= curr_vwap * 1.001 or bc <= ema5) and bc <= bo) or (b_i >= 2 and bl <= or15_low and bc < prev_close_bar):
                                         pending_entry_side, pending_entry_lows, pending_entry_highs = "SHORT", rec_lows, rec_highs
                                 elif b_i >= 2:
-                                    # OR15初動レンジ安値維持＆VWAP基準＆前バー高値更新陽線ブレイク判定
                                     or15_low_held = bool(bc >= or15_low)
                                     vwap_held = bool(bc >= curr_vwap * 0.998)
                                     bull_break_prev_high = bool((bc > bo) and (bc > prev_high_bar))
@@ -2485,7 +2776,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
 
                         if not entered:
                             no_trade_reason = "⚪ 執行ゲートGrade-C・見送り (NO TRADE)" if exec_score_p < 4 else "⚪ OR15/押し目ブレイク条件未到達・見送り (NO TRADE)"
-                            outcome, avg_entry_px, exit_px, result_category, ret_pct, r_multiple_final, base_100_profit = no_trade_reason, sig_plan_px, sig_plan_px, "NOTRADE", 0.0, 0.0, 0.0
+                            outcome, avg_entry_px, exit_px, result_category, ret_pct, r_multiple_final, base_100_profit, entry_hm_act = no_trade_reason, sig_plan_px, sig_plan_px, "NOTRADE", 0.0, 0.0, 0.0, "-"
                         else:
                             if outcome == "":
                                 if entry_d in unconf_dates: continue
@@ -2496,7 +2787,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             ret_pct, base_100_profit = realized_ret_rate * 100.0, (avg_entry_px * BASE_LOT) * realized_ret_rate
 
                         is_win_bool = True if result_category == "WIN" else (False if result_category == "LOSE" else None)
-                        stock_ledger["verified"][entry_d] = {"date": entry_d, "entry_date": entry_d, "exit_date": entry_d, "hold_days": 1, "signal_date": prev_d, "plan_short": f"{sig_tactic}({sig_mode[:10]})", "entry_price": round(avg_entry_px, 4), "exit_price": round(exit_px, 4), "entry_str": fmt_px(avg_entry_px, is_jp, full_code) if result_category != "NOTRADE" else f"待機 {fmt_px(sig_plan_px, is_jp, full_code)}", "exit_str": fmt_px(exit_px, is_jp, full_code) if result_category != "NOTRADE" else "未約定", "outcome": outcome, "result_category": result_category, "is_win": is_win_bool, "return_pct": round(ret_pct, 2), "r_mult": round(float(r_multiple_final), 2), "base_100_profit": round(base_100_profit, 2)}
+                        stock_ledger["verified"][entry_d] = {"date": entry_d, "entry_date": entry_d, "entry_hm": entry_hm_act, "exit_date": entry_d, "hold_days": 1, "signal_date": prev_d, "plan_short": f"{sig_tactic}({sig_mode[:10]})", "entry_price": round(avg_entry_px, 4), "exit_price": round(exit_px, 4), "entry_str": fmt_px(avg_entry_px, is_jp, full_code) if result_category != "NOTRADE" else f"待機 {fmt_px(sig_plan_px, is_jp, full_code)}", "exit_str": fmt_px(exit_px, is_jp, full_code) if result_category != "NOTRADE" else "未約定", "outcome": outcome, "result_category": result_category, "is_win": is_win_bool, "return_pct": round(ret_pct, 2), "r_mult": round(float(r_multiple_final), 2), "base_100_profit": round(base_100_profit, 2)}
                     except Exception as e_day: record_system_error("forward_test_day_loop", e_day, f"Code: {full_code}, Date: {prev_d}"); continue
         except Exception as e: record_system_error("record_and_verify_daily_Forward_test", e, f"Code: {full_code}")
 
@@ -2529,7 +2820,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0.0 else (99.9 if gross_profit > 0.0 else 0.0)
     total_profit_yen = round(sum(float(x.get("profit_val", 0.0)) for x in traded_rows), 2)
 
-    # SQN・平均R倍数・最大ドローダウン算出
     if traded_rows:
         r_list = [float(x.get("r_mult", float(x.get("return_pct", 0.0)) / 1.0)) for x in traded_rows]
         avg_r = round(float(np.mean(r_list)), 2)
@@ -2545,10 +2835,10 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     else:
         avg_r, sqn, max_dd_pct = 0.0, 0.0, 0.0
 
-    latest_result = traded_rows[0] if traded_rows else (all_verified[0] if all_verified else {"date": today_str, "plan_short": f"{tactic_type}({entry_mode[:10]})", "entry_str": fmt_px(plan_entry_price, is_jp, full_code), "exit_str": "-", "outcome": "⏳ 保有中・確定決済待機", "result_category": "NOTRADE", "is_win": None, "return_pct": 0.0, "r_mult": 0.0, "profit_val": 0.0, "hold_days": 1})
+    latest_result = traded_rows[0] if traded_rows else (all_verified[0] if all_verified else {"date": today_str, "entry_hm": "-", "plan_short": f"{tactic_type}({entry_mode[:10]})", "entry_str": fmt_px(plan_entry_price, is_jp, full_code), "exit_str": "-", "outcome": "⏳ 保有中・確定決済待機", "result_category": "NOTRADE", "is_win": None, "return_pct": 0.0, "r_mult": 0.0, "profit_val": 0.0, "hold_days": 1})
     return {"win_count": win_count, "lose_count": lose_count, "scratch_count": scratch_count, "total_days": total_days, "notrade_count": notrade_count, "verified_span_days": len(all_verified), "actual_win_rate": actual_win_rate, "profit_factor": profit_factor, "sqn": sqn, "avg_r": avg_r, "max_dd_pct": max_dd_pct, "total_profit_yen": total_profit_yen, "latest_result": latest_result, "history_rows": all_verified}
 
-def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vol=True, core_inst=True, core_mom=True, total_capital=1000000, risk_tolerance_pct=2.0, shared_ledger=None, save_db=True, macro_10y_map=None, daily_2y_map=None, bench_30m_ret=None):
+def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vol=True, core_inst=True, core_mom=True, total_capital=1000000, risk_tolerance_pct=2.0, shared_ledger=None, save_db=True, macro_10y_map=None, daily_2y_map=None, bench_30m_ret=None, earnings_days_left=None):
     try:
         df = normalize_ohlcv_df(df_raw, min_rows=25)
         if df is None: return None
@@ -2558,7 +2848,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
         cv = float(c[-1]); prev_day_close = float(daily_df_5m["Close"].iloc[-2]) if len(daily_df_5m) >= 2 else float(o[0])
         day_ret = float((cv - prev_day_close) / max(prev_day_close, 1e-4) * 100.0)
 
-        # 30分間イントラデイRS（直近6本の5分足リターン vs 市場基準）
         stock_30m_ret = float(((c[-1] - c[-7]) / max(c[-7], 1e-4)) * 100.0) if len(c) >= 7 else 0.0
         if bench_30m_ret is not None:
             ref_30m = float(bench_30m_ret)
@@ -2688,17 +2977,16 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
                 for sup_lv in (ma25_now, ma75_now, poc_10y_price):
                     if 0 < sup_lv < cv and (cv - sup_lv) < tp_delta_cur * 0.85: tp_delta_cur = max((cv - sup_lv) * 0.95, sl_delta_cur * 1.35)
 
-        exec_score, exec_grade, exec_detail = evaluate_execution_quality_gate(is_short_now, prev_trend_weak, cv, vwap_today, int(q_adv["eff_pct"]), bull_edge, bear_edge, float(q_adv["rvol"]), float(combat_prof["min_rvol_req"]), u_wick_now, l_wick_now, daily_ctx=daily_2y, macro_10y=macro_10y, macro=macro, rs_alpha=rs_alpha)
+        exec_score, exec_grade, exec_detail = evaluate_execution_quality_gate(is_short_now, prev_trend_weak, cv, vwap_today, int(q_adv["eff_pct"]), bull_edge, bear_edge, float(q_adv["rvol"]), float(combat_prof["min_rvol_req"]), u_wick_now, l_wick_now, daily_ctx=daily_2y, macro_10y=macro_10y, macro=macro, rs_alpha=rs_alpha, earnings_days_left=earnings_days_left)
         if is_short_now:
             tpv, slv = round_to_tse_tick(max(cv - tp_delta_cur, cv * 0.5), code, "floor"), round_to_tse_tick(cv + sl_delta_cur, code, "ceil")
         else:
             tpv, slv = round_to_tse_tick(cv + tp_delta_cur, code, "ceil"), round_to_tse_tick(max(cv - sl_delta_cur, cv * 0.5), code, "floor")
-            # 直上しこり壁（HVN）がある場合は利確目標を手前に自動調整
             hvn_wall_px = float(daily_2y.get("hvn_wall_price", 0.0))
             if hvn_wall_px > cv and tpv > hvn_wall_px:
                 tpv = round_to_tse_tick(max(hvn_wall_px * 0.995, cv + sl_delta_cur * 1.35), code, "floor")
 
-        lot_info = compute_japanese_lot_sizing(cv, slv, total_capital, risk_tolerance_pct, is_jp, spec["lot_mul"], lot_cap_mult=combat_prof["lot_cap_mult"])
+        lot_info = compute_japanese_lot_sizing(cv, slv, total_capital, risk_tolerance_pct, is_jp, spec["lot_mul"], lot_cap_mult=combat_prof["lot_cap_mult"], earnings_days_left=earnings_days_left)
         tp_pct_disp, sl_pct_disp = round((tpv - cv) / max(cv, 1e-4) * 100, 1), round((slv - cv) / max(cv, 1e-4) * 100, 1)
         tp_sign, sl_sign = ("+" if tp_pct_disp > 0 else ""), ("+" if sl_pct_disp > 0 else "")
 
@@ -2712,7 +3000,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
         ft_sqn = float(forward_test.get("sqn", 0.0))
         ft_prof = float(forward_test.get("total_profit_yen", 0.0))
 
-        # 過去検証フィードバック・ゲート
         ft_bonus = float(np.clip((ft_wr - 52.0) * 0.14 + (1.8 if ft_prof > 0 else -1.5), -5.0, 6.0)) if ft_days >= 3 else 0.0
         if ft_days >= 4:
             if ft_wr < 45.0 or ft_pf < 0.95 or ft_prof < 0:
@@ -2740,7 +3027,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
 
         macro_10y_serializable = {k: v for k, v in macro_10y.items() if k != "df_weekly_clean"}
         daily_2y_serializable = {k: v for k, v in daily_2y.items() if k not in ("df_daily_clean", "daily_rs_alpha_map")}
-        return {"full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, "combat_tier": combat_prof["tier_class"], "combat_cost_pct": round(combat_prof["cost_rate"] * 100, 2), "exec_grade": exec_grade, "exec_score": exec_score, "exec_detail": exec_detail, "rs_alpha": rs_alpha, "intraday_rs_30m": intraday_rs_30m, "or15_low": or15_low_today, "or15_high": or15_high_today, "style_fit_bonus": round(style_fit_bonus, 1), "macro_10y": macro_10y_serializable, "daily_2y": daily_2y_serializable, "price": fmt_px(cv, is_jp, code), "raw_close": cv, "tp_price": fmt_px(tpv, is_jp, code), "tp_pct": tp_pct_disp, "sl_price": fmt_px(slv, is_jp, code), "sl_pct": sl_pct_disp, "vwap_price": fmt_px(vwap_rounded, is_jp, code), "inst_score": int(np.clip(round((ms["ms_score"] + inst_flow_score) * 0.5), 10, 99)), "vpin": q_adv["vpin"], "ofi_z": round(ofi_z, 2), "yz_vol": q_adv["yz_vol"], "cvar95": q_adv["cvar95"], "eff_pct": q_adv["eff_pct"], "kelly_pct": kelly_pct, "bb_exp_ratio": q_adv["bb_exp_ratio"], "vol_spike_bull_pct": q_adv["vol_spike_bull_pct"], "upper_wick_pressure": u_wick_now, "lower_wick_support": l_wick_now, "bull_edge": bull_edge, "bear_edge": bear_edge, "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"], "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_lambda": ms["kyle_lambda"], "kyle_stealth": ms["kyle_stealth"], "ms_regime": ms["ms_regime"], "expect_pct": round(expect_pct, 1), "surge_attention_score": q_adv["surge_attention_score"], "rvol": q_adv["rvol"], "news_hits": news_hits, "pts_est_price": fmt_px(pest, is_jp, code), "pts_gap_pct": pgap, "pts_label_title": pts_label_title, "diff": round(day_ret, 2), "prob": gu_prob_pct, "intraday_win_rate": intraday_bull_pct, "total_win_rate": round(tot_win, 1), "rsi": q_adv["rsi"], "payoff": q_adv["payoff"], "edge": edge, "ai_score": int(np.clip(round(expect_pct * 0.92 + 4), 10, 99)), "tier_num": t_num, "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg, "lot_info": lot_info, "strat": strat, "forward_test": forward_test}
+        return {"full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, "combat_tier": combat_prof["tier_class"], "combat_cost_pct": round(combat_prof["cost_rate"] * 100, 2), "exec_grade": exec_grade, "exec_score": exec_score, "exec_detail": exec_detail, "earnings_days_left": earnings_days_left, "rs_alpha": rs_alpha, "intraday_rs_30m": intraday_rs_30m, "or15_low": or15_low_today, "or15_high": or15_high_today, "style_fit_bonus": round(style_fit_bonus, 1), "macro_10y": macro_10y_serializable, "daily_2y": daily_2y_serializable, "price": fmt_px(cv, is_jp, code), "raw_close": cv, "raw_tp": tpv, "raw_sl": slv, "raw_vwap": vwap_rounded, "tp_price": fmt_px(tpv, is_jp, code), "tp_pct": tp_pct_disp, "sl_price": fmt_px(slv, is_jp, code), "sl_pct": sl_pct_disp, "vwap_price": fmt_px(vwap_rounded, is_jp, code), "inst_score": int(np.clip(round((ms["ms_score"] + inst_flow_score) * 0.5), 10, 99)), "vpin": q_adv["vpin"], "ofi_z": round(ofi_z, 2), "yz_vol": q_adv["yz_vol"], "cvar95": q_adv["cvar95"], "eff_pct": q_adv["eff_pct"], "kelly_pct": kelly_pct, "bb_exp_ratio": q_adv["bb_exp_ratio"], "vol_spike_bull_pct": q_adv["vol_spike_bull_pct"], "upper_wick_pressure": u_wick_now, "lower_wick_support": l_wick_now, "bull_edge": bull_edge, "bear_edge": bear_edge, "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"], "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_lambda": ms["kyle_lambda"], "kyle_stealth": ms["kyle_stealth"], "ms_regime": ms["ms_regime"], "expect_pct": round(expect_pct, 1), "surge_attention_score": q_adv["surge_attention_score"], "rvol": q_adv["rvol"], "news_hits": news_hits, "pts_est_price": fmt_px(pest, is_jp, code), "pts_gap_pct": pgap, "pts_label_title": pts_label_title, "diff": round(day_ret, 2), "prob": gu_prob_pct, "intraday_win_rate": intraday_bull_pct, "total_win_rate": round(tot_win, 1), "rsi": q_adv["rsi"], "payoff": q_adv["payoff"], "edge": edge, "ai_score": int(np.clip(round(expect_pct * 0.92 + 4), 10, 99)), "tier_num": t_num, "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg, "lot_info": lot_info, "strat": strat, "forward_test": forward_test}
     except Exception as e: record_system_error("analyze_df", e, f"Code: {code}"); return None
 
 @st.cache_data(ttl=90)
@@ -2759,6 +3046,14 @@ def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True,
     daily_2y_map = fetch_2y_daily_metrics(codes_tuple)
     codes = list(codes_tuple)
 
+    earnings_map = {}
+    with ThreadPoolExecutor(max_workers=8) as ex_e:
+        fut_e = {ex_e.submit(fetch_earnings_days_left, c): c for c in codes}
+        for f_e in as_completed(fut_e):
+            c_e = fut_e[f_e]
+            try: earnings_map[c_e] = f_e.result()
+            except Exception: earnings_map[c_e] = None
+
     raw = {}
     for p_str in ("60d", "1mo", "15d"):
         try:
@@ -2766,7 +3061,6 @@ def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True,
             if raw is not None and not raw.empty: break
         except Exception as e: record_system_error(f"fetch_pool_batch:{p_str}", e)
 
-    # 全銘柄の直近30分リターン中央値を事前算出（イントラデイRS基準）
     ret_30m_list = []
     for c in codes:
         df_tmp = _extract_ticker_df(raw, c, len(codes))
@@ -2781,7 +3075,7 @@ def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True,
     evaluated_all = []
     def _w(c, n, g, t):
         df = _extract_ticker_df(raw, c, len(codes))
-        r = analyze_df(df, c, n, t, g, macro, buzz_map, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_capital=total_cap, risk_tolerance_pct=risk_pct, shared_ledger=shared_ledger, save_db=False, macro_10y_map=macro_10y_map, daily_2y_map=daily_2y_map, bench_30m_ret=market_median_30m_ret)
+        r = analyze_df(df, c, n, t, g, macro, buzz_map, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_capital=total_cap, risk_tolerance_pct=risk_pct, shared_ledger=shared_ledger, save_db=False, macro_10y_map=macro_10y_map, daily_2y_map=daily_2y_map, bench_30m_ret=market_median_30m_ret, earnings_days_left=earnings_map.get(c))
         if r: r["is_new_challenger"] = (c in challenger_codes_set)
         return r
 
@@ -2838,33 +3132,115 @@ def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True,
     return gmap, sorted(survivors, key=lambda x: (_is_combat_eligible(x), x["expect_pct"]), reverse=True)
 
 @st.cache_data(ttl=120)
-def fetch_one(code, macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
+def fetch_one_with_df(code, macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
     try:
         code = code.strip().upper()
         if re.match(r"^[0-9]{3}[0-9A-Z]$", code): code = f"{code}.T"
-        if code in DELISTED_OR_INVALID_CODES: return None
+        if code in DELISTED_OR_INVALID_CODES: return None, None
         inf = resolve_ticker_metadata(code)
         local_buzz = {code: {"news_hits": len(search_single_query(f"{inf['name']} 株", 5, trusted_only=False))}}
         macro_10y_map, daily_2y_map = fetch_10y_macro_metrics((code,)), fetch_2y_daily_metrics((code,))
+        e_days = fetch_earnings_days_left(code)
         tkr = yf.Ticker(code); hist_df = None
         for p_str in ("60d", "1mo", "15d"):
             hist_df = tkr.history(period=p_str, interval="5m")
             if hist_df is not None and not hist_df.empty: break
-        return analyze_df(hist_df, code, inf["name"], inf["theme"], inf["genre"], macro, local_buzz, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_capital=total_cap, risk_tolerance_pct=risk_pct, macro_10y_map=macro_10y_map, daily_2y_map=daily_2y_map, bench_30m_ret=None)
-    except Exception as e: record_system_error("fetch_one", e, f"Code: {code}"); return None
+        norm_df = normalize_ohlcv_df(hist_df, min_rows=25)
+        res = analyze_df(hist_df, code, inf["name"], inf["theme"], inf["genre"], macro, local_buzz, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_capital=total_cap, risk_tolerance_pct=risk_pct, macro_10y_map=macro_10y_map, daily_2y_map=daily_2y_map, bench_30m_ret=None, earnings_days_left=e_days)
+        return res, norm_df
+    except Exception as e:
+        record_system_error("fetch_one_with_df", e, f"Code: {code}")
+        return None, None
+
+def fetch_one(code, macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
+    res, _ = fetch_one_with_df(code, macro, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_cap=total_cap, risk_pct=risk_pct)
+    return res
+
+def compute_sector_rotation_stats(all_stocks: list) -> list:
+    out = []
+    for g in DYNAMIC_GENRES:
+        items = [x for x in all_stocks if x.get("genre") == g]
+        if not items:
+            out.append({"genre": g, "count": 0, "avg_rs30": 0.0, "avg_rvol": 1.0, "avg_ofi": 0.0, "flow_score": 0.0})
+            continue
+        avg_rs30 = round(float(np.mean([float(x.get("intraday_rs_30m", 0.0)) for x in items])), 2)
+        avg_rvol = round(float(np.mean([float(x.get("rvol", 1.0)) for x in items])), 2)
+        avg_ofi = round(float(np.mean([float(x.get("ofi_z", 0.0)) for x in items])), 2)
+        flow_score = round(avg_rs30 * 12.0 + avg_ofi * 15.0 + (avg_rvol - 1.0) * 10.0, 1)
+        out.append({"genre": g, "count": len(items), "avg_rs30": avg_rs30, "avg_rvol": avg_rvol, "avg_ofi": avg_ofi, "flow_score": flow_score})
+    out.sort(key=lambda x: x["flow_score"], reverse=True)
+    return out
+
+def analyze_watchlist_portfolio_risk(wl_dict: dict) -> dict:
+    items = list(wl_dict.values())
+    n = len(items)
+    if n < 2: return {"has_alert": False}
+    genre_counts = {}
+    for it in items:
+        g = str(it.get("genre", "その他"))
+        genre_counts[g] = genre_counts.get(g, 0) + 1
+    top_genre, top_cnt = max(genre_counts.items(), key=lambda x: x[1])
+    max_sector_pct = round((top_cnt / n) * 100.0, 1)
+
+    ret_series_list = []
+    for it in items:
+        closes = it.get("daily_2y", {}).get("recent_close_60") or []
+        if len(closes) >= 15:
+            arr = np.asarray(closes, dtype=float)
+            rets = np.diff(arr) / np.maximum(arr[:-1], 1e-4)
+            ret_series_list.append(rets)
+    avg_corr = 0.0
+    if len(ret_series_list) >= 2:
+        min_len = min(len(r) for r in ret_series_list)
+        if min_len >= 10:
+            mat = np.vstack([r[-min_len:] for r in ret_series_list])
+            corr_m = np.corrcoef(mat)
+            upper_vals = [float(corr_m[i, j]) for i in range(len(ret_series_list)) for j in range(i + 1, len(ret_series_list)) if not np.isnan(corr_m[i, j])]
+            if upper_vals: avg_corr = round(float(np.mean(upper_vals)), 2)
+
+    is_high_risk = (avg_corr >= 0.70) or (max_sector_pct >= 60.0)
+    return {"has_alert": True, "count": n, "avg_corr": avg_corr, "top_genre": top_genre, "max_sector_pct": max_sector_pct, "is_high_risk": is_high_risk}
+
+def evaluate_journal_trade_audit(entry: dict, all_stocks: list) -> str:
+    code = entry.get("code", "")
+    name = entry.get("name", "")
+    side = entry.get("side", "LONG")
+    ep = float(entry.get("entry_price", 0.0))
+    xp = float(entry.get("exit_price") or ep)
+    tp = float(entry.get("tp_price", ep))
+    sl = float(entry.get("sl_price", ep))
+    pnl_pct = float(entry.get("pnl_pct", 0.0))
+    pnl_yen = float(entry.get("pnl_yen", 0.0))
+    exec_g = str(entry.get("exec_grade", ""))
+
+    if load_gemini_cfg().get("api_key"):
+        sys_p = "あなたはプロクオンツ監査委員会のリスク管理官AEGISとリスク監査官SENTINELです。ユーザーのトレード記録を採点（100点満点）し、エントリー根拠・損切り規律・利確執行の良かった点と改善点を300〜450文字で具体的に講評してください。"
+        u_p = f"銘柄: {name}({code}) / 方向: {side} / 執行グレード: {exec_g} / 約定値: {ep} / 決済値: {xp} / 計画TP: {tp} / 計画SL: {sl} / 損益: {pnl_pct:+.2f}% ({pnl_yen:+,.0f}円)"
+        res, _ = call_real_llm_api(sys_p, u_p, expect_json=False)
+        if res and len(res.strip()) > 25:
+            return re.sub(r'```[a-zA-Z]*|```', '', res).strip()
+
+    sl_breached = (xp < sl * 0.995) if side == "LONG" else (xp > sl * 1.005)
+    score = 75
+    if pnl_pct > 0: score += 15
+    if sl_breached: score -= 28
+    if "Grade-C" in exec_g: score -= 12
+    score = int(np.clip(score, 20, 98))
+    sl_comment = "⚠️ 計画逆指値（SL）を超えて損失が拡大しています。次回はエントリーと同時に自動逆指値注文を必ず設定してください。" if sl_breached else "✅ 計画逆指値（SL）の規律範囲内でリスクコントロールが機能しています。"
+    tp_comment = "🎯 計画通りの利確執行で期待値通りのトレードです。+1.0Rでの半分利確習慣を継続しましょう。" if pnl_pct >= 1.0 else ("⚖️ 微損・微益での撤退です。方向感が崩れた際の早期撤退は資金防衛として有効です。" if pnl_pct > -1.0 else "🛡️ 損切り後のドテンやリベンジ売買を控え、次のGrade-A銘柄を待ちましょう。")
+    return f"【AEGIS＆SENTINEL 規律監査スコア: {score}点】\n・損益結果: {pnl_pct:+.2f}%（{pnl_yen:+,.0f}円）｜執行グレード: {exec_g}\n・リスク監査(SENTINEL): {sl_comment}\n・資金管理講評(AEGIS): {tp_comment}"
 
 macro_info = fetch_macro()
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
 st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;"><div class="brand-luxury">YAMASHISHI LAB</div><div style="font-size:10px;color:#94a3b8;">週足10年 × 日足2年 × 5分足60日 3階層MTF融合 × Gemini クオンツ監査合議</div></div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
 
-_cache_pool_key = f"pool_v25_style_spec_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
+_cache_pool_key = f"pool_v26_full_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
 if _cache_pool_key not in st.session_state:
     with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】週足10年×日足2年×5分足60日 3階層MTFスコアリングを実行中..."):
         g_res, all_res = fetch_pool_batch(macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
         st.session_state[_cache_pool_key] = (g_res, all_res)
 else: g_res, all_res = st.session_state[_cache_pool_key]
 
-# スタイル変更時に監視シートおよびフォーカス銘柄を即時再評価し古い空売りカードを排除
 if st.session_state.get("last_synced_style") != investment_style:
     st.session_state["last_synced_style"] = investment_style
     res_by_fc = {it["full_code"]: it for it in all_res}
@@ -2888,7 +3264,8 @@ if st.session_state.get("last_synced_style") != investment_style:
 focused_item = st.session_state.get("focused_stock_item")
 if focused_item:
     st.markdown("### 🔵 銘柄詳細・売買合議フォーカスモード")
-    render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True); st.stop()
+    _, foc_df = fetch_one_with_df(focused_item["full_code"], macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+    render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True, intraday_df=foc_df); st.stop()
 
 if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     if not all_impact_news:
@@ -2943,8 +3320,8 @@ if c2.button("🔍 診断", use_container_width=True) and cin:
 if st.session_state.get("custom_search_code"):
     st.markdown("### 🎯 個別銘柄・精密3階層MTFクオンツ診断モード")
     with st.spinner("📡 銘柄正式名称・週足10年・日足2年・5分足60日波形を解析中..."):
-        cr = fetch_one(st.session_state["custom_search_code"], macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-    if cr: render_card(cr, is_custom=True, kp="custom")
+        cr, cr_df = fetch_one_with_df(st.session_state["custom_search_code"], macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+    if cr: render_card(cr, is_custom=True, kp="custom", intraday_df=cr_df)
     else: st.warning("⚠️ 指定された銘柄コードのデータが取得できないか、上場廃止・無効な銘柄です。")
     if st.button("⬅️ トップ画面（ランキング一覧）に戻る", key="btn_back_from_custom_diag", use_container_width=True, type="primary"):
         st.session_state["custom_search_code"] = ""
@@ -2952,7 +3329,7 @@ if st.session_state.get("custom_search_code"):
         st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
     st.stop()
 
-# 直近サバイバル入れ替え戦・戦況バー（新規昇格＆圏外追放最新5件）
+# 直近サバイバル入れ替え戦・戦況バー
 surv_logs_top = db_get("market_survival_logs", [])
 if isinstance(surv_logs_top, list) and surv_logs_top:
     prom_items = [x for x in surv_logs_top if "[新規昇格]" in x.get("msg", "")][:5]
@@ -2960,6 +3337,20 @@ if isinstance(surv_logs_top, list) and surv_logs_top:
     recent_5 = surv_logs_top[:5]
     bar_pills = "".join([f'<span style="display:inline-block;background:{"rgba(16,185,129,0.16)" if "[新規昇格]" in it.get("msg","") else "rgba(239,68,68,0.16)"};border:1px solid {"rgba(16,185,129,0.4)" if "[新規昇格]" in it.get("msg","") else "rgba(239,68,68,0.4)"};color:{"#6ee7b7" if "[新規昇格]" in it.get("msg","") else "#fca5a5"};padding:2px 7px;border-radius:5px;font-size:10.5px;margin:2px 4px 2px 0;">{html.escape(it.get("msg","").split(" が")[0])}</span>' for it in recent_5])
     st.markdown(f'<div style="background:rgba(15,23,42,0.82);border:1px solid rgba(56,189,248,0.28);border-radius:10px;padding:7px 11px;margin-bottom:8px;"><div style="font-size:10.5px;font-weight:800;color:#fde047;margin-bottom:3px;">⚔️ 弱肉強食サバイバル戦況バー（直近入れ替え速報：昇格 {len(prom_items)}件 / 追放 {len(purg_items)}件）</div><div>{bar_pills}</div></div>', unsafe_allow_html=True)
+
+# 5大セクター間リアルタイム資金ローテーション・ヒートマップ
+sec_rot_stats = compute_sector_rotation_stats(all_res)
+if sec_rot_stats:
+    sec_cards = ""
+    for sr in sec_rot_stats:
+        fs = float(sr["flow_score"])
+        if fs >= 12.0: bg_c, bd_c, tx_c = "rgba(16,185,129,0.26)", "#10b981", "#6ee7b7"
+        elif fs >= 0.0: bg_c, bd_c, tx_c = "rgba(16,185,129,0.12)", "rgba(16,185,129,0.45)", "#a7f3d0"
+        elif fs >= -12.0: bg_c, bd_c, tx_c = "rgba(239,68,68,0.12)", "rgba(239,68,68,0.45)", "#fecdd3"
+        else: bg_c, bd_c, tx_c = "rgba(239,68,68,0.26)", "#ef4444", "#fca5a5"
+        g_short = sr["genre"].split("・")[0]
+        sec_cards += f'<div style="background:{bg_c};border:1px solid {bd_c};border-radius:7px;padding:5px 7px;text-align:center;"><div style="font-size:10px;font-weight:800;color:#f8fafc;white-space:nowrap;">{html.escape(g_short)}</div><div style="font-size:11px;font-weight:900;color:{tx_c};">30mRS {sr["avg_rs30"]:+.2f}%</div><div style="font-size:9px;color:#cbd5e1;">RVOL {sr["avg_rvol"]}x / CLV {sr["avg_ofi"]:+.2f}</div></div>'
+    st.markdown(f'<div style="background:rgba(15,23,42,0.82);border:1px solid rgba(168,85,247,0.3);border-radius:10px;padding:7px 11px;margin-bottom:10px;"><div style="font-size:10.5px;font-weight:800;color:#e9d5ff;margin-bottom:5px;">🧭 5大セクター・リアルタイム資金ローテーション・ヒートマップ（資金流入順）</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:5px;">{sec_cards}</div></div>', unsafe_allow_html=True)
 
 def cut_stocks(slist, pct): return slist[:max(3, int(round(len(slist) * (pct / 100.0))))] if slist else []
 
@@ -2970,7 +3361,7 @@ def _top5_eligibility_key(item: dict) -> tuple:
     eligible = 1 if (int(item.get("exec_score", 0)) >= 4 and (t_days < 3 or pf_v >= 1.0)) else 0
     return (eligible, float(item.get("expect_pct", 0.0)))
 
-cats = ["🏆 総合TOP5", "⚛️ ボラティリティ突破TOP10", "🏛️ 5分足需給ミクロTOP10", "🚨 重大ニュース＆連動株", "🎟️ 直近IPO・グロース実測分析", "🏦 BVC-VPIN・CLV資金フロー", "🔥 出来高サージ＆市場注目度", "📋 監視シート"] + [f"📂 {g}" for g in DYNAMIC_GENRES]
+cats = ["🏆 総合TOP5", "⚛️ ボラティリティ突破TOP10", "🏛️ 5分足需給ミクロTOP10", "🚨 重大ニュース＆連動株", "🎟️ 直近IPO・グロース実測分析", "🏦 BVC-VPIN・CLV資金フロー", "🔥 出来高サージ＆市場注目度", "📋 監視シート", "📓 トレード日誌＆AI監査"] + [f"📂 {g}" for g in DYNAMIC_GENRES]
 st.markdown(f'<div class="compact-bar-label"><span>📂 QUANTITATIVE STRATEGY ({investment_style.split(" ")[1]})</span></div>', unsafe_allow_html=True)
 if st.session_state.get("active_category") not in cats: st.session_state["active_category"] = "🏆 総合TOP5"
 
@@ -3014,7 +3405,10 @@ elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
         ld_bg = "rgba(16,185,129,0.24);border-color:#10b981;color:#6ee7b7;" if "確認中" not in ld_disp else "rgba(168,85,247,0.24);border-color:#c084fc;color:#f3e8ff;"
         st.markdown(f'<div class="rank-card" style="border-left-color:#a855f7;background:linear-gradient(180deg,#160d2b 0%,#090d16 100%)!important;"><div style="margin-bottom:6px;"><span class="pill-badge" style="background:{ld_bg}font-weight:900;font-size:11.5px;">📅 上場日: {html.escape(ld_disp)}</span></div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:6px;"><div><span class="pill-badge" style="background:#a855f7;color:#fff;font-weight:800;">{html.escape(p_ipo["status"])}</span><span class="quantum-badge">報道熱量 {p_ipo["heat_score"]}点</span></div><span style="font-size:11px;color:#cbd5e1;">市場: {html.escape(p_ipo["market"])}</span></div><div style="font-size:16.5px;font-weight:800;color:#f8fafc;">{html.escape(p_ipo["name"])} <span style="font-size:11.5px;color:#c084fc;">({html.escape(p_ipo["code"])})</span></div><div style="font-size:11.5px;color:#38bdf8;margin-top:3px;"><b>🎯 核心テーマ:</b> {html.escape(p_ipo["theme"])}</div><div style="font-size:11px;color:#fde047;margin-top:4px;">💰 <b>公開価格/想定価格:</b> {html.escape(str(p_ipo.get("offer_info", "未公表 / 観測中")))} ｜ 🗓️ <b>BB期間:</b> {html.escape(str(p_ipo.get("bb_info", "スケジュール確認中")))}</div><div style="background:rgba(2,6,23,0.75);border:1px solid rgba(168,85,247,0.3);border-radius:6px;padding:7px 10px;margin-top:6px;font-size:11.5px;color:#e9d5ff;">📰 <b>最新RSS観測:</b> {html.escape(p_ipo["latest_headline"])}</div><div style="margin-top:8px;"><a href="https://www.jpx.co.jp/listing/stocks/new/index.html" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">🏛️ JPX新規上場会社情報</a></div></div>', unsafe_allow_html=True)
 
-    for ipo in (ipo_bundle.get("survivors", []) if isinstance(ipo_bundle, dict) else []):
+    survivors_ipo = ipo_bundle.get("survivors", []) if isinstance(ipo_bundle, dict) else []
+    if not survivors_ipo:
+        st.info("📡 現在既上場IPO銘柄の相場データを再取得中です。数秒後に再度お試しください。")
+    for ipo in survivors_ipo:
         chg_col = "#10b981" if ipo["chg_pct"] >= 0 else "#ef4444"
         lockup_badge = f'<span class="pill-badge" style="background:rgba(245,158,11,0.25);border-color:#f59e0b;color:#fde047;font-weight:900;">{html.escape(ipo.get("lockup_note", ""))}</span>' if ipo.get("lockup_alert") else ""
         meta_note_html = f'<div style="font-size:10px;color:#6ee7b7;margin-top:3px;">{html.escape(ipo.get("ipo_meta_note", ""))}</div>' if ipo.get("ipo_meta_note") else ""
@@ -3026,13 +3420,104 @@ elif sel_cat == "🔥 出来高サージ＆市場注目度":
     for i, r in enumerate(sorted(surv, key=lambda x: x["surge_attention_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
 elif sel_cat == "📋 監視シート":
     wl = st.session_state["watchlist"]
+    if len(wl) >= 2:
+        pf_diag = analyze_watchlist_portfolio_risk(wl)
+        if pf_diag.get("has_alert"):
+            if pf_diag.get("is_high_risk"):
+                st.markdown(
+                    f'<div class="rank-card" style="border-left-color:#ef4444;background:linear-gradient(180deg,#2a0d16 0%,#090d16 100%)!important;padding:12px 14px;">'
+                    f'<div style="font-size:13px;font-weight:900;color:#fca5a5;">🛡️ AEGIS リスク監査官：セクター集中・相関過多リスク警告（監視 {pf_diag["count"]}銘柄）</div>'
+                    f'<div style="font-size:11.5px;color:#fecdd3;margin-top:4px;line-height:1.6;">'
+                    f'・<b>直近60日平均相関係数:</b> <b style="color:#fde047;">{pf_diag["avg_corr"]:.2f}</b>（閾値 0.70） ｜ '
+                    f'<b>最大集中セクター:</b> <b style="color:#fde047;">{html.escape(pf_diag["top_genre"])} ({pf_diag["max_sector_pct"]:.1f}%)</b>（閾値 60%）<br>'
+                    f'💡 <b>分散推奨メッセージ:</b> 監視銘柄の値動きが強く連動しており、セクター急落時に同時被弾するリスクが高い状態です。ディフェンシブ大型（電力・銀行・商社）や別テーマ銘柄を組み入れて相関分散を図ってください。'
+                    f'</div></div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f'<div class="rank-card" style="border-left-color:#10b981;padding:10px 14px;">'
+                    f'<div style="font-size:12px;font-weight:800;color:#6ee7b7;">🛡️ AEGIS ポートフォリオ分散診断：良好（監視 {pf_diag["count"]}銘柄）</div>'
+                    f'<div style="font-size:11px;color:#d1fae5;margin-top:2px;">直近60日平均相関係数: <b>{pf_diag["avg_corr"]:.2f}</b> ｜ 最大セクター比率: <b>{html.escape(pf_diag["top_genre"])} ({pf_diag["max_sector_pct"]:.1f}%)</b> — 適切なリスク分散が維持されています。</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
     if st.button("⚡ 総合TOP3を一括登録", use_container_width=True):
         for it in surv[:3]: wl[it["code"]] = it
         cu = st.session_state.get("authenticated_user", "")
         if cu: save_watchlist(cu, wl)
         st.rerun()
     for wc, wi in list(wl.items()): render_card(wi, kp=f"wl_{wc}")
+elif sel_cat == "📓 トレード日誌＆AI監査":
+    st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">📓 実戦トレード日誌 ＆ クオンツ監査官（AEGIS・SENTINEL）振り返り採点</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;">銘柄カードから記録したエントリープランの決済確定・損益集計・AI規律監査を実行します</div></div>', unsafe_allow_html=True)
+    cu_j = st.session_state.get("authenticated_user", "")
+    j_entries = load_trade_journal(cu_j)
+    if not j_entries:
+        st.info("まだトレード日誌に記録がありません。各銘柄カードの『🎯 このプランでエントリー記録』ボタンから登録してください。")
+    else:
+        closed_j = [x for x in j_entries if x.get("status") == "CLOSED"]
+        tot_j_pnl = sum(float(x.get("pnl_yen", 0.0)) for x in closed_j)
+        win_j = sum(1 for x in closed_j if float(x.get("pnl_yen", 0.0)) > 0)
+        wr_j = round((win_j / len(closed_j)) * 100.0, 1) if closed_j else 0.0
+        st.markdown(f'<div class="forward-verify-bar" style="margin-bottom:10px;"><span>📊 <b>日誌通算成績:</b> 全{len(j_entries)}件（決済済 {len(closed_j)}件 / 保有中 {len(j_entries)-len(closed_j)}件）</span><span>勝率: <b style="color:#fde047;">{wr_j:.1f}%</b> ｜ 確定純損益: <b style="color:{"#10b981" if tot_j_pnl>=0 else "#ef4444"};">{tot_j_pnl:+,.0f}円</b></span></div>', unsafe_allow_html=True)
+
+        for idx_j, je in enumerate(j_entries):
+            jid = je.get("id", str(idx_j))
+            fc_j = je.get("full_code", "")
+            is_jp_j = ".T" in fc_j
+            ep_j = float(je.get("entry_price", 0.0))
+            tp_j = float(je.get("tp_price", 0.0))
+            sl_j = float(je.get("sl_price", 0.0))
+            sh_j = int(je.get("shares", 100))
+            side_j = je.get("side", "LONG")
+            st_j = je.get("status", "OPEN")
+            border_c = "#38bdf8" if st_j == "OPEN" else ("#10b981" if float(je.get("pnl_yen", 0.0)) >= 0 else "#ef4444")
+            status_badge = '<span class="pill-badge" style="background:rgba(56,189,248,0.22);border-color:#38bdf8;color:#7dd3fc;font-weight:800;">⏳ 保有中 (OPEN)</span>' if st_j == "OPEN" else f'<span class="pill-badge" style="background:{"rgba(16,185,129,0.22)" if float(je.get("pnl_yen",0))>=0 else "rgba(239,68,68,0.22)"};border-color:{border_c};color:#f8fafc;font-weight:800;">✅ 決済済 ({float(je.get("pnl_pct",0)):+.2f}% / {float(je.get("pnl_yen",0)):+,.0f}円)</span>'
+
+            st.markdown(
+                f'<div class="rank-card" style="border-left-color:{border_c};margin-bottom:10px;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">'
+                f'<div><b>{html.escape(je.get("name",""))} [{html.escape(je.get("code",""))}]</b> <span style="font-size:11px;color:#94a3b8;">({html.escape(je.get("style",""))} / {side_j} / {sh_j:,}株)</span></div>'
+                f'<div>{status_badge}</div></div>'
+                f'<div style="font-size:11px;color:#cbd5e1;margin-top:4px;">記録日時: {html.escape(str(je.get("created_at","")))} ｜ 約定値: <b>{fmt_px(ep_j, is_jp_j, fc_j)}</b> ｜ 計画TP: <b style="color:#10b981;">{fmt_px(tp_j, is_jp_j, fc_j)}</b> ｜ 計画SL: <b style="color:#f87171;">{fmt_px(sl_j, is_jp_j, fc_j)}</b></div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+            if st_j == "OPEN":
+                jc_a, jc_b, jc_c = st.columns([2.2, 1.3, 1.0])
+                exit_in = jc_a.number_input("決済価格", min_value=0.01, value=max(0.01, ep_j), step=1.0 if is_jp_j else 0.1, key=f"j_exit_px_{jid}", label_visibility="collapsed")
+                if jc_b.button("💰 決済確定＆AI監査", key=f"j_close_{jid}", use_container_width=True, type="primary"):
+                    pnl_rate = ((exit_in - ep_j) / max(ep_j, 1e-4)) if side_j == "LONG" else ((ep_j - exit_in) / max(ep_j, 1e-4))
+                    je["exit_price"] = float(exit_in)
+                    je["closed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    je["status"] = "CLOSED"
+                    je["pnl_pct"] = round(pnl_rate * 100.0, 2)
+                    je["pnl_yen"] = round(ep_j * sh_j * pnl_rate, 2)
+                    with st.spinner("🛡️ AEGIS＆SENTINELがトレード規律を監査中..."):
+                        je["ai_feedback"] = evaluate_journal_trade_audit(je, all_res)
+                    j_entries[idx_j] = je
+                    save_trade_journal(cu_j, j_entries)
+                    st.rerun()
+                if jc_c.button("🗑️ 削除", key=f"j_del_{jid}", use_container_width=True):
+                    del j_entries[idx_j]
+                    save_trade_journal(cu_j, j_entries)
+                    st.rerun()
+            else:
+                fb_txt = str(je.get("ai_feedback", ""))
+                if fb_txt:
+                    st.markdown(f'<div class="beginner-action-box" style="margin-top:-4px;margin-bottom:12px;">{html.escape(fb_txt).replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+                jb1, jb2 = st.columns([3, 1])
+                if jb1.button("🔄 AI監査を再実行", key=f"j_reaudit_{jid}", use_container_width=True):
+                    with st.spinner("🛡️ クオンツ監査官が再採点中..."):
+                        je["ai_feedback"] = evaluate_journal_trade_audit(je, all_res)
+                    j_entries[idx_j] = je
+                    save_trade_journal(cu_j, j_entries)
+                    st.rerun()
+                if jb2.button("🗑️ 削除", key=f"j_del_c_{jid}", use_container_width=True):
+                    del j_entries[idx_j]
+                    save_trade_journal(cu_j, j_entries)
+                    st.rerun()
 elif sel_cat.startswith("📂 "):
     for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), survival_cut_pct), 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
 
-st.markdown('<div class="disclaimer-banner"><b>⚖️ 重要免責事項・法的表示</b><br>本システム「YAMASHISHI LAB」が提供するすべての指標（ボラティリティ突破指数・WKB統計近似モデル、5分足60日OHLCV需給ミクロ構造近似、日足2年中期トレンド・MAパーフェクトオーダー・MACD・52週位置・日足ATR14・価格帯別出来高Volume Profile(LVN上値真空/HVNしこり壁)・対ベンチマークRSα・30分イントラデイRS先行度、過去10年週足大局アルゴリズム・10年POC価格帯別出来高解析、BVC-VPIN・Kyle-λ統計近似、WRVヒゲ拒絶ベクトル、OR15分初動レンジ判定・時間帯補正RVOL・3階層MTF5条件執行品質ゲート、当日実測寄付きギャップ／理論寄付き試算値、期待度パーセンテージ、リークフリー検証統計(勝率/PF/SQN/平均R/最大DD)、Geminiクオンツ監査合議ログ、および買い・空売り双方の売買プラン）は、過去の5分足・日足・週足四本値および出来高(OHLCV)データと数理アルゴリズムに基づく研究シミュレーション・情報提供を目的としたものであり、実際の板情報（Tick）やPTS実勢値に基づくものではなく、特定の有価証券の売買推奨や投資助言（投資助言・代理業等）を行うものではありません。株式投資（特に信用取引・空売り）には元本割れや元本超過損・市場変動のリスクが伴います。最終的な投資判断および資金配分は、必ず利用者ご自身の自己責任にて行っていただけますようお願い申し上げます。</div>', unsafe_allow_html=True)
+st.markdown('<div class="disclaimer-banner"><b>⚖️ 重要免責事項・法的表示</b><br>本システム「YAMASHISHI LAB」が提供するすべての指標（ボラティリティ突破指数・WKB統計近似モデル、5分足60日OHLCV需給ミクロ構造近似、日足2年中期トレンド・MAパーフェクトオーダー・MACD・52週位置・日足ATR14・価格帯別出来高Volume Profile(LVN上値真空/HVNしこり壁)・対ベンチマークRSα・30分イントラデイRS先行度、過去10年週足大局アルゴリズム・10年POC価格帯別出来高解析、BVC-VPIN・Kyle-λ統計近似、WRVヒゲ拒絶ベクトル、OR15分初動レンジ判定・時間帯補正RVOL・3階層MTF5条件執行品質ゲート、決算跨ぎリスク遮断ゲート、監視ポートフォリオ相関＆セクター集中リスク診断、5大セクター資金ローテーション・ヒートマップ、当日実測寄付きギャップ／理論寄付き試算値、期待度パーセンテージ、リークフリー検証統計(勝率/PF/SQN/平均R/最大DD/エクイティカーブ/時間帯別勝率)、Geminiクオンツ監査合議ログ、トレード日誌AI監査、および買い・空売り双方の売買プラン）は、過去の5分足・日足・週足四本値および出来高(OHLCV)データと数理アルゴリズムに基づく研究シミュレーション・情報提供を目的としたものであり、実際の板情報（Tick）やPTS実勢値に基づくものではなく、特定の有価証券の売買推奨や投資助言（投資助言・代理業等）を行うものではありません。株式投資（特に信用取引・空売り）には元本割れや元本超過損・市場変動のリスクが伴います。最終的な投資判断および資金配分は、必ず利用者ご自身の自己責任にて行っていただけますようお願い申し上げます。</div>', unsafe_allow_html=True)
