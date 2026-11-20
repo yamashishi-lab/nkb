@@ -810,7 +810,7 @@ if "user_prefs_loaded" not in st.session_state or st.session_state.get("last_loa
     for bk in ["core_vol", "core_inst", "core_mom"]: st.session_state[f"chk_{bk}"] = (bk in saved_boosts)
     st.session_state["watchlist"] = user_saved_watchlist; st.session_state["user_prefs_loaded"] = True; st.session_state["last_loaded_user"] = cu_active
 
-defaults = {"active_debates": {}, "council_threads": {}, "council_meta": {}, "debate_round_seed": {}, "watchlist": user_saved_watchlist, "navigation_page": "TOP", "selected_news_item": None, "custom_search_code": "", "active_category": "🏆 総合TOP5", "last_cat": "🏆 総合TOP5", "nav_history": [], "scroll_top_trig": 0, "scroll_target_id": "", "focused_stock_item": None, "agent_roster": saved_agents, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}, "last_audit_similarity_penalty": 0, "last_working_gemini_model": "", "force_close_sidebar_trig": 0, "last_synced_style": "", "journal_audit_results": {}}
+defaults = {"active_debates": {}, "council_threads": {}, "council_meta": {}, "debate_round_seed": {}, "watchlist": user_saved_watchlist, "navigation_page": "TOP", "selected_news_item": None, "custom_search_code": "", "active_category": "🏆 総合TOP5", "last_cat": "🏆 総合TOP5", "nav_history": [], "scroll_top_trig": 0, "scroll_target_id": "", "focused_stock_item": None, "agent_roster": saved_agents, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}, "last_audit_similarity_penalty": 0, "last_working_gemini_model": "", "force_close_sidebar_trig": 0, "last_synced_style": "", "journal_audit_results": {}, "dd_lab_ctx": None}
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 st.session_state["agent_roster"] = dict(DEFAULT_AGENTS)
@@ -939,7 +939,6 @@ def render_user_manual_page():
         st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000)
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
         st.rerun()
-
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
     is_admin_user = (cu == ADMIN_EMAIL.strip().lower())
@@ -1022,7 +1021,8 @@ if st.session_state.get("navigation_page") == "DEEP_DIVE":
     deep_dive.render_deep_dive_page(
         init_code=st.session_state.get("dd_target_code", "NVDA"),
         init_style=st.session_state.get("dd_target_style", "デイトレード"),
-        gemini_api_key=load_gemini_cfg().get("api_key", "")
+        gemini_api_key=load_gemini_cfg().get("api_key", ""),
+        lab_ctx=st.session_state.get("dd_lab_ctx")
     )
     st.stop()
 
@@ -2291,6 +2291,15 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
         st.session_state["dd_target_style"] = st_info.get("style_name", "デイトレード")
         st.session_state["dd_code_in"] = r["full_code"]
         st.session_state["dd_style_in"] = st_info.get("style_name", "デイトレード")
+        st.session_state["dd_lab_ctx"] = {
+            "full_code": r["full_code"],
+            "side": st_info.get("side", "LONG"),
+            "expect_pct": float(r.get("expect_pct", 50.0)),
+            "exec_grade": str(r.get("exec_grade", "")),
+            "tp": float(r.get("raw_tp", 0.0)),
+            "sl": float(r.get("raw_sl", 0.0)),
+            "vwap": float(r.get("raw_vwap", 0.0)),
+        }
         st.session_state["navigation_page"] = "DEEP_DIVE"
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
         st.rerun()
