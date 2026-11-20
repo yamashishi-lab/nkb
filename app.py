@@ -490,7 +490,7 @@ def load_mem():
     adm = ADMIN_EMAIL.strip().lower()
     if adm not in db:
         ns = datetime.now().strftime("%Y-%m-%d %H:%M")
-        db[adm] = {"name": "管理者", "email": adm, "status": "approved", "passcode": gen_code(adm), "pin_hash": hash_pin("0000", adm), "applied_at": ns, "approved_at": ns, "last_seen_ts": 0, "last_seen_str": "-", "fp": "-", "bio_enabled": False}
+        db[adm] = {"name": "管理者", "email": adm, "status": "approved", "passcode": gen_code(adm), "pin_hash": hash_pin("0000", adm), "applied_at": ns, "approved_at": ns, "last_seen_ts": 0, "last_seen_str": "-", "fp": "-", "bio_enabled": False, "deep_dive_status": "approved", "deep_dive_allowed": True}
         db_set("mem", db)
     return db
 
@@ -775,7 +775,7 @@ def check_auth():
                     is_b, _ = check_and_log_ban_spoof(cm, nm, cfp, rhfp, ph, "新規登録申請")
                     if is_b or (db.get(cm) and db[cm].get("status") == "banned"): st.error("💀 セキュリティ監視システムにより、申請は永久ブロックされました。")
                     else:
-                        db[cm] = {"name": nm, "email": cm, "status": "pending", "passcode": gen_code(cm), "pin_hash": ph, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cfp, "raw_hfp": rhfp, "bio_enabled": False}; db_set("mem", db)
+                        db[cm] = {"name": nm, "email": cm, "status": "pending", "passcode": gen_code(cm), "pin_hash": ph, "applied_at": ns, "approved_at": "-", "last_seen_ts": 0, "last_seen_str": "-", "fp": cfp, "raw_hfp": rhfp, "bio_enabled": False, "deep_dive_status": "none", "deep_dive_allowed": False}; db_set("mem", db)
                         send_mail(cm, "【YAMASHISHI LAB】会員登録申請の受付完了", f"{nm} 様\n申請を受け付けました。管理者承認後、ログイン画面の『🔐 承認確認・暗号化コード照会』タブにて、暗証番号(PIN)を入力すると専用アクセスコードをご確認いただけます。")
                         st.success("✅ 申請を受け付けました！承認完了まで今しばらくお待ちください。")
     with tab_vault:
@@ -825,7 +825,7 @@ with st.container():
 scroll_target_js = f"setTimeout(function(){{try{{const el=window.parent.document.getElementById('{st.session_state.get('scroll_target_id')}');if(el){{const win=el.closest('.council-scroll-window');if(win){{win.scrollTo({{top:Math.max(0,el.offsetTop-4),behavior:'smooth'}});}}(el.closest('.ai-council-box')||el).scrollIntoView({{behavior:'smooth',block:'center'}});}}}}catch(e){{}}}},120);" if st.session_state.get("scroll_target_id") else ""
 st.session_state["scroll_target_id"] = ""
 
-is_overlay_page_active = (st.session_state.get("navigation_page") in ("ADMIN", "MANUAL"))
+is_overlay_page_active = (st.session_state.get("navigation_page") in ("ADMIN", "MANUAL", "DEEP_DIVE"))
 force_close_trig = int(st.session_state.get("force_close_sidebar_trig", 0))
 force_close_js = "window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');closeCustomSidebar();" if is_overlay_page_active else (f"if(window.parent._lastForceCloseTrig!=={force_close_trig}){{window.parent._lastForceCloseTrig={force_close_trig};window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');closeCustomSidebar();}}" if force_close_trig > 0 else "")
 
@@ -985,11 +985,61 @@ if st.session_state.get("navigation_page") == "MANUAL":
     render_user_manual_page()
     st.stop()
 
+if st.session_state.get("navigation_page") == "DEEP_DIVE":
+    cu_dd = st.session_state.get("authenticated_user", "").strip().lower()
+    db_dd = load_mem()
+    u_dd = db_dd.get(cu_dd, {})
+    dd_st = u_dd.get("deep_dive_status", "approved" if u_dd.get("deep_dive_allowed") else "none")
+    is_dd_ok = (cu_dd == ADMIN_EMAIL.strip().lower()) or (dd_st == "approved")
+
+    if not is_dd_ok:
+        st.markdown(
+            '<div class="glass-header" style="border-left:4px solid #f59e0b;">'
+            '<div class="brand-luxury">YAMASHISHI DEEP DIVE</div>'
+            '<div style="color:#fde047;font-weight:800;font-size:14px;margin-top:8px;">🔒 アクセス権限が必要です</div>'
+            '<div style="color:#cbd5e1;font-size:12.5px;margin-top:6px;line-height:1.7;">'
+            'ディープサーチ（単一銘柄・極限解析ターミナル）を利用するには、管理者からの閲覧権限が必要です。<br>'
+            '下のボタンから利用権限を申請してください。</div></div>',
+            unsafe_allow_html=True
+        )
+        if dd_st == "pending":
+            st.info("⏳ 現在、管理者の承認審査待ちです。承認されるまでしばらくお待ちください。")
+        else:
+            if st.button("📩 管理者へディープサーチ利用権限を申請する", use_container_width=True, type="primary"):
+                if cu_dd in db_dd:
+                    db_dd[cu_dd]["deep_dive_status"] = "pending"
+                    db_dd[cu_dd]["deep_dive_applied_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    db_set("mem", db_dd)
+                    st.success("✅ 利用権限を申請しました！管理者の承認をお待ちください。")
+                    st.rerun()
+        if st.button("⬅️ トップ画面に戻る", use_container_width=True):
+            st.session_state["navigation_page"] = "TOP"
+            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+            st.rerun()
+        st.stop()
+
+    import deep_dive
+    deep_dive.render_deep_dive_page(
+        init_code=st.session_state.get("dd_target_code", "NVDA"),
+        init_style=st.session_state.get("dd_target_style", "デイトレード"),
+        gemini_api_key=load_gemini_cfg().get("api_key", "")
+    )
+    st.stop()
+
 if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.strip().lower():
     st.markdown("### 👑 統合管理コントロールセンター (MASTER TERMINAL)")
     if st.button("⬅️ メイン画面に戻る", use_container_width=True, type="primary"):
         st.session_state["navigation_page"] = "TOP"; st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000); st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
-    tab_gemini_sys, tab_users, tab_employment, tab_apply_wait, tab_error_logs = st.tabs(["🔑 Gemini API・システム設定", "👥 会員情報管理", "🧠 クオンツエンジン稼働状態＆データ整合性監査", "📩 会員申し込み審査", "⚠️ システムエラーログ"])
+    db_dd_chk = load_mem()
+    dd_wait_cnt = sum(1 for u in db_dd_chk.values() if u.get("deep_dive_status") == "pending")
+    tab_gemini_sys, tab_users, tab_employment, tab_apply_wait, tab_dd_wait, tab_error_logs = st.tabs([
+        "🔑 Gemini API・システム設定",
+        "👥 会員情報管理",
+        "🧠 クオンツエンジン稼働状態＆データ整合性監査",
+        "📩 会員申し込み審査",
+        f"🔥 ディープサーチ申請待ち ({dd_wait_cnt})",
+        "⚠️ システムエラーログ"
+    ])
     with tab_gemini_sys:
         st.markdown("#### 🔵 Google Gemini API 暗号化設定")
         gem_cur = load_gemini_cfg(); cur_m, cur_k = gem_cur.get("model", "gemini-3-flash-preview"), gem_cur.get("api_key", "")
@@ -1021,8 +1071,12 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         st.markdown("#### 📋 登録済み会員一覧")
         st.caption("🛡️ 端末識別・なりすまし検知の技術仕様:（※HTTPヘッダー環境ハッシュ＆日次HMACトークン照合）によりアクセス整合性を管理しています（ハードウェア生体認証ではありません）。")
         db_m, sec_m = load_mem(), load_sec()
-        rows = "".join([f"<tr><td><b>{html.escape(u.get('name',''))}</b></td><td>{html.escape(em)}</td><td style='color:#38bdf8;font-family:monospace;'>{html.escape(u.get('passcode','-'))}</td><td style='color:#94a3b8;font-family:monospace;'>{html.escape(u.get('pin_hash','-')[:8])}...</td><td style='color:#fde047;font-family:monospace;'>{html.escape(u.get('fp','-'))}</td><td>{html.escape(u.get('applied_at','-'))}</td><td><span style='color:{'#10b981' if u.get('status')=='approved' else ('#ef4444' if u.get('status')=='banned' else '#f59e0b')}'><b>{html.escape(u.get('status',''))}</b></span></td></tr>" for em, u in list(db_m.items())[:200]])
-        st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>お名前</th><th>メールアドレス</th><th>専用パスコード</th><th>PINハッシュ</th><th>環境ハッシュ(FP)※HTTPヘッダー環境ハッシュ＆日次HMACトークン照合</th><th>登録日</th><th>状態</th></tr></thead><tbody>{rows}</tbody></table></div>', unsafe_allow_html=True)
+        rows = ""
+        for em, u in list(db_m.items())[:200]:
+            dd_ok_u = (em == ADMIN_EMAIL.strip().lower()) or (u.get("deep_dive_status") == "approved") or bool(u.get("deep_dive_allowed", False))
+            dd_lbl = "<span style='color:#10b981;font-weight:800;'>🔥 許可済</span>" if dd_ok_u else ("<span style='color:#fde047;font-weight:800;'>⏳ 申請中</span>" if u.get("deep_dive_status") == "pending" else "<span style='color:#64748b;'>🔒 未許可</span>")
+            rows += f"<tr><td><b>{html.escape(u.get('name',''))}</b></td><td>{html.escape(em)}</td><td style='color:#38bdf8;font-family:monospace;'>{html.escape(u.get('passcode','-'))}</td><td>{dd_lbl}</td><td style='color:#fde047;font-family:monospace;'>{html.escape(u.get('fp','-'))}</td><td>{html.escape(u.get('applied_at','-'))}</td><td><span style='color:{'#10b981' if u.get('status')=='approved' else ('#ef4444' if u.get('status')=='banned' else '#f59e0b')}'><b>{html.escape(u.get('status',''))}</b></span></td></tr>"
+        st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>お名前</th><th>メールアドレス</th><th>専用パスコード</th><th>DD権限</th><th>環境ハッシュ(FP)</th><th>登録日</th><th>状態</th></tr></thead><tbody>{rows}</tbody></table></div>', unsafe_allow_html=True)
         spoof_logs = sec_m.get("spoof_logs", [])
         if spoof_logs:
             st.markdown("##### 🚨 なりすまし検知・BAN遮断ログ（※HTTPヘッダー環境ハッシュ＆日次HMACトークン照合）")
@@ -1030,7 +1084,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>日時</th><th>検知種別（※HTTPヘッダー環境ハッシュ＆日次HMACトークン照合）</th><th>入力メール</th><th>環境ハッシュ(FP)</th><th>詳細理由</th></tr></thead><tbody>{s_rows}</tbody></table></div>', unsafe_allow_html=True)
         target_em = st.selectbox("操作対象会員を選択", list(db_m.keys()))
         if target_em and target_em != ADMIN_EMAIL.strip().lower():
-            u_status = db_m[target_em].get("status", ""); b1, b2, b3 = st.columns(3)
+            u_status = db_m[target_em].get("status", ""); b1, b2, b3, b4 = st.columns(4)
             if u_status == "approved":
                 if b1.button("⏸️ 一時停止", use_container_width=True): db_m[target_em]["status"] = "suspended"; db_set("mem", db_m); st.rerun()
             elif b1.button("▶️ 利用再開", use_container_width=True): db_m[target_em]["status"] = "approved"; db_set("mem", db_m); st.rerun()
@@ -1041,6 +1095,11 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                     if val and val != "-": sec_m.setdefault("banned_fps", {})[val] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN（※HTTPヘッダー環境ハッシュ＆日次HMACトークン照合）"}
                 sec_m.setdefault("banned_emails", {})[target_em] = {"banned_at": now_s, "orig": target_em}; db_set("mem", db_m); db_set("sec", sec_m); st.rerun()
             if b3.button("🗑️ 完全削除", use_container_width=True): del db_m[target_em]; db_set("mem", db_m); st.rerun()
+            dd_is_ok = (db_m[target_em].get("deep_dive_status") == "approved") or bool(db_m[target_em].get("deep_dive_allowed", False))
+            if b4.button("🔥 DD取消" if dd_is_ok else "🔓 DD許可", use_container_width=True):
+                db_m[target_em]["deep_dive_status"] = "none" if dd_is_ok else "approved"
+                db_m[target_em]["deep_dive_allowed"] = not dd_is_ok
+                db_set("mem", db_m); st.rerun()
     with tab_employment:
         st.markdown("#### 🧠 クオンツエンジン稼働状態＆データ整合性監査")
         audit_m = _compute_real_audit_metrics(); h_col = "#10b981" if audit_m["health_score"] >= 90 else ("#fde047" if audit_m["health_score"] >= 75 else "#ef4444")
@@ -1061,6 +1120,29 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                     send_mail(pem, "【YAMASHISHI LAB】会員登録承認", f"{pu.get('name','')} 様\n専用アクセスコードは【 {db_all[pem]['passcode']} 】です。"); st.rerun()
                 if cb2.button(f"🚫 却下 ({pu.get('name','')})", key=f"rej_{pem}", use_container_width=True): del db_all[pem]; db_set("mem", db_all); st.rerun()
         else: st.info("承認待ちの新規申請はありません。")
+    with tab_dd_wait:
+        st.markdown("#### 🔥 ディープサーチ（DEEP DIVE）利用権限 申請待ちリスト")
+        db_all = load_mem()
+        dd_pending = {em: u for em, u in db_all.items() if u.get("deep_dive_status") == "pending"}
+        if dd_pending:
+            for pem, pu in list(dd_pending.items()):
+                st.markdown(
+                    f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(245,158,11,0.4);border-left:4px solid #f59e0b;border-radius:8px;padding:10px 14px;margin-bottom:8px;">'
+                    f'<b>{html.escape(pu.get("name","未入力"))}</b> ({html.escape(pem)}) '
+                    f'<span style="color:#94a3b8;font-size:11px;margin-left:8px;">申請日時: {html.escape(pu.get("deep_dive_applied_at","-"))}</span></div>',
+                    unsafe_allow_html=True
+                )
+                dc1, dc2 = st.columns([1, 1])
+                if dc1.button(f"✅ 許可する ({pu.get('name','')})", key=f"dd_ok_{pem}", use_container_width=True, type="primary"):
+                    db_all[pem]["deep_dive_status"] = "approved"
+                    db_all[pem]["deep_dive_allowed"] = True
+                    db_set("mem", db_all); st.rerun()
+                if dc2.button(f"🚫 却下する ({pu.get('name','')})", key=f"dd_ng_{pem}", use_container_width=True):
+                    db_all[pem]["deep_dive_status"] = "none"
+                    db_all[pem]["deep_dive_allowed"] = False
+                    db_set("mem", db_all); st.rerun()
+        else:
+            st.info("現在、ディープサーチ利用権限の申請待ちはありません。")
     with tab_error_logs:
         st.markdown("#### ⚠️ システムエラーログ管理")
         err_list = get_system_error_logs()
@@ -1072,7 +1154,6 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>日時</th><th>モジュール</th><th>例外</th><th>メッセージ</th></tr></thead><tbody>{rows_err}</tbody></table></div>', unsafe_allow_html=True)
         else: st.success("🎉 エラーはありません。")
     st.stop()
-
 def _parse_news_age_hours(pub_str: str) -> float:
     if not pub_str: return 12.0
     try:
@@ -2205,6 +2286,14 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
         f'<details class="quant-detail-drawer"><summary>⚛️ 週足10年 × 日足2年 × 5分足60日 3階層MTFアルゴリズム戦略詳細（OHLCV統計モデル）</summary><div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}<br>📍 <b>重要価格節目＆実戦ガード基準:</b> PDH(前日高値)=<b>{pdh_s}</b> / PDL(前日安値)=<b>{pdl_s}</b> ｜ VWAP+2σ過熱警戒線=<b>{vp2_s}</b> ｜ 機関OB支持帯=<b>{ob_s}</b> ｜ ストップ高上限=<b>{lim_up_s}</b><br>📅 <b>第1層・過去10年週足大局解析:</b> {html.escape(str(m10.get("regime_10y_label", "")))} ｜ 10年スコア={int(m10.get("long_10y_score", 50))}点 ｜ 10年CAGR={m10.get("cagr_10y", 0.0):+.1f}% ｜ 10年レンジ位置={m10.get("pos_10y_pct", 50.0):.1f}%（10年安値:{html.escape(str(m10.get("low_10y_str", "-")))} 〜 10年高値:{html.escape(str(m10.get("high_10y_str", "-")))}） ｜ 200週MA乖離={m10.get("ma200w_dev_pct", 0.0):+.1f}% ｜ 10年最大出来高POC={html.escape(str(m10.get("poc_10y_str", "-")))}<br>📈 <b>第2層・日足2年中期トレンド＆Volume Profile解析:</b> {html.escape(str(d2y.get("regime_1d_label", "")))} ｜ 上値出来高構造={html.escape(vp_struct_lbl)} ｜ 日足スコア={int(d2y.get("daily_trend_score", 50))}点 ｜ {html.escape(str(d2y.get("ma_align_label", "")))} ｜ MA5={html.escape(str(d2y.get("ma5_str", "-")))} / MA25={html.escape(str(d2y.get("ma25_str", "-")))}({d2y.get("ma25_dev_pct", 0.0):+.1f}%) / MA75={html.escape(str(d2y.get("ma75_str", "-")))}({d2y.get("ma75_dev_pct", 0.0):+.1f}%) / MA200={html.escape(str(d2y.get("ma200_str", "-")))} ｜ 日足MACD={d2y.get("macd_line", 0.0):+.2f} (Signal={d2y.get("macd_signal", 0.0):+.2f} / Hist={d2y.get("macd_hist", 0.0):+.2f}) ｜ 日足RSI(14)={d2y.get("daily_rsi14", 50.0):.1f}% ｜ 52週位置={d2y.get("pos_52w_pct", 50.0):.1f}% ｜ 日足ATR14={html.escape(str(d2y.get("daily_atr14_str", "-")))} (日足YZ Vol={round(d2y.get("daily_yz_vol", 0.3)*100, 1)}%)<br>⚖️ <b>双方向需給優位性比較:</b> <span style="color:#34d399;font-weight:700;">LONG優勢度 = {r.get("bull_edge", 0.0):+.1f}pt</span> vs <span style="color:#fb7185;font-weight:700;">SHORT優勢度 = {r.get("bear_edge", 0.0):+.1f}pt</span> ｜ <b>スタイル適合補正 = {r.get("style_fit_bonus", 0.0):+.1f}pt</b> ｜ <b>日次RSα = {r.get("rs_alpha", 0.0):+.2f}%</b> ｜ <b>30分イントラデイRS = {rs_30m_v:+.2f}%</b><br>🚦 <b>3階層MTF執行品質ゲート ({exec_score}/5達成):</b> {html.escape(r.get("exec_detail", ""))}<br>📊 <b>第3層・5分足60日OHLCV実測値 & 検証統計:</b> RSI(14)={r.get("rsi", 50)}% ｜ BVC-VPIN近似={r.get("vpin", 0.5)} ｜ 平滑化CLVフローZ={r.get("ofi_z", 0.0)} ｜ DFA Hurst={r.get("hurst", 0.5)} ｜ Kyle-λ近似={r.get("kyle_lambda", 0.0):.2e} ｜ BB拡大初動率={r.get("bb_exp_ratio", 1.0)}x ｜ 出来高スパイク陽線頻度={r.get("vol_spike_bull_pct", 0.0)}% ｜ CVaR(99%)={r.get("cvar95", 2.5)}% ｜ YZ年率Vol={round(r.get('yz_vol', 0.0)*100, 1)}% ｜ 効率性ER={r.get("eff_pct", 50)}% ｜ Payoff={r.get("payoff", 1.0)} (Kelly={r.get("kelly_pct", 0.0)}%) ｜ SQN={sqn_val:.2f} / 平均R={avg_r_val:+.2f}R / 最大DD={max_dd_val:.1f}% ｜ 🔥 時間帯補正RVOL={r.get("rvol", 1.0)}倍 / 報道{r.get("news_hits", 0)}件</div></details></div>',
         unsafe_allow_html=True
     )
+    if st.button(f"🔥 DEEP DIVEで極限深掘り ({r['code']})", key=f"btn_dd_{kp}_{r['code']}", use_container_width=True):
+        st.session_state["dd_target_code"] = r["full_code"]
+        st.session_state["dd_target_style"] = st_info.get("style_name", "デイトレード")
+        st.session_state["dd_code_in"] = r["full_code"]
+        st.session_state["dd_style_in"] = st_info.get("style_name", "デイトレード")
+        st.session_state["navigation_page"] = "DEEP_DIVE"
+        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+        st.rerun()
     if st.button(f"🎯 このプランでエントリー記録 ({r['name']})", key=f"btn_journal_add_{kp}_{r['code']}", use_container_width=True):
         cu_j = st.session_state.get("authenticated_user", "")
         if cu_j:
@@ -2239,7 +2328,6 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
         st.session_state["selected_news_item"] = rel_news; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
     open_now = bool(is_focused or is_custom)
     render_council_sec(r, f"foc_{r['code']}" if open_now else f"{kp}_{r['code']}", auto_open=open_now)
-
 def _compute_single_10y_metrics(df_w: pd.DataFrame, full_code: str) -> dict:
     is_jp = ".T" in str(full_code)
     default_res = {"cagr_10y": 0.0, "pos_10y_pct": 50.0, "poc_10y_price": 0.0, "poc_10y_str": "-", "low_10y_str": "-", "high_10y_str": "-", "ma200w_dev_pct": 0.0, "ma200w_slope_up": True, "long_10y_score": 50, "regime_10y_label": "📊 10年大局データ標準評価", "poc_relation_note": "データ蓄積中", "years_span": "10Y", "df_weekly_clean": None, "has_data": False}
@@ -2293,6 +2381,7 @@ def fetch_10y_macro_metrics(codes_tuple: tuple) -> dict:
                 out[c] = _compute_single_10y_metrics(df_c, c)
             except Exception as e_single: record_system_error(f"fetch_10y_macro_metrics:{c}", e_single); out[c] = _compute_single_10y_metrics(None, c)
     return out
+
 def _compute_single_daily_metrics(df_d: pd.DataFrame, bench_ret_series: pd.Series, full_code: str) -> dict:
     is_jp = ".T" in str(full_code)
     default_res = {"ma5": 0.0, "ma25": 0.0, "ma75": 0.0, "ma200": 0.0, "ma5_str": "-", "ma25_str": "-", "ma75_str": "-", "ma200_str": "-", "ma5_dev_pct": 0.0, "ma25_dev_pct": 0.0, "ma75_dev_pct": 0.0, "ma200_dev_pct": 0.0, "ma25_slope_up": True, "ma75_slope_up": True, "bull_po": False, "bear_po": False, "ma_align_label": "MA均衡", "macd_line": 0.0, "macd_signal": 0.0, "macd_hist": 0.0, "daily_rsi14": 50.0, "pos_52w_pct": 50.0, "is_52w_break": False, "daily_atr14": 0.0, "daily_atr14_str": "-", "daily_yz_vol": 0.30, "daily_rs_alpha_map": {}, "latest_rs_alpha": 0.0, "daily_trend_score": 50, "regime_1d_label": "⚖️ 日足中期レンジ均衡", "is_lvn_breakout": False, "hvn_wall_price": 0.0, "vp_struct_label": "⚖️ 標準出来高分布", "recent_close_60": [], "pdh": 0.0, "pdl": 0.0, "prev_close_1d": 0.0, "df_daily_clean": None, "has_data": False}
@@ -3201,7 +3290,6 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
 
     latest_result = traded_rows[0] if traded_rows else (all_verified[0] if all_verified else {"date": today_str, "entry_hm": "-", "plan_short": f"{tactic_type}({entry_mode[:10]})", "entry_str": fmt_px(plan_entry_price, is_jp, full_code), "exit_str": "-", "outcome": "⏳ 保有中・確定決済待機", "result_category": "NOTRADE", "is_win": None, "return_pct": 0.0, "r_mult": 0.0, "profit_val": 0.0, "hold_days": 1})
     return {"win_count": win_count, "lose_count": lose_count, "scratch_count": scratch_count, "total_days": total_days, "notrade_count": notrade_count, "verified_span_days": len(all_verified), "actual_win_rate": actual_win_rate, "profit_factor": profit_factor, "sqn": sqn, "avg_r": avg_r, "max_dd_pct": max_dd_pct, "total_profit_yen": total_profit_yen, "latest_result": latest_result, "history_rows": all_verified}
-
 def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vol=True, core_inst=True, core_mom=True, total_capital=1000000, risk_tolerance_pct=2.0, shared_ledger=None, save_db=True, macro_10y_map=None, daily_2y_map=None, bench_30m_ret=None, earnings_days_left=None):
     try:
         df = normalize_ohlcv_df(df_raw, min_rows=25)
