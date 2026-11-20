@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 DB_PATH = "yamashishi_core.db"
 
 # =========================================================================
-# 1. DEEP DIVE v8 専用CSS
+# 1. DEEP DIVE v8.2 専用CSS
 # =========================================================================
 def _inject_dd_css():
     css = """
@@ -74,15 +74,11 @@ def _inject_dd_css():
     .dd-memo-box { background: linear-gradient(180deg, #0b192c 0%, #090d16 100%); border: 1px solid rgba(168, 85, 247, 0.45); border-left: 4px solid #a855f7; padding: 13px 15px; border-radius: 10px; margin-bottom: 10px; font-size: 12.2px; line-height: 1.78; color: #f1f5f9; }
     .dd-factor-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.12); font-size: 11.5px; }
     .dd-factor-row:last-child { border-bottom: none; padding-top: 7px; font-weight: 800; }
-    .dd-table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .dd-data-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; min-width: 310px; }
-    .dd-data-table th { background: #1e293b; color: #38bdf8; padding: 6px 7px; text-align: left; border-bottom: 1px solid rgba(56, 189, 248, 0.3); white-space: nowrap; }
-    .dd-data-table td { padding: 6px 7px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); color: #e2e8f0; }
     """
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 # =========================================================================
-# 2. SQLite 予測スナップショット台帳（ガチ検証・嘘なしロック保存）
+# 2. SQLite 予測スナップショット台帳（ガチ検証・ロック保存）
 # =========================================================================
 def _dd_db_get(key: str, default_val):
     try:
@@ -110,15 +106,12 @@ def _dd_db_set(key: str, val):
 
 def _get_target_session_date(is_jp: bool) -> str:
     now = datetime.datetime.now()
-    # 東証15:30以降は翌営業日をターゲットにする
     if is_jp and (now.hour > 15 or (now.hour == 15 and now.minute >= 30)):
         nxt = now + datetime.timedelta(days=1)
-        while nxt.weekday() >= 5:
-            nxt += datetime.timedelta(days=1)
+        while nxt.weekday() >= 5: nxt += datetime.timedelta(days=1)
         return nxt.strftime("%Y-%m-%d")
     d = now
-    while d.weekday() >= 5:
-        d += datetime.timedelta(days=1)
+    while d.weekday() >= 5: d += datetime.timedelta(days=1)
     return d.strftime("%Y-%m-%d")
 
 # =========================================================================
@@ -282,7 +275,6 @@ def _load_stock_core(code: str) -> dict:
     if not inst_holders and code.endswith(".T"):
         inst_holders = _fetch_jp_holders(code.replace(".T", ""))
 
-    # インサイダー売買（米国株等の大口異変検知用）
     insider_tx = []
     try:
         itx = tkr.insider_transactions
@@ -348,23 +340,18 @@ def _fetch_gov_and_whales(corp_name: str, short_code: str) -> tuple:
         return [f"{x['title']} ({x['pub']})" for x in fg.result()[:5]], fw.result()[:5]
 
 # =========================================================================
-# 4. 大口異変検知・4層精度アップ軌道・ガチ検証エンジン
+# 4. 大口異変検知・ライブ修正＆朝ロック並列エンジン
 # =========================================================================
 def _detect_whale_anomaly(insider_tx: list, whale_news: list) -> dict:
-    """インサイダー売買＋大量保有報告から大口の異変（強気/弱気）を実測判定"""
     bull_sigs, bear_sigs = [], []
     for tx in insider_tx:
         t_up = tx["text"].upper()
-        if "PURCHASE" in t_up or "BUY" in t_up:
-            bull_sigs.append(f"役員買付: {tx['insider']} ({_fmt_sh(tx['shares'])})")
-        elif "SALE" in t_up or "SELL" in t_up:
-            bear_sigs.append(f"役員売却: {tx['insider']} ({_fmt_sh(tx['shares'])})")
+        if "PURCHASE" in t_up or "BUY" in t_up: bull_sigs.append(f"役員買付: {tx['insider']} ({_fmt_sh(tx['shares'])})")
+        elif "SALE" in t_up or "SELL" in t_up: bear_sigs.append(f"役員売却: {tx['insider']} ({_fmt_sh(tx['shares'])})")
     for wn in whale_news:
         t = wn["title"]
-        if any(k in t for k in ["新規保有", "買い増し", "保有割合増加", "5%超"]):
-            bull_sigs.append(f"大量保有(買): {t[:34]}")
-        elif any(k in t for k in ["保有割合低下", "売却", "空売り残高増加", "売り増し"]):
-            bear_sigs.append(f"大口売/空売: {t[:34]}")
+        if any(k in t for k in ["新規保有", "買い増し", "保有割合増加", "5%超"]): bull_sigs.append(f"大量保有(買): {t[:34]}")
+        elif any(k in t for k in ["保有割合低下", "売却", "空売り残高増加", "売り増し"]): bear_sigs.append(f"大口売/空売: {t[:34]}")
 
     if len(bull_sigs) > len(bear_sigs):
         return {"detected": True, "dir": "BULL", "adj_pct": round(min(0.65, 0.25 * (len(bull_sigs) - len(bear_sigs))), 2), "summary": " / ".join(bull_sigs[:2])}
@@ -398,14 +385,11 @@ def _compute_dow_edge(df_1d: pd.DataFrame) -> tuple:
     return stats, (0 if wd >= 4 else wd + 1)
 
 def _compute_wick_bias(df_1d: pd.DataFrame) -> float:
-    """直近5日の上ヒゲ・下ヒゲ圧力から日中ドリフト補正(%)を実測算出"""
     sub = df_1d.tail(5)
     if len(sub) < 3: return 0.0
     o, h, l, c = sub["Open"].values, sub["High"].values, sub["Low"].values, sub["Close"].values
     rng = np.maximum(h - l, 1e-4)
-    up_w = float(np.mean((h - np.maximum(o, c)) / rng))
-    lo_w = float(np.mean((np.minimum(o, c) - l) / rng))
-    return round(float(np.clip((lo_w - up_w) * 0.8, -0.45, 0.45)), 2)
+    return round(float(np.clip((float(np.mean((np.minimum(o, c) - l) / rng)) - float(np.mean((h - np.maximum(o, c)) / rng))) * 0.8, -0.45, 0.45)), 2)
 
 def _compute_vp(df_1d: pd.DataFrame, curr_px: float, is_jp: bool) -> dict:
     sub = df_1d.tail(250)
@@ -426,7 +410,7 @@ def _compute_vp(df_1d: pd.DataFrame, curr_px: float, is_jp: bool) -> dict:
         "sup_px": float(centers[max(b_idx, key=lambda i: hist[i])]) if b_idx else curr_px * 0.95
     }
 
-def _build_locked_5m_trajectory(
+def _build_dual_5m_trajectory(
     fc_code: str, curr_px: float, df_1d: pd.DataFrame, df_5m: pd.DataFrame,
     macro_sens: list, macro_data: dict, news_res: dict, whale_anom: dict,
     dow_next_avg: float, vp: dict, is_jp: bool
@@ -443,7 +427,7 @@ def _build_locked_5m_trajectory(
     target_date = _get_target_session_date(is_jp)
     today_str = datetime.datetime.now().strftime("%Y-%m-%d")
 
-    # 当日実測5分足の抽出（ガチ検証用）
+    # 当日実測5分足
     actual_map = {}
     if df_5m is not None and not df_5m.empty:
         tmp_a = df_5m.copy()
@@ -451,141 +435,169 @@ def _build_locked_5m_trajectory(
         tmp_a["_d"], tmp_a["_hm"] = idx_a.strftime("%Y-%m-%d"), idx_a.strftime("%H:%M")
         if today_str in tmp_a["_d"].values:
             for _, row in tmp_a[tmp_a["_d"] == today_str].iterrows():
-                if row["_hm"] in slots:
-                    actual_map[row["_hm"]] = round(float(row["Close"]), 2)
+                if row["_hm"] in slots: actual_map[row["_hm"]] = round(float(row["Close"]), 2)
 
-    # すでに当日の予測がSQLiteにロック済みならそれを読み込む（場中に予測を書き換えないガチ検証）
-    ledger = _dd_db_get("dd_forecast_ledger_v8", {})
+    actual_arr = [actual_map.get(sl, None) for sl in slots]
+    has_actual = bool(actual_map)
+    last_act_idx = max([i for i, v in enumerate(actual_arr) if v is not None], default=-1)
+
+    # 過去5分足の統計（指数減衰ウェイト）
+    slot_means, slot_stds, slot_vols = np.zeros(n_slots), np.full(n_slots, 0.003), np.zeros(n_slots)
+    if df_5m is not None and not df_5m.empty:
+        tmp = df_5m.copy()
+        idx_dt = pd.to_datetime(tmp.index)
+        tmp["_d"], tmp["_hm"] = idx_dt.strftime("%Y-%m-%d"), idx_dt.strftime("%H:%M")
+        udays = sorted(tmp["_d"].unique().tolist())
+        pdays = udays[:-1] if (udays and udays[-1] == today_str) else udays
+        rmaps, vmaps, weights = [], [], []
+        for di, ds in enumerate(pdays):
+            sub = tmp[tmp["_d"] == ds]
+            if len(sub) < 10: continue
+            op = float(sub["Open"].iloc[0])
+            if op <= 0: continue
+            rm, vm = {}, {}
+            for _, row in sub.iterrows():
+                if row["_hm"] in slots:
+                    rm[row["_hm"]] = (float(row["Close"]) - op) / op
+                    vm[row["_hm"]] = float(row["Volume"])
+            if rm:
+                rmaps.append(rm); vmaps.append(vm); weights.append(float(np.exp(1.2 * (di / max(len(pdays) - 1, 1)))))
+
+        for i, sl in enumerate(slots):
+            rv, wv, vv = [], [], []
+            for rm, vm, w in zip(rmaps, vmaps, weights):
+                if sl in rm: rv.append(rm[sl]); wv.append(w); vv.append(vm[sl])
+            if len(rv) >= 3:
+                wa, ra = np.array(wv) / np.sum(wv), np.array(rv)
+                wm = float(np.sum(wa * ra))
+                slot_means[i] = wm
+                slot_stds[i] = max(float(np.sqrt(np.sum(wa * ((ra - wm) ** 2)))), 0.0025)
+                slot_vols[i] = float(np.mean(vv)) if vv else 0.0
+            else:
+                slot_stds[i] = 0.003 + 0.009 * np.sqrt((i + 1) / n_slots)
+                slot_vols[i] = 0.0
+
+    smap = {x["key"]: x for x in macro_sens}
+    mk = "SOX" if ("SOX" in smap and abs(smap["SOX"]["corr"]) > 0.35) else ("NK_FUT" if (is_jp and "NK_FUT" in smap) else "SP500")
+    mi = smap.get(mk, {"label": "日経先物" if is_jp else "S&P500", "beta": 0.5, "latest_diff": 0.0})
+    fi = smap.get("USDJPY", {"label": "ドル円", "beta": 0.0, "latest_diff": 0.0})
+    vix_d = macro_data.get("VIX", {}).get("diff_pct", 0.0)
+
+    mg = (mi["latest_diff"] * mi["beta"]) * 0.45
+    fg = (fi["latest_diff"] * fi["beta"]) * 0.35
+    ng = news_res["shock_score"] * 0.85
+    wg = float(whale_anom["adj_pct"])
+    dow_adj = float(np.clip(dow_next_avg * 0.35, -0.4, 0.4))
+    wick_adj = _compute_wick_bias(df_1d)
+
+    tot_gap = float(np.clip(mg + fg + ng + wg, -5.0, 5.0))
+    est_open = curr_px * (1.0 + tot_gap / 100.0)
+    drift = float(np.clip((news_res["shock_score"] * 0.005) + ((dow_adj + wick_adj) / 100.0), -0.025, 0.025))
+    vboost = (1.0 + abs(news_res["shock_score"]) * 0.25) * (1.0 + max(0.0, vix_d / 100.0) * 1.2)
+    res_wall = vp["res_px"]
+
+    # ① ベース（場前リアルタイム）予測の算出
+    p50, p85, p15, bdiff = [], [], [], []
+    for i, sl in enumerate(slots):
+        frac = i / max(n_slots - 1, 1)
+        mid = est_open * (1.0 + slot_means[i] + drift * frac)
+        if mid > res_wall * 0.995 and vp["overhead_pct"] >= 35.0:
+            mid = res_wall * 0.995 + (mid - res_wall * 0.995) * 0.45
+        band = est_open * slot_stds[i] * vboost * 1.15
+        lo, hi = max(mid - band, curr_px * 0.5), mid + band
+        p50.append(round(float(mid), 2)); p85.append(round(float(hi), 2)); p15.append(round(float(lo), 2))
+        bdiff.append(round(float(hi - lo), 2))
+
+    # 固定シードの想定波形（モンテカルロ1パス）
+    rng_sim = np.random.default_rng(abs(hash(f"{fc_code}_{target_date}")) % (2**32))
+    sim_line = [p50[0]]
+    for i in range(1, n_slots):
+        pull = (p50[i] - sim_line[-1]) * 0.35
+        noise = rng_sim.normal(0, est_open * slot_stds[i] * 0.28)
+        sim_line.append(round(float(np.clip(sim_line[-1] + pull + noise, p15[i], p85[i])), 2))
+
+    # ② SQLite 朝ロック台帳の読み書き（場前は最新で上書き、場中になったら固定）
+    ledger = _dd_db_get("dd_forecast_ledger_v82", {})
     if not isinstance(ledger, dict): ledger = {}
     stock_hist = ledger.get(fc_code, {})
-    locked_today = stock_hist.get(today_str)
 
-    if locked_today and actual_map:
-        traj = dict(locked_today)
-        traj["is_locked"] = True
-        traj["actual"] = [actual_map.get(sl, None) for sl in traj["slots"]]
-        traj["has_actual"] = True
+    if has_actual and today_str in stock_hist:
+        locked_p50 = stock_hist[today_str]["p50"]
+        locked_p85 = stock_hist[today_str]["p85"]
+        locked_p15 = stock_hist[today_str]["p15"]
+        locked_bdiff = stock_hist[today_str]["band_diff"]
+        locked_sim = stock_hist[today_str].get("sim_line", locked_p50)
+        is_locked = True
     else:
-        # 新規計算（過去5分足の指数減衰ウェイト＋4層精度アップ）
-        slot_means, slot_stds, slot_vols = np.zeros(n_slots), np.full(n_slots, 0.003), np.zeros(n_slots)
-        if df_5m is not None and not df_5m.empty:
-            tmp = df_5m.copy()
-            idx_dt = pd.to_datetime(tmp.index)
-            tmp["_d"], tmp["_hm"] = idx_dt.strftime("%Y-%m-%d"), idx_dt.strftime("%H:%M")
-            udays = sorted(tmp["_d"].unique().tolist())
-            pdays = udays[:-1] if (udays and udays[-1] == today_str) else udays
-            rmaps, vmaps, weights = [], [], []
-            for di, ds in enumerate(pdays):
-                sub = tmp[tmp["_d"] == ds]
-                if len(sub) < 10: continue
-                op = float(sub["Open"].iloc[0])
-                if op <= 0: continue
-                rm, vm = {}, {}
-                for _, row in sub.iterrows():
-                    if row["_hm"] in slots:
-                        rm[row["_hm"]] = (float(row["Close"]) - op) / op
-                        vm[row["_hm"]] = float(row["Volume"])
-                if rm:
-                    rmaps.append(rm); vmaps.append(vm); weights.append(float(np.exp(1.2 * (di / max(len(pdays) - 1, 1)))))
-
-            for i, sl in enumerate(slots):
-                rv, wv, vv = [], [], []
-                for rm, vm, w in zip(rmaps, vmaps, weights):
-                    if sl in rm: rv.append(rm[sl]); wv.append(w); vv.append(vm[sl])
-                if len(rv) >= 3:
-                    wa, ra = np.array(wv) / np.sum(wv), np.array(rv)
-                    wm = float(np.sum(wa * ra))
-                    slot_means[i] = wm
-                    slot_stds[i] = max(float(np.sqrt(np.sum(wa * ((ra - wm) ** 2)))), 0.0025)
-                    slot_vols[i] = float(np.mean(vv)) if vv else 0.0
-                else:
-                    slot_stds[i] = 0.003 + 0.009 * np.sqrt((i + 1) / n_slots)
-                    slot_vols[i] = 0.0  # 嘘のU字カーブは描かない
-
-        smap = {x["key"]: x for x in macro_sens}
-        mk = "SOX" if ("SOX" in smap and abs(smap["SOX"]["corr"]) > 0.35) else ("NK_FUT" if (is_jp and "NK_FUT" in smap) else "SP500")
-        mi = smap.get(mk, {"label": "日経先物" if is_jp else "S&P500", "beta": 0.5, "latest_diff": 0.0})
-        fi = smap.get("USDJPY", {"label": "ドル円", "beta": 0.0, "latest_diff": 0.0})
-        vix_d = macro_data.get("VIX", {}).get("diff_pct", 0.0)
-
-        mg = (mi["latest_diff"] * mi["beta"]) * 0.45
-        fg = (fi["latest_diff"] * fi["beta"]) * 0.35
-        ng = news_res["shock_score"] * 0.85
-        wg = float(whale_anom["adj_pct"])
-        dow_adj = float(np.clip(dow_next_avg * 0.35, -0.4, 0.4))
-        wick_adj = _compute_wick_bias(df_1d)
-
-        tot_gap = float(np.clip(mg + fg + ng + wg, -5.0, 5.0))
-        est_open = curr_px * (1.0 + tot_gap / 100.0)
-        drift = float(np.clip((news_res["shock_score"] * 0.005) + ((dow_adj + wick_adj) / 100.0), -0.025, 0.025))
-        vboost = (1.0 + abs(news_res["shock_score"]) * 0.25) * (1.0 + max(0.0, vix_d / 100.0) * 1.2)
-
-        res_wall = vp["res_px"]
-        p50, p85, p15, bdiff = [], [], [], []
-        for i, sl in enumerate(slots):
-            frac = i / max(n_slots - 1, 1)
-            mid = est_open * (1.0 + slot_means[i] + drift * frac)
-            # しこり壁（抵抗帯）付近での上値抑制補正
-            if mid > res_wall * 0.995 and vp["overhead_pct"] >= 35.0:
-                mid = res_wall * 0.995 + (mid - res_wall * 0.995) * 0.45
-            band = est_open * slot_stds[i] * vboost * 1.15
-            lo, hi = max(mid - band, curr_px * 0.5), mid + band
-            p50.append(round(float(mid), 2)); p85.append(round(float(hi), 2)); p15.append(round(float(lo), 2))
-            bdiff.append(round(float(hi - lo), 2))
-
-        imin, imax = int(np.argmin(p50)), int(np.argmax(p50))
-        traj = {
-            "target_date": target_date, "base_close": round(curr_px, 2), "is_locked": False,
-            "slots": slots, "lunch_idx": lunch_idx, "p50": p50, "p85": p85, "p15": p15, "band_diff": bdiff,
-            "vols": [round(float(v), 1) for v in slot_vols],
-            "actual": [actual_map.get(sl, None) for sl in slots], "has_actual": bool(actual_map),
-            "est_open_px": round(est_open, 2), "est_open_gap_pct": round(tot_gap, 2),
-            "est_close_px": p50[-1], "est_close_chg": round((p50[-1] - curr_px) / max(curr_px, 1e-4) * 100.0, 2),
-            "dip_idx": imin, "dip_time": slots[imin], "dip_px": p50[imin],
-            "peak_idx": imax, "peak_time": slots[imax], "peak_px": p50[imax],
-            "bull_trig": round(p85[min(3, n_slots - 1)], 2), "bull_target": round(max(p85), 2),
-            "bear_trig": round(p15[min(3, n_slots - 1)], 2), "bear_target": round(min(p15), 2),
-            "factors": {
-                "mkt_label": mi["label"], "mkt_diff": mi["latest_diff"], "mkt_beta": mi["beta"], "macro_gap_pct": round(mg, 2),
-                "fx_diff": fi["latest_diff"], "fx_beta": fi["beta"], "fx_gap_pct": round(fg, 2),
-                "news_gap_pct": round(ng, 2), "whale_gap_pct": round(wg, 2), "dow_wick_pct": round(dow_adj + wick_adj, 2)
-            }
-        }
-        # 翌営業日分としてSQLiteにロック保存（1日1回固定）
-        if target_date not in stock_hist:
-            stock_hist[target_date] = {k: v for k, v in traj.items() if k not in ("actual", "has_actual")}
+        locked_p50, locked_p85, locked_p15, locked_bdiff, locked_sim = p50, p85, p15, bdiff, sim_line
+        is_locked = has_actual
+        save_key = today_str if has_actual else target_date
+        if (not has_actual) or (save_key not in stock_hist):
+            stock_hist[save_key] = {"p50": p50, "p85": p85, "p15": p15, "band_diff": bdiff, "sim_line": sim_line}
             if len(stock_hist) > 15:
                 for old_k in sorted(stock_hist.keys())[:-15]: del stock_hist[old_k]
             ledger[fc_code] = stock_hist
-            _dd_db_set("dd_forecast_ledger_v8", ledger)
+            _dd_db_set("dd_forecast_ledger_v82", ledger)
 
-    # リアルタイム検証スコアの算出（実測がある場合のみ）
+    # ③ 場中ライブ修正予測（最新実測値から大引けまでをリアルタイムに再接続）
+    if has_actual and last_act_idx >= 0:
+        live_p50, live_p85, live_p15, live_bdiff = [None]*n_slots, [None]*n_slots, [None]*n_slots, [None]*n_slots
+        anchor_px = actual_arr[last_act_idx]
+        anchor_mean = slot_means[last_act_idx]
+        for i in range(last_act_idx, n_slots):
+            rem_frac = (i - last_act_idx) / max(n_slots - 1 - last_act_idx, 1)
+            rel_move = (slot_means[i] - anchor_mean) + drift * rem_frac * 0.6
+            mid = anchor_px * (1.0 + rel_move)
+            if mid > res_wall * 0.995 and vp["overhead_pct"] >= 35.0:
+                mid = res_wall * 0.995 + (mid - res_wall * 0.995) * 0.45
+            band = anchor_px * max(slot_stds[i] * np.sqrt(rem_frac + 0.05), 0.0015) * vboost
+            lo, hi = max(mid - band, anchor_px * 0.5), mid + band
+            live_p50[i] = round(float(mid), 2); live_p85[i] = round(float(hi), 2); live_p15[i] = round(float(lo), 2)
+            live_bdiff[i] = round(float(hi - lo), 2)
+    else:
+        live_p50, live_p85, live_p15, live_bdiff = p50, p85, p15, bdiff
+
+    # ガチ検証スコア（朝ロック予測 vs 当日実測）
     verify_stats = {"has_verify": False, "in_cone_pct": 0.0, "err_pct": 0.0, "n_pts": 0}
-    if traj["has_actual"]:
+    if has_actual:
         in_c, errs = 0, []
-        for a, lo, hi, m in zip(traj["actual"], traj["p15"], traj["p85"], traj["p50"]):
+        for a, lo, hi, m in zip(actual_arr, locked_p15, locked_p85, locked_p50):
             if a is not None:
                 if lo <= a <= hi: in_c += 1
                 errs.append(abs(a - m) / max(m, 1e-4) * 100.0)
         if errs:
             verify_stats = {"has_verify": True, "in_cone_pct": round(in_c / len(errs) * 100.0, 1), "err_pct": round(float(np.mean(errs)), 2), "n_pts": len(errs)}
-    traj["verify"] = verify_stats
-    return traj
+
+    imin, imax = int(np.argmin(locked_p50)), int(np.argmax(locked_p50))
+    return {
+        "target_date": target_date, "is_locked": is_locked, "has_actual": has_actual,
+        "slots": slots, "lunch_idx": lunch_idx, "vols": [round(float(v), 1) for v in slot_vols], "actual": actual_arr,
+        "locked_p50": locked_p50, "locked_p85": locked_p85, "locked_p15": locked_p15, "locked_bdiff": locked_bdiff, "sim_line": locked_sim,
+        "live_p50": live_p50, "live_p85": live_p85, "live_p15": live_p15, "live_bdiff": live_bdiff,
+        "est_open_px": round(est_open, 2), "est_open_gap_pct": round(tot_gap, 2),
+        "est_close_px": locked_p50[-1], "est_close_chg": round((locked_p50[-1] - curr_px) / max(curr_px, 1e-4) * 100.0, 2),
+        "dip_idx": imin, "dip_time": slots[imin], "dip_px": locked_p50[imin],
+        "peak_idx": imax, "peak_time": slots[imax], "peak_px": locked_p50[imax],
+        "bull_trig": round(locked_p85[min(3, n_slots - 1)], 2), "bull_target": round(max(locked_p85), 2),
+        "bear_trig": round(locked_p15[min(3, n_slots - 1)], 2), "bear_target": round(min(locked_p15), 2),
+        "verify": verify_stats,
+        "factors": {
+            "mkt_label": mi["label"], "mkt_diff": mi["latest_diff"], "mkt_beta": mi["beta"], "macro_gap_pct": round(mg, 2),
+            "fx_diff": fi["latest_diff"], "fx_beta": fi["beta"], "fx_gap_pct": round(fg, 2),
+            "news_gap_pct": round(ng, 2), "whale_gap_pct": round(wg, 2), "dow_wick_pct": round(dow_adj + wick_adj, 2)
+        }
+    }
 
 def _compute_real_5axis(info: dict, ovh_pct: float, gov_cnt: int) -> tuple:
-    """欠損値を55点で誤魔化さず、取得できた実測指標のみを正確にスコア化"""
     axes, vals, missing = [], [], []
     pe = info.get("trailingPE")
-    if pe and pe > 0:
-        axes.append({"name": "割安性", "max": 100}); vals.append(int(np.clip(100 - (pe - 10) * 1.5, 15, 95)))
+    if pe and pe > 0: axes.append({"name": "割安性", "max": 100}); vals.append(int(np.clip(100 - (pe - 10) * 1.5, 15, 95)))
     else: missing.append("割安性(PER欠損)")
     rg = info.get("revenueGrowth")
-    if rg is not None:
-        axes.append({"name": "成長性", "max": 100}); vals.append(int(np.clip(55 + rg * 120, 15, 98)))
+    if rg is not None: axes.append({"name": "成長性", "max": 100}); vals.append(int(np.clip(55 + rg * 120, 15, 98)))
     else: missing.append("成長性(売上成長率欠損)")
     roe = info.get("returnOnEquity")
-    if roe is not None:
-        axes.append({"name": "収益性", "max": 100}); vals.append(int(np.clip(45 + roe * 160, 15, 98)))
+    if roe is not None: axes.append({"name": "収益性", "max": 100}); vals.append(int(np.clip(45 + roe * 160, 15, 98)))
     else: missing.append("収益性(ROE欠損)")
     axes.append({"name": "需給軽さ", "max": 100}); vals.append(int(np.clip(95 - ovh_pct * 0.85, 15, 95)))
     axes.append({"name": "安全性", "max": 100}); vals.append(int(np.clip(95 - gov_cnt * 18, 20, 98)))
@@ -599,19 +611,16 @@ def _generate_detailed_memo(
     ml: str, mc: float, mb: float, pos_pct: int, t1: int, gov_cnt: int,
     whale_sum: str, up: str, api_key: str
 ) -> tuple:
-    prompt = f"""あなたはヘッジファンドのシニア・エクイティアナリストです。以下の実測データに基づき、投資判断に直結する「超詳細インベストメントメモ（800〜1,100文字）」を日本語で作成してください。
-【実測データ】
+    prompt = f"""あなたはヘッジファンドのシニア・エクイティアナリストです。以下の実測データに基づき「超詳細インベストメントメモ（800〜1,100文字）」を日本語で作成してください。
 ・銘柄: {corp_name} ({fc}) / 現在値: {px_s} / アナリスト目標乖離: {up}
 ・翌営業日予測: 想定始値 {traj_open} → 大引け予測 {traj_close}（押し目候補 {dip_t} / ピーク想定 {peak_t}）
 ・分岐トリガー: 強気突破 {bull_trig}→上値メド {bull_tgt} / 急落警戒 {bear_trig}→下値メド {bear_tgt}
-・需給構造: 上値しこり玉 {ovh}% / 大口売り壁 {res_s} / 大口買い支え {sup_s}
-・大口異変: {whale_sum}
+・需給構造: 上値しこり玉 {ovh}% / 大口売り壁 {res_s} / 大口買い支え {sup_s} / 大口異変: {whale_sum}
 ・マクロ連動: {ml} (相関 {mc}, β={mb}) / 高信頼ニュース強気度 {pos_pct}% (一次報道{t1}件) / ガバナンスリスク検知 {gov_cnt}件
-
-以下の3セクション構成で、具体的な価格・時間帯・撤退基準まで踏み込んで出力してください：
-🟢 Bull Case（強気シナリオ：上がる根拠と突破ライン・上値メド）
-🔴 Bear Case（弱気・死角リスク：売り壁・マクロ逆風・ガバナンス懸念と撤退ライン）
-⚡ Next Catalyst（注目トリガー：明日の勝負時間帯・大口動向・監視ポイント）"""
+以下の3セクション構成で具体価格・時間帯・撤退基準まで踏み込んで出力：
+🟢 Bull Case（強気シナリオ）
+🔴 Bear Case（弱気・死角リスク）
+⚡ Next Catalyst（注目トリガー）"""
 
     if api_key:
         for mod in ("gemini-2.5-flash", "gemini-2.0-flash"):
@@ -625,21 +634,9 @@ def _generate_detailed_memo(
                     if txt.strip(): return txt.strip(), f"🔵 AUTO GLOBAL AI ANALYST ({mod} / 一次報道{t1}件反映)"
             except Exception: continue
 
-    bull = (
-        f"・現在値 {px_s} に対しアナリスト目標乖離は {up}。高信頼ニュース強気度は {pos_pct}%（一次報道{t1}件）。\n"
-        f"・翌営業日は {bull_trig} を明確に上抜ければ強気突破シナリオが発動し、上値メド {bull_tgt} を目指す展開。\n"
-        f"・下値は大口買い支え帯 {sup_s} がサポートとして機能しやすい需給構造。"
-    )
-    bear = (
-        f"・{ml} との相関係数が {mc}（β={mb}）と高く、夜間先物や米市場の急変時に連れ安するリスクあり。\n"
-        f"・現在値より上の上値しこり玉は {ovh}%、直上の大口売り壁 {res_s} 付近では戻り売りに要注意。\n"
-        f"・{bear_trig} を割り込んだ場合は下値メド {bear_tgt} までの下振れを警戒し早期撤退。ガバナンス報道は {gov_cnt}件検知。"
-    )
-    cat = (
-        f"・大口・インサイダー動向: {whale_sum}。\n"
-        f"・明日の勝負時間帯は、押し目候補の {dip_t} 前後での反発確認と、ピーク想定の {peak_t} 前後での分割利確。\n"
-        f"・寄付直後の値動きが想定始値 {traj_open} を維持できるかが最初の分岐点。"
-    )
+    bull = f"・現在値 {px_s} に対しアナリスト目標乖離は {up}。高信頼ニュース強気度 {pos_pct}%（一次報道{t1}件）。\n・{bull_trig} を明確に上抜ければ強気突破が発動し、上値メド {bull_tgt} を目指す展開。\n・下値は大口買い支え帯 {sup_s} がサポートとして機能しやすい構造。"
+    bear = f"・{ml} との相関係数が {mc}（β={mb}）で、夜間先物や米市場の急変時に連れ安リスクあり。\n・上値しこり玉は {ovh}%、直上の大口売り壁 {res_s} 付近では戻り売りに要注意。\n・{bear_trig} 割れで下値メド {bear_tgt} までの下振れを警戒し早期撤退。ガバナンス報道は {gov_cnt}件検知。"
+    cat = f"・大口・インサイダー動向: {whale_sum}。\n・明日の勝負時間帯は押し目候補の {dip_t} 前後での反発確認と、ピーク想定の {peak_t} 前後での分割利確。\n・寄付直後に想定始値 {traj_open} を維持できるかが最初の分岐点。"
     return f"🟢 Bull Case（強気シナリオ）\n{bull}\n\n🔴 Bear Case（弱気・死角リスク）\n{bear}\n\n⚡ Next Catalyst（注目トリガー）\n{cat}", f"⚙️ AUTO QUANT MEMO（一次報道{t1}件・実測詳細生成）"
 
 # =========================================================================
@@ -652,8 +649,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     with h1:
         st.markdown(
             '<div class="glass-header" style="margin-bottom:6px;">'
-            '<div class="brand-luxury">YAMASHISHI DEEP DIVE v8</div>'
-            '<div style="font-size:10.5px;color:#94a3b8;margin-top:2px;">ガチ検証ロック軌道 × 大口異変検知 × 嘘なし完全実測ターミナル</div>'
+            '<div class="brand-luxury">YAMASHISHI DEEP DIVE v8.2</div>'
+            '<div style="font-size:10.5px;color:#94a3b8;margin-top:2px;">3モード切替（ライブ修正 / 朝ロック検証 / 両方重ね）× 嘘なし実測</div>'
             '</div>',
             unsafe_allow_html=True
         )
@@ -703,12 +700,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         gov_risks, whale_news = _fetch_gov_and_whales(corp_name, short_code)
         whale_anom = _detect_whale_anomaly(data["insider_tx"], whale_news)
         vp = _compute_vp(df_1d, curr_px, is_jp)
-        traj = _build_locked_5m_trajectory(fc, curr_px, df_1d, df_5m, macro_sens, macro_data, news_res, whale_anom, dow_stats[next_wd]["avg"], vp, is_jp)
+        traj = _build_dual_5m_trajectory(fc, curr_px, df_1d, df_5m, macro_sens, macro_data, news_res, whale_anom, dow_stats[next_wd]["avg"], vp, is_jp)
 
-        # 大口異変緊急アラート（検知時のみ最上部に表示）
         if whale_anom["detected"]:
-            is_b = (whale_anom["dir"] == "BULL")
-            b_cls = "dd-quant-box" if is_b else "dd-warn-box"
+            b_cls = "dd-quant-box" if whale_anom["dir"] == "BULL" else "dd-warn-box"
             st.markdown(f'<div class="{b_cls}"><b>🚨 大口・インサイダー異変検知（予測軌道へ {whale_anom["adj_pct"]:+.2f}% 自動反映済）</b><br>{html.escape(whale_anom["summary"])}</div>', unsafe_allow_html=True)
 
         comp_score = int(np.clip(round(50 + news_res["shock_score"] * 45 - len(gov_risks) * 9 + whale_anom["adj_pct"] * 12), 5, 98))
@@ -753,29 +748,70 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         t1, t2, t3, t4 = st.tabs(["翌営業日 1日軌道", "マクロβ・曜日", "財務・大口株主", "リスク・AIメモ"])
 
         # -----------------------------------------------------------------
-        # TAB 1: 5分刻み予測軌道 ＋ ガチ検証 ＋ 初心者ガイド
+        # TAB 1: 3モード切替スイッチ ＋ 選択式ラインチップ ＋ 初心者ガイド
         # -----------------------------------------------------------------
         with t1:
-            lock_tag = "🔒 朝予測ロック中（場中ガチ検証モード）" if traj.get("is_locked") else f"対象営業日: {traj.get('target_date', '-')}"
-            st.markdown(f'<div class="dd-traj-header"><div class="dd-traj-title">NEXT SESSION 5M TRAJECTORY <span>// {html.escape(lock_tag)}</span></div></div>', unsafe_allow_html=True)
+            modes = ["🔴 ライブ修正", "🔒 朝ロック検証", "⚡ 両方重ね"]
+            if hasattr(st, "pills"):
+                chart_mode = st.pills("表示モード", modes, default="⚡ 両方重ね", selection_mode="single", label_visibility="collapsed", key="dd_chart_mode") or "⚡ 両方重ね"
+                opt_lines = st.pills("追加ライン", ["確率コーン(70%)", "想定波形(実線)", "出来高"], default=["確率コーン(70%)", "出来高"], selection_mode="multi", label_visibility="collapsed", key="dd_opt_lines") or []
+            else:
+                chart_mode = st.radio("表示モード", modes, index=2, horizontal=True, label_visibility="collapsed", key="dd_chart_mode")
+                opt_lines = st.multiselect("追加ライン", ["確率コーン(70%)", "想定波形(実線)", "出来高"], default=["確率コーン(70%)", "出来高"], label_visibility="collapsed", key="dd_opt_lines")
 
-            if traj["verify"]["has_verify"]:
+            if traj["verify"]["has_verify"] and chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
                 v = traj["verify"]
-                st.markdown(f'<div class="dd-quant-box"><b>📊 リアルタイム予測 vs 実測 ガチ検証（実測 {v["n_pts"]}本取得済）</b><br>・<b>確率コーン内 収束率:</b> <b style="color:#fde047;">{v["in_cone_pct"]}%</b> ｜ <b>予測中央値との平均誤差:</b> <b>{v["err_pct"]}%</b></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="dd-quant-box"><b>📊 朝ロック予測 vs 当日実測 ガチ検証（実測 {v["n_pts"]}本取得済）</b><br>・<b>確率コーン内 収束率:</b> <b style="color:#fde047;">{v["in_cone_pct"]}%</b> ｜ <b>朝予測との平均誤差:</b> <b>{v["err_pct"]}%</b></div>', unsafe_allow_html=True)
 
             ml_cfg = {"symbol": ["none", "none"], "lineStyle": {"color": "rgba(148,163,184,0.35)", "type": "dashed"}, "label": {"formatter": "前場/後場", "color": "#94a3b8", "fontSize": 9, "position": "insideEndTop"}, "data": [{"xAxis": traj["lunch_idx"]}]} if traj["lunch_idx"] is not None else {}
-            s_list = [
-                {"name": "実測平均出来高", "type": "bar", "yAxisIndex": 1, "data": traj["vols"], "itemStyle": {"color": "rgba(148,163,184,0.16)"}, "barMaxWidth": 4},
-                {"name": "下限ベース", "type": "line", "yAxisIndex": 0, "data": traj["p15"], "stack": "cone", "lineStyle": {"opacity": 0}, "showSymbol": False, "silent": True},
-                {"name": "確率コーン(70%)", "type": "line", "yAxisIndex": 0, "data": traj["band_diff"], "stack": "cone", "lineStyle": {"opacity": 0}, "areaStyle": {"color": "rgba(56, 189, 248, 0.16)"}, "showSymbol": False, "silent": True},
-                {"name": "強気上限(85%)", "type": "line", "yAxisIndex": 0, "data": traj["p85"], "lineStyle": {"color": "rgba(16,185,129,0.55)", "width": 1.1, "type": "dashed"}, "showSymbol": False},
-                {"name": "予測中央値", "type": "line", "yAxisIndex": 0, "data": traj["p50"], "lineStyle": {"color": "#38bdf8", "width": 2.4}, "showSymbol": False, "markLine": ml_cfg, "markPoint": {"symbolSize": 32, "label": {"fontSize": 9, "color": "#050811", "fontWeight": "bold"}, "data": [{"name": "押目", "coord": [traj["dip_idx"], traj["dip_px"]], "value": "押目", "itemStyle": {"color": "#f59e0b"}}, {"name": "高値", "coord": [traj["peak_idx"], traj["peak_px"]], "value": "高値", "itemStyle": {"color": "#10b981"}}]}},
-                {"name": "弱気下限(15%)", "type": "line", "yAxisIndex": 0, "data": traj["p15"], "lineStyle": {"color": "rgba(239,68,68,0.55)", "width": 1.1, "type": "dashed"}, "showSymbol": False}
-            ]
-            l_names = ["予測中央値", "確率コーン(70%)", "実測平均出来高"]
+
+            s_list, l_names = [], []
+            if "出来高" in opt_lines:
+                s_list.append({"name": "実測平均出来高", "type": "bar", "yAxisIndex": 1, "data": traj["vols"], "itemStyle": {"color": "rgba(148,163,184,0.16)"}, "barMaxWidth": 4})
+                l_names.append("実測平均出来高")
+
+            # 確率コーン（モードに合わせてライブ用 or 朝ロック用を描画）
+            if "確率コーン(70%)" in opt_lines:
+                c_p15 = traj["live_p15"] if chart_mode == "🔴 ライブ修正" else traj["locked_p15"]
+                c_p85 = traj["live_p85"] if chart_mode == "🔴 ライブ修正" else traj["locked_p85"]
+                c_bd = traj["live_bdiff"] if chart_mode == "🔴 ライブ修正" else traj["locked_bdiff"]
+                s_list.extend([
+                    {"name": "下限ベース", "type": "line", "yAxisIndex": 0, "data": c_p15, "stack": "cone", "lineStyle": {"opacity": 0}, "showSymbol": False, "silent": True},
+                    {"name": "確率コーン(70%)", "type": "line", "yAxisIndex": 0, "data": c_bd, "stack": "cone", "lineStyle": {"opacity": 0}, "areaStyle": {"color": "rgba(56, 189, 248, 0.16)"}, "showSymbol": False, "silent": True},
+                    {"name": "強気上限", "type": "line", "yAxisIndex": 0, "data": c_p85, "lineStyle": {"color": "rgba(16,185,129,0.5)", "width": 1.0, "type": "dashed"}, "showSymbol": False},
+                    {"name": "弱気下限", "type": "line", "yAxisIndex": 0, "data": c_p15, "lineStyle": {"color": "rgba(239,68,68,0.5)", "width": 1.0, "type": "dashed"}, "showSymbol": False}
+                ])
+                l_names.append("確率コーン(70%)")
+
+            if "想定波形(実線)" in opt_lines:
+                s_list.append({"name": "想定波形(実線)", "type": "line", "yAxisIndex": 0, "data": traj["sim_line"], "lineStyle": {"color": "#facc15", "width": 2.0}, "showSymbol": False})
+                l_names.append("想定波形(実線)")
+
+            # 朝ロック予測（紫の点線 or 青太線）
+            if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
+                is_both = (chart_mode == "⚡ 両方重ね")
+                s_list.append({
+                    "name": "朝ロック予測", "type": "line", "yAxisIndex": 0, "data": traj["locked_p50"],
+                    "lineStyle": {"color": "#c084fc" if is_both else "#38bdf8", "width": 2.0 if is_both else 2.5, "type": "dashed" if is_both else "solid"},
+                    "showSymbol": False, "markLine": ml_cfg,
+                    "markPoint": {"symbolSize": 32, "label": {"fontSize": 9, "color": "#050811", "fontWeight": "bold"}, "data": [{"name": "押目", "coord": [traj["dip_idx"], traj["dip_px"]], "value": "押目", "itemStyle": {"color": "#f59e0b"}}, {"name": "高値", "coord": [traj["peak_idx"], traj["peak_px"]], "value": "高値", "itemStyle": {"color": "#10b981"}}]} if not is_both else {}
+                })
+                l_names.append("朝ロック予測")
+
+            # ライブ修正予測（水色の太線）
+            if chart_mode in ("🔴 ライブ修正", "⚡ 両方重ね"):
+                s_list.append({
+                    "name": "ライブ修正予測", "type": "line", "yAxisIndex": 0, "data": traj["live_p50"],
+                    "lineStyle": {"color": "#38bdf8", "width": 2.5}, "showSymbol": False,
+                    "markLine": ml_cfg if chart_mode == "🔴 ライブ修正" else {}
+                })
+                l_names.append("ライブ修正予測")
+
+            # 当日実測（白の太線）
             if traj["has_actual"]:
                 s_list.append({"name": "当日実測(白線)", "type": "line", "yAxisIndex": 0, "data": traj["actual"], "lineStyle": {"color": "#ffffff", "width": 2.8}, "showSymbol": False})
                 l_names.insert(0, "当日実測(白線)")
+
             _render_echarts({
                 "backgroundColor": "#0b1120", "tooltip": {"trigger": "axis"},
                 "legend": {"data": l_names, "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
@@ -785,17 +821,16 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 "series": s_list
             }, height=315)
 
-            with st.expander("🔰 このチャートの見方・初心者ガイド（各線の意味）", expanded=False):
+            with st.expander("🔰 3モード＆各ラインの見方（初心者ガイド）", expanded=False):
                 st.markdown("""
                 <div class="dd-guide-box">
-                ・<b>青い太線（予測中央値）:</b> 過去30日の5分足のクセ・夜間先物・ニュース・大口異変を合成した「最も可能性が高い1日のルート」です。<br>
-                ・<b>水色の帯（確率コーン 70%）:</b> 統計的に70%の確率で株価が収まる想定レンジです。上の緑点線が強気上限（85%）、下の赤点線が弱気下限（15%）です。<br>
-                ・<b>白い太線（当日実測）:</b> 市場が開くとリアルタイムに伸びていきます。<b>白線が水色の帯を上に抜けたら「想定以上の強さ」</b>、下に割れたら「シナリオ崩れ（撤退サイン）」と判断します。<br>
-                ・<b>押目 / 高値ピン:</b> 過去波形上、1日の中で最も安くなりやすい時刻（買い狙い）と高くなりやすい時刻（利確目安）を自動表示しています。
+                ・<b>🔴 ライブ修正（水色の太線）:</b> 市場が開いている間、今の現在値から大引けまでの最新ルートを60秒ごとにリアルタイム修正します。<br>
+                ・<b>🔒 朝ロック検証（紫の点線）:</b> 寄付き前にSQLiteへ固定した予測です。動かさないことで「朝の予測が当たったか」を嘘なしで答え合わせできます。<br>
+                ・<b>白い太線（当日実測）:</b> 今日のリアルな値動きです。水色の帯（確率コーン70%）を上に抜けたら「想定以上の強さ」、下に割れたら「撤退サイン」です。<br>
+                ・<b>想定波形(実線・ゴールド):</b> 過去の値動きの荒さ（ボラティリティ）を再現した1日のシミュレーション波形です。見たい時だけ上のチップでONにできます。
                 </div>
                 """, unsafe_allow_html=True)
 
-            # 確率コーン定義（15% / 70% / 15%）と完全一致させた嘘なしシナリオカード
             bp = (traj["bull_target"] - curr_px) / max(curr_px, 1e-4) * 100.0
             sp = (traj["bear_target"] - curr_px) / max(curr_px, 1e-4) * 100.0
             st.markdown(f"""
@@ -819,9 +854,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             </div>
             """, unsafe_allow_html=True)
 
-        # -----------------------------------------------------------------
-        # TAB 2: 曜日エッジ ＋ マクロβ ＋ 決算サプライズ ＋ 初心者ガイド
-        # -----------------------------------------------------------------
         with t2:
             d_cells = "".join([f'<div class="dd-dow-cell" style="{"border:1.5px solid #fde047;background:rgba(250,204,21,0.12);" if d["dow"]==next_wd else ""}"><div style="font-size:10px;color:{"#fde047" if d["dow"]==next_wd else "#94a3b8"};font-weight:800;">{d["label"]}曜 {"★翌" if d["dow"]==next_wd else ""}</div><div style="font-family:JetBrains Mono,monospace;font-size:12.5px;font-weight:800;color:{"#10b981" if d["avg"]>=0 else "#ef4444"};margin-top:2px;">{d["avg"]:+.2f}%</div><div style="font-size:9.5px;color:#cbd5e1;">勝率 {d["wr"]}%</div></div>' for d in dow_stats])
             st.markdown(f'<div class="dd-dark-box"><b>DAY-OF-WEEK EDGE // 曜日別アノマリー（過去1年実測）</b><div class="dd-dow-grid">{d_cells}</div></div>', unsafe_allow_html=True)
@@ -837,17 +869,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 _render_echarts({"backgroundColor": "#0b1120", "tooltip": {"trigger": "axis"}, "legend": {"data": ["予想EPS", "実績EPS"], "textStyle": {"color": "#cbd5e1", "fontSize": 10}, "top": 2}, "grid": {"top": 30, "bottom": 20, "left": 6, "right": 10, "containLabel": True}, "xAxis": {"type": "category", "data": [e["date"][2:7] for e in eh_r], "axisLabel": {"color": "#94a3b8", "fontSize": 9.5}}, "yAxis": {"type": "value", "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9.5}}, "series": [{"name": "予想EPS", "type": "bar", "data": [e["est"] for e in eh_r], "itemStyle": {"color": "#64748b"}}, {"name": "実績EPS", "type": "bar", "data": [{"value": e["rep"], "itemStyle": {"color": "#10b981" if (e["surp"] or 0) >= 0 else "#ef4444"}} for e in eh_r]}]}, height=205)
 
             with st.expander("🔰 マクロβ・曜日・決算の見方（初心者ガイド）", expanded=False):
-                st.markdown("""
-                <div class="dd-guide-box">
-                ・<b>曜日別アノマリー:</b> 過去1年間で「何曜日に上がりやすいか」の実測データです。黄色枠（★翌）が次の営業日の曜日です。<br>
-                ・<b>マクロ感応度（相関）:</b> 緑の棒が長いほど、その指標（例：米SOXやドル円）が上がるとこの株も一緒に上がりやすいことを意味します。赤い棒は逆の動きをします。<br>
-                ・<b>決算サプライズ:</b> 灰色の棒（市場の事前予想）を、緑の棒（実際の決算）が上回り続けている銘柄は、機関投資家に好まれ上昇トレンドが続きやすいです。
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown('<div class="dd-guide-box">・<b>曜日別アノマリー:</b> 過去1年で何曜日に上がりやすいかの実測データ（黄色枠が翌営業日）。<br>・<b>マクロ感応度:</b> 緑の棒が長い指標ほど、その指標が上がるとこの株も連れ高しやすい傾向があります。<br>・<b>決算サプライズ:</b> 灰色（予想）を緑（実績）が上回り続ける銘柄は上昇トレンドが続きやすいです。</div>', unsafe_allow_html=True)
 
-        # -----------------------------------------------------------------
-        # TAB 3: 大口Top10ランキング ＋ 実測レーダー ＋ 仮想板 ＋ 初心者ガイド
-        # -----------------------------------------------------------------
         with t3:
             st.markdown("##### 大口投資家・大株主 Top 10 ランキング")
             inst_h = data["inst_holders"]
@@ -875,16 +898,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 _render_echarts({"backgroundColor": "#0b1120", "tooltip": {"trigger": "axis"}, "grid": {"top": 10, "bottom": 20, "left": 6, "right": 14, "containLabel": True}, "xAxis": {"type": "value", "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9.5}}, "yAxis": {"type": "category", "data": vp["labels"], "axisLabel": {"color": "#cbd5e1", "fontSize": 9.5}}, "series": [{"name": "出来高(M)", "type": "bar", "data": vp["vols"], "itemStyle": {"color": "#a855f7"}}]}, height=230)
 
             with st.expander("🔰 大口株主・レーダー・価格帯別出来高の見方（初心者ガイド）", expanded=False):
-                st.markdown(f"""
-                <div class="dd-guide-box">
-                ・<b>大口株主ランキング:</b> 世界的な巨大ファンドや優良企業が上位に入っているほど、下値が堅く信頼性が高い傾向があります。<br>
-                ・<b>価格帯別出来高（紫の横棒）:</b> 過去1年間に「どの価格帯で一番株が売買されたか」を示します。現在値より上に長い棒（大口売り壁: <b>{_fmt_cur(vp['res_px'], is_jp)}</b>）があると、そこまで上がった時に「やれやれ売り」が出やすくなります。逆に下に長い棒（買い支え: <b>{_fmt_cur(vp['sup_px'], is_jp)}</b>）があると下がりにくくなります。
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<div class="dd-guide-box">・<b>大口株主ランキング:</b> 大手機関投資家が上位にいるほど下値が堅い傾向。<br>・<b>価格帯別出来高（紫の棒）:</b> 現在値より上の長い棒（売り壁: <b>{_fmt_cur(vp["res_px"], is_jp)}</b>）は上値の抵抗、下の長い棒（買い支え: <b>{_fmt_cur(vp["sup_px"], is_jp)}</b>）は下値サポートになります。</div>', unsafe_allow_html=True)
 
-        # -----------------------------------------------------------------
-        # TAB 4: リアル計器メーター ＋ 超詳細AIメモ ＋ 高信頼フィード
-        # -----------------------------------------------------------------
         with t4:
             _render_echarts({"backgroundColor": "#0b1120", "series": [{"type": "gauge", "startAngle": 180, "endAngle": 0, "min": 0, "max": 100, "splitNumber": 5, "center": ["50%", "74%"], "radius": "112%", "axisLine": {"lineStyle": {"width": 16, "color": [[0.2, "#dc2626"], [0.4, "#f97316"], [0.6, "#38bdf8"], [0.8, "#10b981"], [1.0, "#059669"]]}}, "pointer": {"icon": "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z", "length": "52%", "width": 10, "offsetCenter": [0, "-12%"], "itemStyle": {"color": "#f8fafc", "shadowBlur": 8, "shadowColor": "rgba(56,189,248,0.8)"}}, "anchor": {"show": True, "showAbove": True, "size": 14, "itemStyle": {"color": "#38bdf8", "borderWidth": 2, "borderColor": "#fff"}}, "axisTick": {"length": 6, "lineStyle": {"color": "auto", "width": 1.5}}, "splitLine": {"length": 12, "lineStyle": {"color": "auto", "width": 2.5}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9.5, "distance": -36}, "title": {"offsetCenter": [0, "18%"], "fontSize": 10.5, "color": "#7dd3fc", "fontWeight": "bold"}, "detail": {"fontSize": 26, "fontWeight": "bold", "offsetCenter": [0, "-3%"], "valueAnimation": True, "color": "#ffffff", "formatter": "{value}"}, "data": [{"value": comp_score, "name": meter_lbl}]}]}, height=225)
 
@@ -902,12 +917,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             st.markdown(f'<div class="dd-memo-box"><div style="font-size:10.5px;color:#c084fc;font-weight:800;margin-bottom:6px;">{html.escape(m_src)}</div>{html.escape(m_txt).replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
 
             with st.expander("🔰 メーターと高信頼ニュースの見方（初心者ガイド）", expanded=False):
-                st.markdown("""
-                <div class="dd-guide-box">
-                ・<b>総合センチメントメーター:</b> 0（極度の警戒）〜100（極度の強気）で市場の空気を数値化しています。日英の一次報道・大口異変・不祥事リスクを合算しています。<br>
-                ・<b>信頼度バッジ（S/A/B）:</b> ロイター・ブルームバーグ・日経・株探などの一次報道を「信頼度S」として最優先し、まとめサイト等のノイズは自動で除外しています。
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown('<div class="dd-guide-box">・<b>センチメントメーター:</b> 0（警戒）〜100（強気）で市場の空気を数値化。<br>・<b>信頼度バッジ（S/A/B）:</b> ロイター・ブルームバーグ・日経・株探などの一次報道をSランクとして最優先しています。</div>', unsafe_allow_html=True)
 
             if gov_risks:
                 st.markdown(f'<div class="dd-warn-box"><b>ガバナンス・不祥事・訴訟関連ヒット ({len(gov_risks)}件)</b><br>' + "<br>".join([f"・{html.escape(x)}" for x in gov_risks]) + '</div>', unsafe_allow_html=True)
