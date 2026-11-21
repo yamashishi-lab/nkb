@@ -22,6 +22,36 @@ except Exception:
     ZoneInfo = None
 
 DB_PATH = "yamashishi_core.db"
+WEIGHTS_EVOLUTION_PATH = "weights_evolution.json"
+WEIGHTS_KV_KEY = "dd_weights_evolution_v1"
+
+DEFAULT_WEIGHTS_EVOLUTION = {
+    "version": 1,
+    "lr": 0.03,
+    "updates_count": 0,
+    "last_updated": "",
+    "learned_keys": [],
+    "open_gap": {
+        "macro": 0.45,
+        "fx": 0.35,
+        "news": 0.85,
+        "whale": 1.00,
+        "lab_bias": 0.35,
+    },
+    "intraday_drift": {
+        "news": 0.005,
+        "dow": 0.35,
+        "wick": 0.80,
+        "calib": 0.40,
+        "lab_bias": 0.80,
+    },
+    "last_decomp": {
+        "date": "-",
+        "code": "-",
+        "open_err_pct": 0.0,
+        "intraday_err_pct": 0.0,
+    },
+}
 
 
 # =========================================================================
@@ -174,6 +204,168 @@ def _dd_db_set(key: str, val):
     except Exception:
         pass
     _dd_sb_set(key, val)
+
+
+# =========================================================================
+# フェーズ2：weights_evolution.json ＋ Supabase 同期 ＆ 2分解オンライン学習
+# =========================================================================
+def _merge_default_weights(raw: dict) -> dict:
+    base = json.loads(json.dumps(DEFAULT_WEIGHTS_EVOLUTION))
+    if not isinstance(raw, dict):
+        return base
+    for k in ("version", "lr", "updates_count", "last_updated"):
+        if k in raw:
+            base[k] = raw[k]
+    if isinstance(raw.get("learned_keys"), list):
+        base["learned_keys"] = list(dict.fromkeys(str(x) for x in raw["learned_keys"]))[-300:]
+    if isinstance(raw.get("open_gap"), dict):
+        for gk, gv in raw["open_gap"].items():
+            if gk in base["open_gap"]:
+                base["open_gap"][gk] = float(gv)
+    if isinstance(raw.get("intraday_drift"), dict):
+        for ik, iv in raw["intraday_drift"].items():
+            if ik in base["intraday_drift"]:
+                base["intraday_drift"][ik] = float(iv)
+    if isinstance(raw.get("last_decomp"), dict):
+        base["last_decomp"].update(raw["last_decomp"])
+    return base
+
+
+def _load_weights_evolution() -> dict:
+    """Supabase優先 -> ローカル weights_evolution.json -> SQLite -> デフォルトの順でロード"""
+    sb_val = _dd_sb_get(WEIGHTS_KV_KEY)
+    if isinstance(sb_val, dict) and sb_val:
+        merged = _merge_default_weights(sb_val)
+        try:
+            with open(WEIGHTS_EVOLUTION_PATH, "w", encoding="utf-8") as f:
+                json.dump(merged, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        return merged
+
+    if os.path.exists(WEIGHTS_EVOLUTION_PATH):
+        try:
+            with open(WEIGHTS_EVOLUTION_PATH, "r", encoding="utf-8") as f:
+                disk_val = json.load(f)
+            if isinstance(disk_val, dict) and disk_val:
+                return _merge_default_weights(disk_val)
+        except Exception:
+            pass
+
+    db_val = _dd_db_get(WEIGHTS_KV_KEY, None)
+    if isinstance(db_val, dict) and db_val:
+        return _merge_default_weights(db_val)
+
+    return json.loads(json.dumps(DEFAULT_WEIGHTS_EVOLUTION))
+
+
+def _save_weights_evolution(w_evo: dict) -> None:
+    """weights_evolution.json・Supabase・SQLiteの三層へ保存"""
+    clean_w = _merge_default_weights(w_evo)
+    clean_w["last_updated"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with open(WEIGHTS_EVOLUTION_PATH, "w", encoding="utf-8") as f:
+            json.dump(clean_w, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    _dd_db_set(WEIGHTS_KV_KEY, clean_w)
+
+
+def _update_weights_two_stage(w_evo: dict, fc_code: str, df_1d: pd.DataFrame, stock_hist: dict, market_today_str: str) -> tuple:
+    """
+    確定済み過去日データから「寄付き誤差（Open Gap Error）」と「日中誤差（Intraday Drift Error）」の
+    2分解誤差を算出し、オンライン重みを勾配更新する。
+    """
+    updated = _merge_default_weights(w_evo)
+    if not isinstance(stock_hist, dict) or df_1d is None or df_1d.empty:
+        return updated, False
+
+    if not {"Open", "Close"}.issubset(set(df_1d.columns)):
+        return updated, False
+
+    rows_1d = []
+    for idx, r_d in df_1d.iterrows():
+        d_s = idx.strftime("%Y-%m-%d") if hasattr(idx, "strftime") else str(idx)[:10]
+        op_v = float(r_d["Open"])
+        cl_v = float(r_d["Close"])
+        if op_v > 0 and cl_v > 0:
+            rows_1d.append((d_s, op_v, cl_v))
+
+    if len(rows_1d) < 2:
+        return updated, False
+
+    day_map = {d_s: (op_v, cl_v) for d_s, op_v, cl_v in rows_1d}
+    prev_close_map = {rows_1d[i][0]: rows_1d[i - 1][2] for i in range(1, len(rows_1d))}
+
+    learned_set = set(updated.get("learned_keys", []))
+    lr = float(np.clip(updated.get("lr", 0.03), 0.005, 0.15))
+    og = updated["open_gap"]
+    idr = updated["intraday_drift"]
+
+    og_bounds = {"macro": (0.15, 1.20), "fx": (0.10, 0.90), "news": (0.20, 1.80), "whale": (0.20, 2.00), "lab_bias": (0.05, 1.00)}
+    idr_bounds = {"news": (0.001, 0.015), "dow": (0.05, 0.90), "wick": (0.20, 1.60), "calib": (0.05, 1.00), "lab_bias": (0.10, 1.60)}
+
+    changed = False
+    for dt_k in sorted(stock_hist.keys()):
+        if dt_k >= market_today_str:
+            continue
+        learn_id = f"{fc_code}:{dt_k}"
+        if learn_id in learned_set:
+            continue
+        if dt_k not in day_map or dt_k not in prev_close_map:
+            continue
+
+        snap = stock_hist[dt_k]
+        p50_arr = snap.get("p50") or []
+        if not p50_arr:
+            continue
+
+        act_open, act_close = day_map[dt_k]
+        prev_close = prev_close_map[dt_k]
+
+        pred_open = float(snap.get("pred_open_px") or p50_arr[0] or act_open)
+        pred_close = float(p50_arr[-1] or act_close)
+        if pred_open <= 0 or pred_close <= 0:
+            continue
+
+        # 1) 寄付き誤差（実績寄付きギャップ率 - 予測寄付きギャップ率）
+        act_gap_pct = ((act_open - prev_close) / max(prev_close, 1e-4)) * 100.0
+        pred_gap_pct = float(snap["pred_open_gap_pct"]) if snap.get("pred_open_gap_pct") is not None else (((pred_open - prev_close) / max(prev_close, 1e-4)) * 100.0)
+        open_err_pct = float(np.clip(act_gap_pct - pred_gap_pct, -6.0, 6.0))
+
+        # 2) 日中誤差（実績日中リターン% - 予測日中リターン%）
+        act_intra_pct = ((act_close - act_open) / max(act_open, 1e-4)) * 100.0
+        pred_intra_pct = ((pred_close - pred_open) / max(pred_open, 1e-4)) * 100.0
+        intraday_err_pct = float(np.clip(act_intra_pct - pred_intra_pct, -6.0, 6.0))
+
+        # 2分解誤差に基づく重み更新（誤差方向へ穏やかに調整）
+        step_open = float(np.clip(open_err_pct * lr * 0.08, -0.04, 0.04))
+        for gk, (b_lo, b_hi) in og_bounds.items():
+            # 寄付き系重みを誤差方向へ微調整
+            og[gk] = round(float(np.clip(og[gk] + step_open * (0.6 if gk in ("macro", "news") else 0.4), b_lo, b_hi)), 4)
+
+        step_intra = float(np.clip(intraday_err_pct * lr * 0.08, -0.04, 0.04))
+        for ik, (b_lo, b_hi) in idr_bounds.items():
+            if ik == "news":
+                idr[ik] = round(float(np.clip(idr[ik] + step_intra * 0.004, b_lo, b_hi)), 5)
+            else:
+                idr[ik] = round(float(np.clip(idr[ik] + step_intra * 0.5, b_lo, b_hi)), 4)
+
+        updated["last_decomp"] = {
+            "date": dt_k,
+            "code": fc_code,
+            "open_err_pct": round(open_err_pct, 3),
+            "intraday_err_pct": round(intraday_err_pct, 3),
+        }
+        updated["updates_count"] = int(updated.get("updates_count", 0)) + 1
+        learned_set.add(learn_id)
+        changed = True
+
+    if changed:
+        updated["learned_keys"] = sorted(learned_set)[-300:]
+        _save_weights_evolution(updated)
+
+    return updated, changed
 
 
 def _get_market_now(is_jp: bool) -> datetime.datetime:
@@ -724,35 +916,45 @@ def _build_dual_5m_trajectory(
     last_act_idx = max([i for i, v in enumerate(actual_arr) if v is not None], default=-1)
     anchor_base_close = prev_px if has_actual else curr_px
 
+    ledger = _dd_db_get("dd_forecast_ledger_v9", {})
+    if not isinstance(ledger, dict):
+        ledger = {}
+    stock_hist = ledger.get(fc_code, {})
+    if not isinstance(stock_hist, dict):
+        stock_hist = {}
+
+    # フェーズ2：学習済み重みのロード＆2分解オンライン学習
+    w_evo = _load_weights_evolution()
+    w_evo, weights_updated = _update_weights_two_stage(w_evo, fc_code, df_1d, stock_hist, market_today_str)
+    og_w = w_evo["open_gap"]
+    idr_w = w_evo["intraday_drift"]
+
     smap = {x["key"]: x for x in macro_sens}
     mk = "SOX" if ("SOX" in smap and abs(smap["SOX"]["corr"]) > 0.35) else ("NK_FUT" if (is_jp and "NK_FUT" in smap) else "SP500")
     mi = smap.get(mk, {"label": "日経先物" if is_jp else "S&P500", "beta": 0.5, "latest_diff": 0.0})
     fi = smap.get("USDJPY", {"label": "ドル円", "beta": 0.0, "latest_diff": 0.0})
     vix_d = macro_data.get("VIX", {}).get("diff_pct", 0.0)
 
-    mg = (mi["latest_diff"] * mi["beta"]) * 0.45
-    fg = (fi["latest_diff"] * fi["beta"]) * 0.35
-    ng = news_res["shock_score"] * 0.85
-    wg = float(whale_anom["adj_pct"])
-    dow_adj = float(np.clip(dow_next_avg * 0.35, -0.4, 0.4))
-    wick_adj = _compute_wick_bias(df_1d)
+    mg = (mi["latest_diff"] * mi["beta"]) * og_w["macro"]
+    fg = (fi["latest_diff"] * fi["beta"]) * og_w["fx"]
+    ng = news_res["shock_score"] * og_w["news"]
+    wg = float(whale_anom["adj_pct"]) * og_w["whale"]
+    dow_adj = float(np.clip(dow_next_avg * idr_w["dow"], -0.4, 0.4))
+    wick_adj = round(float(np.clip(_compute_wick_bias(df_1d) * (idr_w["wick"] / 0.80), -0.55, 0.55)), 2)
 
-    # 1. LAB方向性・期待度バイアス（active_labのside・expect_pctから算出）
+    # 1. LAB方向性・期待度バイアス
     lab_bias_pct = 0.0
     if isinstance(active_lab, dict) and active_lab:
         l_side = _extract_lab_side(active_lab)
         l_exp = float(active_lab.get("expect_pct", 50.0))
         l_strength = float(np.clip((l_exp - 50.0) / 40.0, 0.0, 1.0))
         l_dir = 1.0 if l_side == "LONG" else -1.0
-        lab_bias_pct = round(l_dir * l_strength * 0.80, 2)
+        lab_bias_pct = round(l_dir * l_strength * idr_w["lab_bias"], 2)
 
-    tot_gap = float(np.clip(mg + fg + ng + wg + lab_bias_pct * 0.35, -5.0, 5.0))
+    tot_gap = float(np.clip(mg + fg + ng + wg + lab_bias_pct * og_w["lab_bias"], -5.0, 5.0))
 
-    ledger = _dd_db_get("dd_forecast_ledger_v9", {})
-    if not isinstance(ledger, dict):
-        ledger = {}
-    stock_hist = ledger.get(fc_code, {})
-    calib_pct, calib_n = _compute_self_calibration(stock_hist, df_1d, market_today_str)
+    raw_calib_pct, calib_n = _compute_self_calibration(stock_hist, df_1d, market_today_str)
+    calib_pct = round(float(np.clip(raw_calib_pct * (idr_w["calib"] / 0.40), -0.65, 0.65)), 2)
 
     # 類似地合いフィルタリング（GU/GD 2.5倍加重）＋ k-NN用の日別マップ保存
     slot_means, slot_stds, slot_vols = np.zeros(n_slots), np.full(n_slots, 0.003), np.zeros(n_slots)
@@ -832,7 +1034,7 @@ def _build_dual_5m_trajectory(
             rvol = round(cum_act_v / cum_avg_v, 2)
 
     est_open = anchor_base_close * (1.0 + tot_gap / 100.0)
-    drift = float(np.clip((news_res["shock_score"] * 0.005) + ((dow_adj + wick_adj + calib_pct + lab_bias_pct) / 100.0), -0.032, 0.032))
+    drift = float(np.clip((news_res["shock_score"] * idr_w["news"]) + ((dow_adj + wick_adj + calib_pct + lab_bias_pct) / 100.0), -0.032, 0.032))
     vboost = (1.0 + abs(news_res["shock_score"]) * 0.25) * (1.0 + max(0.0, vix_d / 100.0) * 1.2)
 
     # HVNしこり壁・機関OB支持帯の抽出
@@ -884,7 +1086,9 @@ def _build_dual_5m_trajectory(
         if (not has_actual) or (save_key not in stock_hist):
             stock_hist[save_key] = {
                 "p50": p50, "p85": p85, "p15": p15, "band_diff": bdiff,
-                "p32": p32, "band_diff_in": bdiff_inner, "sim_line": sim_line
+                "p32": p32, "band_diff_in": bdiff_inner, "sim_line": sim_line,
+                "pred_open_px": round(float(est_open), 4),
+                "pred_open_gap_pct": round(float(tot_gap), 4),
             }
             if len(stock_hist) > 15:
                 for old_k in sorted(stock_hist.keys())[:-15]:
@@ -1018,6 +1222,13 @@ def _build_dual_5m_trajectory(
         "verify": verify_stats, "regime_tag": regime_tag,
         "knn_match": {"matched_dates": knn_match["matched_dates"], "mean_dist": knn_match["mean_dist"]},
         "invalidation_alert": invalidation_alert,
+        "weights_evolution": {
+            "updates_count": w_evo.get("updates_count", 0),
+            "weights_updated": weights_updated,
+            "open_gap": og_w,
+            "intraday_drift": idr_w,
+            "last_decomp": w_evo.get("last_decomp", {}),
+        },
         "factors": {
             "mkt_label": mi["label"], "mkt_diff": mi["latest_diff"], "mkt_beta": mi["beta"], "macro_gap_pct": round(mg, 2),
             "fx_diff": fi["latest_diff"], "fx_beta": fi["beta"], "fx_gap_pct": round(fg, 2),
@@ -1154,7 +1365,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         st.markdown(
             '<div class="glass-header" style="margin-bottom:6px;">'
             '<div class="brand-luxury">YAMASHISHI DEEP DIVE v11</div>'
-            '<div style="font-size:10.5px;color:#94a3b8;margin-top:2px;">機関投資家プロ仕様（RVOL・ORB・大口約定◆・ガンマピン・EV電卓・k-NN類似日・破棄アラート）</div>'
+            '<div style="font-size:10.5px;color:#94a3b8;margin-top:2px;">機関投資家プロ仕様（2分解オンライン学習・weights_evolution.json・k-NN類似日・破棄アラート）</div>'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1513,7 +1724,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 ・<b>大口◆マーカー:</b> 過去平均の2.5倍以上の異常出来高が出た足に自動表示（緑◆＝大口買い、赤◆＝大口売り）。<br>
                 ・<b>ガンマピン（ゴールド点線）:</b> オプション建玉が集中しやすいキリ番節目。磁石のように引き寄せられたり強く反発しやすい価格帯です。<br>
                 ・<b>ORB（寄り付き30分高安）:</b> 最初の30分のレンジ。上抜けで強気加速、下抜けで弱気加速の目安になります。<br>
-                ・<b>HVN/OB反発＆k-NN類似日＆破棄アラート:</b> LABのHVNしこり壁・機関OB支持帯を軌道に反映し、場中3本以上の実測から過去類似日トップ5をライブ軌道へ30%ブレンド。想定超えの逸脱やLAB強シグナル逆行時は破棄アラートで即警告します。
+                ・<b>2分解オンライン学習＆重み進化:</b> 確定日ごとに「寄付き誤差」と「日中誤差」を分離計算し、<code>weights_evolution.json</code> とSupabaseへ自動保存・更新します。
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -1528,25 +1739,41 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             """, unsafe_allow_html=True)
 
             f = traj["factors"]
+            we = traj["weights_evolution"]
+            og_now = we["open_gap"]
+            idr_now = we["intraday_drift"]
+            ld = we.get("last_decomp", {})
             knn_dates_str = ", ".join(traj["knn_match"]["matched_dates"][:3]) if traj["knn_match"]["matched_dates"] else "場前待機"
             hvn_str = _fmt_cur(f["hvn_wall_px"], is_jp) if f.get("hvn_wall_px", 0.0) > 0 else "-"
             ob_str = _fmt_cur(f["ob_sup_px"], is_jp) if f.get("ob_sup_px", 0.0) > 0 else "-"
             st.markdown(f"""
             <div class="dd-dark-box">
-              <div style="font-size:11px;font-weight:800;color:#38bdf8;margin-bottom:5px;">FACTOR ATTRIBUTION // v11 機関投資家アルゴリズム内訳（{html.escape(traj['regime_tag'])}）</div>
-              <div class="dd-factor-row"><span>主連動（{html.escape(f['mkt_label'])} {f['mkt_diff']:+.2f}% × β{f['mkt_beta']:+.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['macro_gap_pct']>=0 else '#ef4444'};">{f['macro_gap_pct']:+.2f}%</span></div>
-              <div class="dd-factor-row"><span>為替（ドル円 {f['fx_diff']:+.2f}% × β{f['fx_beta']:+.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['fx_gap_pct']>=0 else '#ef4444'};">{f['fx_gap_pct']:+.2f}%</span></div>
-              <div class="dd-factor-row"><span>日英高信頼ニュース修正（一次報道 {news_res['tier1_cnt']}件）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['news_gap_pct']>=0 else '#ef4444'};">{f['news_gap_pct']:+.2f}%</span></div>
-              <div class="dd-factor-row"><span>大口・インサイダー異変補正</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['whale_gap_pct']>=0 else '#ef4444'};">{f['whale_gap_pct']:+.2f}%</span></div>
-              <div class="dd-factor-row"><span>LAB上位足 方向性・期待度バイアス</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['lab_bias_pct']>=0 else '#ef4444'};">{f['lab_bias_pct']:+.2f}%</span></div>
+              <div style="font-size:11px;font-weight:800;color:#38bdf8;margin-bottom:5px;">FACTOR ATTRIBUTION // v11 機関投資家アルゴリズム内訳（{html.escape(traj['regime_tag'])}・学習{we['updates_count']}回）</div>
+              <div class="dd-factor-row"><span>主連動（{html.escape(f['mkt_label'])} {f['mkt_diff']:+.2f}% × β{f['mkt_beta']:+.2f} × 重み{og_now['macro']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['macro_gap_pct']>=0 else '#ef4444'};">{f['macro_gap_pct']:+.2f}%</span></div>
+              <div class="dd-factor-row"><span>為替（ドル円 {f['fx_diff']:+.2f}% × β{f['fx_beta']:+.2f} × 重み{og_now['fx']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['fx_gap_pct']>=0 else '#ef4444'};">{f['fx_gap_pct']:+.2f}%</span></div>
+              <div class="dd-factor-row"><span>日英高信頼ニュース修正（一次報道 {news_res['tier1_cnt']}件・重み{og_now['news']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['news_gap_pct']>=0 else '#ef4444'};">{f['news_gap_pct']:+.2f}%</span></div>
+              <div class="dd-factor-row"><span>大口・インサイダー異変補正（重み{og_now['whale']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['whale_gap_pct']>=0 else '#ef4444'};">{f['whale_gap_pct']:+.2f}%</span></div>
+              <div class="dd-factor-row"><span>LAB上位足 方向性・期待度バイアス（日中重み{idr_now['lab_bias']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['lab_bias_pct']>=0 else '#ef4444'};">{f['lab_bias_pct']:+.2f}%</span></div>
               <div class="dd-factor-row"><span>HVNしこり壁 / 機関OB支持帯</span><span style="font-family:'JetBrains Mono',monospace;color:#c084fc;">HVN {hvn_str} / OB {ob_str}</span></div>
               <div class="dd-factor-row"><span>曜日エッジ ＋ 直近5日ヒゲ圧力補正</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['dow_wick_pct']>=0 else '#ef4444'};">{f['dow_wick_pct']:+.2f}%</span></div>
               <div class="dd-factor-row"><span>台帳自己学習キャリブレーション（過去{f['calib_n']}日）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['calib_pct']>=0 else '#ef4444'};">{f['calib_pct']:+.2f}%</span></div>
               <div class="dd-factor-row"><span>場中VWAP＆30分モメンタム補正（ライブ反映）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['live_vwap_pct']>=0 else '#ef4444'};">{f['live_vwap_pct']:+.2f}%</span></div>
               <div class="dd-factor-row"><span>k-NN類似日マッチ（上位類似日）</span><span style="font-family:'JetBrains Mono',monospace;color:#7dd3fc;">{html.escape(knn_dates_str)}</span></div>
+              <div class="dd-factor-row"><span>2分解誤差（{html.escape(str(ld.get('date','-')))}）</span><span style="font-family:'JetBrains Mono',monospace;color:#fde047;">寄付 {float(ld.get('open_err_pct',0.0)):+.2f}% / 日中 {float(ld.get('intraday_err_pct',0.0)):+.2f}%</span></div>
               <div class="dd-factor-row"><span>合成・寄付き予測 → 大引け予測</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if traj['est_close_chg']>=0 else '#ef4444'};">{traj['est_open_gap_pct']:+.2f}% → {traj['est_close_chg']:+.2f}%</span></div>
             </div>
             """, unsafe_allow_html=True)
+
+            with st.expander("🧬 オンライン進化重み（weights_evolution.json / Supabase）", expanded=False):
+                st.json({
+                    "updates_count": we["updates_count"],
+                    "open_gap_weights": og_now,
+                    "intraday_drift_weights": idr_now,
+                    "last_decomposition": ld,
+                })
+                if st.button("🔄 進化重みを初期値にリセット", key="dd_reset_weights_btn", use_container_width=True):
+                    _save_weights_evolution(DEFAULT_WEIGHTS_EVOLUTION)
+                    st.rerun()
 
         with t2:
             d_cells = "".join([f'<div class="dd-dow-cell" style="{"border:1.5px solid #fde047;background:rgba(250,204,21,0.12);" if d["dow"]==next_wd else ""}"><div style="font-size:10px;color:{"#fde047" if d["dow"]==next_wd else "#94a3b8"};font-weight:800;">{d["label"]}曜 {"★翌" if d["dow"]==next_wd else ""}</div><div style="font-family:JetBrains Mono,monospace;font-size:12.5px;font-weight:800;color:{"#10b981" if d["avg"]>=0 else "#ef4444"};margin-top:2px;">{d["avg"]:+.2f}%</div><div style="font-size:9.5px;color:#cbd5e1;">勝率 {d["wr"]}%</div></div>' for d in dow_stats])
@@ -1650,6 +1877,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "verify": traj["verify"],
             "knn_match": traj["knn_match"],
             "invalidation_alert": traj["invalidation_alert"],
+            "weights_evolution": traj["weights_evolution"],
             "verdict": f"{meter_lbl} (スコア{comp_score} / 想定大引け{traj['est_close_chg']:+.2f}% / {mkt_regime['label']})",
             "summary": m_txt[:450],
             "dd_score": int(comp_score),
