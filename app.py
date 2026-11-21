@@ -2404,7 +2404,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
 
     ft = r.get("forward_test", {}); lat = ft.get("latest_result", {}); is_jp = ".T" in r.get("full_code", "")
     fc_card = str(r.get("full_code", ""))
-    verified_span_days = int(ft.get("verified_span_days", len(hist_rows)))
+    verified_span_days = int(ft.get("verified_span_days", len(ft.get("history_rows", []))))
     tot_p = float(ft.get("total_profit_yen", 0.0))
     tot_p_str = f"{'+' if tot_p >= 0 else ''}{tot_p:,.0f}円" if is_jp else f"{'+' if tot_p >= 0 else ''}${tot_p:,.2f}"
     tot_p_col = "#10b981" if tot_p >= 0 else "#ef4444"
