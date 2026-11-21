@@ -77,9 +77,74 @@ def _inject_dd_css():
 
 
 # =========================================================================
-# 2. SQLite 予測スナップショット台帳 ＆ 市場現地時刻ヘルパー（夏時間対応）
+# 2. SQLite ＆ Supabase 予測スナップショット台帳 ＆ 市場現地時刻ヘルパー（夏時間対応）
 # =========================================================================
+def _dd_safe_secret(k: str) -> str:
+    try:
+        v = os.environ.get(k, "")
+        if v:
+            return str(v).strip()
+    except Exception:
+        pass
+    try:
+        v = st.secrets.get(k, "")
+        if v:
+            return str(v).strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _dd_sb_headers(sb_key: str) -> dict:
+    return {
+        "apikey": sb_key,
+        "Authorization": f"Bearer {sb_key}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates",
+    }
+
+
+def _dd_sb_get(key: str):
+    sb_url = _dd_safe_secret("SUPABASE_URL").rstrip("/")
+    sb_key = _dd_safe_secret("SUPABASE_KEY")
+    if not sb_url or not sb_key:
+        return None
+    try:
+        q = f"{sb_url}/rest/v1/kv_store?key=eq.{urllib.parse.quote(key)}&select=val"
+        req = urllib.request.Request(q, headers=_dd_sb_headers(sb_key), method="GET")
+        with urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=4.0) as r:
+            rows = json.loads(r.read().decode("utf-8"))
+            if isinstance(rows, list) and rows and rows[0].get("val") is not None:
+                raw_val = rows[0]["val"]
+                return json.loads(raw_val) if isinstance(raw_val, str) else raw_val
+    except Exception:
+        pass
+    return None
+
+
+def _dd_sb_set(key: str, val) -> None:
+    sb_url = _dd_safe_secret("SUPABASE_URL").rstrip("/")
+    sb_key = _dd_safe_secret("SUPABASE_KEY")
+    if not sb_url or not sb_key:
+        return
+    try:
+        url = f"{sb_url}/rest/v1/kv_store?on_conflict=key"
+        payload = json.dumps({
+            "key": key,
+            "val": json.dumps(val, ensure_ascii=False),
+            "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(url, data=payload, headers=_dd_sb_headers(sb_key), method="POST")
+        with urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=4.0) as r:
+            r.read()
+    except Exception:
+        pass
+
+
 def _dd_db_get(key: str, default_val):
+    sb_val = _dd_sb_get(key)
+    if sb_val is not None:
+        return sb_val
     try:
         conn = sqlite3.connect(DB_PATH, timeout=8.0)
         cur = conn.cursor()
@@ -108,6 +173,7 @@ def _dd_db_set(key: str, val):
         conn.close()
     except Exception:
         pass
+    _dd_sb_set(key, val)
 
 
 def _get_market_now(is_jp: bool) -> datetime.datetime:
@@ -135,8 +201,6 @@ def _get_target_session_date(is_jp: bool) -> str:
     while d.weekday() >= 5:
         d += datetime.timedelta(days=1)
     return d.strftime("%Y-%m-%d")
-
-
 # =========================================================================
 # 3. ヘルパー ＆ データ取得
 # =========================================================================
@@ -880,19 +944,17 @@ def _compute_real_5axis(info: dict, ovh_pct: float, gov_cnt: int) -> tuple:
     axes.append({"name": "安全性", "max": 100})
     vals.append(int(np.clip(95 - gov_cnt * 18, 20, 98)))
     return axes, vals, missing
-
-
-@st.cache_data(ttl=600)
 def _generate_detailed_memo(
     fc: str, corp_name: str, px_s: str, traj_open: str, traj_close: str,
     bull_trig: str, bull_tgt: str, bear_trig: str, bear_tgt: str,
     dip_t: str, peak_t: str, ovh: float, res_s: str, sup_s: str,
     ml: str, mc: float, mb: float, pos_pct: int, t1: int, gov_cnt: int,
-    whale_sum: str, up: str, lab_note: str, api_key: str
+    whale_sum: str, up: str, lab_note: str, api_key: str, lab_deep_ctx: str = ""
 ) -> tuple:
+    lab_block = f"\n・LAB本体統合データ: {lab_deep_ctx}" if lab_deep_ctx else ""
     prompt = f"""あなたはヘッジファンドのシニア・エクイティアナリストです。以下の実測データに基づき「超詳細インベストメントメモ（800〜1,100文字）」を日本語で作成してください。
 ・銘柄: {corp_name} ({fc}) / 現在値: {px_s} / アナリスト目標乖離: {up}
-・LAB本体判定: {lab_note}
+・LAB本体判定: {lab_note}{lab_block}
 ・翌営業日予測: 想定始値 {traj_open} → 大引け予測 {traj_close}（押し目候補 {dip_t} / ピーク想定 {peak_t}）
 ・分岐トリガー: 強気突破 {bull_trig}→上値メド {bull_tgt} / 急落警戒 {bear_trig}→下値メド {bear_tgt}
 ・需給構造: 上値しこり玉 {ovh}% / 大口売り壁 {res_s} / 大口買い支え {sup_s} / 大口異変: {whale_sum}
@@ -916,10 +978,53 @@ def _generate_detailed_memo(
             except Exception:
                 continue
 
-    bull = f"・LAB本体判定: {lab_note}。現在値 {px_s} に対しアナリスト目標乖離は {up}、高信頼ニュース強気度 {pos_pct}%（一次報道{t1}件）。\n・{bull_trig} を明確に上抜ければ強気突破が発動し、上値メド {bull_tgt} を目指す展開。\n・下値は大口買い支え帯 {sup_s} がサポートとして機能しやすい構造。"
+    lab_extra = f"\n・LAB連携情報: {lab_deep_ctx}" if lab_deep_ctx else ""
+    bull = f"・LAB本体判定: {lab_note}{lab_extra}。現在値 {px_s} に対しアナリスト目標乖離は {up}、高信頼ニュース強気度 {pos_pct}%（一次報道{t1}件）。\n・{bull_trig} を明確に上抜ければ強気突破が発動し、上値メド {bull_tgt} を目指す展開。\n・下値は大口買い支え帯 {sup_s} がサポートとして機能しやすい構造。"
     bear = f"・{ml} との相関係数が {mc}（β={mb}）で、夜間先物や米市場の急変時に連れ安リスクあり。\n・上値しこり玉は {ovh}%、直上の大口売り壁 {res_s} 付近では戻り売りに要注意。\n・{bear_trig} 割れで下値メド {bear_tgt} までの下振れを警戒し早期撤退。ガバナンス報道は {gov_cnt}件検知。"
     cat = f"・大口・インサイダー動向: {whale_sum}。\n・明日の勝負時間帯は押し目候補の {dip_t} 前後での反発確認と、ピーク想定の {peak_t} 前後での分割利確。\n・寄付直後に想定始値 {traj_open} を維持できるかが最初の分岐点。"
     return f"🟢 Bull Case（強気シナリオ）\n{bull}\n\n🔴 Bear Case（弱気・死角リスク）\n{bear}\n\n⚡ Next Catalyst（注目トリガー）\n{cat}", f"⚙️ AUTO QUANT MEMO（一次報道{t1}件・実測詳細生成）"
+
+
+def _resolve_shared_lab_entry(fc: str, lab_ctx: dict = None) -> dict:
+    merged = {}
+    shared_ss = st.session_state.get("shared_ticker_intel")
+    if isinstance(shared_ss, dict) and isinstance(shared_ss.get(fc), dict):
+        merged.update(shared_ss[fc])
+    shared_db = _dd_db_get("shared_ticker_intel", {})
+    if isinstance(shared_db, dict) and isinstance(shared_db.get(fc), dict):
+        for k, v in shared_db[fc].items():
+            if k not in merged or merged[k] is None:
+                merged[k] = v
+    if isinstance(lab_ctx, dict) and lab_ctx:
+        if lab_ctx.get("full_code") == fc or not lab_ctx.get("full_code"):
+            merged.update(lab_ctx)
+            if "lab_full" not in merged and any(k in lab_ctx for k in ("side", "expect_pct", "tp", "sl", "exec_grade")):
+                merged["lab_full"] = lab_ctx
+    return merged
+
+
+def _format_lab_deep_context(lab_full: dict, lab_council: dict) -> str:
+    parts = []
+    if isinstance(lab_full, dict) and lab_full:
+        if lab_full.get("side") or lab_full.get("expect_pct"):
+            parts.append(f"方向={lab_full.get('side','-')}/期待度={lab_full.get('expect_pct','-')}%/グレード={lab_full.get('exec_grade','-')}")
+        m10 = lab_full.get("macro_10y")
+        if isinstance(m10, dict) and m10:
+            parts.append(f"週足10Y(POC={m10.get('poc_10y_price','-')},CAGR={m10.get('cagr_pct','-')},Score={m10.get('score','-')})")
+        d2 = lab_full.get("daily_2y")
+        if isinstance(d2, dict) and d2:
+            parts.append(f"日足2Y(MA={d2.get('ma_align','-')},HVN={d2.get('hvn_wall_price','-')},ATR14={d2.get('atr14','-')})")
+        wf22 = lab_full.get("wf_22d") or lab_full.get("walk_forward_22d")
+        if isinstance(wf22, dict) and wf22:
+            parts.append(f"22日検証(勝率={wf22.get('win_rate','-')},PF={wf22.get('pf','-')},SQN={wf22.get('sqn','-')},DD={wf22.get('max_dd','-')})")
+        q_ind = lab_full.get("quant_metrics") or lab_full.get("quants")
+        if isinstance(q_ind, dict) and q_ind:
+            parts.append(f"独自クオンツ(WKB={q_ind.get('wkb','-')},Kyle={q_ind.get('kyle_lambda','-')},VPIN={q_ind.get('vpin','-')},CLV={q_ind.get('clv','-')},RS30={q_ind.get('rs_30m','-')},OB={lab_full.get('ob_support_px','-')})")
+    if isinstance(lab_council, dict) and lab_council:
+        verdict_c = lab_council.get("verdict") or lab_council.get("conclusion") or lab_council.get("summary")
+        if verdict_c:
+            parts.append(f"5名監査官結論={verdict_c}")
+    return " | ".join(parts)
 
 
 # =========================================================================
@@ -957,12 +1062,19 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     is_jp = fc.endswith(".T")
     api_k = _get_gemini_key(gemini_api_key)
 
-    active_lab = lab_ctx if (isinstance(lab_ctx, dict) and lab_ctx.get("full_code") == fc) else None
+    shared_entry = _resolve_shared_lab_entry(fc, lab_ctx)
+    lab_full = shared_entry.get("lab_full") if isinstance(shared_entry.get("lab_full"), dict) else {}
+    lab_council = shared_entry.get("lab_council") if isinstance(shared_entry.get("lab_council"), dict) else {}
+    active_lab = lab_full if lab_full else (lab_ctx if (isinstance(lab_ctx, dict) and lab_ctx.get("full_code") == fc) else None)
+    lab_deep_ctx = _format_lab_deep_context(lab_full, lab_council)
 
     def _body():
         _render_live_clock(sync_interval=60)
-        data = _load_stock_core(fc)
-        macro_data = _load_macro_data()
+        with ThreadPoolExecutor(max_workers=2) as ex_core:
+            fut_stk = ex_core.submit(_load_stock_core, fc)
+            fut_mac = ex_core.submit(_load_macro_data)
+            data = fut_stk.result()
+            macro_data = fut_mac.result()
 
         if macro_data:
             chips = "".join([f'<div class="dd-macro-chip"><span style="color:#94a3b8;">{macro_data[k]["label"]}</span><span style="color:{"#10b981" if macro_data[k]["diff_pct"]>=0 else "#ef4444"};font-weight:700;">{macro_data[k]["diff_pct"]:+.2f}%</span></div>' for k in ["SOX", "SP500", "NK_FUT", "USDJPY", "US10Y", "OIL", "VIX"] if k in macro_data])
@@ -985,8 +1097,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         gamma_pin = _compute_gamma_pin(curr_px, is_jp)
         macro_sens = _compute_macro_sens(df_1d["Close"], macro_data)
         dow_stats, next_wd = _compute_dow_edge(df_1d)
-        news_res = _fetch_global_intel(corp_name, short_code)
-        gov_risks, whale_news = _fetch_gov_and_whales(corp_name, short_code)
+        with ThreadPoolExecutor(max_workers=2) as ex_intel:
+            fut_news = ex_intel.submit(_fetch_global_intel, corp_name, short_code)
+            fut_gov = ex_intel.submit(_fetch_gov_and_whales, corp_name, short_code)
+            news_res = fut_news.result()
+            gov_risks, whale_news = fut_gov.result()
         whale_anom = _detect_whale_anomaly(data["insider_tx"], whale_news)
         vp = _compute_vp(df_1d, curr_px, is_jp)
         traj = _build_dual_5m_trajectory(fc, curr_px, prev_px, df_1d, df_5m, macro_sens, macro_data, news_res, whale_anom, dow_stats[next_wd]["avg"], vp, is_jp)
@@ -1008,9 +1123,26 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             is_aligned = (l_side == "LONG" and dd_bull) or (l_side == "SHORT" and not dd_bull)
             lab_note = f"LAB判定={l_side} (期待度{active_lab.get('expect_pct',0)}% / TP:{_fmt_cur(l_tp, is_jp)} / SL:{_fmt_cur(l_sl, is_jp)})"
             if is_aligned:
-                st.markdown(f'<div class="dd-quant-box"><b>✅ LAB × DEEP DIVE 方向性一致（{l_side} 同期）</b><br>LAB上位足判定（期待度 {active_lab.get("expect_pct",0)}% / {html.escape(active_lab.get("exec_grade","").split("（")[0])}）と5分足予測軌道（{traj["est_close_chg"]:+.2f}%）が一致しています。TP: <b>{_fmt_cur(l_tp, is_jp)}</b> / SL: <b>{_fmt_cur(l_sl, is_jp)}</b></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="dd-quant-box"><b>✅ LAB × DEEP DIVE 方向性一致（{l_side} 同期）</b><br>LAB上位足判定（期待度 {active_lab.get("expect_pct",0)}% / {html.escape(str(active_lab.get("exec_grade","")).split("（")[0])}）と5分足予測軌道（{traj["est_close_chg"]:+.2f}%）が一致しています。TP: <b>{_fmt_cur(l_tp, is_jp)}</b> / SL: <b>{_fmt_cur(l_sl, is_jp)}</b></div>', unsafe_allow_html=True)
             else:
                 st.markdown(f'<div class="dd-sync-warn"><b>⚠️ LAB × DEEP DIVE 方向性に乖離あり（慎重待機推奨）</b><br>LAB上位足判定は <b>{l_side}</b>（期待度 {active_lab.get("expect_pct",0)}%）ですが、5分足短期軌道は <b>{traj["est_close_chg"]:+.2f}%</b> と逆方向を示唆しています。押し目／戻りを待って執行してください。</div>', unsafe_allow_html=True)
+
+        if lab_full or lab_council:
+            with st.expander("⚛️ LAB本体 3階層MTF・22営業日検証・5名監査官データ（100%同期済）", expanded=False):
+                m10 = lab_full.get("macro_10y") if isinstance(lab_full.get("macro_10y"), dict) else {}
+                d2 = lab_full.get("daily_2y") if isinstance(lab_full.get("daily_2y"), dict) else {}
+                wf22 = (lab_full.get("wf_22d") if isinstance(lab_full.get("wf_22d"), dict) else (lab_full.get("walk_forward_22d") if isinstance(lab_full.get("walk_forward_22d"), dict) else {}))
+                q_ind = (lab_full.get("quant_metrics") if isinstance(lab_full.get("quant_metrics"), dict) else (lab_full.get("quants") if isinstance(lab_full.get("quants"), dict) else {}))
+                c_verdict = (lab_council.get("verdict") or lab_council.get("conclusion") or lab_council.get("summary") or "-") if isinstance(lab_council, dict) else "-"
+                st.markdown(f"""
+                <div class="dd-dark-box" style="margin-bottom:0;">
+                  <div><b>■ 週足10Y大局:</b> 10年POC={html.escape(str(m10.get("poc_10y_price", "-")))} / CAGR={html.escape(str(m10.get("cagr_pct", "-")))} / スコア={html.escape(str(m10.get("score", "-")))}</div>
+                  <div><b>■ 日足2Y中期:</b> MA並び={html.escape(str(d2.get("ma_align", "-")))} / HVN/LVN={html.escape(str(d2.get("hvn_wall_price", "-")))} / 日足ATR14={html.escape(str(d2.get("atr14", "-")))}</div>
+                  <div><b>■ 22営業日リークフリー検証:</b> 勝率={html.escape(str(wf22.get("win_rate", "-")))} / PF={html.escape(str(wf22.get("pf", "-")))} / SQN={html.escape(str(wf22.get("sqn", "-")))} / 平均R={html.escape(str(wf22.get("avg_r", "-")))} / 最大DD={html.escape(str(wf22.get("max_dd", "-")))} / 累計損益={html.escape(str(wf22.get("total_pnl", "-")))}</div>
+                  <div><b>■ 独自クオンツ指標:</b> WKB={html.escape(str(q_ind.get("wkb", "-")))} / Kyle-λ={html.escape(str(q_ind.get("kyle_lambda", "-")))} / VPIN={html.escape(str(q_ind.get("vpin", "-")))} / CLV={html.escape(str(q_ind.get("clv", "-")))} / 30分RS={html.escape(str(q_ind.get("rs_30m", "-")))} / 機関OB支持帯={html.escape(str(lab_full.get("ob_support_px", "-")))}</div>
+                  <div><b>■ 5名監査官の最新結論:</b> {html.escape(str(c_verdict))}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
         if whale_anom["detected"]:
             b_cls = "dd-quant-box" if whale_anom["dir"] == "BULL" else "dd-warn-box"
@@ -1099,6 +1231,23 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     ml_data.append({"yAxis": round(float(active_lab["tp"]), 2), "lineStyle": {"color": "#10b981", "type": "dashed", "width": 1.5}, "label": {"formatter": f"TP {_fmt_cur(active_lab['tp'], is_jp)}", "color": "#6ee7b7", "fontSize": 9, "position": "insideStartTop"}})
                 if float(active_lab.get("sl", 0)) > 0:
                     ml_data.append({"yAxis": round(float(active_lab["sl"]), 2), "lineStyle": {"color": "#ef4444", "type": "dashed", "width": 1.5}, "label": {"formatter": f"SL {_fmt_cur(active_lab['sl'], is_jp)}", "color": "#fca5a5", "fontSize": 9, "position": "insideStartBottom"}})
+                aux_cands = []
+                if isinstance(lab_full, dict) and lab_full:
+                    if lab_full.get("ob_support_px") is not None:
+                        aux_cands.append(("OB支持", lab_full.get("ob_support_px"), "#34d399"))
+                    d2_aux = lab_full.get("daily_2y") if isinstance(lab_full.get("daily_2y"), dict) else {}
+                    if d2_aux.get("hvn_wall_price") is not None:
+                        aux_cands.append(("HVN壁", d2_aux.get("hvn_wall_price"), "#c084fc"))
+                    m10_aux = lab_full.get("macro_10y") if isinstance(lab_full.get("macro_10y"), dict) else {}
+                    if m10_aux.get("poc_10y_price") is not None:
+                        aux_cands.append(("10Y POC", m10_aux.get("poc_10y_price"), "#fbbf24"))
+                for lbl_a, raw_px_a, col_a in aux_cands:
+                    try:
+                        px_a = float(raw_px_a)
+                        if px_a > 0 and curr_px > 0 and abs(px_a - curr_px) / curr_px <= 0.12:
+                            ml_data.append({"yAxis": round(px_a, 2), "lineStyle": {"color": col_a, "type": "dotted", "width": 1.2}, "label": {"formatter": f"{lbl_a} {_fmt_cur(px_a, is_jp)}", "color": col_a, "fontSize": 8.5, "position": "insideStartTop"}})
+                    except Exception:
+                        pass
             ml_cfg = {"symbol": ["none", "none"], "data": ml_data} if ml_data else {}
 
             # 背景ハイライト（売り壁ラベルを左寄せにして重なりを完全解消）
@@ -1315,7 +1464,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 traj["dip_time"], traj["peak_time"], vp["overhead_pct"],
                 _fmt_cur(vp["res_px"], is_jp), _fmt_cur(vp["sup_px"], is_jp),
                 top_m["label"], top_m["corr"], top_m["beta"], news_res["pos_pct"],
-                news_res["tier1_cnt"], len(gov_risks), whale_anom["summary"], upside_str, lab_note, api_k
+                news_res["tier1_cnt"], len(gov_risks), whale_anom["summary"], upside_str, lab_note, api_k, lab_deep_ctx
             )
             st.markdown(f'<div class="dd-memo-box"><div style="font-size:10.5px;color:#c084fc;font-weight:800;margin-bottom:6px;">{html.escape(m_src)}</div>{html.escape(m_txt).replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
 
@@ -1330,6 +1479,50 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             if news_res["items"]:
                 n_html = "".join([f'<div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(148,163,184,0.12);"><span style="color:{"#fde047" if it["trust"]=="S" else ("#38bdf8" if it["trust"]=="A" else "#64748b")};font-weight:800;font-size:10px;border:1px solid;padding:0 4px;border-radius:3px;margin-right:4px;">信頼度{it["trust"]}/{it["lang"]}</span><span style="color:{"#10b981" if it["sent"]=="POS" else ("#ef4444" if it["sent"]=="NEG" else "#94a3b8")};font-weight:800;font-size:10px;margin-right:4px;">[{it["sent"]}]</span><a href="{html.escape(it["link"])}" target="_blank" style="color:#e2e8f0;text-decoration:none;font-weight:600;">{html.escape(it["title"])}</a> <span style="color:#64748b;font-size:10px;">({html.escape(it["source"] or "Wire")} / {html.escape(it["pub"])})</span></div>' for it in news_res["items"]])
                 st.markdown(f'<div class="dd-dark-box"><b>GLOBAL INTELLIGENCE FEED // 日英高信頼ニュース（一次報道 {news_res["tier1_cnt"]}件）</b><br><br>{n_html}</div>', unsafe_allow_html=True)
+
+        dd_result = {
+            "full_code": fc,
+            "style": in_style,
+            "comp_score": int(comp_score),
+            "meter_lbl": str(meter_lbl),
+            "mkt_regime": mkt_regime,
+            "est_open_gap_pct": float(traj["est_open_gap_pct"]),
+            "est_close_px": float(traj["est_close_px"]),
+            "est_close_chg": float(traj["est_close_chg"]),
+            "bull_trig": float(traj["bull_trig"]),
+            "bull_target": float(traj["bull_target"]),
+            "bear_trig": float(traj["bear_trig"]),
+            "bear_target": float(traj["bear_target"]),
+            "dip_time": str(traj["dip_time"]),
+            "peak_time": str(traj["peak_time"]),
+            "rvol": traj["rvol"],
+            "gamma_pin": float(gamma_pin),
+            "orb_high": traj["orb_high"],
+            "orb_low": traj["orb_low"],
+            "vol_spikes_cnt": len(traj["vol_spikes"]),
+            "whale_anom": whale_anom,
+            "gov_risks_cnt": len(gov_risks),
+            "overhead_pct": float(vp["overhead_pct"]),
+            "res_px": float(vp["res_px"]),
+            "sup_px": float(vp["sup_px"]),
+            "verify": traj["verify"],
+            "verdict": f"{meter_lbl} (スコア{comp_score} / 想定大引け{traj['est_close_chg']:+.2f}% / {mkt_regime['label']})",
+            "summary": m_txt[:450],
+            "dd_score": int(comp_score),
+            "updated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        st.session_state["dd_latest_result"] = dd_result
+        shared_map = st.session_state.setdefault("shared_ticker_intel", {})
+        if not isinstance(shared_map, dict):
+            shared_map = {}
+            st.session_state["shared_ticker_intel"] = shared_map
+        entry_obj = shared_map.get(fc)
+        if not isinstance(entry_obj, dict):
+            entry_obj = {}
+        entry_obj["dd_result"] = dd_result
+        entry_obj["dd_updated_at"] = dd_result["updated_at"]
+        shared_map[fc] = entry_obj
+        _dd_db_set("shared_ticker_intel", shared_map)
 
     if hasattr(st, "fragment"):
         @st.fragment(run_every="60s")
