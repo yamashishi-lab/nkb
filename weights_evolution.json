@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "lr": 0.03,
+  "updates_count": 0,
+  "last_updated": "2026-11-21 14:03:52",
+  "learned_keys": [],
+  "open_gap": {
+    "macro": 0.45,
+    "fx": 0.35,
+    "news": 0.85,
+    "whale": 1.0,
+    "lab_bias": 0.35
+  },
+  "intraday_drift": {
+    "news": 0.005,
+    "dow": 0.35,
+    "wick": 0.8,
+    "calib": 0.4,
+    "lab_bias": 0.8
+  },
+  "last_decomp": {
+    "date": "-",
+    "code": "-",
+    "open_err_pct": 0.0,
+    "intraday_err_pct": 0.0
+  }
+}
