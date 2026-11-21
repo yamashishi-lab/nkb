@@ -657,6 +657,22 @@ def _extract_lab_side(active_lab: dict) -> str:
     return str(side or "LONG").upper()
 
 
+def _apply_hvn_ob_bounce(mid: float, hvn_wall_px: float, ob_sup_px: float, vp: dict) -> float:
+    """HVNしこり壁での上値抑え込み（反落）と、機関OB支持帯での下値クッション（反発）を適用"""
+    res_wall = hvn_wall_px if hvn_wall_px > 0 else vp["res_px"]
+    if res_wall > 0 and mid > res_wall * 0.995:
+        damp = 0.35 if hvn_wall_px > 0 else (0.45 if vp["overhead_pct"] >= 35.0 else 1.0)
+        if damp < 1.0:
+            mid = res_wall * 0.995 + (mid - res_wall * 0.995) * damp
+
+    sup_floor = ob_sup_px if ob_sup_px > 0 else vp["sup_px"]
+    if sup_floor > 0 and mid < sup_floor * 1.005:
+        cushion = 0.38 if ob_sup_px > 0 else 0.65
+        mid = sup_floor * 1.005 - (sup_floor * 1.005 - mid) * cushion
+
+    return mid
+
+
 def _build_dual_5m_trajectory(
     fc_code: str, curr_px: float, prev_px: float, df_1d: pd.DataFrame, df_5m: pd.DataFrame,
     macro_sens: list, macro_data: dict, news_res: dict, whale_anom: dict,
@@ -721,7 +737,7 @@ def _build_dual_5m_trajectory(
     dow_adj = float(np.clip(dow_next_avg * 0.35, -0.4, 0.4))
     wick_adj = _compute_wick_bias(df_1d)
 
-    # 1. LAB方向性バイアス（active_labのside・expect_pctから算出）
+    # 1. LAB方向性・期待度バイアス（active_labのside・expect_pctから算出）
     lab_bias_pct = 0.0
     if isinstance(active_lab, dict) and active_lab:
         l_side = _extract_lab_side(active_lab)
@@ -818,15 +834,20 @@ def _build_dual_5m_trajectory(
     est_open = anchor_base_close * (1.0 + tot_gap / 100.0)
     drift = float(np.clip((news_res["shock_score"] * 0.005) + ((dow_adj + wick_adj + calib_pct + lab_bias_pct) / 100.0), -0.032, 0.032))
     vboost = (1.0 + abs(news_res["shock_score"]) * 0.25) * (1.0 + max(0.0, vix_d / 100.0) * 1.2)
-    res_wall = vp["res_px"]
+
+    # HVNしこり壁・機関OB支持帯の抽出
+    hvn_wall_px, ob_sup_px = 0.0, 0.0
+    if isinstance(active_lab, dict) and active_lab:
+        d2_ctx = active_lab.get("daily_2y") if isinstance(active_lab.get("daily_2y"), dict) else {}
+        hvn_wall_px = float(d2_ctx.get("hvn_wall_price", 0.0) or 0.0)
+        ob_sup_px = float(active_lab.get("ob_support_px", 0.0) or 0.0)
 
     p50, p85, p15, bdiff = [], [], [], []
     p68, p32, bdiff_inner = [], [], []
     for i, sl in enumerate(slots):
         frac = i / max(n_slots - 1, 1)
         mid = est_open * (1.0 + slot_means[i] + drift * frac)
-        if mid > res_wall * 0.995 and vp["overhead_pct"] >= 35.0:
-            mid = res_wall * 0.995 + (mid - res_wall * 0.995) * 0.45
+        mid = _apply_hvn_ob_bounce(mid, hvn_wall_px, ob_sup_px, vp)
         band_out = est_open * slot_stds[i] * vboost * 1.15
         band_in = band_out * 0.52
         lo, hi = max(mid - band_out, anchor_base_close * 0.5), mid + band_out
@@ -925,11 +946,9 @@ def _build_dual_5m_trajectory(
         for i in range(last_act_idx, n_slots):
             rem_frac = (i - last_act_idx) / max(n_slots - 1 - last_act_idx, 1)
             base_rel = (slot_means[i] - anchor_mean) + (drift * 0.6 + live_vwap_bias) * rem_frac
-            # k-NN類似日マッチがある場合は30%ブレンド
             rel_move = (0.70 * base_rel + 0.30 * knn_moves[i]) if (i in knn_moves) else base_rel
             mid = anchor_px * (1.0 + rel_move)
-            if mid > res_wall * 0.995 and vp["overhead_pct"] >= 35.0:
-                mid = res_wall * 0.995 + (mid - res_wall * 0.995) * 0.45
+            mid = _apply_hvn_ob_bounce(mid, hvn_wall_px, ob_sup_px, vp)
             band_out = anchor_px * max(slot_stds[i] * np.sqrt(rem_frac + 0.05), 0.0015) * vboost
             band_in = band_out * 0.52
             lo, hi = max(mid - band_out, anchor_px * 0.5), mid + band_out
@@ -1004,6 +1023,8 @@ def _build_dual_5m_trajectory(
             "fx_diff": fi["latest_diff"], "fx_beta": fi["beta"], "fx_gap_pct": round(fg, 2),
             "news_gap_pct": round(ng, 2), "whale_gap_pct": round(wg, 2),
             "lab_bias_pct": lab_bias_pct,
+            "hvn_wall_px": hvn_wall_px,
+            "ob_sup_px": ob_sup_px,
             "dow_wick_pct": round(dow_adj + wick_adj, 2),
             "calib_pct": calib_pct, "calib_n": calib_n,
             "live_vwap_pct": round(live_vwap_bias * 100.0, 2)
@@ -1492,7 +1513,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 ・<b>大口◆マーカー:</b> 過去平均の2.5倍以上の異常出来高が出た足に自動表示（緑◆＝大口買い、赤◆＝大口売り）。<br>
                 ・<b>ガンマピン（ゴールド点線）:</b> オプション建玉が集中しやすいキリ番節目。磁石のように引き寄せられたり強く反発しやすい価格帯です。<br>
                 ・<b>ORB（寄り付き30分高安）:</b> 最初の30分のレンジ。上抜けで強気加速、下抜けで弱気加速の目安になります。<br>
-                ・<b>k-NN類似日＆予測破棄アラート:</b> 場中3本以上の実測から過去類似日トップ5を自動照合してライブ軌道へ30%ブレンド。バンド大幅逸脱やLAB強シグナル逆行時は破棄アラートで即警告します。
+                ・<b>HVN/OB反発＆k-NN類似日＆破棄アラート:</b> LABのHVNしこり壁・機関OB支持帯を軌道に反映し、場中3本以上の実測から過去類似日トップ5をライブ軌道へ30%ブレンド。想定超えの逸脱やLAB強シグナル逆行時は破棄アラートで即警告します。
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -1508,6 +1529,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
             f = traj["factors"]
             knn_dates_str = ", ".join(traj["knn_match"]["matched_dates"][:3]) if traj["knn_match"]["matched_dates"] else "場前待機"
+            hvn_str = _fmt_cur(f["hvn_wall_px"], is_jp) if f.get("hvn_wall_px", 0.0) > 0 else "-"
+            ob_str = _fmt_cur(f["ob_sup_px"], is_jp) if f.get("ob_sup_px", 0.0) > 0 else "-"
             st.markdown(f"""
             <div class="dd-dark-box">
               <div style="font-size:11px;font-weight:800;color:#38bdf8;margin-bottom:5px;">FACTOR ATTRIBUTION // v11 機関投資家アルゴリズム内訳（{html.escape(traj['regime_tag'])}）</div>
@@ -1515,7 +1538,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
               <div class="dd-factor-row"><span>為替（ドル円 {f['fx_diff']:+.2f}% × β{f['fx_beta']:+.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['fx_gap_pct']>=0 else '#ef4444'};">{f['fx_gap_pct']:+.2f}%</span></div>
               <div class="dd-factor-row"><span>日英高信頼ニュース修正（一次報道 {news_res['tier1_cnt']}件）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['news_gap_pct']>=0 else '#ef4444'};">{f['news_gap_pct']:+.2f}%</span></div>
               <div class="dd-factor-row"><span>大口・インサイダー異変補正</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['whale_gap_pct']>=0 else '#ef4444'};">{f['whale_gap_pct']:+.2f}%</span></div>
-              <div class="dd-factor-row"><span>LAB上位足 方向性バイアス補正</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['lab_bias_pct']>=0 else '#ef4444'};">{f['lab_bias_pct']:+.2f}%</span></div>
+              <div class="dd-factor-row"><span>LAB上位足 方向性・期待度バイアス</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['lab_bias_pct']>=0 else '#ef4444'};">{f['lab_bias_pct']:+.2f}%</span></div>
+              <div class="dd-factor-row"><span>HVNしこり壁 / 機関OB支持帯</span><span style="font-family:'JetBrains Mono',monospace;color:#c084fc;">HVN {hvn_str} / OB {ob_str}</span></div>
               <div class="dd-factor-row"><span>曜日エッジ ＋ 直近5日ヒゲ圧力補正</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['dow_wick_pct']>=0 else '#ef4444'};">{f['dow_wick_pct']:+.2f}%</span></div>
               <div class="dd-factor-row"><span>台帳自己学習キャリブレーション（過去{f['calib_n']}日）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['calib_pct']>=0 else '#ef4444'};">{f['calib_pct']:+.2f}%</span></div>
               <div class="dd-factor-row"><span>場中VWAP＆30分モメンタム補正（ライブ反映）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['live_vwap_pct']>=0 else '#ef4444'};">{f['live_vwap_pct']:+.2f}%</span></div>
