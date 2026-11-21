@@ -1,0 +1,68 @@
+name: Weekly Forecast Error Audit & Improvement PR
+
+on:
+  schedule:
+    # 毎週日曜 00:00 UTC (= 09:00 JST)
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  audit-and-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas numpy
+
+      - name: Run weekly audit script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python scripts/weekly_audit_pr.py
+
+      - name: Create branch and open Pull Request if changes exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes detected. Skipping PR creation."
+            exit 0
+          fi
+
+          RUN_DATE=$(date -u +"%Y-%m-%d")
+          BRANCH_NAME="chore/weekly-error-audit-${RUN_DATE}"
+
+          git checkout -B "${BRANCH_NAME}"
+          git add reports/ weights_evolution.json
+          git commit -m "chore(audit): weekly forecast error report and weight proposal (${RUN_DATE})"
+          git push -u origin "${BRANCH_NAME}" --force
+
+          PR_BODY_FILE="reports/weekly_audit_latest.md"
+          if gh pr list --head "${BRANCH_NAME}" --state open --json number --jq 'length' | grep -q '^0$'; then
+            gh pr create \
+              --base main \
+              --head "${BRANCH_NAME}" \
+              --title "📊 Weekly Error Audit & Weight Proposal (${RUN_DATE})" \
+              --body-file "${PR_BODY_FILE}"
+          else
+            echo "PR for ${BRANCH_NAME} is already open."
+          fi
