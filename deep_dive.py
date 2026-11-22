@@ -121,7 +121,7 @@ DEFAULT_WEIGHTS_EVOLUTION = {
 
 
 # =========================================================================
-# 1. DEEP DIVE v15 専用CSS
+# 1. DEEP DIVE v15.1 専用CSS
 # =========================================================================
 def _inject_dd_css():
     css = """
@@ -1582,16 +1582,36 @@ def _extract_lab_side(active_lab: dict) -> str:
     return str(side or "LONG").upper()
 
 
-def _apply_hvn_ob_bounce(mid: float, hvn_wall_px: float, ob_sup_px: float, vp: dict) -> float:
-    res_wall = hvn_wall_px if hvn_wall_px > 0 else vp["res_px"]
+def _apply_hvn_ob_bounce(mid: float, ref_px: float, hvn_wall_px: float, ob_sup_px: float, vp: dict) -> float:
+    """修正1: ref_px を基準に、未突破の上値抵抗・未割れの支持帯のみを有効化して張り付きを防止"""
+    if ref_px <= 0:
+        return mid
+
+    # 1. 上値抵抗帯（ref_px より明確に上にある場合のみ有効）
+    res_wall = 0.0
+    is_hvn = False
+    if hvn_wall_px > ref_px * 1.002:
+        res_wall = hvn_wall_px
+        is_hvn = True
+    elif float(vp.get("res_px", 0.0)) > ref_px * 1.002:
+        res_wall = float(vp["res_px"])
+
     if res_wall > 0 and mid > res_wall * 0.995:
-        damp = 0.35 if hvn_wall_px > 0 else (0.45 if vp["overhead_pct"] >= 35.0 else 1.0)
+        damp = 0.35 if is_hvn else (0.45 if vp.get("overhead_pct", 0.0) >= 35.0 else 1.0)
         if damp < 1.0:
             mid = res_wall * 0.995 + (mid - res_wall * 0.995) * damp
 
-    sup_floor = ob_sup_px if ob_sup_px > 0 else vp["sup_px"]
+    # 2. 下値支持帯（ref_px より明確に下にある場合のみ有効）
+    sup_floor = 0.0
+    is_ob = False
+    if 0 < ob_sup_px < ref_px * 0.998:
+        sup_floor = ob_sup_px
+        is_ob = True
+    elif 0 < float(vp.get("sup_px", 0.0)) < ref_px * 0.998:
+        sup_floor = float(vp["sup_px"])
+
     if sup_floor > 0 and mid < sup_floor * 1.005:
-        cushion = 0.38 if ob_sup_px > 0 else 0.65
+        cushion = 0.38 if is_ob else 0.65
         mid = sup_floor * 1.005 - (sup_floor * 1.005 - mid) * cushion
 
     return mid
@@ -1745,18 +1765,18 @@ def _compute_short_horizon_3way(
         # 上昇シナリオ波形
         up_shock_add = max(0.0, shock_ratio) * 0.45 * step_frac
         up_raw = anchor_px * (1.0 + local_shape * 0.65 + cum_sig * 1.05 + up_shock_add)
-        up_raw = _apply_hvn_ob_bounce(up_raw, hvn_wall_px, ob_sup_px, vp)
+        up_raw = _apply_hvn_ob_bounce(up_raw, anchor_px, hvn_wall_px, ob_sup_px, vp)
         up_raw = max(up_raw, anchor_px * (1.0 + 0.0005 * k))
 
         # 横ばいシナリオ波形（現在値とVWAP中間へ緩やか収束＋小波）
         flat_center = anchor_px + (vwap_mid_target - anchor_px) * (0.45 * step_frac)
         flat_wave = anchor_px * (local_shape * 0.35 + shock_ratio * 0.15 * step_frac)
-        flat_raw = _apply_hvn_ob_bounce(flat_center + flat_wave, hvn_wall_px, ob_sup_px, vp)
+        flat_raw = _apply_hvn_ob_bounce(flat_center + flat_wave, anchor_px, hvn_wall_px, ob_sup_px, vp)
 
         # 下落シナリオ波形
         dn_shock_sub = max(0.0, -shock_ratio) * 0.45 * step_frac
         dn_raw = anchor_px * (1.0 + local_shape * 0.65 - cum_sig * 1.05 - dn_shock_sub)
-        dn_raw = _apply_hvn_ob_bounce(dn_raw, hvn_wall_px, ob_sup_px, vp)
+        dn_raw = _apply_hvn_ob_bounce(dn_raw, anchor_px, hvn_wall_px, ob_sup_px, vp)
         dn_raw = min(dn_raw, anchor_px * (1.0 - 0.0005 * k))
         dn_raw = max(dn_raw, anchor_px * 0.5)
 
@@ -2244,34 +2264,42 @@ def _build_dual_5m_trajectory(
                 u_shape = 1.35 if (i < 6 or i >= n_slots - 6) else 0.85
                 slot_inc_stds[i] = 0.0022 * u_shape
 
-    # 機能C: 5分期待値幅「高ボラ狩り場帯（スキャル適性ゾーン）」の抽出
+    # 機能C + 修正2: 5分期待値幅「高ボラ狩り場帯（スキャル適性ゾーン）」の抽出（近接マージ＆極細ゾーン非ラベル化）
     mean_inc_std = float(np.mean(slot_inc_stds)) if len(slot_inc_stds) > 0 else 0.0022
     q75_inc_std = float(np.percentile(slot_inc_stds, 75)) if len(slot_inc_stds) > 0 else mean_inc_std * 1.18
     hv_thresh = max(mean_inc_std * 1.18, q75_inc_std)
-    high_vol_zones = []
+
+    raw_hv_spans = []
     z_start = None
-    z_vals = []
-    for i, sl in enumerate(slots):
+    for i in range(n_slots):
         if slot_inc_stds[i] >= hv_thresh:
             if z_start is None:
                 z_start = i
-                z_vals = [float(slot_inc_stds[i])]
-            else:
-                z_vals.append(float(slot_inc_stds[i]))
         else:
             if z_start is not None:
-                high_vol_zones.append({
-                    "start_slot": slots[z_start],
-                    "end_slot": slots[i - 1],
-                    "avg_move_pct": round(float(np.mean(z_vals)) * 100.0, 2),
-                })
+                raw_hv_spans.append([z_start, i - 1])
                 z_start = None
-                z_vals = []
     if z_start is not None:
+        raw_hv_spans.append([z_start, n_slots - 1])
+
+    # スロット間隔が1本以内（ギャップ <= 2）の近接ゾーンをマージ
+    merged_hv_spans = []
+    for sp in raw_hv_spans:
+        if merged_hv_spans and (sp[0] - merged_hv_spans[-1][1] <= 2):
+            merged_hv_spans[-1][1] = sp[1]
+        else:
+            merged_hv_spans.append(list(sp))
+
+    high_vol_zones = []
+    for s_i, e_i in merged_hv_spans:
+        width_slots = e_i - s_i + 1
+        avg_mv = round(float(np.mean(slot_inc_stds[s_i:e_i + 1])) * 100.0, 2)
         high_vol_zones.append({
-            "start_slot": slots[z_start],
-            "end_slot": slots[n_slots - 1],
-            "avg_move_pct": round(float(np.mean(z_vals)) * 100.0, 2),
+            "start_slot": slots[s_i],
+            "end_slot": slots[e_i],
+            "width_slots": width_slots,
+            "show_label": bool(width_slots >= 3),
+            "avg_move_pct": avg_mv,
         })
 
     vol_profile_meta = {
@@ -2330,7 +2358,7 @@ def _build_dual_5m_trajectory(
     for i, sl in enumerate(slots):
         frac = i / max(n_slots - 1, 1)
         mid = est_open * (1.0 + slot_means[i] + drift * frac)
-        mid = _apply_hvn_ob_bounce(mid, hvn_wall_px, ob_sup_px, vp)
+        mid = _apply_hvn_ob_bounce(mid, est_open, hvn_wall_px, ob_sup_px, vp)
 
         up_out_spread = max((slot_q90[i] - slot_means[i]) * vboost, slot_stds[i] * vboost * 0.65)
         dn_out_spread = max((slot_means[i] - slot_q10[i]) * vboost, slot_stds[i] * vboost * 0.65)
@@ -2559,7 +2587,7 @@ def _build_dual_5m_trajectory(
             base_rel = (slot_means[i] - anchor_mean) + (drift * 0.6 + live_vwap_bias) * rem_frac
             rel_move = (0.70 * base_rel + 0.30 * knn_moves[i]) if (i in knn_moves) else base_rel
             mid = anchor_px * (1.0 + rel_move)
-            mid = _apply_hvn_ob_bounce(mid, hvn_wall_px, ob_sup_px, vp)
+            mid = _apply_hvn_ob_bounce(mid, anchor_px, hvn_wall_px, ob_sup_px, vp)
 
             if i == last_act_idx:
                 u_step_sig = 0.0012
@@ -2879,10 +2907,10 @@ def _render_unified_guide():
     2. <b>ベイズ確率メーター＆シナリオカード:</b> 1日全体の4シナリオ事後確率と「押し目・高値の時間帯」「上下トリガー価格」をチェック。<br>
     3. <b>What-If衝撃波シミュレーター＆適正ロット電卓:</b> 先物・為替の追加ショックをスライダーで模擬し、100株単元・流動性インパクト・U字ボラ積分FPT到達確率を即算出。<br>
     <hr style="border-color:rgba(56,189,248,0.22);margin:7px 0;">
-    <b>■ v15 デイトレ・スキャル魔改造ガイド</b><br>
+    <b>■ v15.1 デイトレ・スキャル魔改造ガイド</b><br>
     ・<b>場中30分・3分岐点線:</b> 現在値(NOW)から6本(30分)先までの上昇・横ばい・下落波形とリアルタイム確率(%)を表示。<br>
     ・<b>類似実測波形(Top-1):</b> 平均化していない実在類似日の5分足波形を重ね、ダマシや押し目のリアルな質感を再現。<br>
-    ・<b>高ボラ狩り場帯:</b> U字ボラ曲線から期待5分値幅が大きい時間帯をアンバー縦帯で可視化。
+    ・<b>高ボラ狩り場帯:</b> U字ボラ曲線から期待5分値幅が大きい時間帯をアンバー縦帯（下端ラベル）で可視化。
     </div>
     """, unsafe_allow_html=True)
 
@@ -2897,7 +2925,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     with h1:
         st.markdown(
             '<div class="glass-header" style="margin-bottom:4px;padding:8px 12px;">'
-            '<div class="brand-luxury" style="font-size:15px;">YAMASHISHI DEEP DIVE v15</div>'
+            '<div class="brand-luxury" style="font-size:15px;">YAMASHISHI DEEP DIVE v15.1</div>'
             '<div style="font-size:10px;color:#94a3b8;">場中30分3分岐点線・類似実測メドイド・高ボラ狩り場帯・ベイズ確率</div>'
             '</div>',
             unsafe_allow_html=True
@@ -3295,13 +3323,14 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 elif traj["has_actual"] and not traj["is_locked"]:
                     st.markdown('<div class="dd-sync-warn"><b>ℹ️ 本日は場中初回アクセスのため「朝ロック検証」対象外</b><br>リーク防止のため、寄り前に保存された予測のみを答え合わせ対象としています（現在はライブ修正軌道を基準に表示中）。</div>', unsafe_allow_html=True)
 
+            # 修正2: 上端(insideTop: 押目帯/利確帯/前/後場) と 下端(insideBottom/insideStartBottom: ボラ帯/転換時間帯ガイド) の完全分離
             ml_data = []
             if traj["lunch_idx"] is not None:
                 ml_data.append({"xAxis": traj["slots"][traj["lunch_idx"]], "lineStyle": {"color": "rgba(148,163,184,0.3)", "type": "dashed"}, "label": {"formatter": "前/後場", "color": "#94a3b8", "fontSize": 9, "position": "insideEndTop"}})
 
             if "転換時間帯ガイド" in opt_lines:
                 micro_times = (
-                    [("09:05", "寄付一巡"), ("09:30", "仲値前"), ("11:25", "前引け"), ("12:30", "後場寄"), ("14:30", "機関執行"), ("15:25", "大引け")]
+                    [("09:15", "寄付一巡"), ("11:25", "前引"), ("12:30", "後場"), ("14:30", "機関"), ("15:25", "引け")]
                     if is_jp else
                     [("10:00", "指標/反転"), ("11:30", "欧州引け"), ("15:50", "MOC執行")]
                 )
@@ -3310,7 +3339,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         ml_data.append({
                             "xAxis": mt_slot,
                             "lineStyle": {"color": "rgba(125, 211, 252, 0.22)", "type": "dotted", "width": 1.0},
-                            "label": {"formatter": mt_lbl, "color": "rgba(148, 163, 184, 0.72)", "fontSize": 8, "position": "insideEndBottom"},
+                            "label": {"formatter": mt_lbl, "color": "rgba(148, 163, 184, 0.72)", "fontSize": 8, "position": "insideStartBottom"},
                         })
 
             if g15.get("show_gap_target") and prev_px > 0:
@@ -3349,12 +3378,18 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             ma_data = []
             if "高ボラ狩り場帯" in opt_lines and traj.get("high_vol_zones"):
                 for hvz in traj["high_vol_zones"]:
+                    show_hv_lbl = bool(hvz.get("show_label", hvz.get("width_slots", 3) >= 3))
                     ma_data.append([
                         {
-                            "name": f"ボラ帯(±{hvz['avg_move_pct']:.2f}%)",
+                            "name": f"±{hvz['avg_move_pct']:.1f}%",
                             "xAxis": hvz["start_slot"],
                             "itemStyle": {"color": "rgba(245, 158, 11, 0.08)"},
-                            "label": {"position": "insideTop", "color": "#fbbf24", "fontSize": 8},
+                            "label": {
+                                "show": show_hv_lbl,
+                                "position": "insideBottom",
+                                "color": "#fbbf24",
+                                "fontSize": 8,
+                            },
                         },
                         {"xAxis": hvz["end_slot"]},
                     ])
@@ -3370,6 +3405,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     ma_data.append([{"name": "売り壁", "yAxis": round(vp["res_px"] * 0.996, 2), "itemStyle": {"color": "rgba(168, 85, 247, 0.13)"}, "label": {"position": "insideLeft", "color": "#d8b4fe", "fontSize": 8.5}}, {"yAxis": round(vp["res_px"] * 1.004, 2)}])
             ma_cfg = {"silent": True, "data": ma_data} if ma_data else {}
 
+            # 修正3: 凡例アイコン色と線の色を完全一致させる itemStyle.color の明示指定
             s_list, l_names = [], []
             if "出来高" in opt_lines:
                 s_list.append({"name": "出来高", "type": "bar", "yAxisIndex": 1, "data": traj["vols"], "itemStyle": {"color": "rgba(148,163,184,0.14)", "borderRadius": [2, 2, 0, 0]}, "barMaxWidth": 4})
@@ -3381,10 +3417,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 c_p32 = disp_live_p32 if is_lv else disp_locked_p32
                 c_bd_in = disp_live_bdiff_in if is_lv else disp_locked_bdiff_in
                 s_list.extend([
-                    {"name": "outer_base", "type": "line", "yAxisIndex": 0, "data": c_p15, "stack": "fan_out", "lineStyle": {"opacity": 0}, "showSymbol": False, "silent": True},
-                    {"name": "10-90%分位帯", "type": "line", "yAxisIndex": 0, "data": c_bd, "stack": "fan_out", "lineStyle": {"opacity": 0}, "areaStyle": {"color": "rgba(99, 102, 241, 0.12)"}, "showSymbol": False, "silent": True},
-                    {"name": "inner_base", "type": "line", "yAxisIndex": 0, "data": c_p32, "stack": "fan_in", "lineStyle": {"opacity": 0}, "showSymbol": False, "silent": True},
-                    {"name": "コア帯", "type": "line", "yAxisIndex": 0, "data": c_bd_in, "stack": "fan_in", "lineStyle": {"opacity": 0}, "areaStyle": {"color": "rgba(56, 189, 248, 0.22)"}, "showSymbol": False, "silent": True},
+                    {"name": "outer_base", "type": "line", "yAxisIndex": 0, "data": c_p15, "stack": "fan_out", "itemStyle": {"color": "rgba(99, 102, 241, 0.25)"}, "lineStyle": {"opacity": 0}, "showSymbol": False, "silent": True},
+                    {"name": "10-90%分位帯", "type": "line", "yAxisIndex": 0, "data": c_bd, "stack": "fan_out", "itemStyle": {"color": "rgba(99, 102, 241, 0.25)"}, "lineStyle": {"opacity": 0}, "areaStyle": {"color": "rgba(99, 102, 241, 0.12)"}, "showSymbol": False, "silent": True},
+                    {"name": "inner_base", "type": "line", "yAxisIndex": 0, "data": c_p32, "stack": "fan_in", "itemStyle": {"color": "#38bdf8"}, "lineStyle": {"opacity": 0}, "showSymbol": False, "silent": True},
+                    {"name": "コア帯", "type": "line", "yAxisIndex": 0, "data": c_bd_in, "stack": "fan_in", "itemStyle": {"color": "#38bdf8"}, "lineStyle": {"color": "#38bdf8", "opacity": 0}, "areaStyle": {"color": "rgba(56, 189, 248, 0.22)"}, "showSymbol": False, "silent": True},
                 ])
                 l_names.append("コア帯")
 
@@ -3396,6 +3432,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "type": "line",
                         "yAxisIndex": 0,
                         "data": ap_scaled,
+                        "itemStyle": {"color": "#94a3b8"},
                         "lineStyle": {"color": "#94a3b8", "width": 1.1, "opacity": 0.18},
                         "showSymbol": False,
                         "silent": True,
@@ -3410,6 +3447,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     "type": "line",
                     "yAxisIndex": 0,
                     "data": med_scaled,
+                    "itemStyle": {"color": "#f59e0b"},
                     "lineStyle": {"color": "#f59e0b", "width": 1.5, "opacity": 0.72, "type": "solid"},
                     "showSymbol": False,
                     "z": 4,
@@ -3417,22 +3455,32 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 l_names.append("類似実測(Top-1)")
 
             if "VWAP" in opt_lines and traj["has_actual"]:
-                s_list.append({"name": "VWAP", "type": "line", "yAxisIndex": 0, "data": traj["vwap"], "lineStyle": {"color": "#f59e0b", "width": 1.6, "type": "dotted"}, "showSymbol": False})
+                s_list.append({
+                    "name": "VWAP",
+                    "type": "line",
+                    "yAxisIndex": 0,
+                    "data": traj["vwap"],
+                    "itemStyle": {"color": "#fbbf24"},
+                    "lineStyle": {"color": "#fbbf24", "width": 1.6, "type": "dotted"},
+                    "showSymbol": False,
+                })
                 l_names.append("VWAP")
 
             if "VWAP±σ" in opt_lines and traj["has_actual"]:
                 s_list.extend([
-                    {"name": "VWAP+1σ", "type": "line", "yAxisIndex": 0, "data": traj["vwap_p1"], "lineStyle": {"color": "rgba(245,158,11,0.55)", "width": 1.0, "type": "dashed"}, "showSymbol": False, "silent": True},
-                    {"name": "VWAP-1σ", "type": "line", "yAxisIndex": 0, "data": traj["vwap_m1"], "lineStyle": {"color": "rgba(245,158,11,0.55)", "width": 1.0, "type": "dashed"}, "showSymbol": False, "silent": True},
-                    {"name": "VWAP+2σ", "type": "line", "yAxisIndex": 0, "data": traj["vwap_p2"], "lineStyle": {"color": "rgba(239,68,68,0.45)", "width": 1.0, "type": "dotted"}, "showSymbol": False, "silent": True},
-                    {"name": "VWAP-2σ", "type": "line", "yAxisIndex": 0, "data": traj["vwap_m2"], "lineStyle": {"color": "rgba(16,185,129,0.45)", "width": 1.0, "type": "dotted"}, "showSymbol": False, "silent": True},
+                    {"name": "VWAP+1σ", "type": "line", "yAxisIndex": 0, "data": traj["vwap_p1"], "itemStyle": {"color": "rgba(251,191,36,0.55)"}, "lineStyle": {"color": "rgba(251,191,36,0.55)", "width": 1.0, "type": "dashed"}, "showSymbol": False, "silent": True},
+                    {"name": "VWAP-1σ", "type": "line", "yAxisIndex": 0, "data": traj["vwap_m1"], "itemStyle": {"color": "rgba(251,191,36,0.55)"}, "lineStyle": {"color": "rgba(251,191,36,0.55)", "width": 1.0, "type": "dashed"}, "showSymbol": False, "silent": True},
+                    {"name": "VWAP+2σ", "type": "line", "yAxisIndex": 0, "data": traj["vwap_p2"], "itemStyle": {"color": "rgba(239,68,68,0.45)"}, "lineStyle": {"color": "rgba(239,68,68,0.45)", "width": 1.0, "type": "dotted"}, "showSymbol": False, "silent": True},
+                    {"name": "VWAP-2σ", "type": "line", "yAxisIndex": 0, "data": traj["vwap_m2"], "itemStyle": {"color": "rgba(16,185,129,0.45)"}, "lineStyle": {"color": "rgba(16,185,129,0.45)", "width": 1.0, "type": "dotted"}, "showSymbol": False, "silent": True},
                 ])
 
             if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
                 is_both = (chart_mode == "⚡ 両方重ね")
+                lk_col = "#c084fc" if is_both else "#38bdf8"
                 s_list.append({
                     "name": "朝ロック", "type": "line", "yAxisIndex": 0, "data": disp_locked_p50,
-                    "lineStyle": {"color": "#c084fc" if is_both else "#38bdf8", "width": 2.0 if is_both else 2.6, "type": "dashed" if is_both else "solid", "shadowBlur": 8, "shadowColor": "rgba(192,132,252,0.45)"},
+                    "itemStyle": {"color": lk_col},
+                    "lineStyle": {"color": lk_col, "width": 2.0 if is_both else 2.6, "type": "dashed" if is_both else "solid", "shadowBlur": 8, "shadowColor": "rgba(192,132,252,0.45)"},
                     "showSymbol": False, "markLine": ml_cfg, "markArea": ma_cfg
                 })
                 l_names.append("朝ロック")
@@ -3440,6 +3488,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             if chart_mode in ("🔴 ライブ修正", "⚡ 両方重ね"):
                 s_list.append({
                     "name": "ライブ修正", "type": "line", "yAxisIndex": 0, "data": disp_live_p50,
+                    "itemStyle": {"color": "#38bdf8"},
                     "lineStyle": {"color": "#38bdf8", "width": 2.6, "shadowBlur": 12, "shadowColor": "rgba(56,189,248,0.65)"},
                     "showSymbol": False,
                     "markLine": ml_cfg if chart_mode == "🔴 ライブ修正" else {},
@@ -3450,6 +3499,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             if traj["has_actual"]:
                 s_list.append({
                     "name": "当日実測", "type": "line", "yAxisIndex": 0, "data": traj["actual"],
+                    "itemStyle": {"color": "#ffffff"},
                     "lineStyle": {"color": "#ffffff", "width": 2.8, "shadowBlur": 10, "shadowColor": "rgba(255,255,255,0.65)"},
                     "showSymbol": False
                 })
@@ -3464,6 +3514,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "type": "line",
                         "yAxisIndex": 0,
                         "data": short_3way["up_path"],
+                        "itemStyle": {"color": "#10b981"},
                         "lineStyle": {"color": "#10b981", "width": 2.0, "type": "dashed"},
                         "showSymbol": False,
                         "endLabel": {
@@ -3482,6 +3533,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "type": "line",
                         "yAxisIndex": 0,
                         "data": short_3way["flat_path"],
+                        "itemStyle": {"color": "#94a3b8"},
                         "lineStyle": {"color": "#94a3b8", "width": 1.8, "type": "dotted"},
                         "showSymbol": False,
                         "endLabel": {
@@ -3500,6 +3552,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "type": "line",
                         "yAxisIndex": 0,
                         "data": short_3way["down_path"],
+                        "itemStyle": {"color": "#ef4444"},
                         "lineStyle": {"color": "#ef4444", "width": 2.0, "type": "dashed"},
                         "showSymbol": False,
                         "endLabel": {
