@@ -455,7 +455,7 @@ def db_get(key: str, default_val):
                 if row:
                     val = json.loads(row[0]); _MEM_CACHE[key] = val
                     if _get_supabase_config()[0]:
-                        _supabase_rest_upsert(key, val)
+                        threading.Thread(target=_supabase_rest_upsert, args=(key, val), daemon=True).start()
                     return val
         except Exception as e: record_system_error(f"db_get:{key}", e)
         return default_val
@@ -469,8 +469,9 @@ def db_set(key: str, val):
         except Exception as e: record_system_error(f"db_set:{key}", e)
         try:
             if _get_supabase_config()[0]:
-                _supabase_rest_upsert(key, val)
+                threading.Thread(target=_supabase_rest_upsert, args=(key, val), daemon=True).start()
         except Exception: pass
+
 def _derive_crypto_key(salt: bytes) -> bytes: return hashlib.pbkdf2_hmac("sha256", SECRET_KEY.encode(), salt, 60000, 32)
 
 def encrypt_secret_str(p: str) -> str:
@@ -676,7 +677,6 @@ DEFAULT_AGENTS = {
 }
 
 def load_quant_auditors() -> dict:
-    db_set("agi_agents", dict(DEFAULT_AGENTS))
     return dict(DEFAULT_AGENTS)
 
 def check_and_log_ban_spoof(em: str, nm: str, cfp: str, rhfp: str, p_h: str = "", act: str = "アクセス") -> tuple:
@@ -863,7 +863,7 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
             else: st.warning("⚠️ この端末は未登録です。初回は下のフォームから専用コードでログインしてください（次回から自動登録されます）。")
 
 def inject_css():
-    css = """@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}div[data-baseweb="popover"],div[data-baseweb="menu"],div[role="listbox"],ul[role="listbox"]{z-index:2147483647!important;pointer-events:auto!important;}header[data-testid="stHeader"]{background:transparent!important;pointer-events:none!important;height:3.5rem!important;z-index:999980!important;}header[data-testid="stHeader"] [data-testid="stToolbar"],header[data-testid="stHeader"] [data-testid="stActionButtons"]{display:none!important;}section[data-testid="stSidebar"]{position:fixed!important;top:0!important;left:0!important;height:100vh!important;z-index:999995!important;width:330px!important;max-width:88vw!important;min-width:320px!important;background:rgba(8,12,22,0.98)!important;backdrop-filter:blur(25px)!important;border-right:1px solid rgba(56,189,248,0.35)!important;visibility:visible!important;transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)!important;}section[data-testid="stSidebar"]:not([aria-expanded="true"]){transform:translateX(-120%)!important;pointer-events:none!important;}section[data-testid="stSidebar"][aria-expanded="true"]{transform:translateX(0)!important;pointer-events:auto!important;}section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"]{pointer-events:auto!important;}[data-testid="collapsedControl"],[data-testid="stSidebarCollapsedControl"],[data-testid="stSidebarCollapseButton"],header button[kind="headerNoPadding"],section[data-testid="stSidebar"] button[aria-label*="Close"],section[data-testid="stSidebar"] button[aria-label*="閉じる"],section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]{display:none!important;opacity:0!important;position:absolute!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none!important;z-index:-1!important;}section[data-testid="stSidebar"]+div,section.main,.stApp>header+div>div{margin-left:0!important;width:100%!important;max-width:100%!important;}.sidebar-section-card{background:rgba(15,23,42,0.65);border:1px solid rgba(56,189,248,0.18);border-radius:10px;padding:10px 12px;margin-bottom:12px;}.sidebar-header-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#38bdf8;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:5px;}.fixed-top-nav-bar{position:fixed!important;top:10px!important;left:50%!important;transform:translateX(-50%)!important;z-index:999980!important;width:min(170px,calc(100vw - 4rem))!important;background:transparent!important;border:none!important;margin:0!important;padding:0!important;pointer-events:auto!important;}div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}.fixed-top-nav-bar div[data-testid="stHorizontalBlock"]{background:transparent!important;border:none!important;width:100%!important;display:flex!important;justify-content:center!important;}.fixed-top-nav-bar button{width:100%!important;height:30px!important;min-height:30px!important;max-height:30px!important;background:rgba(15,23,42,0.75)!important;color:#93c5fd!important;border:1px solid rgba(56,189,248,0.35)!important;border-radius:20px!important;box-shadow:0 0 8px rgba(56,189,248,0.25)!important;font-size:11.5px!important;font-weight:700!important;letter-spacing:0.5px!important;cursor:pointer!important;transition:all 0.15s ease!important;}.fixed-top-nav-bar button:hover{background:rgba(15,23,42,0.8)!important;border-color:rgba(56,189,248,0.45)!important;color:#93c5fd!important;box-shadow:0 0 10px rgba(56,189,248,0.3)!important;}.fixed-top-nav-bar button:active{background:rgba(56,189,248,0.25)!important;border-color:#38bdf8!important;color:#ffffff!important;box-shadow:0 0 25px rgba(56,189,248,0.95),inset 0 0 12px rgba(56,189,248,0.6)!important;transform:scale(0.96)!important;}.brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,24px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;display:block;width:100%;}.glass-header{background:radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);border:1px solid rgba(148,163,184,0.18);border-radius:14px;padding:14px;margin-bottom:16px;box-shadow:0 10px 28px rgba(0,0,0,0.45);}.rank-card,.search-result-card{background:linear-gradient(180deg,#0f172a 0%,#090d16 100%)!important;color:#f8fafc!important;border-radius:16px;padding:16px 18px;margin-top:14px;margin-bottom:24px;box-shadow:0 12px 32px rgba(0,0,0,0.65);border:1px solid rgba(148,163,184,0.22);border-left:5px solid #38bdf8;}.search-result-card{border-left-color:#f59e0b;}.prob-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:800;color:#38bdf8!important;}.expect-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:900;color:#fde047!important;}.winrate-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(65px,1fr));gap:6px;background:rgba(15,23,42,0.85)!important;border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:7px 6px;margin-top:5px!important;text-align:center;}.trade-plan-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:6px;margin-top:5px!important;background:rgba(2,6,23,0.7)!important;padding:7px 6px;border-radius:8px;border:1px solid rgba(148,163,184,0.18);text-align:center;}.order-ticket-box{background:linear-gradient(135deg,rgba(15,23,42,0.96) 0%,rgba(8,47,73,0.92) 100%);border:1.5px solid #38bdf8;border-radius:10px;padding:10px 12px;margin-bottom:10px;box-shadow:0 4px 16px rgba(56,189,248,0.18);}.order-ticket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-top:6px;}.order-ticket-cell{background:rgba(2,6,23,0.78);border:1px solid rgba(148,163,184,0.22);border-radius:6px;padding:6px 8px;}.admin-table-container{width:100%;overflow-x:auto;background:#0b0f19;border:1px solid rgba(56,189,248,0.25);border-radius:10px;margin-top:10px;}.admin-table{width:100%;border-collapse:collapse;font-size:11.5px;text-align:left;color:#e2e8f0;}.admin-table th{background:#1e293b;color:#38bdf8;padding:8px 10px;border-bottom:1px solid rgba(56,189,248,0.3);font-weight:700;white-space:nowrap;}.admin-table td{padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.1);white-space:nowrap;}.admin-table tr:hover{background:rgba(56,189,248,0.05);}.ai-council-box{background:rgba(8,12,22,0.98);border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-top:12px;}.ai-engine-status-pill{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:6px;margin-bottom:8px;display:block;}.council-scroll-window{max-height:440px!important;height:400px!important;overflow-y:auto!important;overflow-x:hidden!important;padding-right:8px;padding-top:4px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth;will-change:scroll-position;}.council-scroll-window::-webkit-scrollbar{width:6px;}.council-scroll-window::-webkit-scrollbar-track{background:rgba(15,23,42,0.6);border-radius:4px;}.council-scroll-window::-webkit-scrollbar-thumb{background:#38bdf8;border-radius:4px;}.chat-bubble-ai,.chat-bubble-user,.chat-bubble-agree,.chat-bubble-doubt,.chat-bubble-rage{padding:9px 12px;border-radius:8px;margin-bottom:4px;font-size:12px;line-height:1.5;word-break:break-word;}.chat-bubble-ai{background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;}.chat-bubble-agree{background:rgba(6,78,59,0.65);border-left:3px solid #10b981;}.chat-bubble-doubt{background:rgba(120,53,15,0.65);border-left:3px solid #f59e0b;}.chat-bubble-rage{background:rgba(127,29,29,0.65);border-left:3px solid #ef4444;}.chat-bubble-user{background:rgba(56,189,248,0.24);border-left:4px solid #38bdf8;border-right:2px solid rgba(56,189,248,0.4);text-align:left;padding:10px 14px;margin-bottom:6px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.4);scroll-margin-top:6px!important;}.round-divider{font-size:11px;font-weight:800;color:#94a3b8;text-align:center;margin:6px 0;letter-spacing:1px;}.beginner-action-box{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;color:#d1fae5;}.sizing-box{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;background:rgba(2,6,23,0.7);border:1px solid rgba(148,163,184,0.16);padding:7px 12px;border-radius:6px;margin-top:5px;font-size:11.5px;}.combat-guide-box{background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.28);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#bae6fd;line-height:1.5;}.macro10y-box{background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.34);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#e9d5ff;line-height:1.5;}.daily2y-box{background:rgba(14,165,233,0.10);border:1px solid rgba(14,165,233,0.36);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#bae6fd;line-height:1.5;}.forward-verify-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px;background:linear-gradient(90deg,rgba(16,185,129,0.14),rgba(56,189,248,0.14));border:1px solid rgba(56,189,248,0.35);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:11px;color:#e2e8f0;}.quant-detail-drawer{margin-top:6px;font-size:11.5px;cursor:pointer;}.signal-10tier-badge{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;display:flex;justify-content:space-between;margin-bottom:6px;}.pill-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;border:1px solid rgba(148,163,184,0.3);margin-right:3px;display:inline-block;white-space:nowrap!important;}.quantum-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);color:#c084fc;margin-right:3px;display:inline-block;white-space:nowrap!important;}.inst-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;margin-right:0px;display:inline-block;white-space:nowrap!important;}.badge-single-line{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scrollbar-width:none!important;margin-bottom:6px!important;gap:2px!important;white-space:nowrap!important;}.badge-single-line::-webkit-scrollbar{display:none!important;}.ipo-link-btn{display:inline-block;padding:5px 12px;background:rgba(245,158,11,0.2);border:1px solid #f59e0b;border-radius:6px;color:#fde047;text-decoration:none;font-size:11.5px;font-weight:700;margin-right:6px;margin-top:4px;}.consensus-banner{background:rgba(15,23,42,0.95);border:1px solid rgba(250,204,21,0.4);border-radius:10px;padding:12px;margin-top:12px;}.disclaimer-banner{background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:8px;padding:10px 14px;margin-top:25px;margin-bottom:15px;font-size:11px;line-height:1.6;color:#94a3b8;}.svg-chart-wrap{background:rgba(2,6,23,0.88);border:1px solid rgba(56,189,248,0.32);border-radius:10px;padding:8px 10px;margin-top:8px;margin-bottom:8px;overflow-x:auto;}.manual-card{background:rgba(15,23,42,0.92);border:1px solid rgba(56,189,248,0.28);border-left:4px solid #38bdf8;border-radius:10px;padding:12px 14px;margin-bottom:10px;}@keyframes alert-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,0.8);}70%{box-shadow:0 0 0 10px rgba(239,68,68,0);}100%{box-shadow:0 0 0 0 rgba(239,68,68,0);}}"""
+    css = """@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');html,body,[class*="css"]{font-family:'Plus Jakarta+Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}div[data-baseweb="popover"],div[data-baseweb="menu"],div[role="listbox"],ul[role="listbox"]{z-index:2147483647!important;pointer-events:auto!important;}header[data-testid="stHeader"]{background:transparent!important;pointer-events:none!important;height:3.5rem!important;z-index:999980!important;}header[data-testid="stHeader"] [data-testid="stToolbar"],header[data-testid="stHeader"] [data-testid="stActionButtons"]{display:none!important;}section[data-testid="stSidebar"]{position:fixed!important;top:0!important;left:0!important;height:100vh!important;z-index:999995!important;width:330px!important;max-width:88vw!important;min-width:320px!important;background:rgba(8,12,22,0.98)!important;backdrop-filter:blur(25px)!important;border-right:1px solid rgba(56,189,248,0.35)!important;visibility:visible!important;transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)!important;}section[data-testid="stSidebar"]:not([aria-expanded="true"]){transform:translateX(-120%)!important;pointer-events:none!important;}section[data-testid="stSidebar"][aria-expanded="true"]{transform:translateX(0)!important;pointer-events:auto!important;}section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"]{pointer-events:auto!important;}[data-testid="collapsedControl"],[data-testid="stSidebarCollapsedControl"],[data-testid="stSidebarCollapseButton"],header button[kind="headerNoPadding"],section[data-testid="stSidebar"] button[aria-label*="Close"],section[data-testid="stSidebar"] button[aria-label*="閉じる"],section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]{display:none!important;opacity:0!important;position:absolute!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none!important;z-index:-1!important;}section[data-testid="stSidebar"]+div,section.main,.stApp>header+div>div{margin-left:0!important;width:100%!important;max-width:100%!important;}.sidebar-section-card{background:rgba(15,23,42,0.65);border:1px solid rgba(56,189,248,0.18);border-radius:10px;padding:10px 12px;margin-bottom:12px;}.sidebar-header-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#38bdf8;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:5px;}.fixed-top-nav-bar{position:fixed!important;top:10px!important;left:50%!important;transform:translateX(-50%)!important;z-index:999980!important;width:min(170px,calc(100vw - 4rem))!important;background:transparent!important;border:none!important;margin:0!important;padding:0!important;pointer-events:auto!important;}div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}.fixed-top-nav-bar div[data-testid="stHorizontalBlock"]{background:transparent!important;border:none!important;width:100%!important;display:flex!important;justify-content:center!important;}.fixed-top-nav-bar button{width:100%!important;height:30px!important;min-height:30px!important;max-height:30px!important;background:rgba(15,23,42,0.75)!important;color:#93c5fd!important;border:1px solid rgba(56,189,248,0.35)!important;border-radius:20px!important;box-shadow:0 0 8px rgba(56,189,248,0.25)!important;font-size:11.5px!important;font-weight:700!important;letter-spacing:0.5px!important;cursor:pointer!important;transition:all 0.15s ease!important;}.fixed-top-nav-bar button:hover{background:rgba(15,23,42,0.8)!important;border-color:rgba(56,189,248,0.45)!important;color:#93c5fd!important;box-shadow:0 0 10px rgba(56,189,248,0.3)!important;}.fixed-top-nav-bar button:active{background:rgba(56,189,248,0.25)!important;border-color:#38bdf8!important;color:#ffffff!important;box-shadow:0 0 25px rgba(56,189,248,0.95),inset 0 0 12px rgba(56,189,248,0.6)!important;transform:scale(0.96)!important;}.brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,24px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;display:block;width:100%;}.glass-header{background:radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);border:1px solid rgba(148,163,184,0.18);border-radius:14px;padding:14px;margin-bottom:16px;box-shadow:0 10px 28px rgba(0,0,0,0.45);}.rank-card,.search-result-card{background:linear-gradient(180deg,#0f172a 0%,#090d16 100%)!important;color:#f8fafc!important;border-radius:16px;padding:16px 18px;margin-top:14px;margin-bottom:24px;box-shadow:0 12px 32px rgba(0,0,0,0.65);border:1px solid rgba(148,163,184,0.22);border-left:5px solid #38bdf8;}.search-result-card{border-left-color:#f59e0b;}.prob-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:800;color:#38bdf8!important;}.expect-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:900;color:#fde047!important;}.winrate-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(65px,1fr));gap:6px;background:rgba(15,23,42,0.85)!important;border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:7px 6px;margin-top:5px!important;text-align:center;}.trade-plan-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:6px;margin-top:5px!important;background:rgba(2,6,23,0.7)!important;padding:7px 6px;border-radius:8px;border:1px solid rgba(148,163,184,0.18);text-align:center;}.order-ticket-box{background:linear-gradient(135deg,rgba(15,23,42,0.96) 0%,rgba(8,47,73,0.92) 100%);border:1.5px solid #38bdf8;border-radius:10px;padding:10px 12px;margin-bottom:10px;box-shadow:0 4px 16px rgba(56,189,248,0.18);}.order-ticket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-top:6px;}.order-ticket-cell{background:rgba(2,6,23,0.78);border:1px solid rgba(148,163,184,0.22);border-radius:6px;padding:6px 8px;}.admin-table-container{width:100%;overflow-x:auto;background:#0b0f19;border:1px solid rgba(56,189,248,0.25);border-radius:10px;margin-top:10px;}.admin-table{width:100%;border-collapse:collapse;font-size:11.5px;text-align:left;color:#e2e8f0;}.admin-table th{background:#1e293b;color:#38bdf8;padding:8px 10px;border-bottom:1px solid rgba(56,189,248,0.3);font-weight:700;white-space:nowrap;}.admin-table td{padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.1);white-space:nowrap;}.admin-table tr:hover{background:rgba(56,189,248,0.05);}.ai-council-box{background:rgba(8,12,22,0.98);border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-top:12px;}.ai-engine-status-pill{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:6px;margin-bottom:8px;display:block;}.council-scroll-window{max-height:440px!important;height:400px!important;overflow-y:auto!important;overflow-x:hidden!important;padding-right:8px;padding-top:4px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth;will-change:scroll-position;}.council-scroll-window::-webkit-scrollbar{width:6px;}.council-scroll-window::-webkit-scrollbar-track{background:rgba(15,23,42,0.6);border-radius:4px;}.council-scroll-window::-webkit-scrollbar-thumb{background:#38bdf8;border-radius:4px;}.chat-bubble-ai,.chat-bubble-user,.chat-bubble-agree,.chat-bubble-doubt,.chat-bubble-rage{padding:9px 12px;border-radius:8px;margin-bottom:4px;font-size:12px;line-height:1.5;word-break:break-word;}.chat-bubble-ai{background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;}.chat-bubble-agree{background:rgba(6,78,59,0.65);border-left:3px solid #10b981;}.chat-bubble-doubt{background:rgba(120,53,15,0.65);border-left:3px solid #f59e0b;}.chat-bubble-rage{background:rgba(127,29,29,0.65);border-left:3px solid #ef4444;}.chat-bubble-user{background:rgba(56,189,248,0.24);border-left:4px solid #38bdf8;border-right:2px solid rgba(56,189,248,0.4);text-align:left;padding:10px 14px;margin-bottom:6px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.4);scroll-margin-top:6px!important;}.round-divider{font-size:11px;font-weight:800;color:#94a3b8;text-align:center;margin:6px 0;letter-spacing:1px;}.beginner-action-box{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;color:#d1fae5;}.sizing-box{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;background:rgba(2,6,23,0.7);border:1px solid rgba(148,163,184,0.16);padding:7px 12px;border-radius:6px;margin-top:5px;font-size:11.5px;}.combat-guide-box{background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.28);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#bae6fd;line-height:1.5;}.macro10y-box{background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.34);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#e9d5ff;line-height:1.5;}.daily2y-box{background:rgba(14,165,233,0.10);border:1px solid rgba(14,165,233,0.36);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#bae6fd;line-height:1.5;}.forward-verify-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px;background:linear-gradient(90deg,rgba(16,185,129,0.14),rgba(56,189,248,0.14));border:1px solid rgba(56,189,248,0.35);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:11px;color:#e2e8f0;}.quant-detail-drawer{margin-top:6px;font-size:11.5px;cursor:pointer;}.signal-10tier-badge{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;display:flex;justify-content:space-between;margin-bottom:6px;}.pill-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;border:1px solid rgba(148,163,184,0.3);margin-right:3px;display:inline-block;white-space:nowrap!important;}.quantum-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);color:#c084fc;margin-right:3px;display:inline-block;white-space:nowrap!important;}.inst-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;margin-right:0px;display:inline-block;white-space:nowrap!important;}.badge-single-line{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scrollbar-width:none!important;margin-bottom:6px!important;gap:2px!important;white-space:nowrap!important;}.badge-single-line::-webkit-scrollbar{display:none!important;}.ipo-link-btn{display:inline-block;padding:5px 12px;background:rgba(245,158,11,0.2);border:1px solid #f59e0b;border-radius:6px;color:#fde047;text-decoration:none;font-size:11.5px;font-weight:700;margin-right:6px;margin-top:4px;}.consensus-banner{background:rgba(15,23,42,0.95);border:1px solid rgba(250,204,21,0.4);border-radius:10px;padding:12px;margin-top:12px;}.disclaimer-banner{background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:8px;padding:10px 14px;margin-top:25px;margin-bottom:15px;font-size:11px;line-height:1.6;color:#94a3b8;}.svg-chart-wrap{background:rgba(2,6,23,0.88);border:1px solid rgba(56,189,248,0.32);border-radius:10px;padding:8px 10px;margin-top:8px;margin-bottom:8px;overflow-x:auto;}.manual-card{background:rgba(15,23,42,0.92);border:1px solid rgba(56,189,248,0.28);border-left:4px solid #38bdf8;border-radius:10px;padding:12px 14px;margin-bottom:10px;}@keyframes alert-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,0.8);}70%{box-shadow:0 0 0 10px rgba(239,68,68,0);}100%{box-shadow:0 0 0 0 rgba(239,68,68,0);}}"""
     st.markdown(f'<div id="page_top_anchor"></div><style>{css}</style>', unsafe_allow_html=True)
 
 inject_css()
@@ -940,6 +940,7 @@ if "user_prefs_loaded" not in st.session_state or st.session_state.get("last_loa
     saved_boosts = set(_normalize_boost_keys(user_saved_prefs.get("active_boosts", ["core_vol", "core_inst", "core_mom"])))
     for bk in ["core_vol", "core_inst", "core_mom"]: st.session_state[f"chk_{bk}"] = (bk in saved_boosts)
     st.session_state["watchlist"] = user_saved_watchlist; st.session_state["user_prefs_loaded"] = True; st.session_state["last_loaded_user"] = cu_active
+    st.session_state["_last_saved_prefs_hash"] = hashlib.md5(json.dumps({"user": cu_active, "prefs": user_saved_prefs}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 defaults = {"active_debates": {}, "council_threads": {}, "council_meta": {}, "debate_round_seed": {}, "watchlist": user_saved_watchlist, "navigation_page": "TOP", "selected_news_item": None, "custom_search_code": "", "active_category": "🏆 総合TOP5", "last_cat": "🏆 総合TOP5", "nav_history": [], "scroll_top_trig": 0, "scroll_target_id": "", "focused_stock_item": None, "agent_roster": saved_agents, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}, "last_audit_similarity_penalty": 0, "last_working_gemini_model": "", "force_close_sidebar_trig": 0, "last_synced_style": "", "journal_audit_results": {}, "dd_lab_ctx": None, "shared_ticker_intel": db_get("shared_ticker_intel", {})}
 for k, v in defaults.items():
@@ -1106,7 +1107,12 @@ with st.sidebar:
         risk_tolerance_pct = st.slider("1トレード許容リスク (%)", 0.5, 5.0, float(st.session_state.get("risk_tolerance_val", 2.0)), 0.5, key="risk_tolerance_input")
         survival_cut_pct = st.slider("選抜合格率 (%)", 40, 100, int(st.session_state.get("survival_cut_val", 75)), 5, key="survival_cut_input")
 
-    if cu: save_user_prefs(cu, {"investment_style": investment_style, "active_boosts": list(ac_b), "total_capital": total_capital, "risk_tolerance_pct": risk_tolerance_pct, "survival_cut_pct": survival_cut_pct})
+    if cu:
+        prefs_payload = {"investment_style": investment_style, "active_boosts": sorted(list(ac_b)), "total_capital": int(total_capital), "risk_tolerance_pct": float(risk_tolerance_pct), "survival_cut_pct": int(survival_cut_pct)}
+        prefs_hash = hashlib.md5(json.dumps({"user": cu, "prefs": prefs_payload}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        if st.session_state.get("_last_saved_prefs_hash") != prefs_hash:
+            save_user_prefs(cu, prefs_payload)
+            st.session_state["_last_saved_prefs_hash"] = prefs_hash
 
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🚪 ログアウト", use_container_width=True):
@@ -1921,6 +1927,7 @@ def fetch_earnings_days_left(full_code: str):
         return min(future_days) if future_days else None
     except Exception:
         return None
+
 def build_tomorrow_forecast_svg(r: dict) -> str:
     try:
         is_jp = ".T" in str(r.get("full_code", ""))
@@ -2312,16 +2319,22 @@ def _fmt_turn(t: dict, idx: int = 0) -> str:
     role_lbl = t.get("role_label") or {"agree": "強気・追随スタンス", "doubt": "慎重・リスク警戒", "rage": "過熱・空売り警鐘スタンス"}.get(t.get("tone", "normal"), "多角分析スタンス")
     return f'<div class="{b_cls}"><div style="font-weight:700;color:#38bdf8;font-size:11px;margin-bottom:2px;">{html.escape(t["speaker"])} <span style="color:#94a3b8;font-size:10px;">[{html.escape(role_lbl)}]</span></div><div>{html.escape(t["text"])}</div></div>'
 
-def render_council_sec(r, uk, auto_open=False):
+def _app_rerun():
+    try:
+        st.rerun(scope="app")
+    except TypeError:
+        st.rerun()
+
+def _render_council_sec_impl(r, uk, auto_open=False):
     is_open = auto_open or st.session_state["active_debates"].get(uk, False)
     if not auto_open:
         c1, c2 = st.columns([2.7, 1.1])
         btn_lbl = "🔼 売買ガイドを閉じる" if is_open else ("🔴 空売り戦略と合議を見る" if r.get("strat", {}).get("side") == "SHORT" else "🔵 買い方ガイドと合議を見る")
         if c1.button(btn_lbl, key=f"btn_open_{uk}", use_container_width=True):
-            st.session_state["focused_stock_item"] = r; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
+            st.session_state["focused_stock_item"] = r; st.session_state["scroll_top_trig"] = int(time.time() * 1000); _app_rerun()
         if c2.button("✅ 監視済" if r["code"] in st.session_state["watchlist"] else "⭐ 監視追加", key=f"btn_watch_{uk}", use_container_width=True):
             if r["code"] in st.session_state["watchlist"]: del st.session_state["watchlist"][r["code"]]
-            else: st.session_state["watchlist"][r["code"]] = r
+            else st.session_state["watchlist"][r["code"]] = r
             cu = st.session_state.get("authenticated_user", "")
             if cu: save_watchlist(cu, st.session_state["watchlist"])
             st.rerun()
@@ -2355,7 +2368,12 @@ def render_council_sec(r, uk, auto_open=False):
     if auto_open and not st.session_state.get("custom_search_code"):
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", key=f"btn_back_bottom_{uk}", use_container_width=True, type="primary"):
-            st.session_state["focused_stock_item"] = None; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
+            st.session_state["focused_stock_item"] = None; st.session_state["scroll_top_trig"] = int(time.time() * 1000); _app_rerun()
+
+if hasattr(st, "fragment"):
+    render_council_sec = st.fragment(_render_council_sec_impl)
+else:
+    render_council_sec = _render_council_sec_impl
 
 def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extra_origin_badge: str = "", intraday_df: pd.DataFrame = None):
     rel_news_list = [n for n in all_impact_news if r["full_code"] in n["detail"]["related_codes"]]
@@ -2530,7 +2548,6 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
         st.session_state["selected_news_item"] = rel_news; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
     open_now = bool(is_focused or is_custom)
     render_council_sec(r, f"foc_{r['code']}" if open_now else f"{kp}_{r['code']}", auto_open=open_now)
-
 def _compute_single_10y_metrics(df_w: pd.DataFrame, full_code: str) -> dict:
     is_jp = ".T" in str(full_code)
     default_res = {"cagr_10y": 0.0, "pos_10y_pct": 50.0, "poc_10y_price": 0.0, "poc_10y_str": "-", "low_10y_str": "-", "high_10y_str": "-", "ma200w_dev_pct": 0.0, "ma200w_slope_up": True, "long_10y_score": 50, "regime_10y_label": "📊 10年大局データ標準評価", "poc_relation_note": "データ蓄積中", "years_span": "10Y", "df_weekly_clean": None, "has_data": False}
@@ -2591,6 +2608,7 @@ def fetch_10y_macro_metrics(codes_tuple: tuple) -> dict:
             try: out.update(f_ch.result())
             except Exception as e_f: record_system_error("fetch_10y_macro_metrics:future", e_f)
     return out
+
 def _compute_single_daily_metrics(df_d: pd.DataFrame, bench_ret_series: pd.Series, full_code: str) -> dict:
     is_jp = ".T" in str(full_code)
     default_res = {"ma5": 0.0, "ma25": 0.0, "ma75": 0.0, "ma200": 0.0, "ma5_str": "-", "ma25_str": "-", "ma75_str": "-", "ma200_str": "-", "ma5_dev_pct": 0.0, "ma25_dev_pct": 0.0, "ma75_dev_pct": 0.0, "ma200_dev_pct": 0.0, "ma25_slope_up": True, "ma75_slope_up": True, "bull_po": False, "bear_po": False, "ma_align_label": "MA均衡", "macd_line": 0.0, "macd_signal": 0.0, "macd_hist": 0.0, "daily_rsi14": 50.0, "pos_52w_pct": 50.0, "is_52w_break": False, "daily_atr14": 0.0, "daily_atr14_str": "-", "daily_yz_vol": 0.30, "daily_rs_alpha_map": {}, "latest_rs_alpha": 0.0, "daily_trend_score": 50, "regime_1d_label": "⚖️ 日足中期レンジ均衡", "is_lvn_breakout": False, "hvn_wall_price": 0.0, "vp_struct_label": "⚖️ 標準出来高分布", "recent_close_60": [], "pdh": 0.0, "pdl": 0.0, "prev_close_1d": 0.0, "df_daily_clean": None, "has_data": False}
@@ -3114,7 +3132,6 @@ def _build_historical_daily_slice_ctx(df_daily_clean: pd.DataFrame, prev_d: str,
         poc_10y_price = round_to_tse_tick(poc_raw, full_code, "nearest") if full_code else poc_raw
         ma200w_dev_pct = float(((px - ma200) / max(ma200, 1e-4)) * 100.0)
     return {"ma5": ma5, "ma25": ma25, "ma75": ma75, "ma200": ma200, "ma25_slope_up": ma25_slope_up, "bull_po": bull_po, "bear_po": bear_po, "macd_hist": macd_hist, "pos_52w_pct": pos_52w_pct, "daily_atr14": daily_atr14, "prev_trend_weak": prev_trend_weak, "poc_10y_price": poc_10y_price, "pos_10y_pct": pos_10y_pct, "ma200w_dev_pct": ma200w_dev_pct, "has_data": True}
-
 def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat: dict, pest: float, vwap20: float, tpv: float, slv: float, shares: int, style: str, total_capital: float = 1000000.0, risk_tolerance_pct: float = 2.0, shared_ledger: dict = None, save_db: bool = True, genre: str = "", daily_2y: dict = None, macro_10y: dict = None, active_boosts: tuple = ("core_inst", "core_mom", "core_vol")) -> dict:
     is_jp = ".T" in full_code; now_dt = datetime.now(); today_str = now_dt.strftime("%Y-%m-%d"); today_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%d"); is_market_open = _is_market_open_now(is_jp)
     combat_prof = get_ticker_combat_profile(full_code, genre)
@@ -3256,6 +3273,13 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
         TACTIC_MODE_LABELS = {"Type-S2": "【空売り】過熱・WRV拒絶VWAP割れ", "Type-S1": "【空売り】資金流出VWAP割れ", "Type-A": "【買い】OR15維持+押し目高値更新始値", "Type-B": "【買い】OR15維持+押し目反発始値", "Type-C": "【買い】OR15維持+VWAP支持始値", "Type-D": "【買い】OR15高値ブレイク", "Type-E": "【買い】OR15維持+安値切上始値"}
         try:
             if len(unique_dates) >= 2:
+                all_c, all_o, all_h, all_l, all_v = [np.asarray(df[col].values, dtype=float).reshape(-1) for col in ["Close", "Open", "High", "Low", "Volume"]]
+                all_daily_5m = df.groupby("_trade_date").agg(Open=("Open", "first"), High=("High", "max"), Low=("Low", "min"), Close=("Close", "last"), Volume=("Volume", "sum")).sort_index()
+                date_end_pos = {}
+                t_dates_arr = df["_trade_date"].values
+                for pos_idx, td_val in enumerate(t_dates_arr):
+                    date_end_pos[str(td_val)] = pos_idx + 1
+
                 start_idx = max(0, len(unique_dates) - 35)
                 for idx_prev in range(start_idx, len(unique_dates) - 1):
                     try:
@@ -3263,19 +3287,21 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                         if entry_d in stock_ledger["verified"] or entry_d in unconf_dates: continue
                         prev_bars, entry_day_bars = bars_by_date.get(prev_d), bars_by_date.get(entry_d)
                         if prev_bars is None or prev_bars.empty or entry_day_bars is None or entry_day_bars.empty: continue
-                        hist_until_prev = pd.concat([bars_by_date[d_k] for d_k in unique_dates[:idx_prev + 1]], axis=0)
+                        end_p = date_end_pos.get(prev_d, 0)
+                        if end_p <= 0: continue
                         p_close = float(prev_bars["Close"].iloc[-1]); p_vol = prev_bars["Volume"].values.astype(float)
                         p_typ = (prev_bars["High"].values + prev_bars["Low"].values + prev_bars["Close"].values) / 3.0
                         p_vwap = float(np.sum(p_typ * p_vol) / np.sum(p_vol)) if np.sum(p_vol) > 0 else p_close
-                        hist_daily_5m = hist_until_prev.groupby("_trade_date").agg(Open=("Open", "first"), High=("High", "max"), Low=("Low", "min"), Close=("Close", "last"), Volume=("Volume", "sum")).sort_index()
+                        hist_daily_5m = all_daily_5m.loc[:prev_d]
                         hist_daily_ctx = _build_historical_daily_slice_ctx(df_daily_clean, prev_d, p_close, full_code=full_code, df_weekly_clean=df_weekly_clean)
                         hist_macro_slice = {"poc_10y_price": hist_daily_ctx["poc_10y_price"], "pos_10y_pct": hist_daily_ctx["pos_10y_pct"], "ma200w_dev_pct": hist_daily_ctx["ma200w_dev_pct"], "has_data": hist_daily_ctx["has_data"]}
                         poc_hist_p, pos_hist_p, p_atr = float(hist_daily_ctx["poc_10y_price"]), float(hist_daily_ctx["pos_10y_pct"]), float(hist_daily_ctx["daily_atr14"])
                         rs_alpha_p, is_prev_trend_weak = float(daily_rs_alpha_map.get(prev_d, 0.0)), bool(hist_daily_ctx["prev_trend_weak"])
 
-                        hc, ho, hh, hl, hv = [hist_until_prev[col].values.astype(float) for col in ["Close", "Open", "High", "Low", "Volume"]]
+                        hc, ho, hh, hl, hv = all_c[:end_p], all_o[:end_p], all_h[:end_p], all_l[:end_p], all_v[:end_p]
+                        hist_df_slice = df.iloc[:end_p]
                         ofi_p = compute_smoothed_clv_z(hc, hh, hl, hv, day_bars_count=len(prev_bars))
-                        qa_p = compute_advanced_quant_indicators(hc, ho, hh, hl, hv, daily_df=hist_daily_5m, df=hist_until_prev) if len(hc) >= 20 else {"rsi": 50.0, "vpin": 0.50, "eff_pct": 50, "surge_attention_score": 50, "rvol": 1.0, "upper_wick_pressure": 0.0, "lower_wick_support": 0.0}
+                        qa_p = compute_advanced_quant_indicators(hc, ho, hh, hl, hv, daily_df=hist_daily_5m, df=hist_df_slice) if len(hc) >= 20 else {"rsi": 50.0, "vpin": 0.50, "eff_pct": 50, "surge_attention_score": 50, "rvol": 1.0, "upper_wick_pressure": 0.0, "lower_wick_support": 0.0}
                         qm_p = compute_quantum_wave_metrics(hc, hh, hl, hv, o=ho, rsi_val=qa_p.get("rsi", 50.0), upper_wick_val=qa_p.get("upper_wick_pressure", 0.0)) if len(hc) >= 20 else {"q_tunnel": 50.0, "q_score": 50}
                         ms_p = compute_inst_microstructure(hc, hh, hl, hv) if len(hc) >= 20 else {"kyle_stealth": 50.0, "hurst": 0.50, "ms_score": 50}
                         r20_p = int(np.sum(np.diff(hc[-21:]) > 0)) if len(hc) >= 21 else 10
@@ -3787,6 +3813,7 @@ def _collect_raw_market_snapshot(universe_tuple: tuple) -> dict:
         "daily_2y_map": daily_2y_map,
         "earnings_map": earnings_map,
         "raw_5m": raw,
+        "total_codes": len(codes),
         "fetched_ts": time.time(),
     }
 
@@ -3817,7 +3844,9 @@ def _get_bg_market_refresher():
             state["started"] = True
     return state
 
-def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
+@st.cache_data(ttl=90)
+def _fetch_pool_batch_core(macro_sig: tuple, style: str, core_vol: bool, core_inst: bool, core_mom: bool):
+    macro = {k: {"price": p, "diff": d, "label": l} for k, p, d, l in macro_sig}
     base_roster = load_active_market_roster(); existing_codes = tuple(sorted([it[0] for it in base_roster]))
     challengers = discover_challenger_tickers(existing_codes); challenger_codes_set = {it[0] for it in challengers}
     combined_universe, seen_c = [], set()
@@ -3862,7 +3891,7 @@ def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True,
     evaluated_all = []
     def _w(c, n, g, t):
         df = _extract_ticker_df(raw, c, len(codes))
-        r = analyze_df(df, c, n, t, g, macro, buzz_map, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_capital=total_cap, risk_tolerance_pct=risk_pct, shared_ledger=shared_ledger, save_db=False, macro_10y_map=macro_10y_map, daily_2y_map=daily_2y_map, bench_30m_ret=market_median_30m_ret, earnings_days_left=earnings_map.get(c))
+        r = analyze_df(df, c, n, t, g, macro, buzz_map, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_capital=1000000, risk_tolerance_pct=2.0, shared_ledger=shared_ledger, save_db=False, macro_10y_map=macro_10y_map, daily_2y_map=daily_2y_map, bench_30m_ret=market_median_30m_ret, earnings_days_left=earnings_map.get(c))
         if r: r["is_new_challenger"] = (c in challenger_codes_set)
         return r
 
@@ -3871,7 +3900,7 @@ def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True,
             try:
                 r = f.result()
                 if r: evaluated_all.append(r)
-            except Exception as e: record_system_error("fetch_pool_batch:future", e)
+            except Exception as e: record_system_error("_fetch_pool_batch_core:future", e)
     db_set("daily_forward_ledger", shared_ledger)
 
     for ev_r in evaluated_all:
@@ -3923,6 +3952,74 @@ def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True,
     for g in gmap: gmap[g] = sorted(gmap[g], key=lambda x: (_is_combat_eligible(x), x["expect_pct"]), reverse=True)
     return gmap, sorted(survivors, key=lambda x: (_is_combat_eligible(x), x["expect_pct"]), reverse=True)
 
+def _scale_stock_item_for_user(item: dict, style: str, total_cap: float, risk_pct: float) -> dict:
+    r = dict(item)
+    code = str(r.get("full_code", ""))
+    is_jp = ".T" in code
+    cv = float(r.get("raw_close", 0.0))
+    slv = float(r.get("raw_sl", cv * 0.99))
+    spec = get_style_spec(style)
+    combat_prof = get_ticker_combat_profile(code, r.get("genre", ""), rvol=float(r.get("rvol", 1.0)), yz_vol=float(r.get("yz_vol", 0.3)))
+    new_lot = compute_japanese_lot_sizing(cv, slv, total_cap, risk_pct, is_jp, spec["lot_mul"], lot_cap_mult=combat_prof["lot_cap_mult"], earnings_days_left=r.get("earnings_days_left"))
+    r["lot_info"] = new_lot
+
+    old_strat = r.get("strat")
+    if isinstance(old_strat, dict):
+        old_sh = int(old_strat.get("adj_shares", 100))
+        new_sh = int(new_lot.get("shares", 100))
+        if old_sh != new_sh or float(total_cap) != 1000000.0 or float(risk_pct) != 2.0:
+            tp_sign = "+" if float(r.get("tp_pct", 0.0)) > 0 else ""
+            sl_sign = "+" if float(r.get("sl_pct", 0.0)) > 0 else ""
+            r["strat"] = select_dynamic_strategy(
+                r.get("code", code.replace(".T", "")), style, float(r.get("ofi_z", 0.0)), float(r.get("vpin", 0.5)),
+                float(r.get("cvar95", 2.5)), float(r.get("rsi", 50.0)), new_lot,
+                str(r.get("pts_est_price", "-")), str(r.get("vwap_price", "-")),
+                f"{r.get('tp_price', '-')}({tp_sign}{r.get('tp_pct', 0.0)}%)",
+                f"{r.get('sl_price', '-')}({sl_sign}{r.get('sl_pct', 0.0)}%)",
+                {"q_score": r.get("q_score", 50), "q_tunnel": r.get("q_tunnel", 50.0)},
+                {"ms_score": r.get("ms_score", 50), "hurst": r.get("hurst", 0.5), "kyle_stealth": r.get("kyle_stealth", 50.0)},
+                name=r.get("name", ""), theme=r.get("theme", ""), pgap=float(r.get("pts_gap_pct", 0.0)),
+                expect_pct=float(r.get("expect_pct", 50.0)), full_code=code, genre=r.get("genre", ""),
+                upper_wick_pressure=float(r.get("upper_wick_pressure", 0.0)), lower_wick_support=float(r.get("lower_wick_support", 0.0)),
+                cv=cv, vwap_today=float(r.get("raw_vwap", cv)), rs_alpha=float(r.get("rs_alpha", 0.0)),
+                macro_10y=r.get("macro_10y", {}), daily_2y=r.get("daily_2y", {})
+            )
+        else:
+            r["strat"] = dict(old_strat)
+
+    ft = r.get("forward_test")
+    if isinstance(ft, dict):
+        ft_copy = dict(ft)
+        user_shares = max(1, int(new_lot.get("shares", 100)))
+        new_rows = []
+        for hr in ft.get("history_rows", []):
+            h_copy = dict(hr)
+            rcat = h_copy.get("result_category", "NOTRADE")
+            h_copy["profit_val"] = 0.0 if rcat == "NOTRADE" else round(float(h_copy.get("entry_price", 0.0)) * user_shares * (float(h_copy.get("return_pct", 0.0)) / 100.0), 2)
+            new_rows.append(h_copy)
+        ft_copy["history_rows"] = new_rows
+        traded_rows = [x for x in new_rows if x.get("result_category") != "NOTRADE"]
+        ft_copy["total_profit_yen"] = round(sum(float(x.get("profit_val", 0.0)) for x in traded_rows), 2)
+        if isinstance(ft.get("latest_result"), dict):
+            lat_copy = dict(ft["latest_result"])
+            l_cat = lat_copy.get("result_category", "NOTRADE")
+            lat_copy["profit_val"] = 0.0 if l_cat == "NOTRADE" else round(float(lat_copy.get("entry_price", 0.0)) * user_shares * (float(lat_copy.get("return_pct", 0.0)) / 100.0), 2)
+            ft_copy["latest_result"] = lat_copy
+        r["forward_test"] = ft_copy
+    return r
+
+def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
+    macro_sig = tuple(sorted((k, round(float(v.get("price", 0.0)), 4), round(float(v.get("diff", 0.0)), 2), str(v.get("label", ""))) for k, v in (macro or {}).items()))
+    core_gmap, core_all = _fetch_pool_batch_core(macro_sig, style, bool(core_vol), bool(core_inst), bool(core_mom))
+    scaled_map = {}
+    scaled_all = []
+    for item in core_all:
+        sc_item = _scale_stock_item_for_user(item, style, float(total_cap), float(risk_pct))
+        scaled_map[sc_item["full_code"]] = sc_item
+        scaled_all.append(sc_item)
+    scaled_gmap = {g: [scaled_map[x["full_code"]] for x in items if x["full_code"] in scaled_map] for g, items in core_gmap.items()}
+    return scaled_gmap, scaled_all
+
 @st.cache_data(ttl=120)
 def fetch_one_with_df(code, macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
     try:
@@ -3947,7 +4044,6 @@ def fetch_one_with_df(code, macro, style, core_vol=True, core_inst=True, core_mo
 def fetch_one(code, macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
     res, _ = fetch_one_with_df(code, macro, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_cap=total_cap, risk_pct=risk_pct)
     return res
-
 def compute_sector_rotation_stats(all_stocks: list) -> list:
     out = []
     for g in DYNAMIC_GENRES:
@@ -4024,7 +4120,7 @@ def evaluate_journal_trade_audit(entry: dict, all_stocks: list) -> str:
 
 macro_info = fetch_macro()
 mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
-st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;"><div class="brand-luxury">YAMASHISHI LAB</div><div style="font-size:10px;color:#94a3b8;">週足10年 × 日足2年 × 5分足60日 3階層MTF融合 × Gemini クオンツ監査合議</div></div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;"><div class="brand-luxury">YAMASHISHI LAB</div><div style="font-size:10px;color:#94a3b8;">週足10年 × 日足2年 × 5分足60日 3階層MTF融合 × Gemini クオンツ監査合議</div></div><div style="display:flex;flex-wrap:wrap:gap:5px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
 
 _cache_pool_key = f"pool_v27_full_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
 if _cache_pool_key not in st.session_state:
@@ -4056,7 +4152,18 @@ if st.session_state.get("last_synced_style") != investment_style:
 focused_item = st.session_state.get("focused_stock_item")
 if focused_item:
     st.markdown("### 🔵 銘柄詳細・売買合議フォーカスモード")
-    _, foc_df = fetch_one_with_df(focused_item["full_code"], macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+    foc_fc = str(focused_item.get("full_code", "")).strip().upper()
+    foc_df = None
+    bg_state_f = _get_bg_market_refresher()
+    with bg_state_f["lock"]:
+        snap_f = bg_state_f.get("snapshot")
+    if isinstance(snap_f, dict) and isinstance(snap_f.get("raw_5m"), (pd.DataFrame, dict)):
+        raw_5m_snap = snap_f["raw_5m"]
+        tot_codes_snap = int(snap_f.get("total_codes") or (len(snap_f.get("universe") or ()) or 45))
+        df_cand_f = _extract_ticker_df(raw_5m_snap, foc_fc, tot_codes_snap)
+        foc_df = normalize_ohlcv_df(df_cand_f, min_rows=25)
+    if foc_df is None:
+        _, foc_df = fetch_one_with_df(foc_fc, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
     render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True, intraday_df=foc_df); st.stop()
 
 if st.session_state.get("navigation_page") == "NEWS_DETAIL":
@@ -4231,7 +4338,7 @@ elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
         chg_col = "#10b981" if ipo["chg_pct"] >= 0 else "#ef4444"
         lockup_badge = f'<span class="pill-badge" style="background:rgba(245,158,11,0.25);border-color:#f59e0b;color:#fde047;font-weight:900;">{html.escape(ipo.get("lockup_note", ""))}</span>' if ipo.get("lockup_alert") else ""
         meta_note_html = f'<div style="font-size:10px;color:#6ee7b7;margin-top:3px;">{html.escape(ipo.get("ipo_meta_note", ""))}</div>' if ipo.get("ipo_meta_note") else ""
-        st.markdown(f'<div class="rank-card" style="border-left-color:#f59e0b;"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;"><span class="pill-badge" style="background:rgba(16,185,129,0.24);border-color:#10b981;color:#6ee7b7;font-weight:900;font-size:11.5px;">📅 上場日: {html.escape(str(ipo.get("listing_date") or "実測特定済"))}（上場後 {int(ipo.get("days_since_listing", 0)):,}日経過）</span>{lockup_badge}</div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap:gap:4px;"><div><span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 生存 第{ipo["rank"]}位</span><span class="pill-badge" style="background:rgba(250,204,21,0.2);color:#fde047;border-color:#facc15;">スコア {ipo["score"]}点</span></div><div style="font-size:11px;color:#38bdf8;font-weight:700;">{html.escape(ipo["tier"])}</div></div><div><span style="font-size:18px;font-weight:800;color:#f8fafc;">{html.escape(ipo["name"])}</span> <span style="font-size:12px;color:#94a3b8;">({ipo["code"]} / {html.escape(ipo["market"])})</span></div><div style="font-size:11px;color:#cbd5e1;margin-top:3px;">🎯 {html.escape(ipo["theme"])} ｜ 🏦 主幹事: {html.escape(str(ipo.get("lead_underwriter", "-")))} ｜ 📦 吸収規模: {html.escape(str(ipo.get("absorption_scale", "-")))}</div><div class="winrate-bar" style="margin-top:8px;"><div><div style="font-size:9.5px;color:#94a3b8;">🏷️ 公開価格</div><div style="font-size:12px;font-weight:800;color:#e2e8f0;">{html.escape(str(ipo.get("offer_price_str", "-")))}</div></div><div><div style="font-size:9.5px;color:#fde047;">🚀 初値 (公募比)</div><div style="font-size:12px;font-weight:800;color:#fde047;">{html.escape(str(ipo.get("initial_price_str", "-")))}</div></div><div><div style="font-size:9.5px;color:#38bdf8;">💰 現在値 (前日比 / 初値比)</div><div style="font-size:12px;font-weight:800;">{ipo["price"]} (<span style="color:{chg_col};">{ipo["chg_pct"]:+.2f}%</span> / 初値比 <b style="color:#6ee7b7;">{html.escape(str(ipo.get("curr_vs_init_str", "-")))}</b>)</div></div></div><div class="trade-plan-box" style="margin-top:6px;"><div><div style="font-size:9.5px;color:#94a3b8;">📊 当日RVOL</div><div style="font-size:12px;font-weight:800;color:#fde047;">{ipo["rvol"]}倍</div></div><div><div style="font-size:9.5px;color:#94a3b8;">📏 1ヶ月高安レンジ (高値乖離)</div><div style="font-size:11.5px;font-weight:700;">{html.escape(ipo["period_range"])} ({ipo["from_high_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#94a3b8;">💴 直近売買代金 / 年率Vol</div><div style="font-size:11.5px;font-weight:700;">{ipo["turnover_m_yen"]:,.1f}百万円 / {ipo["ann_vol"]}%</div></div></div>{meta_note_html}<div style="background:rgba(2,6,23,0.75);border:1px solid rgba(245,158,11,0.28);border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11.5px;color:#fef3c7;">📰 <b>最新ヘッドライン:</b> {html.escape(ipo["latest_headline"])}</div><div style="margin-top:8px;"><a href="{ipo["kabutan_url"]}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📊 株探詳細</a><a href="{ipo["yahoo_url"]}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">💹 Yahoo!ファイナンス</a><a href="{ipo["jpx_ipo_url"]}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#10b981;color:#6ee7b7;">🏛️ JPX新規上場情報</a></div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="rank-card" style="border-left-color:#f59e0b;"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;"><span class="pill-badge" style="background:rgba(16,185,129,0.24);border-color:#10b981;color:#6ee7b7;font-weight:900;font-size:11.5px;">📅 上場日: {html.escape(str(ipo.get("listing_date") or "実測特定済"))}（上場後 {int(ipo.get("days_since_listing", 0)):,}日経過）</span>{lockup_badge}</div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px;"><div><span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 生存 第{ipo["rank"]}位</span><span class="pill-badge" style="background:rgba(250,204,21,0.2);color:#fde047;border-color:#facc15;">スコア {ipo["score"]}点</span></div><div style="font-size:11px;color:#38bdf8;font-weight:700;">{html.escape(ipo["tier"])}</div></div><div><span style="font-size:18px;font-weight:800;color:#f8fafc;">{html.escape(ipo["name"])}</span> <span style="font-size:12px;color:#94a3b8;">({ipo["code"]} / {html.escape(ipo["market"])})</span></div><div style="font-size:11px;color:#cbd5e1;margin-top:3px;">🎯 {html.escape(ipo["theme"])} ｜ 🏦 主幹事: {html.escape(str(ipo.get("lead_underwriter", "-")))} ｜ 📦 吸収規模: {html.escape(str(ipo.get("absorption_scale", "-")))}</div><div class="winrate-bar" style="margin-top:8px;"><div><div style="font-size:9.5px;color:#94a3b8;">🏷️ 公開価格</div><div style="font-size:12px;font-weight:800;color:#e2e8f0;">{html.escape(str(ipo.get("offer_price_str", "-")))}</div></div><div><div style="font-size:9.5px;color:#fde047;">🚀 初値 (公募比)</div><div style="font-size:12px;font-weight:800;color:#fde047;">{html.escape(str(ipo.get("initial_price_str", "-")))}</div></div><div><div style="font-size:9.5px;color:#38bdf8;">💰 現在値 (前日比 / 初値比)</div><div style="font-size:12px;font-weight:800;">{ipo["price"]} (<span style="color:{chg_col};">{ipo["chg_pct"]:+.2f}%</span> / 初値比 <b style="color:#6ee7b7;">{html.escape(str(ipo.get("curr_vs_init_str", "-")))}</b>)</div></div></div><div class="trade-plan-box" style="margin-top:6px;"><div><div style="font-size:9.5px;color:#94a3b8;">📊 当日RVOL</div><div style="font-size:12px;font-weight:800;color:#fde047;">{ipo["rvol"]}倍</div></div><div><div style="font-size:9.5px;color:#94a3b8;">📏 1ヶ月高安レンジ (高値乖離)</div><div style="font-size:11.5px;font-weight:700;">{html.escape(ipo["period_range"])} ({ipo["from_high_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#94a3b8;">💴 直近売買代金 / 年率Vol</div><div style="font-size:11.5px;font-weight:700;">{ipo["turnover_m_yen"]:,.1f}百万円 / {ipo["ann_vol"]}%</div></div></div>{meta_note_html}<div style="background:rgba(2,6,23,0.75);border:1px solid rgba(245,158,11,0.28);border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11.5px;color:#fef3c7;">📰 <b>最新ヘッドライン:</b> {html.escape(ipo["latest_headline"])}</div><div style="margin-top:8px;"><a href="{ipo["kabutan_url"]}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📊 株探詳細</a><a href="{ipo["yahoo_url"]}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">💹 Yahoo!ファイナンス</a><a href="{ipo["jpx_ipo_url"]}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#10b981;color:#6ee7b7;">🏛️ JPX新規上場情報</a></div></div>', unsafe_allow_html=True)
         if st.button(f"🔵 {ipo['name']} ({ipo['code']}) の実戦検証と売買戦略詳細を見る", key=f"ipo_diag_{ipo['code']}", use_container_width=True): st.session_state["custom_search_code"] = ipo["full_code"]; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
 elif sel_cat == "🏦 BVC-VPIN・CLV資金フロー":
     for i, r in enumerate(sorted(surv, key=lambda x: x["inst_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
