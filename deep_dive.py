@@ -121,7 +121,7 @@ DEFAULT_WEIGHTS_EVOLUTION = {
 
 
 # =========================================================================
-# 1. DEEP DIVE v14 専用CSS
+# 1. DEEP DIVE v15 専用CSS
 # =========================================================================
 def _inject_dd_css():
     css = """
@@ -164,6 +164,13 @@ def _inject_dd_css():
     .dd-sc-pct { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; margin-top: 2px; }
     .dd-sc-bar-bg { width: 100%; height: 5px; background: rgba(148, 163, 184, 0.16); border-radius: 99px; margin-top: 8px; overflow: hidden; }
     .dd-sc-bar-fill { height: 100%; border-radius: 99px; transition: width 0.3s ease; }
+    .dd-3way-strip {
+        display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;
+        background: linear-gradient(90deg, rgba(15, 23, 42, 0.95) 0%, rgba(17, 24, 39, 0.95) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px;
+        padding: 6px 10px; margin: 5px 0 6px 0;
+        font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    }
     .dd-prob-meter {
         background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(56, 189, 248, 0.25);
         border-radius: 10px; padding: 9px 11px; margin: 6px 0 8px 0;
@@ -738,7 +745,10 @@ def _render_echarts(
                 if (!params || !params.length) return '';
                 var tm = params[0].axisValue;
                 var parts = ['<span style="color:#7dd3fc;font-weight:800;">' + tm + '</span>'];
-                var shortMap = {{'当日実測':'実測', 'ライブ修正':'ライブ', '朝ロック':'ロック', 'VWAP':'VWAP'}};
+                var shortMap = {{
+                    '当日実測':'実測', 'ライブ修正':'ライブ', '朝ロック':'ロック', 'VWAP':'VWAP',
+                    '類似実測(Top-1)':'類似1位', '上昇分岐':'▲上', '横ばい分岐':'▶横', '下落分岐':'▼下'
+                }};
                 for (var i = 0; i < params.length; i++) {{
                     var p = params[i];
                     if (shortMap[p.seriesName] && p.value !== null && p.value !== undefined) {{
@@ -1587,6 +1597,186 @@ def _apply_hvn_ob_bounce(mid: float, hvn_wall_px: float, ob_sup_px: float, vp: d
     return mid
 
 
+def _compute_short_horizon_3way(
+    has_actual: bool, last_act_idx: int, n_slots: int,
+    anchor_px: float, cur_vwap: float, mom_30m: float,
+    rvol: float, cvd_div: dict, gap_open15: dict,
+    bench_live_alpha_adj: float, knn_moves: dict,
+    slot_means: np.ndarray, slot_inc_stds: np.ndarray, vboost: float,
+    hvn_wall_px: float, ob_sup_px: float, vp: dict,
+    shock_ext_pct: float = 0.0, horizon_slots: int = 6
+) -> dict:
+    """機能A: 場中リアルタイム「現在値→短期30分(最大6スロット)・3分岐点線（上昇 / 横ばい / 下落 %表示）」"""
+    empty_res = {
+        "active": False, "horizon": 0, "end_idx": -1,
+        "p_up": 33, "p_flat": 34, "p_down": 33,
+        "up_path": [None] * n_slots,
+        "flat_path": [None] * n_slots,
+        "down_path": [None] * n_slots,
+    }
+    if not has_actual or last_act_idx < 0 or anchor_px <= 0:
+        return empty_res
+
+    horizon = min(int(horizon_slots), n_slots - 1 - last_act_idx)
+    if horizon < 1:
+        return empty_res
+
+    end_idx = last_act_idx + horizon
+    vw_ref = cur_vwap if (cur_vwap is not None and cur_vwap > 0) else anchor_px
+    vwap_gap = (anchor_px - vw_ref) / max(vw_ref, 1e-4)
+
+    log_up = 0.0
+    log_flat = 0.18
+    log_down = 0.0
+
+    # 1. VWAP乖離
+    if abs(vwap_gap) <= 0.0015:
+        log_flat += 0.42
+    elif vwap_gap > 0:
+        log_up += float(np.clip(vwap_gap * 85.0, 0.15, 1.05))
+        log_down -= float(np.clip(vwap_gap * 45.0, 0.05, 0.55))
+    else:
+        log_down += float(np.clip((-vwap_gap) * 85.0, 0.15, 1.05))
+        log_up -= float(np.clip((-vwap_gap) * 45.0, 0.05, 0.55))
+
+    # 2. 直近30分モメンタム
+    if abs(mom_30m) <= 0.0012:
+        log_flat += 0.30
+    elif mom_30m > 0:
+        log_up += float(np.clip(mom_30m * 95.0, 0.10, 1.15))
+    else:
+        log_down += float(np.clip((-mom_30m) * 95.0, 0.10, 1.15))
+
+    # 3. RVOL（相対出来高）
+    if rvol is not None:
+        if rvol >= 1.4:
+            r_boost = float(np.clip((rvol - 1.0) * 0.42, 0.15, 0.85))
+            if mom_30m >= 0 and vwap_gap >= -0.001:
+                log_up += r_boost
+            elif mom_30m < 0 and vwap_gap <= 0.001:
+                log_down += r_boost
+            log_flat -= r_boost * 0.65
+        elif rvol < 0.85:
+            log_flat += 0.68
+            log_up -= 0.25
+            log_down -= 0.25
+
+    # 4. 疑似CVDフロー・ダイバージェンス
+    cvd_st = cvd_div.get("state", "NEUTRAL")
+    if cvd_st == "ABSORPTION":
+        log_up += 0.62
+        log_down -= 0.45
+    elif cvd_st == "ALIGNED_BULL":
+        log_up += 0.34
+    elif cvd_st == "DISTRIBUTION":
+        log_down += 0.62
+        log_up -= 0.45
+    elif cvd_st == "ALIGNED_BEAR":
+        log_down += 0.34
+
+    # 5. 寄り15分Gap判定バイアス
+    g_bias = float(gap_open15.get("bias", 0.0))
+    if g_bias > 0:
+        log_up += float(np.clip(g_bias * 90.0, 0.10, 0.50))
+    elif g_bias < 0:
+        log_down += float(np.clip((-g_bias) * 90.0, 0.10, 0.50))
+
+    # 6. 指数5分足リアルタイム追従
+    if bench_live_alpha_adj > 0:
+        log_up += float(np.clip(bench_live_alpha_adj * 55.0, 0.05, 0.55))
+    elif bench_live_alpha_adj < 0:
+        log_down += float(np.clip((-bench_live_alpha_adj) * 55.0, 0.05, 0.55))
+
+    # 7. k-NN類似日の30分先方向
+    knn_end_rel = float(knn_moves.get(end_idx, 0.0)) if isinstance(knn_moves, dict) else 0.0
+    if abs(knn_end_rel) <= 0.0015:
+        log_flat += 0.25
+    elif knn_end_rel > 0:
+        log_up += float(np.clip(knn_end_rel * 75.0, 0.08, 0.65))
+    else:
+        log_down += float(np.clip((-knn_end_rel) * 75.0, 0.08, 0.65))
+
+    # 8. What-If衝撃波連動
+    if shock_ext_pct > 0.01:
+        log_up += float(np.clip(shock_ext_pct * 0.70, 0.0, 1.40))
+        log_down -= float(np.clip(shock_ext_pct * 0.35, 0.0, 0.70))
+    elif shock_ext_pct < -0.01:
+        log_down += float(np.clip((-shock_ext_pct) * 0.70, 0.0, 1.40))
+        log_up -= float(np.clip((-shock_ext_pct) * 0.35, 0.0, 0.70))
+
+    logits = np.array([log_up, log_flat, log_down], dtype=float)
+    logits -= np.max(logits)
+    exps = np.exp(logits)
+    probs = (exps / np.sum(exps)) * 100.0
+
+    p_up = int(np.clip(round(float(probs[0])), 2, 96))
+    p_down = int(np.clip(round(float(probs[2])), 2, 96))
+    p_flat = int(100 - p_up - p_down)
+    if p_flat < 2:
+        p_flat = 2
+        if p_up >= p_down:
+            p_up = 100 - p_flat - p_down
+        else:
+            p_down = 100 - p_flat - p_up
+
+    up_path = [None] * n_slots
+    flat_path = [None] * n_slots
+    down_path = [None] * n_slots
+
+    start_val = round(float(anchor_px), 2)
+    up_path[last_act_idx] = start_val
+    flat_path[last_act_idx] = start_val
+    down_path[last_act_idx] = start_val
+
+    anchor_mean = float(slot_means[last_act_idx])
+    vwap_mid_target = 0.5 * (anchor_px + vw_ref)
+    shock_ratio = shock_ext_pct / 100.0
+
+    for k in range(1, horizon + 1):
+        idx = last_act_idx + k
+        step_frac = k / max(horizon, 1)
+        cum_sig = float(np.sqrt(np.sum(slot_inc_stds[last_act_idx + 1:idx + 1] ** 2))) * vboost
+        cum_sig = max(cum_sig, 0.0014 * math.sqrt(k))
+
+        mean_delta = float(slot_means[idx]) - anchor_mean
+        knn_delta = float(knn_moves[idx]) if (isinstance(knn_moves, dict) and idx in knn_moves) else mean_delta
+        local_shape = 0.60 * mean_delta + 0.40 * knn_delta
+
+        # 上昇シナリオ波形
+        up_shock_add = max(0.0, shock_ratio) * 0.45 * step_frac
+        up_raw = anchor_px * (1.0 + local_shape * 0.65 + cum_sig * 1.05 + up_shock_add)
+        up_raw = _apply_hvn_ob_bounce(up_raw, hvn_wall_px, ob_sup_px, vp)
+        up_raw = max(up_raw, anchor_px * (1.0 + 0.0005 * k))
+
+        # 横ばいシナリオ波形（現在値とVWAP中間へ緩やか収束＋小波）
+        flat_center = anchor_px + (vwap_mid_target - anchor_px) * (0.45 * step_frac)
+        flat_wave = anchor_px * (local_shape * 0.35 + shock_ratio * 0.15 * step_frac)
+        flat_raw = _apply_hvn_ob_bounce(flat_center + flat_wave, hvn_wall_px, ob_sup_px, vp)
+
+        # 下落シナリオ波形
+        dn_shock_sub = max(0.0, -shock_ratio) * 0.45 * step_frac
+        dn_raw = anchor_px * (1.0 + local_shape * 0.65 - cum_sig * 1.05 - dn_shock_sub)
+        dn_raw = _apply_hvn_ob_bounce(dn_raw, hvn_wall_px, ob_sup_px, vp)
+        dn_raw = min(dn_raw, anchor_px * (1.0 - 0.0005 * k))
+        dn_raw = max(dn_raw, anchor_px * 0.5)
+
+        up_path[idx] = round(float(up_raw), 2)
+        flat_path[idx] = round(float(flat_raw), 2)
+        down_path[idx] = round(float(dn_raw), 2)
+
+    return {
+        "active": True,
+        "horizon": horizon,
+        "end_idx": end_idx,
+        "p_up": p_up,
+        "p_flat": p_flat,
+        "p_down": p_down,
+        "up_path": up_path,
+        "flat_path": flat_path,
+        "down_path": down_path,
+    }
+
+
 def _compute_bayesian_scenario_probs(
     has_actual: bool, curr_px: float, anchor_base_close: float,
     est_open_gap_pct: float, est_close_chg: float,
@@ -1900,7 +2090,7 @@ def _build_dual_5m_trajectory(
     slot_inc_stds = np.full(n_slots, 0.0022)
     slot_q10, slot_q25, slot_q75, slot_q90 = np.zeros(n_slots), np.zeros(n_slots), np.zeros(n_slots), np.zeros(n_slots)
     regime_tag = "標準"
-    rmaps, alpha_rmaps, rdates, day_gaps_hist = [], [], [], []
+    rmaps, alpha_rmaps, rdates, day_gaps_hist, day_ranges_hist = [], [], [], [], []
     gap_fill_stats = {"prob": None, "avg_min": None, "n_samples": 0, "dir": "FLAT"}
 
     if df_5m is not None and not df_5m.empty:
@@ -1945,6 +2135,9 @@ def _build_dual_5m_trajectory(
             if op <= 0:
                 continue
             day_gap = ((op - prev_day_close) / prev_day_close * 100.0) if (prev_day_close and prev_day_close > 0) else 0.0
+            day_hi = float(sub["High"].max()) if "High" in sub.columns else float(sub["Close"].max())
+            day_lo = float(sub["Low"].min()) if "Low" in sub.columns else float(sub["Close"].min())
+            day_rng_pct = ((day_hi - day_lo) / op) * 100.0
 
             if prev_day_close and prev_day_close > 0 and abs(day_gap) >= 0.20:
                 if target_gap_dir == 0 or (day_gap * target_gap_dir > 0):
@@ -1984,6 +2177,7 @@ def _build_dual_5m_trajectory(
                 alpha_rmaps.append(arm)
                 rdates.append(ds)
                 day_gaps_hist.append(day_gap)
+                day_ranges_hist.append(day_rng_pct)
                 vmaps.append(vm)
                 weights.append(base_w)
 
@@ -2049,6 +2243,42 @@ def _build_dual_5m_trajectory(
             else:
                 u_shape = 1.35 if (i < 6 or i >= n_slots - 6) else 0.85
                 slot_inc_stds[i] = 0.0022 * u_shape
+
+    # 機能C: 5分期待値幅「高ボラ狩り場帯（スキャル適性ゾーン）」の抽出
+    mean_inc_std = float(np.mean(slot_inc_stds)) if len(slot_inc_stds) > 0 else 0.0022
+    q75_inc_std = float(np.percentile(slot_inc_stds, 75)) if len(slot_inc_stds) > 0 else mean_inc_std * 1.18
+    hv_thresh = max(mean_inc_std * 1.18, q75_inc_std)
+    high_vol_zones = []
+    z_start = None
+    z_vals = []
+    for i, sl in enumerate(slots):
+        if slot_inc_stds[i] >= hv_thresh:
+            if z_start is None:
+                z_start = i
+                z_vals = [float(slot_inc_stds[i])]
+            else:
+                z_vals.append(float(slot_inc_stds[i]))
+        else:
+            if z_start is not None:
+                high_vol_zones.append({
+                    "start_slot": slots[z_start],
+                    "end_slot": slots[i - 1],
+                    "avg_move_pct": round(float(np.mean(z_vals)) * 100.0, 2),
+                })
+                z_start = None
+                z_vals = []
+    if z_start is not None:
+        high_vol_zones.append({
+            "start_slot": slots[z_start],
+            "end_slot": slots[n_slots - 1],
+            "avg_move_pct": round(float(np.mean(z_vals)) * 100.0, 2),
+        })
+
+    vol_profile_meta = {
+        "mean_move_pct": round(mean_inc_std * 100.0, 2),
+        "max_move_pct": round(float(np.max(slot_inc_stds)) * 100.0, 2) if len(slot_inc_stds) > 0 else 0.22,
+        "zone_cnt": len(high_vol_zones),
+    }
 
     rvol = None
     vol_spikes = []
@@ -2119,6 +2349,40 @@ def _build_dual_5m_trajectory(
         p68.append(round(float(hi_in), 2))
         p32.append(round(float(lo_in), 2))
         bdiff_inner.append(round(float(hi_in - lo_in), 2))
+
+    # 機能B(場前): Top-1 最類似実測日（メドイド）の抽出
+    premarket_medoid = None
+    if rmaps and rdates:
+        best_score = 1e9
+        best_idx = 0
+        n_r = len(rmaps)
+        for idx_r in range(n_r):
+            d_gap_i = float(day_gaps_hist[idx_r]) if idx_r < len(day_gaps_hist) else 0.0
+            d_rng_i = float(day_ranges_hist[idx_r]) if idx_r < len(day_ranges_hist) else float(vol_cls["atr_pct"])
+            gap_dist = abs(d_gap_i - tot_gap)
+            range_dist = abs(d_rng_i - float(vol_cls["atr_pct"])) * 0.6
+            recency_pen = 0.25 * (1.0 - (idx_r / max(n_r - 1, 1)))
+            comp_score_m = gap_dist + range_dist + recency_pen
+            if comp_score_m < best_score:
+                best_score = comp_score_m
+                best_idx = idx_r
+        best_rm = rmaps[best_idx]
+        best_ds = rdates[best_idx]
+        best_gap = round(float(day_gaps_hist[best_idx]), 2) if best_idx < len(day_gaps_hist) else 0.0
+        med_path = []
+        last_valid_r = 0.0
+        for sl in slots:
+            if sl in best_rm:
+                last_valid_r = float(best_rm[sl])
+                med_path.append(round(float(est_open * (1.0 + last_valid_r)), 2))
+            else:
+                med_path.append(round(float(est_open * (1.0 + last_valid_r)), 2) if med_path else None)
+        premarket_medoid = {
+            "date": best_ds,
+            "gap_pct": best_gap,
+            "data": med_path,
+            "mode": "PREMARKET",
+        }
 
     saved_today = stock_hist.get(market_today_str) if isinstance(stock_hist.get(market_today_str), dict) else None
     has_premarket_lock = bool(saved_today and saved_today.get("locked_premarket", True))
@@ -2203,7 +2467,7 @@ def _build_dual_5m_trajectory(
                             gap_pen = -0.06
 
                     comp_dist = max(0.001, cos_dist + rvol_pen + gap_pen)
-                    cands.append((comp_dist, ds, rm))
+                    cands.append((comp_dist, ds, rm, d_gap))
 
             if cands:
                 cands.sort(key=lambda x: x[0])
@@ -2218,7 +2482,7 @@ def _build_dual_5m_trajectory(
                 for i in range(last_act_idx, n_slots):
                     sl = slots[i]
                     vals_i, ws_i = [], []
-                    for (_, _, rm_k), wk in zip(top_k, w_knn):
+                    for (_, _, rm_k, _), wk in zip(top_k, w_knn):
                         if sl in rm_k and anchor_sl in rm_k:
                             vals_i.append(rm_k[sl] - rm_k[anchor_sl])
                             ws_i.append(wk)
@@ -2230,7 +2494,7 @@ def _build_dual_5m_trajectory(
                         knn_q90_m[i] = float(np.max(va_arr))
 
                 analog_paths = []
-                for rank_idx, (_, ds_k, rm_k) in enumerate(top_k):
+                for rank_idx, (_, ds_k, rm_k, dg_k) in enumerate(top_k):
                     if anchor_sl not in rm_k:
                         continue
                     path_arr = [None] * n_slots
@@ -2239,7 +2503,7 @@ def _build_dual_5m_trajectory(
                         if sl in rm_k:
                             rel_d = rm_k[sl] - rm_k[anchor_sl]
                             path_arr[i] = round(float(anchor_px_now * (1.0 + rel_d)), 2)
-                    analog_paths.append({"date": ds_k, "data": path_arr})
+                    analog_paths.append({"date": ds_k, "gap_pct": round(float(dg_k), 2), "data": path_arr})
 
                 knn_match = {
                     "matched_dates": [c[1] for c in top_k],
@@ -2250,14 +2514,29 @@ def _build_dual_5m_trajectory(
                     "analog_paths": analog_paths,
                 }
 
+    # 機能B(統合): 場中はk-NN 1位（現在値アンカー済）、場前はpremarket_medoidをシームレスに返す
+    if has_actual and knn_match["analog_paths"]:
+        top1_ap = knn_match["analog_paths"][0]
+        medoid_analog = {
+            "date": top1_ap["date"],
+            "gap_pct": top1_ap.get("gap_pct", 0.0),
+            "data": top1_ap["data"],
+            "mode": "INTRADAY_KNN",
+        }
+    else:
+        medoid_analog = premarket_medoid
+
     live_vwap_bias = 0.0
     bench_live_alpha_adj = 0.0
+    mom_30m = 0.0
+    cur_vwap_last = None
     if has_actual and last_act_idx >= 0:
         live_p50, live_p85, live_p15, live_bdiff = [None] * n_slots, [None] * n_slots, [None] * n_slots, [None] * n_slots
         live_p32, live_bdiff_in = [None] * n_slots, [None] * n_slots
         anchor_px = actual_arr[last_act_idx]
         anchor_mean = slot_means[last_act_idx]
         cur_vwap = vwap_arr[last_act_idx] or anchor_px
+        cur_vwap_last = cur_vwap
         vwap_gap = (anchor_px - cur_vwap) / max(cur_vwap, 1e-4)
 
         recent_vals = [v for v in actual_arr[max(0, last_act_idx - 6):last_act_idx + 1] if v is not None]
@@ -2429,6 +2708,21 @@ def _build_dual_5m_trajectory(
         "bear_target": lv_bear_tgt if has_actual else round(min(locked_p15), 2),
         "verify": verify_stats, "meta_audit": meta_audit, "regime_tag": regime_tag,
         "has_bench_5m": has_bench_5m, "bench_beta_5m": round(bench_beta_5m, 2),
+        "medoid_analog": medoid_analog,
+        "high_vol_zones": high_vol_zones,
+        "vol_profile_meta": vol_profile_meta,
+        "short_3way_ctx": {
+            "anchor_px": actual_arr[last_act_idx] if (has_actual and last_act_idx >= 0) else 0.0,
+            "cur_vwap": cur_vwap_last,
+            "mom_30m": mom_30m,
+            "bench_live_alpha_adj": bench_live_alpha_adj,
+            "knn_rel_moves": knn_match["knn_rel_moves"],
+            "slot_means": slot_means,
+            "slot_inc_stds": slot_inc_stds,
+            "vboost": vboost,
+            "hvn_wall_px": hvn_wall_px,
+            "ob_sup_px": ob_sup_px,
+        },
         "knn_match": {
             "matched_dates": knn_match["matched_dates"],
             "mean_dist": knn_match["mean_dist"],
@@ -2581,15 +2875,14 @@ def _render_unified_guide():
     st.markdown("""
     <div class="dd-guide-box">
     <b>🔰 最初に見る3ポイント</b><br>
-    1. <b>予測軌道チャート:</b> 白線(実測)が青い非対称分位点ファン(10〜90%タイル)の中に収まっているかを確認。右上の <b>⛶ 横拡大</b> でスマホ横向きフル大画面にできます。<br>
-    2. <b>ベイズ確率メーター＆シナリオカード:</b> 4シナリオのリアルタイム事後確率と「押し目・高値の時間帯」「上下トリガー価格」をチェック。<br>
+    1. <b>予測軌道チャート:</b> 白線(実測)と「場中30分・3分岐点線（▲上昇 / ▶横ばい / ▼下落 %）」、さらに実在した過去日のリアル波形「類似実測波形(Top-1)」で押し目の深さと値幅を確認。右上の <b>⛶ 横拡大</b> でスマホ横向きフル大画面にできます。<br>
+    2. <b>ベイズ確率メーター＆シナリオカード:</b> 1日全体の4シナリオ事後確率と「押し目・高値の時間帯」「上下トリガー価格」をチェック。<br>
     3. <b>What-If衝撃波シミュレーター＆適正ロット電卓:</b> 先物・為替の追加ショックをスライダーで模擬し、100株単元・流動性インパクト・U字ボラ積分FPT到達確率を即算出。<br>
     <hr style="border-color:rgba(56,189,248,0.22);margin:7px 0;">
-    <b>■ v14 クオンツ魔改造ガイド</b><br>
-    ・<b>指数ベータ分離(α+β):</b> 市場指数5分足を差し引いた純粋個別アルファ軌道＋場中リアルタイム地合い追従。<br>
-    ・<b>U字型ボラティリティ曲線:</b> 寄り・引けのボラ増大を反映したスロット増分σ積分をバンド幅・FPT確率へ適用。<br>
-    ・<b>スイング疑似CVD:</b> 5本スイング極値×出来高フィルタで大口の売り抜け・底値吸収を精密検出。<br>
-    ・<b>クラスタ別3脳SGD＋L2正則化:</b> 市場(JP/US)×ボラ帯(LOW/MID/HIGH)×レジーム別に標準化リッジ学習。
+    <b>■ v15 デイトレ・スキャル魔改造ガイド</b><br>
+    ・<b>場中30分・3分岐点線:</b> 現在値(NOW)から6本(30分)先までの上昇・横ばい・下落波形とリアルタイム確率(%)を表示。<br>
+    ・<b>類似実測波形(Top-1):</b> 平均化していない実在類似日の5分足波形を重ね、ダマシや押し目のリアルな質感を再現。<br>
+    ・<b>高ボラ狩り場帯:</b> U字ボラ曲線から期待5分値幅が大きい時間帯をアンバー縦帯で可視化。
     </div>
     """, unsafe_allow_html=True)
 
@@ -2604,8 +2897,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     with h1:
         st.markdown(
             '<div class="glass-header" style="margin-bottom:4px;padding:8px 12px;">'
-            '<div class="brand-luxury" style="font-size:15px;">YAMASHISHI DEEP DIVE v14</div>'
-            '<div style="font-size:10px;color:#94a3b8;">α+β分離軌道・U字ボラFPT・ベイズ確率メーター・What-If衝撃波</div>'
+            '<div class="brand-luxury" style="font-size:15px;">YAMASHISHI DEEP DIVE v15</div>'
+            '<div style="font-size:10px;color:#94a3b8;">場中30分3分岐点線・類似実測メドイド・高ボラ狩り場帯・ベイズ確率</div>'
             '</div>',
             unsafe_allow_html=True
         )
@@ -2769,6 +3062,18 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         disp_live_p32 = [round(v * shock_mult, 2) if v is not None else None for v in traj["live_p32"]]
         disp_live_bdiff_in = [round(v * shock_mult, 2) if v is not None else None for v in traj["live_bdiff_in"]]
 
+        # 機能A: 短期30分(6スロット)・3分岐点線＆リアルタイム確率（What-If連動）
+        s3_ctx = traj["short_3way_ctx"]
+        short_3way = _compute_short_horizon_3way(
+            traj["has_actual"], traj["last_act_idx"], len(traj["slots"]),
+            s3_ctx["anchor_px"], s3_ctx["cur_vwap"], s3_ctx["mom_30m"],
+            traj["rvol"], traj["cvd_div"], traj["gap_open15"],
+            s3_ctx["bench_live_alpha_adj"], s3_ctx["knn_rel_moves"],
+            s3_ctx["slot_means"], s3_ctx["slot_inc_stds"], s3_ctx["vboost"],
+            s3_ctx["hvn_wall_px"], s3_ctx["ob_sup_px"], vp,
+            shock_ext_pct=shock_ext_pct, horizon_slots=6
+        )
+
         cur_vwap_now = traj["vwap"][traj["last_act_idx"]] if (traj["has_actual"] and traj["last_act_idx"] >= 0) else None
         scen_probs = _compute_bayesian_scenario_probs(
             traj["has_actual"], curr_px, traj["anchor_base_close"],
@@ -2931,7 +3236,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             </div>
             """, unsafe_allow_html=True)
 
+            is_short_style = in_style in ("デイトレード", "スキャルピング")
             line_opts = [
+                "場中30分・3分岐点線（確率%）", "類似実測波形（Top-1）", "高ボラ狩り場帯",
                 "予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "転換時間帯ガイド",
                 "押目・利確ゾーン", "VWAP", "VWAP±σ",
                 "心理的キリ番節目", "寄り30分高安（ORB）", "大口約定（◆）", "出来高"
@@ -2946,16 +3253,19 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
             if sel_preset == "📈 今の予測":
                 pr_mode_idx = 2
-                pr_lines = ["予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "転換時間帯ガイド", "押目・利確ゾーン", "VWAP", "心理的キリ番節目", "大口約定（◆）", "出来高"] + (["LAB TP/SL"] if active_lab else [])
+                short_defaults = ["場中30分・3分岐点線（確率%）", "類似実測波形（Top-1）", "高ボラ狩り場帯"] if is_short_style else ["場中30分・3分岐点線（確率%）"]
+                pr_lines = short_defaults + ["予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "転換時間帯ガイド", "押目・利確ゾーン", "VWAP", "心理的キリ番節目", "大口約定（◆）", "出来高"] + (["LAB TP/SL"] if active_lab else [])
             elif sel_preset == "🔍 朝の答え合わせ":
                 pr_mode_idx = 1
-                pr_lines = ["予測レンジ帯（ファン）", "転換時間帯ガイド", "寄り30分高安（ORB）", "出来高"]
+                pr_lines = ["場中30分・3分岐点線（確率%）", "予測レンジ帯（ファン）", "転換時間帯ガイド", "寄り30分高安（ORB）", "出来高"]
             else:
                 pr_mode_idx = 0
-                pr_lines = ["VWAP", "VWAP±σ", "転換時間帯ガイド", "心理的キリ番節目", "大口約定（◆）", "押目・利確ゾーン", "出来高"] + (["LAB TP/SL"] if active_lab else [])
+                pr_lines = ["場中30分・3分岐点線（確率%）", "高ボラ狩り場帯", "VWAP", "VWAP±σ", "転換時間帯ガイド", "心理的キリ番節目", "大口約定（◆）", "押目・利確ゾーン", "出来高"] + (["LAB TP/SL"] if active_lab else [])
 
-            if st.session_state.get("dd_last_preset") != sel_preset:
+            style_preset_sig = f"{sel_preset}::{is_short_style}"
+            if st.session_state.get("dd_last_preset") != sel_preset or st.session_state.get("dd_last_style_sig") != style_preset_sig:
                 st.session_state["dd_last_preset"] = sel_preset
+                st.session_state["dd_last_style_sig"] = style_preset_sig
                 st.session_state["dd_chart_mode"] = modes[pr_mode_idx]
                 st.session_state["dd_opt_lines"] = [x for x in pr_lines if x in line_opts]
 
@@ -2969,12 +3279,14 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         chart_mode = st.radio("軌道モード", modes, index=pr_mode_idx, key="dd_chart_mode")
                         opt_lines = st.multiselect("表示レイヤー", line_opts, default=[x for x in pr_lines if x in line_opts], key="dd_opt_lines")
 
+            med_info = traj.get("medoid_analog")
+            med_caption = f" ｜ 最類似実測: {med_info['date']} (Gap {med_info['gap_pct']:+.2f}%)" if ("類似実測波形（Top-1）" in opt_lines and isinstance(med_info, dict) and med_info.get("date")) else ""
             preset_desc = {
-                "📈 今の予測": "ライブ修正軌道 ＋ ノンパラメトリック分位点ファン ＋ k-NN類似日パス ＋ 転換時間帯",
+                "📈 今の予測": "ライブ修正軌道 ＋ 分位点ファン ＋ 場中30分3分岐 ＋ 類似実測Top-1",
                 "🔍 朝の答え合わせ": "寄り前ロック予測 vs 当日実測 ＋ 寄り30分高安",
                 "🏦 大口・節目": "VWAP±σバンド ＋ 心理的キリ番節目 ＋ 大口約定スパイク",
             }
-            st.caption(f"表示中: {preset_desc.get(sel_preset, '')}")
+            st.caption(f"表示中: {preset_desc.get(sel_preset, '')}{med_caption}")
 
             if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
                 if traj["verify"]["has_verify"]:
@@ -3035,6 +3347,17 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             ml_cfg = {"symbol": ["none", "none"], "data": ml_data} if ml_data else {}
 
             ma_data = []
+            if "高ボラ狩り場帯" in opt_lines and traj.get("high_vol_zones"):
+                for hvz in traj["high_vol_zones"]:
+                    ma_data.append([
+                        {
+                            "name": f"ボラ帯(±{hvz['avg_move_pct']:.2f}%)",
+                            "xAxis": hvz["start_slot"],
+                            "itemStyle": {"color": "rgba(245, 158, 11, 0.08)"},
+                            "label": {"position": "insideTop", "color": "#fbbf24", "fontSize": 8},
+                        },
+                        {"xAxis": hvz["end_slot"]},
+                    ])
             if "押目・利確ゾーン" in opt_lines:
                 n_sl = len(traj["slots"])
                 cur_dip_i = traj["live_dip_idx"] if use_live_basis else traj["locked_dip_idx"]
@@ -3079,6 +3402,20 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "z": 2,
                     })
 
+            # 機能B: 類似実測波形（Top-1 メドイド）
+            if "類似実測波形（Top-1）" in opt_lines and isinstance(med_info, dict) and med_info.get("data"):
+                med_scaled = [round(v * shock_mult, 2) if v is not None else None for v in med_info["data"]]
+                s_list.append({
+                    "name": "類似実測(Top-1)",
+                    "type": "line",
+                    "yAxisIndex": 0,
+                    "data": med_scaled,
+                    "lineStyle": {"color": "#f59e0b", "width": 1.5, "opacity": 0.72, "type": "solid"},
+                    "showSymbol": False,
+                    "z": 4,
+                })
+                l_names.append("類似実測(Top-1)")
+
             if "VWAP" in opt_lines and traj["has_actual"]:
                 s_list.append({"name": "VWAP", "type": "line", "yAxisIndex": 0, "data": traj["vwap"], "lineStyle": {"color": "#f59e0b", "width": 1.6, "type": "dotted"}, "showSymbol": False})
                 l_names.append("VWAP")
@@ -3118,6 +3455,66 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 })
                 l_names.insert(0, "当日実測")
 
+            # 機能A: 場中30分・3分岐点線（上昇 / 横ばい / 下落 %表示）
+            show_3way_now = bool("場中30分・3分岐点線（確率%）" in opt_lines and short_3way.get("active"))
+            if show_3way_now:
+                s_list.extend([
+                    {
+                        "name": "上昇分岐",
+                        "type": "line",
+                        "yAxisIndex": 0,
+                        "data": short_3way["up_path"],
+                        "lineStyle": {"color": "#10b981", "width": 2.0, "type": "dashed"},
+                        "showSymbol": False,
+                        "endLabel": {
+                            "show": True,
+                            "distance": 4,
+                            "formatter": f"▲ {short_3way['p_up']}%",
+                            "color": "#6ee7b7",
+                            "fontSize": 10,
+                            "fontWeight": "bold",
+                            "fontFamily": "JetBrains Mono",
+                        },
+                        "z": 9,
+                    },
+                    {
+                        "name": "横ばい分岐",
+                        "type": "line",
+                        "yAxisIndex": 0,
+                        "data": short_3way["flat_path"],
+                        "lineStyle": {"color": "#94a3b8", "width": 1.8, "type": "dotted"},
+                        "showSymbol": False,
+                        "endLabel": {
+                            "show": True,
+                            "distance": 4,
+                            "formatter": f"▶ {short_3way['p_flat']}%",
+                            "color": "#cbd5e1",
+                            "fontSize": 10,
+                            "fontWeight": "bold",
+                            "fontFamily": "JetBrains Mono",
+                        },
+                        "z": 8,
+                    },
+                    {
+                        "name": "下落分岐",
+                        "type": "line",
+                        "yAxisIndex": 0,
+                        "data": short_3way["down_path"],
+                        "lineStyle": {"color": "#ef4444", "width": 2.0, "type": "dashed"},
+                        "showSymbol": False,
+                        "endLabel": {
+                            "show": True,
+                            "distance": 4,
+                            "formatter": f"▼ {short_3way['p_down']}%",
+                            "color": "#fca5a5",
+                            "fontSize": 10,
+                            "fontWeight": "bold",
+                            "fontFamily": "JetBrains Mono",
+                        },
+                        "z": 9,
+                    },
+                ])
+
             if "大口約定（◆）" in opt_lines and traj["vol_spikes"]:
                 sp_pts = [{"value": [sp["time"], sp["price"]], "itemStyle": {"color": "#10b981" if sp["dir"] > 0 else "#ef4444", "borderColor": "#ffffff", "borderWidth": 1}} for sp in traj["vol_spikes"]]
                 s_list.append({"name": "大口約定", "type": "scatter", "yAxisIndex": 0, "symbol": "diamond", "symbolSize": 9, "data": sp_pts, "z": 10})
@@ -3138,10 +3535,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 "label": {"show": True, "position": "top", "formatter": "{b}", "color": "#f8fafc", "fontSize": 9, "fontWeight": "bold"}
             })
 
+            right_pad = (58 if is_jp else 52) if show_3way_now else (50 if is_jp else 44)
             _render_echarts({
                 "backgroundColor": "#0b1120",
                 "legend": {"data": l_names, "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2, "left": 4, "right": 72, "itemWidth": 12, "itemHeight": 8},
-                "grid": {"top": 60, "bottom": 24, "left": 6, "right": 50 if is_jp else 44, "containLabel": False},
+                "grid": {"top": 60, "bottom": 24, "left": 6, "right": right_pad, "containLabel": False},
                 "dataZoom": [{"type": "inside", "xAxisIndex": 0, "filterMode": "none"}],
                 "xAxis": {"type": "category", "boundaryGap": False, "data": traj["slots"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,0.2)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9.5, "interval": "auto", "hideOverlap": True}},
                 "yAxis": [
@@ -3150,6 +3548,20 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 ],
                 "series": s_list
             }, height=345, use_hud_tooltip=True, is_jp=is_jp, enable_fullscreen=True)
+
+            # チャート直下のミニバッジ（場中かつ3分岐ON時のみ）
+            if show_3way_now:
+                mins_ahead = short_3way["horizon"] * 5
+                st.markdown(f"""
+                <div class="dd-3way-strip">
+                  <span style="color:#7dd3fc;font-weight:800;">⚡ 短期{mins_ahead}分3分岐（NOW起点）:</span>
+                  <span>
+                    <span style="color:#6ee7b7;font-weight:800;">▲上昇 {short_3way['p_up']}%</span> /
+                    <span style="color:#cbd5e1;font-weight:800;">▶横ばい {short_3way['p_flat']}%</span> /
+                    <span style="color:#fca5a5;font-weight:800;">▼下落 {short_3way['p_down']}%</span>
+                  </span>
+                </div>
+                """, unsafe_allow_html=True)
 
             basis_txt = "ライブ連動" if use_live_basis else "朝ロック基準"
             shock_badge_txt = f" / 衝撃波{shock_ext_pct:+.2f}%" if abs(shock_ext_pct) > 0.01 else ""
@@ -3510,6 +3922,13 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "dip_time": str(active_dip_time),
             "peak_time": str(active_peak_time),
             "scenario_probs": scen_probs,
+            "short_horizon_3way": {
+                "active": short_3way["active"],
+                "horizon_min": short_3way["horizon"] * 5,
+                "p_up": short_3way["p_up"],
+                "p_flat": short_3way["p_flat"],
+                "p_down": short_3way["p_down"],
+            },
             "meta_audit": meta_a,
             "rvol": traj["rvol"],
             "gap_fill": traj["gap_fill"],
@@ -3525,6 +3944,12 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "res_px": float(vp["res_px"]),
             "sup_px": float(vp["sup_px"]),
             "verify": traj["verify"],
+            "medoid_analog": {
+                "date": med_info["date"] if isinstance(med_info, dict) else None,
+                "gap_pct": med_info["gap_pct"] if isinstance(med_info, dict) else None,
+                "mode": med_info["mode"] if isinstance(med_info, dict) else None,
+            },
+            "vol_profile_meta": traj["vol_profile_meta"],
             "knn_match": {
                 "matched_dates": traj["knn_match"]["matched_dates"],
                 "mean_dist": traj["knn_match"]["mean_dist"],
