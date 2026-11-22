@@ -121,7 +121,7 @@ DEFAULT_WEIGHTS_EVOLUTION = {
 
 
 # =========================================================================
-# 1. DEEP DIVE v15.1 専用CSS
+# 1. DEEP DIVE v15.2 専用CSS
 # =========================================================================
 def _inject_dd_css():
     css = """
@@ -1583,11 +1583,10 @@ def _extract_lab_side(active_lab: dict) -> str:
 
 
 def _apply_hvn_ob_bounce(mid: float, ref_px: float, hvn_wall_px: float, ob_sup_px: float, vp: dict) -> float:
-    """修正1: ref_px を基準に、未突破の上値抵抗・未割れの支持帯のみを有効化して張り付きを防止"""
+    """v15.1修正: ref_px を基準に、未突破の上値抵抗・未割れの支持帯のみを有効化して張り付きを防止"""
     if ref_px <= 0:
         return mid
 
-    # 1. 上値抵抗帯（ref_px より明確に上にある場合のみ有効）
     res_wall = 0.0
     is_hvn = False
     if hvn_wall_px > ref_px * 1.002:
@@ -1601,7 +1600,6 @@ def _apply_hvn_ob_bounce(mid: float, ref_px: float, hvn_wall_px: float, ob_sup_p
         if damp < 1.0:
             mid = res_wall * 0.995 + (mid - res_wall * 0.995) * damp
 
-    # 2. 下値支持帯（ref_px より明確に下にある場合のみ有効）
     sup_floor = 0.0
     is_ob = False
     if 0 < ob_sup_px < ref_px * 0.998:
@@ -2111,6 +2109,7 @@ def _build_dual_5m_trajectory(
     slot_q10, slot_q25, slot_q75, slot_q90 = np.zeros(n_slots), np.zeros(n_slots), np.zeros(n_slots), np.zeros(n_slots)
     regime_tag = "標準"
     rmaps, alpha_rmaps, rdates, day_gaps_hist, day_ranges_hist = [], [], [], [], []
+    vmaps, use_maps = [], []
     gap_fill_stats = {"prob": None, "avg_min": None, "n_samples": 0, "dir": "FLAT"}
 
     if df_5m is not None and not df_5m.empty:
@@ -2119,7 +2118,7 @@ def _build_dual_5m_trajectory(
         tmp["_d"], tmp["_hm"] = idx_dt.strftime("%Y-%m-%d"), idx_dt.strftime("%H:%M")
         udays = sorted(tmp["_d"].unique().tolist())
         pdays = [d for d in udays if d != market_today_str]
-        vmaps, weights = [], []
+        weights = []
         prev_day_close = None
         want_gu = tot_gap >= 0.15
         want_gd = tot_gap <= -0.15
@@ -2264,7 +2263,7 @@ def _build_dual_5m_trajectory(
                 u_shape = 1.35 if (i < 6 or i >= n_slots - 6) else 0.85
                 slot_inc_stds[i] = 0.0022 * u_shape
 
-    # 機能C + 修正2: 5分期待値幅「高ボラ狩り場帯（スキャル適性ゾーン）」の抽出（近接マージ＆極細ゾーン非ラベル化）
+    # 機能C + v15.1修正2: 5分期待値幅「高ボラ狩り場帯（スキャル適性ゾーン）」の抽出（近接マージ＆極細ゾーン非ラベル化）
     mean_inc_std = float(np.mean(slot_inc_stds)) if len(slot_inc_stds) > 0 else 0.0022
     q75_inc_std = float(np.percentile(slot_inc_stds, 75)) if len(slot_inc_stds) > 0 else mean_inc_std * 1.18
     hv_thresh = max(mean_inc_std * 1.18, q75_inc_std)
@@ -2282,7 +2281,6 @@ def _build_dual_5m_trajectory(
     if z_start is not None:
         raw_hv_spans.append([z_start, n_slots - 1])
 
-    # スロット間隔が1本以内（ギャップ <= 2）の近接ゾーンをマージ
     merged_hv_spans = []
     for sp in raw_hv_spans:
         if merged_hv_spans and (sp[0] - merged_hv_spans[-1][1] <= 2):
@@ -2378,13 +2376,24 @@ def _build_dual_5m_trajectory(
         p32.append(round(float(lo_in), 2))
         bdiff_inner.append(round(float(hi_in - lo_in), 2))
 
-    # 機能B(場前): Top-1 最類似実測日（メドイド）の抽出
+    # 機能B(場前) + v15.2修正1・2・3: 指数ベータ分離統一・異常外れ値除外・ATR振幅スケーリング
+    target_atr = max(float(vol_cls["atr_pct"]), 0.8)
+    max_r_cap = (target_atr * 1.4) / 100.0
     premarket_medoid = None
-    if rmaps and rdates:
-        best_score = 1e9
-        best_idx = 0
-        n_r = len(rmaps)
+    if use_maps and rdates:
+        n_r = len(use_maps)
+        max_normal_rng = max(float(vol_cls["atr_pct"]) * 2.2, 5.0)
+        valid_med_indices = []
         for idx_r in range(n_r):
+            d_gap_i = float(day_gaps_hist[idx_r]) if idx_r < len(day_gaps_hist) else 0.0
+            d_rng_i = float(day_ranges_hist[idx_r]) if idx_r < len(day_ranges_hist) else float(vol_cls["atr_pct"])
+            if abs(d_gap_i - tot_gap) <= 3.0 and d_rng_i <= max_normal_rng:
+                valid_med_indices.append(idx_r)
+        cand_indices = valid_med_indices if valid_med_indices else list(range(n_r))
+
+        best_score = 1e9
+        best_idx = cand_indices[0]
+        for idx_r in cand_indices:
             d_gap_i = float(day_gaps_hist[idx_r]) if idx_r < len(day_gaps_hist) else 0.0
             d_rng_i = float(day_ranges_hist[idx_r]) if idx_r < len(day_ranges_hist) else float(vol_cls["atr_pct"])
             gap_dist = abs(d_gap_i - tot_gap)
@@ -2394,20 +2403,30 @@ def _build_dual_5m_trajectory(
             if comp_score_m < best_score:
                 best_score = comp_score_m
                 best_idx = idx_r
-        best_rm = rmaps[best_idx]
+
+        best_rm = use_maps[best_idx]
         best_ds = rdates[best_idx]
         best_gap = round(float(day_gaps_hist[best_idx]), 2) if best_idx < len(day_gaps_hist) else 0.0
+        best_rng = float(day_ranges_hist[best_idx]) if best_idx < len(day_ranges_hist) else target_atr
+        amp_scale = float(np.clip(target_atr / max(best_rng, 0.5), 0.35, 1.35))
+
         med_path = []
         last_valid_r = 0.0
         for sl in slots:
             if sl in best_rm:
                 last_valid_r = float(best_rm[sl])
-                med_path.append(round(float(est_open * (1.0 + last_valid_r)), 2))
+                r_scaled = float(np.clip(last_valid_r * amp_scale, -max_r_cap, max_r_cap))
+                med_path.append(round(float(est_open * (1.0 + r_scaled)), 2))
             else:
-                med_path.append(round(float(est_open * (1.0 + last_valid_r)), 2) if med_path else None)
+                if med_path:
+                    r_scaled = float(np.clip(last_valid_r * amp_scale, -max_r_cap, max_r_cap))
+                    med_path.append(round(float(est_open * (1.0 + r_scaled)), 2))
+                else:
+                    med_path.append(None)
         premarket_medoid = {
             "date": best_ds,
             "gap_pct": best_gap,
+            "amp_scale": round(amp_scale, 2),
             "data": med_path,
             "mode": "PREMARKET",
         }
@@ -2459,9 +2478,10 @@ def _build_dual_5m_trajectory(
             ledger[fc_code] = stock_hist
             _dd_db_set("dd_forecast_ledger_v9", ledger)
 
+    # v15.2修正1・3: k-NN類似日探索も use_maps（指数ベータ分離ベース）統一＋ATR振幅スケーリング適用
     knn_match = {"matched_dates": [], "mean_dist": None, "knn_rel_moves": {}, "knn_q10": {}, "knn_q90": {}, "analog_paths": []}
     atr_norm_pct = max(vol_cls["atr_pct"] / 100.0, 0.005)
-    if has_actual and last_act_idx >= 2 and rmaps:
+    if has_actual and last_act_idx >= 2 and use_maps:
         valid_slots = [slots[i] for i in range(last_act_idx + 1) if actual_arr[i] is not None]
         if len(valid_slots) >= 3:
             first_px = actual_map[valid_slots[0]]
@@ -2469,7 +2489,7 @@ def _build_dual_5m_trajectory(
             today_vec = np.array([(actual_map[sl] - first_px) / max(first_px, 1e-4) for sl in valid_slots], dtype=float) / atr_norm_pct
             today_norm = float(np.linalg.norm(today_vec))
             cands = []
-            for ds, rm, vm, d_gap in zip(rdates, rmaps, vmaps, day_gaps_hist):
+            for ds, rm, vm, d_gap, d_rng in zip(rdates, use_maps, vmaps, day_gaps_hist, day_ranges_hist):
                 if all(sl in rm for sl in valid_slots):
                     hist_vec = np.array([rm[sl] for sl in valid_slots], dtype=float) / atr_norm_pct
                     hist_norm = float(np.linalg.norm(hist_vec))
@@ -2495,7 +2515,7 @@ def _build_dual_5m_trajectory(
                             gap_pen = -0.06
 
                     comp_dist = max(0.001, cos_dist + rvol_pen + gap_pen)
-                    cands.append((comp_dist, ds, rm, d_gap))
+                    cands.append((comp_dist, ds, rm, d_gap, d_rng))
 
             if cands:
                 cands.sort(key=lambda x: x[0])
@@ -2510,9 +2530,11 @@ def _build_dual_5m_trajectory(
                 for i in range(last_act_idx, n_slots):
                     sl = slots[i]
                     vals_i, ws_i = [], []
-                    for (_, _, rm_k, _), wk in zip(top_k, w_knn):
+                    for (_, _, rm_k, _, d_rng_k), wk in zip(top_k, w_knn):
                         if sl in rm_k and anchor_sl in rm_k:
-                            vals_i.append(rm_k[sl] - rm_k[anchor_sl])
+                            amp_k = float(np.clip(target_atr / max(float(d_rng_k), 0.5), 0.35, 1.35))
+                            rel_s = float(np.clip((rm_k[sl] - rm_k[anchor_sl]) * amp_k, -max_r_cap, max_r_cap))
+                            vals_i.append(rel_s)
                             ws_i.append(wk)
                     if vals_i:
                         ws_arr = np.array(ws_i) / np.sum(ws_i)
@@ -2522,16 +2544,22 @@ def _build_dual_5m_trajectory(
                         knn_q90_m[i] = float(np.max(va_arr))
 
                 analog_paths = []
-                for rank_idx, (_, ds_k, rm_k, dg_k) in enumerate(top_k):
+                for rank_idx, (_, ds_k, rm_k, dg_k, d_rng_k) in enumerate(top_k):
                     if anchor_sl not in rm_k:
                         continue
+                    amp_scale_k = float(np.clip(target_atr / max(float(d_rng_k), 0.5), 0.35, 1.35))
                     path_arr = [None] * n_slots
                     for i in range(last_act_idx, n_slots):
                         sl = slots[i]
                         if sl in rm_k:
-                            rel_d = rm_k[sl] - rm_k[anchor_sl]
-                            path_arr[i] = round(float(anchor_px_now * (1.0 + rel_d)), 2)
-                    analog_paths.append({"date": ds_k, "gap_pct": round(float(dg_k), 2), "data": path_arr})
+                            rel_d_scaled = float(np.clip((rm_k[sl] - rm_k[anchor_sl]) * amp_scale_k, -max_r_cap, max_r_cap))
+                            path_arr[i] = round(float(anchor_px_now * (1.0 + rel_d_scaled)), 2)
+                    analog_paths.append({
+                        "date": ds_k,
+                        "gap_pct": round(float(dg_k), 2),
+                        "amp_scale": round(amp_scale_k, 2),
+                        "data": path_arr,
+                    })
 
                 knn_match = {
                     "matched_dates": [c[1] for c in top_k],
@@ -2542,12 +2570,13 @@ def _build_dual_5m_trajectory(
                     "analog_paths": analog_paths,
                 }
 
-    # 機能B(統合): 場中はk-NN 1位（現在値アンカー済）、場前はpremarket_medoidをシームレスに返す
+    # 機能B(統合): 場中はk-NN 1位（現在値アンカー済・ATR補正）、場前はpremarket_medoidをシームレスに返す
     if has_actual and knn_match["analog_paths"]:
         top1_ap = knn_match["analog_paths"][0]
         medoid_analog = {
             "date": top1_ap["date"],
             "gap_pct": top1_ap.get("gap_pct", 0.0),
+            "amp_scale": top1_ap.get("amp_scale", 1.0),
             "data": top1_ap["data"],
             "mode": "INTRADAY_KNN",
         }
@@ -2903,13 +2932,13 @@ def _render_unified_guide():
     st.markdown("""
     <div class="dd-guide-box">
     <b>🔰 最初に見る3ポイント</b><br>
-    1. <b>予測軌道チャート:</b> 白線(実測)と「場中30分・3分岐点線（▲上昇 / ▶横ばい / ▼下落 %）」、さらに実在した過去日のリアル波形「類似実測波形(Top-1)」で押し目の深さと値幅を確認。右上の <b>⛶ 横拡大</b> でスマホ横向きフル大画面にできます。<br>
+    1. <b>予測軌道チャート:</b> 白線(実測)と「場中30分・3分岐点線（▲上昇 / ▶横ばい / ▼下落 %）」、さらに実在した過去日のリアル波形「類似実測波形(Top-1・指数分離＆ATR補正済)」で押し目の深さと値幅を確認。右上の <b>⛶ 横拡大</b> でスマホ横向きフル大画面にできます。<br>
     2. <b>ベイズ確率メーター＆シナリオカード:</b> 1日全体の4シナリオ事後確率と「押し目・高値の時間帯」「上下トリガー価格」をチェック。<br>
     3. <b>What-If衝撃波シミュレーター＆適正ロット電卓:</b> 先物・為替の追加ショックをスライダーで模擬し、100株単元・流動性インパクト・U字ボラ積分FPT到達確率を即算出。<br>
     <hr style="border-color:rgba(56,189,248,0.22);margin:7px 0;">
-    <b>■ v15.1 デイトレ・スキャル魔改造ガイド</b><br>
+    <b>■ v15.2 デイトレ・スキャル魔改造ガイド</b><br>
     ・<b>場中30分・3分岐点線:</b> 現在値(NOW)から6本(30分)先までの上昇・横ばい・下落波形とリアルタイム確率(%)を表示。<br>
-    ・<b>類似実測波形(Top-1):</b> 平均化していない実在類似日の5分足波形を重ね、ダマシや押し目のリアルな質感を再現。<br>
+    ・<b>類似実測波形(Top-1):</b> 指数ベータ分離＋外れ値除外＋ATR振幅正規化を適用した実在類似日の5分足波形を重ね、Y軸を潰さず押し目・反発のリズムを再現。<br>
     ・<b>高ボラ狩り場帯:</b> U字ボラ曲線から期待5分値幅が大きい時間帯をアンバー縦帯（下端ラベル）で可視化。
     </div>
     """, unsafe_allow_html=True)
@@ -2925,8 +2954,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     with h1:
         st.markdown(
             '<div class="glass-header" style="margin-bottom:4px;padding:8px 12px;">'
-            '<div class="brand-luxury" style="font-size:15px;">YAMASHISHI DEEP DIVE v15.1</div>'
-            '<div style="font-size:10px;color:#94a3b8;">場中30分3分岐点線・類似実測メドイド・高ボラ狩り場帯・ベイズ確率</div>'
+            '<div class="brand-luxury" style="font-size:15px;">YAMASHISHI DEEP DIVE v15.2</div>'
+            '<div style="font-size:10px;color:#94a3b8;">場中30分3分岐点線・類似実測メドイド(ATR正規化)・高ボラ狩り場帯・ベイズ確率</div>'
             '</div>',
             unsafe_allow_html=True
         )
@@ -3308,7 +3337,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         opt_lines = st.multiselect("表示レイヤー", line_opts, default=[x for x in pr_lines if x in line_opts], key="dd_opt_lines")
 
             med_info = traj.get("medoid_analog")
-            med_caption = f" ｜ 最類似実測: {med_info['date']} (Gap {med_info['gap_pct']:+.2f}%)" if ("類似実測波形（Top-1）" in opt_lines and isinstance(med_info, dict) and med_info.get("date")) else ""
+            if "類似実測波形（Top-1）" in opt_lines and isinstance(med_info, dict) and med_info.get("date"):
+                amp_s = med_info.get("amp_scale", 1.0)
+                med_caption = f" ｜ 最類似実測: {med_info['date']} (Gap {med_info['gap_pct']:+.2f}% / ATR補正×{amp_s:.2f})"
+            else:
+                med_caption = ""
             preset_desc = {
                 "📈 今の予測": "ライブ修正軌道 ＋ 分位点ファン ＋ 場中30分3分岐 ＋ 類似実測Top-1",
                 "🔍 朝の答え合わせ": "寄り前ロック予測 vs 当日実測 ＋ 寄り30分高安",
@@ -3323,7 +3356,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 elif traj["has_actual"] and not traj["is_locked"]:
                     st.markdown('<div class="dd-sync-warn"><b>ℹ️ 本日は場中初回アクセスのため「朝ロック検証」対象外</b><br>リーク防止のため、寄り前に保存された予測のみを答え合わせ対象としています（現在はライブ修正軌道を基準に表示中）。</div>', unsafe_allow_html=True)
 
-            # 修正2: 上端(insideTop: 押目帯/利確帯/前/後場) と 下端(insideBottom/insideStartBottom: ボラ帯/転換時間帯ガイド) の完全分離
+            # v15.1修正2: 上端(insideTop: 押目帯/利確帯/前/後場) と 下端(insideBottom/insideStartBottom: ボラ帯/転換時間帯ガイド) の完全分離
             ml_data = []
             if traj["lunch_idx"] is not None:
                 ml_data.append({"xAxis": traj["slots"][traj["lunch_idx"]], "lineStyle": {"color": "rgba(148,163,184,0.3)", "type": "dashed"}, "label": {"formatter": "前/後場", "color": "#94a3b8", "fontSize": 9, "position": "insideEndTop"}})
@@ -3405,7 +3438,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     ma_data.append([{"name": "売り壁", "yAxis": round(vp["res_px"] * 0.996, 2), "itemStyle": {"color": "rgba(168, 85, 247, 0.13)"}, "label": {"position": "insideLeft", "color": "#d8b4fe", "fontSize": 8.5}}, {"yAxis": round(vp["res_px"] * 1.004, 2)}])
             ma_cfg = {"silent": True, "data": ma_data} if ma_data else {}
 
-            # 修正3: 凡例アイコン色と線の色を完全一致させる itemStyle.color の明示指定
+            # v15.1修正3: 凡例アイコン色と線の色を完全一致させる itemStyle.color の明示指定
             s_list, l_names = [], []
             if "出来高" in opt_lines:
                 s_list.append({"name": "出来高", "type": "bar", "yAxisIndex": 1, "data": traj["vols"], "itemStyle": {"color": "rgba(148,163,184,0.14)", "borderRadius": [2, 2, 0, 0]}, "barMaxWidth": 4})
@@ -3439,7 +3472,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "z": 2,
                     })
 
-            # 機能B: 類似実測波形（Top-1 メドイド）
+            # 機能B: 類似実測波形（Top-1 メドイド・指数分離＆ATR正規化済）
             if "類似実測波形（Top-1）" in opt_lines and isinstance(med_info, dict) and med_info.get("data"):
                 med_scaled = [round(v * shock_mult, 2) if v is not None else None for v in med_info["data"]]
                 s_list.append({
@@ -4000,6 +4033,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "medoid_analog": {
                 "date": med_info["date"] if isinstance(med_info, dict) else None,
                 "gap_pct": med_info["gap_pct"] if isinstance(med_info, dict) else None,
+                "amp_scale": med_info.get("amp_scale", 1.0) if isinstance(med_info, dict) else None,
                 "mode": med_info["mode"] if isinstance(med_info, dict) else None,
             },
             "vol_profile_meta": traj["vol_profile_meta"],
@@ -4007,7 +4041,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 "matched_dates": traj["knn_match"]["matched_dates"],
                 "mean_dist": traj["knn_match"]["mean_dist"],
             },
-            "invalidation_alert": traj["invalidation_alert"],
+            "invalidation_alert": invalidation_alert,
             "weights_evolution": {
                 "active_cluster": traj["weights_evolution"]["active_cluster"],
                 "active_regime": traj["weights_evolution"]["active_regime"],
