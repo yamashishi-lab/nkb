@@ -4121,8 +4121,23 @@ def evaluate_journal_trade_audit(entry: dict, all_stocks: list) -> str:
     return f"【AEGIS＆SENTINEL 規律監査スコア: {score}点】\n・損益結果: {pnl_pct:+.2f}%（{pnl_yen:+,.0f}円）｜執行グレード: {exec_g}\n・リスク監査(SENTINEL): {sl_comment}\n・資金管理講評(AEGIS): {tp_comment}"
 
 macro_info = fetch_macro()
-mpills = "".join([f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;gap:4px;"><span style="color:#94a3b8;">{m["label"]}</span><span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span></div>' for m in macro_info.values()])
-st.markdown(f'<div class="glass-header"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;"><div class="brand-luxury">YAMASHISHI LAB</div><div style="font-size:10px;color:#94a3b8;">週足10年 × 日足2年 × 5分足60日 3階層MTF融合 × Gemini クオンツ監査合議</div></div><div style="display:flex;flex-wrap:wrap:gap:5px;margin-top:8px;">{mpills}</div></div>', unsafe_allow_html=True)
+mpills = "".join([
+    f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:3px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;">'
+    f'<span style="color:#94a3b8;white-space:nowrap;">{m["label"]}</span>'
+    f'<span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;white-space:nowrap;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span>'
+    f'</div>'
+    for m in macro_info.values()
+])
+st.markdown(
+    f'<div class="glass-header">'
+    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
+    f'<div class="brand-luxury">YAMASHISHI LAB</div>'
+    f'<div style="font-size:10px;color:#94a3b8;">週足10年 × 日足2年 × 5分足60日 3階層MTF融合 × Gemini クオンツ監査合議</div>'
+    f'</div>'
+    f'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:8px;">{mpills}</div>'
+    f'</div>',
+    unsafe_allow_html=True
+)
 
 _cache_pool_key = f"pool_v27_full_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
 if _cache_pool_key not in st.session_state:
