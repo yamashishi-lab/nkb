@@ -394,6 +394,10 @@ def _update_weights_two_stage(w_evo: dict, fc_code: str, df_1d: pd.DataFrame, st
             continue
 
         snap = stock_hist[dt_k]
+        # リーク防止：場中初回アクセスで生成されたスナップショットは学習対象から除外
+        if snap.get("locked_premarket") is False:
+            continue
+
         p50_arr = snap.get("p50") or []
         if not p50_arr:
             continue
@@ -552,15 +556,30 @@ def _get_gemini_key(passed_key: str = "") -> str:
     return str(k).strip()
 
 
-def _calc_first_passage_prob(curr_px: float, target_px: float, rem_sigma_pct: float) -> float:
+def _norm_cdf(x: float) -> float:
+    return 0.5 * math.erfc(-x / math.sqrt(2.0))
+
+
+def _calc_first_passage_prob(curr_px: float, target_px: float, rem_sigma_pct: float, rem_drift_pct: float = 0.0) -> float:
+    """ドリフト付きブラウン運動の初回到達確率（First Passage Time Probability）"""
     if curr_px <= 0 or target_px <= 0:
         return 0.0
-    dist_pct = abs(target_px - curr_px) / curr_px
-    if dist_pct <= 1e-6:
+    raw_dist = (target_px - curr_px) / curr_px
+    if abs(raw_dist) <= 1e-6:
         return 99.0
-    sig = max(rem_sigma_pct, 1e-4)
-    z = dist_pct / (sig * math.sqrt(2.0))
-    prob = math.erfc(z) * 100.0
+    # 上方バリアならそのまま、下方バリアなら符号反転して統一計算
+    if raw_dist > 0:
+        b = raw_dist
+        mu_t = rem_drift_pct
+    else:
+        b = -raw_dist
+        mu_t = -rem_drift_pct
+
+    sig_t = max(rem_sigma_pct, 1e-4)
+    term1 = _norm_cdf((-b + mu_t) / sig_t)
+    exp_arg = min((2.0 * mu_t * b) / (sig_t ** 2), 50.0)
+    term2 = math.exp(exp_arg) * _norm_cdf((-b - mu_t) / sig_t)
+    prob = (term1 + term2) * 100.0
     return round(float(np.clip(prob, 1.0, 99.0)), 1)
 
 
@@ -593,7 +612,7 @@ def _render_echarts(
                 if (!params || !params.length) return '';
                 var tm = params[0].axisValue;
                 var parts = ['<span style="color:#7dd3fc;font-weight:800;">' + tm + '</span>'];
-                var shortMap = {{'当日実測':'実測', 'ライブ修正':'ライブ', '朝ロック':'ロック', 'VWAP':'VWAP', '想定波形':'波形'}};
+                var shortMap = {{'当日実測':'実測', 'ライブ修正':'ライブ', '朝ロック':'ロック', 'VWAP':'VWAP'}};
                 for (var i = 0; i < params.length; i++) {{
                     var p = params[i];
                     if (shortMap[p.seriesName] && p.value !== null && p.value !== undefined) {{
@@ -791,6 +810,7 @@ MACRO_TICKERS = {"SOX": ("^SOX", "米SOX"), "SP500": ("^GSPC", "S&P500"), "NK_FU
 TIER1_SOURCES = ["REUTERS", "ロイター", "BLOOMBERG", "ブルームバーグ", "WSJ", "WALL STREET JOURNAL", "FINANCIAL TIMES", "NIKKEI", "日経", "日本経済新聞", "KABUTAN", "株探", "PR TIMES", "CNBC", "SEC"]
 TIER2_SOURCES = ["YAHOO", "MINKABU", "みんかぶ", "MARKETWATCH", "BARRON", "FORBES", "東洋経済", "ダイヤモンド", "JIJI", "時事", "共同通信"]
 NOISE_SOURCES = ["まとめ", "ブログ", "2ch", "5ch", "note.com"]
+NEG_GUARD_PATTERNS = ["赤字縮小", "赤字脱却", "赤字解消", "下落せず", "懸念後退", "懸念払拭", "リスク軽減", "リスク後退", "不祥事.*他社", "訴訟.*和解", "訴訟.*勝訴"]
 
 
 @st.cache_data(ttl=90)
@@ -928,6 +948,13 @@ def _fetch_rss(url: str, lang_tag: str) -> list:
     return out
 
 
+def _strip_neg_guards(text: str) -> str:
+    cleaned = text
+    for pat in NEG_GUARD_PATTERNS:
+        cleaned = re.sub(pat, "", cleaned)
+    return cleaned
+
+
 @st.cache_data(ttl=120)
 def _fetch_global_intel(corp_name: str, short_code: str) -> dict:
     q_jp = f"{corp_name} OR {short_code} 株価"
@@ -952,7 +979,7 @@ def _fetch_global_intel(corp_name: str, short_code: str) -> dict:
             continue
         seen_t.add(nk)
         trust, wt = ("S", 2.0) if any(t1 in src_up for t1 in TIER1_SOURCES) else (("A", 1.3) if any(t2 in src_up for t2 in TIER2_SOURCES) else ("B", 0.7))
-        t_up = it["title"].upper()
+        t_up = _strip_neg_guards(it["title"]).upper()
         p_h, n_h = sum(1 for w in pos_w if w in t_up), sum(1 for w in neg_w if w in t_up)
         filtered.append({**it, "trust": trust, "w_trust": wt, "sent": "POS" if p_h > n_h else ("NEG" if n_h > p_h else "NEU")})
 
@@ -967,15 +994,24 @@ def _fetch_global_intel(corp_name: str, short_code: str) -> dict:
 def _fetch_gov_and_whales(corp_name: str, short_code: str) -> tuple:
     u_g = f"https://news.google.com/rss/search?q={urllib.parse.quote(f'{corp_name} (不祥事 OR 不正 OR 訴訟 OR 行政処分 OR 辞任 OR リコール)')}&hl=ja&gl=JP&ceid=JP:ja"
     u_w = f"https://news.google.com/rss/search?q={urllib.parse.quote(f'({corp_name} OR {short_code}) (大量保有 OR 変更報告書 OR 空売り残高 OR 5%ルール OR 買い増し OR 保有割合低下)')}&hl=ja&gl=JP&ceid=JP:ja"
+    gov_kw = ["不祥事", "不正", "訴訟", "行政処分", "辞任", "リコール"]
     with ThreadPoolExecutor(max_workers=2) as ex:
         fg, fw = ex.submit(_fetch_rss, u_g, "JP"), ex.submit(_fetch_rss, u_w, "JP")
-        return [f"{x['title']} ({x['pub']})" for x in fg.result()[:5]], fw.result()[:5]
+        gov_filtered = []
+        for x in fg.result()[:8]:
+            cleaned_t = _strip_neg_guards(x["title"])
+            if any(k in cleaned_t for k in gov_kw):
+                gov_filtered.append(f"{x['title']} ({x['pub']})")
+            if len(gov_filtered) >= 5:
+                break
+        return gov_filtered, fw.result()[:5]
 
 
 # =========================================================================
-# 4. 機関投資家プロ仕様：ガンマピン・CVDダイバージェンス・Gap&Go判定等
+# 4. 機関投資家プロ仕様：心理的キリ番節目・CVDダイバージェンス・Gap&Go判定等
 # =========================================================================
-def _compute_gamma_pin(curr_px: float, is_jp: bool) -> float:
+def _compute_round_number_level(curr_px: float, is_jp: bool) -> float:
+    """現在値に最も近い心理的キリ番節目（ラウンドナンバー）を算出"""
     if is_jp:
         step = 5000 if curr_px >= 20000 else (1000 if curr_px >= 5000 else (500 if curr_px >= 2000 else 100))
     else:
@@ -1019,32 +1055,29 @@ def _detect_cvd_divergence(slots: list, actual_arr: list, cvd_arr: list) -> dict
     p1_lo = min(first_h, key=lambda x: x[2])
     p2_lo = min(second_h, key=lambda x: x[2])
 
-    # 天井売り抜け（Bearish Distribution）: 価格が高値更新なのにCVDが切り下がり
     if p2_hi[2] > p1_hi[2] * 1.0015 and p2_hi[3] < p1_hi[3]:
         return {
             "state": "DISTRIBUTION",
             "label": "売り抜け警戒",
             "color": "#ef4444",
-            "detail": f"価格が高値更新（{p1_hi[1]}→{p2_hi[1]}）する一方、累積出来高デルタ(CVD)が減少。大口の天井売り抜け（Distribution）の兆候。",
+            "detail": f"価格が高値更新（{p1_hi[1]}→{p2_hi[1]}）する一方、疑似CVD（CLV×出来高累積）が減少。大口の天井売り抜け（Distribution）の兆候。",
             "marker": {"time": p2_hi[1], "price": p2_hi[2], "name": "売り抜け", "color": "#ef4444"},
         }
 
-    # 底値吸収（Bullish Absorption）: 価格が安値更新なのにCVDが切り上がり
     if p2_lo[2] < p1_lo[2] * 0.9985 and p2_lo[3] > p1_lo[3]:
         return {
             "state": "ABSORPTION",
             "label": "底値吸収",
             "color": "#10b981",
-            "detail": f"価格が安値更新（{p1_lo[1]}→{p2_lo[1]}）する一方、累積出来高デルタ(CVD)が上昇。大口の指値買い吸収（Absorption）の兆候。",
+            "detail": f"価格が安値更新（{p1_lo[1]}→{p2_lo[1]}）する一方、疑似CVD（CLV×出来高累積）が上昇。大口の指値買い吸収（Absorption）の兆候。",
             "marker": {"time": p2_lo[1], "price": p2_lo[2], "name": "底値吸収", "color": "#10b981"},
         }
 
-    # ダイバージェンスなし：CVD方向の一致状況
     last_cvd = pts[-1][3]
     if last_cvd > 0:
-        return {"state": "ALIGNED_BULL", "label": "買い優勢", "color": "#38bdf8", "detail": "CVDプラス圏で買い主導の推移。", "marker": None}
+        return {"state": "ALIGNED_BULL", "label": "買い優勢", "color": "#38bdf8", "detail": "疑似CVDプラス圏で買い主導の推移。", "marker": None}
     if last_cvd < 0:
-        return {"state": "ALIGNED_BEAR", "label": "売り優勢", "color": "#f59e0b", "detail": "CVDマイナス圏で売り主導の推移。", "marker": None}
+        return {"state": "ALIGNED_BEAR", "label": "売り優勢", "color": "#f59e0b", "detail": "疑似CVDマイナス圏で売り主導の推移。", "marker": None}
     return {"state": "NEUTRAL", "label": "均衡", "color": "#94a3b8", "detail": "売り買いのデルタは均衡。", "marker": None}
 
 
@@ -1098,7 +1131,6 @@ def _evaluate_gap_open15(
             }
         return {"status": "GU_HOLD", "label": "GU 様子見", "color": "#38bdf8", "bias": 0.001, "detail": f"GU({gap_pct:+.2f}%)・RVOL {rvol15:.2f}x。", "show_gap_target": False}
 
-    # ギャップダウン (gap_pct <= -0.20)
     no_open_high_break = max(highs3[1:]) <= highs3[0] * 1.001
     if below_vwap_all and rvol15 >= 1.5 and no_open_high_break:
         return {
@@ -1187,8 +1219,11 @@ def _compute_self_calibration(stock_hist: dict, df_1d: pd.DataFrame, market_toda
     for dt_k in sorted(stock_hist.keys()):
         if dt_k >= market_today_str:
             continue
+        snap = stock_hist[dt_k]
+        if snap.get("locked_premarket") is False:
+            continue
         if dt_k in close_map:
-            p50_arr = stock_hist[dt_k].get("p50")
+            p50_arr = snap.get("p50")
             if p50_arr and len(p50_arr) > 0:
                 pred_c = float(p50_arr[-1])
                 act_c = close_map[dt_k]
@@ -1338,15 +1373,17 @@ def _build_dual_5m_trajectory(
         l_strength = float(np.clip((l_exp - 50.0) / 40.0, 0.0, 1.0))
         lab_strength_dir = (1.0 if l_side == "LONG" else -1.0) * l_strength
 
+    # 二重係数バグ修正：寄付きギャップと日中ドリフトでそれぞれ独立に lab_strength_dir を使用
     mg = raw_macro_x * og_w["macro"]
     fg = raw_fx_x * og_w["fx"]
     ng = raw_news_x * og_w["news"]
     wg = raw_whale_x * og_w["whale"]
+    lg_open = lab_strength_dir * og_w["lab_bias"]
     lab_bias_pct = round(lab_strength_dir * idr_w["lab_bias"], 2)
     dow_adj = float(np.clip(raw_dow_x * idr_w["dow"], -0.4, 0.4))
     wick_adj = round(float(np.clip(raw_wick_x * (idr_w["wick"] / 0.80), -0.55, 0.55)), 2)
 
-    tot_gap = float(np.clip(mg + fg + ng + wg + lab_bias_pct * og_w["lab_bias"], -5.0, 5.0))
+    tot_gap = float(np.clip(mg + fg + ng + wg + lg_open, -5.0, 5.0))
 
     raw_calib_pct, calib_n = _compute_self_calibration(stock_hist, df_1d, market_today_str)
     calib_pct = round(float(np.clip(raw_calib_pct * (idr_w["calib"] / 0.40), -0.65, 0.65)), 2)
@@ -1456,11 +1493,9 @@ def _build_dual_5m_trajectory(
         if cum_avg_v > 0:
             rvol = round(cum_act_v / cum_avg_v, 2)
 
-    # 流動性インパクト計算用の平均5分足出来高
     pos_vols = [v for v in slot_vols if v > 0]
     avg_5m_vol = float(np.mean(pos_vols)) if pos_vols else (float(df_1d["Volume"].tail(20).mean()) / max(n_slots, 1))
 
-    # CVDダイバージェンス ＆ 寄り後15分 Gap & Go / Fade 判定
     cvd_div = _detect_cvd_divergence(slots, actual_arr, cvd_arr)
     gap_open15 = _evaluate_gap_open15(
         has_actual, slots, actual_arr, vwap_arr,
@@ -1498,31 +1533,28 @@ def _build_dual_5m_trajectory(
         p32.append(round(float(lo_in), 2))
         bdiff_inner.append(round(float(hi_in - lo_in), 2))
 
-    rng_sim = np.random.default_rng(abs(hash(f"{fc_code}_{target_date}")) % (2**32))
-    sim_line = [p50[0]]
-    for i in range(1, n_slots):
-        pull = (p50[i] - sim_line[-1]) * 0.35
-        noise = rng_sim.normal(0, est_open * slot_stds[i] * 0.28)
-        sim_line.append(round(float(np.clip(sim_line[-1] + pull + noise, p15[i], p85[i])), 2))
+    # リーク防止：寄り前に保存されたスナップショットのみを「朝ロック」として認定
+    saved_today = stock_hist.get(market_today_str) if isinstance(stock_hist.get(market_today_str), dict) else None
+    has_premarket_lock = bool(saved_today and saved_today.get("locked_premarket", True))
 
-    if has_actual and market_today_str in stock_hist:
-        locked_p50 = stock_hist[market_today_str]["p50"]
-        locked_p85 = stock_hist[market_today_str]["p85"]
-        locked_p15 = stock_hist[market_today_str]["p15"]
-        locked_bdiff = stock_hist[market_today_str]["band_diff"]
-        locked_p32 = stock_hist[market_today_str].get("p32", [round(m - (m - l) * 0.52, 2) for m, l in zip(locked_p50, locked_p15)])
-        locked_bdiff_in = stock_hist[market_today_str].get("band_diff_in", [round(d * 0.52, 2) for d in locked_bdiff])
-        locked_sim = stock_hist[market_today_str].get("sim_line", locked_p50)
+    if has_actual and has_premarket_lock:
+        locked_p50 = saved_today["p50"]
+        locked_p85 = saved_today["p85"]
+        locked_p15 = saved_today["p15"]
+        locked_bdiff = saved_today["band_diff"]
+        locked_p32 = saved_today.get("p32", [round(m - (m - l) * 0.52, 2) for m, l in zip(locked_p50, locked_p15)])
+        locked_bdiff_in = saved_today.get("band_diff_in", [round(d * 0.52, 2) for d in locked_bdiff])
         is_locked = True
     else:
         locked_p50, locked_p85, locked_p15, locked_bdiff = p50, p85, p15, bdiff
-        locked_p32, locked_bdiff_in, locked_sim = p32, bdiff_inner, sim_line
-        is_locked = has_actual
-        save_key = market_today_str if has_actual else target_date
-        if (not has_actual) or (save_key not in stock_hist):
-            stock_hist[save_key] = {
+        locked_p32, locked_bdiff_in = p32, bdiff_inner
+        is_locked = False
+        # 寄り前（not has_actual）の場合のみ、翌営業日の事前ロック予測として台帳保存
+        if not has_actual:
+            stock_hist[target_date] = {
                 "p50": p50, "p85": p85, "p15": p15, "band_diff": bdiff,
-                "p32": p32, "band_diff_in": bdiff_inner, "sim_line": sim_line,
+                "p32": p32, "band_diff_in": bdiff_inner,
+                "locked_premarket": True,
                 "regime_code": regime_code,
                 "pred_open_px": round(float(est_open), 4),
                 "pred_open_gap_pct": round(float(tot_gap), 4),
@@ -1532,7 +1564,7 @@ def _build_dual_5m_trajectory(
                         "fx": round(raw_fx_x, 4),
                         "news": round(raw_news_x, 4),
                         "whale": round(raw_whale_x, 4),
-                        "lab_bias": round(lab_bias_pct, 4),
+                        "lab_bias": round(lab_strength_dir, 4),
                     },
                     "intraday_drift": {
                         "news": round(raw_news_x, 4),
@@ -1620,8 +1652,12 @@ def _build_dual_5m_trajectory(
         live_p50, live_p85, live_p15, live_bdiff = p50, p85, p15, bdiff
         live_p32, live_bdiff_in = p32, bdiff_inner
 
+    # FPT用の残存ドリフト（場中ならライブ修正込み、場前なら標準ドリフト）
+    rem_drift_pct = ((drift * 0.6 + live_vwap_bias) * rem_frac_now) if has_actual else drift
+
+    # 朝ロック検証は「寄り前ロックが存在する場合のみ」実行（リーク防止）
     verify_stats = {"has_verify": False, "in_cone_pct": 0.0, "err_pct": 0.0, "n_pts": 0}
-    if has_actual:
+    if has_actual and is_locked:
         in_c, errs = 0, []
         for a, lo, hi, m in zip(actual_arr, locked_p15, locked_p85, locked_p50):
             if a is not None:
@@ -1634,14 +1670,15 @@ def _build_dual_5m_trajectory(
     inv_reasons = []
     if has_actual and last_act_idx >= 0:
         cur_a = actual_arr[last_act_idx]
-        lo_l, hi_l = locked_p15[last_act_idx], locked_p85[last_act_idx]
-        bw_l = max(hi_l - lo_l, cur_a * 0.005)
-        if cur_a > hi_l + bw_l * 0.5:
-            inv_reasons.append("上方向へ予測バンド大幅ブレイク（想定超え急騰）")
-        elif cur_a < lo_l - bw_l * 0.5:
-            inv_reasons.append("下方向へ予測バンド大幅割れ（想定超え急落）")
-        if verify_stats["n_pts"] >= 6 and verify_stats["in_cone_pct"] < 45.0:
-            inv_reasons.append(f"朝ロック予測の収束率が低下（{verify_stats['in_cone_pct']}%）")
+        if is_locked:
+            lo_l, hi_l = locked_p15[last_act_idx], locked_p85[last_act_idx]
+            bw_l = max(hi_l - lo_l, cur_a * 0.005)
+            if cur_a > hi_l + bw_l * 0.5:
+                inv_reasons.append("上方向へ予測バンド大幅ブレイク（想定超え急騰）")
+            elif cur_a < lo_l - bw_l * 0.5:
+                inv_reasons.append("下方向へ予測バンド大幅割れ（想定超え急落）")
+            if verify_stats["n_pts"] >= 6 and verify_stats["in_cone_pct"] < 45.0:
+                inv_reasons.append(f"朝ロック予測の収束率が低下（{verify_stats['in_cone_pct']}%）")
         if isinstance(active_lab, dict) and float(active_lab.get("expect_pct", 0.0)) >= 70.0:
             l_side = _extract_lab_side(active_lab)
             day_chg_now = (cur_a - anchor_base_close) / max(anchor_base_close, 1e-4) * 100.0
@@ -1664,9 +1701,9 @@ def _build_dual_5m_trajectory(
         "vwap_p1": vwap_p1_arr, "vwap_m1": vwap_m1_arr, "vwap_p2": vwap_p2_arr, "vwap_m2": vwap_m2_arr,
         "rvol": rvol, "orb_high": orb_high, "orb_low": orb_low, "vol_spikes": vol_spikes,
         "avg_5m_vol": avg_5m_vol, "cvd_div": cvd_div, "gap_open15": gap_open15,
-        "gap_fill": gap_fill_stats, "rem_sigma_pct": rem_sigma_pct, "rem_frac_now": rem_frac_now,
+        "gap_fill": gap_fill_stats, "rem_sigma_pct": rem_sigma_pct, "rem_drift_pct": rem_drift_pct, "rem_frac_now": rem_frac_now,
         "locked_p50": locked_p50, "locked_p85": locked_p85, "locked_p15": locked_p15, "locked_bdiff": locked_bdiff,
-        "locked_p32": locked_p32, "locked_bdiff_in": locked_bdiff_in, "sim_line": locked_sim,
+        "locked_p32": locked_p32, "locked_bdiff_in": locked_bdiff_in,
         "live_p50": live_p50, "live_p85": live_p85, "live_p15": live_p15, "live_bdiff": live_bdiff,
         "live_p32": live_p32, "live_bdiff_in": live_bdiff_in,
         "est_open_px": round(est_open, 2), "est_open_gap_pct": round(tot_gap, 2),
@@ -1818,14 +1855,14 @@ def _render_unified_guide():
     st.markdown("""
     <div class="dd-guide-box">
     <b>🔰 最初に見る3ポイント</b><br>
-    1. <b>予測軌道チャート:</b> 白線(実測)が青い帯(予測レンジ)の中に収まっているかを確認。右上の <b>⛶ 横拡大</b> でスマホ横向きフル大画面にできます。<br>
+    1. <b>予測軌道チャート:</b> 白線(実測)が青い帯(±1.15σ予測レンジ)の中に収まっているかを確認。右上の <b>⛶ 横拡大</b> でスマホ横向きフル大画面にできます。<br>
     2. <b>3つのシナリオカード:</b> 「押し目・高値の時間帯」と「上振れ/下振れトリガー価格」をチェック。<br>
-    3. <b>適正ロット電卓:</b> 許容損失額を入れると、日本株100株単元・流動性インパクト・TP到達確率(FPT)を自動計算します。<br>
+    3. <b>適正ロット電卓:</b> 許容損失額を入れると、日本株100株単元・流動性インパクト・ドリフト考慮のTP到達確率(FPT)を自動計算します。<br>
     <hr style="border-color:rgba(56,189,248,0.22);margin:7px 0;">
-    <b>■ プロ仕様 魔改造インジケーターガイド</b><br>
-    ・<b>疑似オーダーフロー(CVD):</b> 高値更新なのにCVD低下＝大口の売り抜け警戒 / 安値更新なのにCVD上昇＝大口の底値吸収。<br>
+    <b>■ プロ仕様 インジケーターガイド</b><br>
+    ・<b>疑似オーダーフロー(CVD):</b> 5分足CLV×出来高の累積。高値更新なのにCVD低下＝売り抜け警戒 / 安値更新なのにCVD上昇＝底値吸収。<br>
     ・<b>初動15分 Gap&Go / Fade:</b> 寄り3本のVWAP位置×RVOLから本物トレンドか窓埋め騙しかを即判定。<br>
-    ・<b>3脳SGD学習:</b> トレンド脳・レンジ脳・中立脳の重みを独立学習し、相場転換時の揺り戻しを防止。<br>
+    ・<b>3脳SGD学習:</b> 寄り前ロック予測の実測誤差のみを使って、トレンド脳・レンジ脳・中立脳の重みをリークフリーで独立学習。<br>
     ・<b>RVOL / VWAP±σ / 流動性インパクト:</b> 同時刻出来高比、機関執行帯、自分の注文が板に与えるスリッページ負荷を計測。
     </div>
     """, unsafe_allow_html=True)
@@ -1837,13 +1874,12 @@ def _render_unified_guide():
 def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイトレード", gemini_api_key: str = "", lab_ctx: dict = None):
     _inject_dd_css()
 
-    # コンパクト・ヘッダー（タイトル + 📖 見方ガイド + LABへ戻る）
     h1, h2, h3 = st.columns([2.4, 1.0, 1.2])
     with h1:
         st.markdown(
             '<div class="glass-header" style="margin-bottom:4px;padding:8px 12px;">'
             '<div class="brand-luxury" style="font-size:15px;">YAMASHISHI DEEP DIVE v13</div>'
-            '<div style="font-size:10px;color:#94a3b8;">3脳SGD・CVD大口透視・初動15分Gap判定・100株流動性電卓</div>'
+            '<div style="font-size:10px;color:#94a3b8;">3脳SGD・疑似CVD透視・初動15分Gap判定・100株流動性電卓</div>'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1908,7 +1944,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         chg_col = "#10b981" if chg_pct >= 0 else "#ef4444"
 
         mkt_regime = _detect_market_regime(df_1d)
-        gamma_pin = _compute_gamma_pin(curr_px, is_jp)
+        round_level = _compute_round_number_level(curr_px, is_jp)
         macro_sens = _compute_macro_sens(df_1d["Close"], macro_data)
         dow_stats, next_wd = _compute_dow_edge(df_1d)
         with ThreadPoolExecutor(max_workers=2) as ex_intel:
@@ -1924,7 +1960,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             mkt_regime=mkt_regime, active_lab=active_lab
         )
 
-        # ステータス・ピル＋統合詳細ドロワー
         status_pills = []
         alert_blocks = []
         ne_days = data.get("next_earnings_days")
@@ -1938,10 +1973,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
         cvd_div = traj["cvd_div"]
         if cvd_div["state"] == "DISTRIBUTION":
-            status_pills.append('<span class="dd-st-pill" style="border-color:#ef4444;background:rgba(239,68,68,0.20);color:#fecaca;">🚨 CVD売り抜け</span>')
+            status_pills.append('<span class="dd-st-pill" style="border-color:#ef4444;background:rgba(239,68,68,0.20);color:#fecaca;">🚨 疑似CVD売り抜け</span>')
             alert_blocks.append(f'<div class="dd-warn-box"><b>🚨 疑似オーダーフロー（CVD）天井売り抜け検知</b><br>{html.escape(cvd_div["detail"])}</div>')
         elif cvd_div["state"] == "ABSORPTION":
-            status_pills.append('<span class="dd-st-pill" style="border-color:#10b981;background:rgba(16,185,129,0.18);color:#6ee7b7;">🧲 CVD底値吸収</span>')
+            status_pills.append('<span class="dd-st-pill" style="border-color:#10b981;background:rgba(16,185,129,0.18);color:#6ee7b7;">🧲 疑似CVD底値吸収</span>')
             alert_blocks.append(f'<div class="dd-quant-box"><b>🧲 疑似オーダーフロー（CVD）底値吸収検知</b><br>{html.escape(cvd_div["detail"])}</div>')
 
         g15 = traj["gap_open15"]
@@ -2014,7 +2049,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         upside_str = f"{((target_mean - curr_px)/curr_px*100):+.1f}%" if (target_mean and curr_px > 0) else "-"
         risk_status, risk_col = (f"⚠️ {len(gov_risks)}件", "#f87171") if gov_risks else ("🟢 クリーン", "#10b981")
 
-        # ヒーローカード
         st.markdown(f"""
         <div class="rank-card" style="border-left-color:{aura_col};box-shadow:0 8px 26px {aura_glow};margin-top:2px;margin-bottom:8px;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
@@ -2045,7 +2079,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         t1, t2, t3, t4 = st.tabs(["翌営業日 1日軌道", "マクロβ・曜日", "財務・大口株主", "リスク・AIメモ"])
 
         with t1:
-            # 機関投資家テレメトリバー（6項目：RVOL / 窓埋め / キリ番 / 大口◆ / CVD / 初動15分）
             rvol_v = traj["rvol"]
             rvol_txt, rvol_c = (f"{rvol_v:.2f}x (機関)", "#10b981") if (rvol_v and rvol_v >= 1.8) else ((f"{rvol_v:.2f}x (閑散)", "#f59e0b") if (rvol_v and rvol_v < 0.75) else ((f"{rvol_v:.2f}x (通常)", "#38bdf8") if rvol_v else ("場前待機", "#94a3b8")))
             gf = traj["gap_fill"]
@@ -2061,19 +2094,18 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             <div class="dd-inst-strip">
               <div class="dd-inst-card"><div class="dd-metric-lbl">RVOL 相対出来高</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:{rvol_c};margin-top:2px;">{rvol_txt}</div></div>
               <div class="dd-inst-card"><div class="dd-metric-lbl">窓埋め率 (平均)</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:{gf_c};margin-top:2px;">{gf_txt}</div></div>
-              <div class="dd-inst-card"><div class="dd-metric-lbl">キリ番節目 (Pin)</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:#fde047;margin-top:2px;">{_fmt_cur(gamma_pin, is_jp)}</div></div>
+              <div class="dd-inst-card"><div class="dd-metric-lbl">心理的キリ番節目</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:#fde047;margin-top:2px;">{_fmt_cur(round_level, is_jp)}</div></div>
               <div class="dd-inst-card"><div class="dd-metric-lbl">大口約定スパイク</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:{'#c084fc' if n_sp>0 else '#94a3b8'};margin-top:2px;">{sp_txt}</div></div>
-              <div class="dd-inst-card"><div class="dd-metric-lbl">CVD オーダーフロー</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:{cvd_div['color']};margin-top:2px;">{html.escape(cvd_div['label'])}</div></div>
+              <div class="dd-inst-card"><div class="dd-metric-lbl">疑似CVDフロー</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:{cvd_div['color']};margin-top:2px;">{html.escape(cvd_div['label'])}</div></div>
               <div class="dd-inst-card"><div class="dd-metric-lbl">寄り15分 Gap判定</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:{g15['color']};margin-top:2px;">{html.escape(g15['label'])}</div></div>
             </div>
             """, unsafe_allow_html=True)
 
-            # 目的別プリセット ＋ ⚙️表示設定
             presets = ["📈 今の予測", "🔍 朝の答え合わせ", "🏦 大口・節目"]
             modes = ["🔴 ライブ修正", "🔒 朝ロック検証", "⚡ 両方重ね"]
             line_opts = [
                 "予測レンジ帯（ファン）", "押目・利確ゾーン", "VWAP", "VWAP±σ",
-                "キリ番節目（Pin）", "寄り30分高安（ORB）", "大口約定（◆）", "想定波形", "出来高"
+                "心理的キリ番節目", "寄り30分高安（ORB）", "大口約定（◆）", "出来高"
             ] + (["LAB TP/SL"] if active_lab else [])
 
             p_col, cfg_col = st.columns([3.2, 1.1])
@@ -2085,13 +2117,13 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
             if sel_preset == "📈 今の予測":
                 pr_mode_idx = 2
-                pr_lines = ["予測レンジ帯（ファン）", "押目・利確ゾーン", "VWAP", "キリ番節目（Pin）", "大口約定（◆）", "出来高"] + (["LAB TP/SL"] if active_lab else [])
+                pr_lines = ["予測レンジ帯（ファン）", "押目・利確ゾーン", "VWAP", "心理的キリ番節目", "大口約定（◆）", "出来高"] + (["LAB TP/SL"] if active_lab else [])
             elif sel_preset == "🔍 朝の答え合わせ":
                 pr_mode_idx = 1
-                pr_lines = ["予測レンジ帯（ファン）", "想定波形", "寄り30分高安（ORB）", "出来高"]
+                pr_lines = ["予測レンジ帯（ファン）", "寄り30分高安（ORB）", "出来高"]
             else:
                 pr_mode_idx = 0
-                pr_lines = ["VWAP", "VWAP±σ", "キリ番節目（Pin）", "大口約定（◆）", "押目・利確ゾーン", "出来高"] + (["LAB TP/SL"] if active_lab else [])
+                pr_lines = ["VWAP", "VWAP±σ", "心理的キリ番節目", "大口約定（◆）", "押目・利確ゾーン", "出来高"] + (["LAB TP/SL"] if active_lab else [])
 
             if st.session_state.get("dd_last_preset") != sel_preset:
                 st.session_state["dd_last_preset"] = sel_preset
@@ -2110,23 +2142,25 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
             preset_desc = {
                 "📈 今の予測": "ライブ修正軌道 ＋ 押し目/利確帯 ＋ 大口約定（右上の「⛶ 横拡大」で横向き大画面）",
-                "🔍 朝の答え合わせ": "朝ロック予測 vs 当日実測 ＋ 想定波形 ＋ 寄り30分高安",
-                "🏦 大口・節目": "VWAP±σバンド ＋ キリ番節目 ＋ 大口約定スパイク",
+                "🔍 朝の答え合わせ": "寄り前ロック予測 vs 当日実測 ＋ 寄り30分高安",
+                "🏦 大口・節目": "VWAP±σバンド ＋ 心理的キリ番節目 ＋ 大口約定スパイク",
             }
             st.caption(f"表示中: {preset_desc.get(sel_preset, '')}")
 
-            if traj["verify"]["has_verify"] and chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
-                v = traj["verify"]
-                st.markdown(f'<div class="dd-quant-box"><b>📊 朝ロック予測 vs 当日実測 ガチ検証（実測 {v["n_pts"]}本）</b><br>・<b>確率ファン内 収束率:</b> <b style="color:#fde047;">{v["in_cone_pct"]}%</b> ｜ <b>平均誤差:</b> <b>{v["err_pct"]}%</b></div>', unsafe_allow_html=True)
+            if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
+                if traj["verify"]["has_verify"]:
+                    v = traj["verify"]
+                    st.markdown(f'<div class="dd-quant-box"><b>📊 寄り前ロック予測 vs 当日実測 検証（実測 {v["n_pts"]}本）</b><br>・<b>±1.15σファン内 収束率:</b> <b style="color:#fde047;">{v["in_cone_pct"]}%</b> ｜ <b>平均誤差:</b> <b>{v["err_pct"]}%</b></div>', unsafe_allow_html=True)
+                elif traj["has_actual"] and not traj["is_locked"]:
+                    st.markdown('<div class="dd-sync-warn"><b>ℹ️ 本日は場中初回アクセスのため「朝ロック検証」対象外</b><br>リーク防止のため、寄り前に保存された予測のみを答え合わせ対象としています（現在はライブ修正軌道を基準に表示中）。</div>', unsafe_allow_html=True)
 
-            # 水平・垂直ライン
             ml_data = []
             if traj["lunch_idx"] is not None:
                 ml_data.append({"xAxis": traj["slots"][traj["lunch_idx"]], "lineStyle": {"color": "rgba(148,163,184,0.3)", "type": "dashed"}, "label": {"formatter": "前/後場", "color": "#94a3b8", "fontSize": 9, "position": "insideEndTop"}})
             if g15.get("show_gap_target") and prev_px > 0:
                 ml_data.append({"yAxis": round(prev_px, 2), "lineStyle": {"color": "#f97316", "type": "dashed", "width": 1.6}, "label": {"formatter": f"窓埋目標 {_fmt_cur(prev_px, is_jp)}", "color": "#fdba74", "fontSize": 9, "position": "insideEndTop"}})
-            if "キリ番節目（Pin）" in opt_lines:
-                ml_data.append({"yAxis": gamma_pin, "lineStyle": {"color": "rgba(250,204,21,0.55)", "type": "dotted", "width": 1.3}, "label": {"formatter": f"Pin {_fmt_cur(gamma_pin, is_jp)}", "color": "#fde047", "fontSize": 8.5, "position": "insideStartTop"}})
+            if "心理的キリ番節目" in opt_lines:
+                ml_data.append({"yAxis": round_level, "lineStyle": {"color": "rgba(250,204,21,0.55)", "type": "dotted", "width": 1.3}, "label": {"formatter": f"節目 {_fmt_cur(round_level, is_jp)}", "color": "#fde047", "fontSize": 8.5, "position": "insideStartTop"}})
             if "寄り30分高安（ORB）" in opt_lines and traj["orb_high"] and traj["orb_low"]:
                 ml_data.append({"yAxis": traj["orb_high"], "lineStyle": {"color": "rgba(56,189,248,0.45)", "type": "dashed", "width": 1.0}, "label": {"formatter": "ORB高", "color": "#7dd3fc", "fontSize": 8.5, "position": "insideStartTop"}})
                 ml_data.append({"yAxis": traj["orb_low"], "lineStyle": {"color": "rgba(244,63,94,0.45)", "type": "dashed", "width": 1.0}, "label": {"formatter": "ORB安", "color": "#fda4af", "fontSize": 8.5, "position": "insideStartBottom"}})
@@ -2179,11 +2213,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 c_bd_in = traj["live_bdiff_in"] if is_lv else traj["locked_bdiff_in"]
                 s_list.extend([
                     {"name": "outer_base", "type": "line", "yAxisIndex": 0, "data": c_p15, "stack": "fan_out", "lineStyle": {"opacity": 0}, "showSymbol": False, "silent": True},
-                    {"name": "85%帯", "type": "line", "yAxisIndex": 0, "data": c_bd, "stack": "fan_out", "lineStyle": {"opacity": 0}, "areaStyle": {"color": "rgba(99, 102, 241, 0.12)"}, "showSymbol": False, "silent": True},
+                    {"name": "±1.15σ帯", "type": "line", "yAxisIndex": 0, "data": c_bd, "stack": "fan_out", "lineStyle": {"opacity": 0}, "areaStyle": {"color": "rgba(99, 102, 241, 0.12)"}, "showSymbol": False, "silent": True},
                     {"name": "inner_base", "type": "line", "yAxisIndex": 0, "data": c_p32, "stack": "fan_in", "lineStyle": {"opacity": 0}, "showSymbol": False, "silent": True},
-                    {"name": "50%コア帯", "type": "line", "yAxisIndex": 0, "data": c_bd_in, "stack": "fan_in", "lineStyle": {"opacity": 0}, "areaStyle": {"color": "rgba(56, 189, 248, 0.22)"}, "showSymbol": False, "silent": True},
+                    {"name": "コア帯", "type": "line", "yAxisIndex": 0, "data": c_bd_in, "stack": "fan_in", "lineStyle": {"opacity": 0}, "areaStyle": {"color": "rgba(56, 189, 248, 0.22)"}, "showSymbol": False, "silent": True},
                 ])
-                l_names.append("50%コア帯")
+                l_names.append("コア帯")
 
             if "VWAP" in opt_lines and traj["has_actual"]:
                 s_list.append({"name": "VWAP", "type": "line", "yAxisIndex": 0, "data": traj["vwap"], "lineStyle": {"color": "#f59e0b", "width": 1.6, "type": "dotted"}, "showSymbol": False})
@@ -2196,10 +2230,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     {"name": "VWAP+2σ", "type": "line", "yAxisIndex": 0, "data": traj["vwap_p2"], "lineStyle": {"color": "rgba(239,68,68,0.45)", "width": 1.0, "type": "dotted"}, "showSymbol": False, "silent": True},
                     {"name": "VWAP-2σ", "type": "line", "yAxisIndex": 0, "data": traj["vwap_m2"], "lineStyle": {"color": "rgba(16,185,129,0.45)", "width": 1.0, "type": "dotted"}, "showSymbol": False, "silent": True},
                 ])
-
-            if "想定波形" in opt_lines:
-                s_list.append({"name": "想定波形", "type": "line", "yAxisIndex": 0, "data": traj["sim_line"], "lineStyle": {"color": "#facc15", "width": 1.8}, "showSymbol": False})
-                l_names.append("想定波形")
 
             if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
                 is_both = (chart_mode == "⚡ 両方重ね")
@@ -2261,7 +2291,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 "series": s_list
             }, height=345, use_hud_tooltip=True, is_jp=is_jp, enable_fullscreen=True)
 
-            # 適正ロット＆EV電卓 ＋ 日本株100株単元 ＋ 流動性インパクト ＋ FPT到達確率
             with st.expander("🧮 適正ロット・100株単元・流動性インパクト・FPT電卓", expanded=False):
                 l_tp_ev = float(active_lab.get("tp", active_lab.get("raw_tp", 0.0)) or 0.0) if active_lab else 0.0
                 l_sl_ev = float(active_lab.get("sl", active_lab.get("raw_sl", 0.0)) or 0.0) if active_lab else 0.0
@@ -2300,17 +2329,16 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 ev_val = (win_prob / 100.0) * (calc_shares * rew_per_sh) - (1.0 - win_prob / 100.0) * (calc_shares * risk_per_sh)
                 ev_col = "#10b981" if ev_val > 0 else "#ef4444"
 
-                # 流動性インパクト（自分の注文株数 ÷ 5分足平均出来高）
                 avg_5m_v = max(float(traj.get("avg_5m_vol", 1.0)), 1.0)
                 impact_pct = (calc_shares / avg_5m_v) * 100.0
                 imp_col = "#ef4444" if impact_pct >= 2.0 else ("#f59e0b" if impact_pct >= 0.8 else "#10b981")
 
-                tp_fpt = _calc_first_passage_prob(curr_px, def_tp, traj["rem_sigma_pct"])
-                sl_fpt = _calc_first_passage_prob(curr_px, def_sl, traj["rem_sigma_pct"])
+                tp_fpt = _calc_first_passage_prob(curr_px, def_tp, traj["rem_sigma_pct"], traj["rem_drift_pct"])
+                sl_fpt = _calc_first_passage_prob(curr_px, def_sl, traj["rem_sigma_pct"], traj["rem_drift_pct"])
                 rem_pct_lbl = int(round(traj["rem_frac_now"] * 100))
 
                 st.markdown(f"""
-                <div style="font-size:11px;color:#94a3b8;">基準: Entry <b>{_fmt_cur(curr_px, is_jp)}</b> / TP <b>{_fmt_cur(def_tp, is_jp)}</b> / SL <b>{_fmt_cur(def_sl, is_jp)}</b>（残存時間 {rem_pct_lbl}%）</div>
+                <div style="font-size:11px;color:#94a3b8;">基準: Entry <b>{_fmt_cur(curr_px, is_jp)}</b> / TP <b>{_fmt_cur(def_tp, is_jp)}</b> / SL <b>{_fmt_cur(def_sl, is_jp)}</b>（残存時間 {rem_pct_lbl}% / ドリフト {traj['rem_drift_pct']*100:+.2f}%）</div>
                 <div class="dd-ev-grid">
                   <div class="dd-ev-cell"><div class="dd-metric-lbl">適正ロット</div><div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:800;color:{lot_col};">{lot_lbl}</div></div>
                   <div class="dd-ev-cell"><div class="dd-metric-lbl">RR比 (損益分岐)</div><div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:800;color:#fde047;">1:{rr_ratio:.2f} ({be_wr:.0f}%)</div></div>
@@ -2335,9 +2363,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             sp = (traj["bear_target"] - curr_px) / max(curr_px, 1e-4) * 100.0
             st.markdown(f"""
             <div class="dd-sc-stack">
-              <div class="dd-sc-card" style="border-left:4px solid #10b981;"><div class="dd-sc-top"><div><div style="font-weight:800;color:#6ee7b7;font-size:12.5px;">上振れ突破シナリオ（統計確率 15%）</div><div style="font-size:11px;color:#cbd5e1;margin-top:2px;">トリガー: <b>{_fmt_cur(traj['bull_trig'], is_jp)}</b> 超えで強気加速</div></div><div style="text-align:right;"><div class="dd-sc-price" style="color:#6ee7b7;">{_fmt_cur(traj['bull_target'], is_jp)}</div><div class="dd-sc-pct" style="color:#10b981;">{bp:+.2f}%</div></div></div><div class="dd-sc-bar-bg"><div class="dd-sc-bar-fill" style="width:15%;background:#10b981;"></div></div></div>
-              <div class="dd-sc-card" style="border-left:4px solid #38bdf8;"><div class="dd-sc-top"><div><div style="font-weight:800;color:#7dd3fc;font-size:12.5px;">確率ファン内・標準シナリオ（統計確率 70%）</div><div style="font-size:11px;color:#cbd5e1;margin-top:2px;">押し目: <b>{traj['dip_time']}</b> ({_fmt_cur(traj['dip_px'], is_jp)}) → 高値 <b>{traj['peak_time']}</b></div></div><div style="text-align:right;"><div class="dd-sc-price" style="color:#7dd3fc;">{_fmt_cur(traj['est_close_px'], is_jp)}</div><div class="dd-sc-pct" style="color:#38bdf8;">{traj['est_close_chg']:+.2f}%</div></div></div><div class="dd-sc-bar-bg"><div class="dd-sc-bar-fill" style="width:70%;background:#38bdf8;"></div></div></div>
-              <div class="dd-sc-card" style="border-left:4px solid #ef4444;"><div class="dd-sc-top"><div><div style="font-weight:800;color:#fca5a5;font-size:12.5px;">下振れ警戒シナリオ（統計確率 15%）</div><div style="font-size:11px;color:#cbd5e1;margin-top:2px;">トリガー: <b>{_fmt_cur(traj['bear_trig'], is_jp)}</b> 割れで撤退警戒</div></div><div style="text-align:right;"><div class="dd-sc-price" style="color:#fca5a5;">{_fmt_cur(traj['bear_target'], is_jp)}</div><div class="dd-sc-pct" style="color:#ef4444;">{sp:+.2f}%</div></div></div><div class="dd-sc-bar-bg"><div class="dd-sc-bar-fill" style="width:15%;background:#ef4444;"></div></div></div>
+              <div class="dd-sc-card" style="border-left:4px solid #10b981;"><div class="dd-sc-top"><div><div style="font-weight:800;color:#6ee7b7;font-size:12.5px;">上振れ突破シナリオ（+1.15σ超）</div><div style="font-size:11px;color:#cbd5e1;margin-top:2px;">トリガー: <b>{_fmt_cur(traj['bull_trig'], is_jp)}</b> 超えで強気加速</div></div><div style="text-align:right;"><div class="dd-sc-price" style="color:#6ee7b7;">{_fmt_cur(traj['bull_target'], is_jp)}</div><div class="dd-sc-pct" style="color:#10b981;">{bp:+.2f}%</div></div></div><div class="dd-sc-bar-bg"><div class="dd-sc-bar-fill" style="width:12.5%;background:#10b981;"></div></div></div>
+              <div class="dd-sc-card" style="border-left:4px solid #38bdf8;"><div class="dd-sc-top"><div><div style="font-weight:800;color:#7dd3fc;font-size:12.5px;">標準レンジ内シナリオ（±1.15σ帯）</div><div style="font-size:11px;color:#cbd5e1;margin-top:2px;">押し目: <b>{traj['dip_time']}</b> ({_fmt_cur(traj['dip_px'], is_jp)}) → 高値 <b>{traj['peak_time']}</b></div></div><div style="text-align:right;"><div class="dd-sc-price" style="color:#7dd3fc;">{_fmt_cur(traj['est_close_px'], is_jp)}</div><div class="dd-sc-pct" style="color:#38bdf8;">{traj['est_close_chg']:+.2f}%</div></div></div><div class="dd-sc-bar-bg"><div class="dd-sc-bar-fill" style="width:75%;background:#38bdf8;"></div></div></div>
+              <div class="dd-sc-card" style="border-left:4px solid #ef4444;"><div class="dd-sc-top"><div><div style="font-weight:800;color:#fca5a5;font-size:12.5px;">下振れ警戒シナリオ（-1.15σ割れ）</div><div style="font-size:11px;color:#cbd5e1;margin-top:2px;">トリガー: <b>{_fmt_cur(traj['bear_trig'], is_jp)}</b> 割れで撤退警戒</div></div><div style="text-align:right;"><div class="dd-sc-price" style="color:#fca5a5;">{_fmt_cur(traj['bear_target'], is_jp)}</div><div class="dd-sc-pct" style="color:#ef4444;">{sp:+.2f}%</div></div></div><div class="dd-sc-bar-bg"><div class="dd-sc-bar-fill" style="width:12.5%;background:#ef4444;"></div></div></div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -2380,7 +2408,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                   <div class="dd-factor-row"><span>為替（ドル円 {f['fx_diff']:+.2f}% × β{f['fx_beta']:+.2f} × 重み{og_now['fx']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['fx_gap_pct']>=0 else '#ef4444'};">{f['fx_gap_pct']:+.2f}%</span></div>
                   <div class="dd-factor-row"><span>日英高信頼ニュース修正（一次報道 {news_res['tier1_cnt']}件・重み{og_now['news']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['news_gap_pct']>=0 else '#ef4444'};">{f['news_gap_pct']:+.2f}%</span></div>
                   <div class="dd-factor-row"><span>大口・インサイダー異変補正（重み{og_now['whale']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['whale_gap_pct']>=0 else '#ef4444'};">{f['whale_gap_pct']:+.2f}%</span></div>
-                  <div class="dd-factor-row"><span>LAB上位足 方向性・期待度バイアス（日中重み{idr_now['lab_bias']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['lab_bias_pct']>=0 else '#ef4444'};">{f['lab_bias_pct']:+.2f}%</span></div>
+                  <div class="dd-factor-row"><span>LAB上位足 方向性・期待度バイアス（寄付重み{og_now['lab_bias']:.2f} / 日中重み{idr_now['lab_bias']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['lab_bias_pct']>=0 else '#ef4444'};">{f['lab_bias_pct']:+.2f}%</span></div>
                   <div class="dd-factor-row"><span>HVNしこり壁 / 機関OB支持帯</span><span style="font-family:'JetBrains Mono',monospace;color:#c084fc;">HVN {hvn_str} / OB {ob_str}</span></div>
                   <div class="dd-factor-row"><span>曜日エッジ ＋ 直近5日ヒゲ圧力補正</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['dow_wick_pct']>=0 else '#ef4444'};">{f['dow_wick_pct']:+.2f}%</span></div>
                   <div class="dd-factor-row"><span>台帳自己学習キャリブレーション（過去{f['calib_n']}日）</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if f['calib_pct']>=0 else '#ef4444'};">{f['calib_pct']:+.2f}%</span></div>
@@ -2489,7 +2517,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "gap_fill": traj["gap_fill"],
             "gap_open15": traj["gap_open15"],
             "cvd_div": traj["cvd_div"],
-            "gamma_pin": float(gamma_pin),
+            "round_level": float(round_level),
             "orb_high": traj["orb_high"],
             "orb_low": traj["orb_low"],
             "vol_spikes_cnt": len(traj["vol_spikes"]),
