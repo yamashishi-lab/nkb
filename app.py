@@ -2333,8 +2333,10 @@ def _render_council_sec_impl(r, uk, auto_open=False):
         if c1.button(btn_lbl, key=f"btn_open_{uk}", use_container_width=True):
             st.session_state["focused_stock_item"] = r; st.session_state["scroll_top_trig"] = int(time.time() * 1000); _app_rerun()
         if c2.button("✅ 監視済" if r["code"] in st.session_state["watchlist"] else "⭐ 監視追加", key=f"btn_watch_{uk}", use_container_width=True):
-            if r["code"] in st.session_state["watchlist"]: del st.session_state["watchlist"][r["code"]]
-            else st.session_state["watchlist"][r["code"]] = r
+            if r["code"] in st.session_state["watchlist"]:
+                del st.session_state["watchlist"][r["code"]]
+            else:
+                st.session_state["watchlist"][r["code"]] = r
             cu = st.session_state.get("authenticated_user", "")
             if cu: save_watchlist(cu, st.session_state["watchlist"])
             st.rerun()
