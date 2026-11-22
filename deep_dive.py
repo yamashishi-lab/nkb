@@ -871,7 +871,7 @@ def _render_echarts(
         if (btn) btn.textContent = isFS ? '✕ 戻す' : '⛶ 横拡大';
         if (opt.dataZoom) {
           chart.setOption({
-            grid: { bottom: isFS ? 44 : 24, top: isFS ? 48 : 60 },
+            grid: { bottom: isFS ? 44 : 24, top: isFS ? 52 : 66 },
             dataZoom: isFS
               ? [{ type: 'inside', xAxisIndex: 0, filterMode: 'none' }, { type: 'slider', xAxisIndex: 0, height: 18, bottom: 6, borderColor: 'rgba(56,189,248,0.35)', fillerColor: 'rgba(56,189,248,0.18)', textStyle: { color: '#94a3b8', fontSize: 9 } }]
               : [{ type: 'inside', xAxisIndex: 0, filterMode: 'none' }]
@@ -3450,10 +3450,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             if sel_preset == "📈 今の予測":
                 pr_mode_idx = 2
                 short_defaults = ["場中30分・3分岐点線（スコア比%）", "類似実測波形（Top-1）", "高ボラ狩り場帯"] if is_short_style else ["場中30分・3分岐点線（スコア比%）"]
-                pr_lines = short_defaults + ["予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "転換時間帯ガイド", "押目・利確ゾーン", "VWAP", "心理的キリ番節目", "大口約定（◆）", "出来高"] + (["LAB TP/SL"] if active_lab else [])
+                pr_lines = short_defaults + ["予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "押目・利確ゾーン", "VWAP", "心理的キリ番節目", "大口約定（◆）", "出来高"] + (["LAB TP/SL"] if active_lab else [])
             elif sel_preset == "🔍 朝の答え合わせ":
                 pr_mode_idx = 1
-                pr_lines = ["場中30分・3分岐点線（スコア比%）", "予測レンジ帯（ファン）", "転換時間帯ガイド", "寄り30分高安（ORB）", "出来高"]
+                pr_lines = ["場中30分・3分岐点線（スコア比%）", "予測レンジ帯（ファン）", "寄り30分高安（ORB）", "出来高"]
             else:
                 pr_mode_idx = 0
                 pr_lines = ["場中30分・3分岐点線（スコア比%）", "高ボラ狩り場帯", "VWAP", "VWAP±σ", "転換時間帯ガイド", "心理的キリ番節目", "大口約定（◆）", "押目・利確ゾーン", "出来高"] + (["LAB TP/SL"] if active_lab else [])
@@ -3495,38 +3495,70 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 elif traj["has_actual"] and not traj["is_locked"]:
                     st.markdown('<div class="dd-sync-warn"><b>ℹ️ 本日は寄り前2時間以内の事前ロックがないため「朝ロック検証」対象外</b><br>リーク防止のため、寄り前2時間以内に保存された予測のみを答え合わせ対象としています（現在はライブ修正軌道を基準に表示中）。</div>', unsafe_allow_html=True)
 
+            # チャート内ラベルの重なり・縦書き・左端見切れ防止ヘルパー
+            def _h_badge(txt: str, col: str, pos: str = "insideStartTop") -> dict:
+                return {
+                    "formatter": txt,
+                    "color": col,
+                    "fontSize": 8.5,
+                    "fontWeight": "bold",
+                    "position": pos,
+                    "backgroundColor": "rgba(11, 17, 32, 0.84)",
+                    "padding": [1, 4],
+                    "borderRadius": 3,
+                    "distance": 3,
+                }
+
+            def _v_badge(txt: str, col: str) -> dict:
+                return {
+                    "formatter": txt,
+                    "color": col,
+                    "fontSize": 8,
+                    "rotate": 0,
+                    "position": "insideEndTop",
+                    "backgroundColor": "rgba(11, 17, 32, 0.82)",
+                    "padding": [1, 3],
+                    "borderRadius": 3,
+                    "distance": 4,
+                }
+
             ml_data = []
             if traj["lunch_idx"] is not None:
-                ml_data.append({"xAxis": traj["slots"][traj["lunch_idx"]], "lineStyle": {"color": "rgba(148,163,184,0.3)", "type": "dashed"}, "label": {"formatter": "前/後場", "color": "#94a3b8", "fontSize": 9, "position": "insideEndTop"}})
+                ml_data.append({
+                    "xAxis": traj["slots"][traj["lunch_idx"]],
+                    "lineStyle": {"color": "rgba(148,163,184,0.35)", "type": "dashed"},
+                    "label": _v_badge("昼休", "#94a3b8"),
+                })
 
             if "転換時間帯ガイド" in opt_lines:
                 micro_times = (
-                    [("09:15", "寄付一巡"), ("11:25", "前引"), ("12:30", "後場"), ("14:30", "機関"), ("15:25", "引け")]
+                    [("09:15", "一巡"), ("14:30", "機関"), ("15:25", "引け")]
                     if is_jp else
-                    [("10:00", "指標/反転"), ("11:30", "欧州引け"), ("15:50", "MOC執行")]
+                    [("10:00", "指標"), ("11:30", "欧州引"), ("15:50", "MOC")]
                 )
                 for mt_slot, mt_lbl in micro_times:
                     if mt_slot in traj["slots"]:
                         ml_data.append({
                             "xAxis": mt_slot,
-                            "lineStyle": {"color": "rgba(125, 211, 252, 0.22)", "type": "dotted", "width": 1.0},
-                            "label": {"formatter": mt_lbl, "color": "rgba(148, 163, 184, 0.72)", "fontSize": 8, "position": "insideStartBottom"},
+                            "lineStyle": {"color": "rgba(125, 211, 252, 0.25)", "type": "dotted", "width": 1.0},
+                            "label": _v_badge(mt_lbl, "rgba(148, 163, 184, 0.85)"),
                         })
 
+            # 左寄せグループ（主要ターゲット・トリガー系）と右寄せグループ（節目・支持抵抗・ORB）に分散
             if g15.get("show_gap_target") and prev_px > 0:
-                ml_data.append({"yAxis": round(prev_px, 2), "lineStyle": {"color": "#f97316", "type": "dashed", "width": 1.6}, "label": {"formatter": f"窓埋目標 {_fmt_cur(prev_px, is_jp)}", "color": "#fdba74", "fontSize": 9, "position": "insideEndTop"}})
+                ml_data.append({"yAxis": round(prev_px, 2), "lineStyle": {"color": "#f97316", "type": "dashed", "width": 1.6}, "label": _h_badge(f"窓埋目標 {_fmt_cur(prev_px, is_jp)}", "#fdba74", "insideStartTop")})
             if "心理的キリ番節目" in opt_lines:
-                ml_data.append({"yAxis": round_level, "lineStyle": {"color": "rgba(250,204,21,0.55)", "type": "dotted", "width": 1.3}, "label": {"formatter": f"節目 {_fmt_cur(round_level, is_jp)}", "color": "#fde047", "fontSize": 8.5, "position": "insideStartTop"}})
+                ml_data.append({"yAxis": round_level, "lineStyle": {"color": "rgba(250,204,21,0.55)", "type": "dotted", "width": 1.3}, "label": _h_badge(f"節目 {_fmt_cur(round_level, is_jp)}", "#fde047", "insideEndTop")})
             if "寄り30分高安（ORB）" in opt_lines and traj["orb_high"] and traj["orb_low"]:
-                ml_data.append({"yAxis": traj["orb_high"], "lineStyle": {"color": "rgba(56,189,248,0.45)", "type": "dashed", "width": 1.0}, "label": {"formatter": "ORB高", "color": "#7dd3fc", "fontSize": 8.5, "position": "insideStartTop"}})
-                ml_data.append({"yAxis": traj["orb_low"], "lineStyle": {"color": "rgba(244,63,94,0.45)", "type": "dashed", "width": 1.0}, "label": {"formatter": "ORB安", "color": "#fda4af", "fontSize": 8.5, "position": "insideStartBottom"}})
+                ml_data.append({"yAxis": traj["orb_high"], "lineStyle": {"color": "rgba(56,189,248,0.45)", "type": "dashed", "width": 1.0}, "label": _h_badge("ORB高", "#7dd3fc", "insideEndTop")})
+                ml_data.append({"yAxis": traj["orb_low"], "lineStyle": {"color": "rgba(244,63,94,0.45)", "type": "dashed", "width": 1.0}, "label": _h_badge("ORB安", "#fda4af", "insideEndBottom")})
             if active_lab and "LAB TP/SL" in opt_lines:
                 l_tp_line = float(active_lab.get("tp", active_lab.get("raw_tp", 0.0)) or 0.0)
                 l_sl_line = float(active_lab.get("sl", active_lab.get("raw_sl", 0.0)) or 0.0)
                 if l_tp_line > 0:
-                    ml_data.append({"yAxis": round(l_tp_line, 2), "lineStyle": {"color": "#10b981", "type": "dashed", "width": 1.5}, "label": {"formatter": f"TP {_fmt_cur(l_tp_line, is_jp)}", "color": "#6ee7b7", "fontSize": 9, "position": "insideStartTop"}})
+                    ml_data.append({"yAxis": round(l_tp_line, 2), "lineStyle": {"color": "#10b981", "type": "dashed", "width": 1.5}, "label": _h_badge(f"TP {_fmt_cur(l_tp_line, is_jp)}", "#6ee7b7", "insideStartTop")})
                 if l_sl_line > 0:
-                    ml_data.append({"yAxis": round(l_sl_line, 2), "lineStyle": {"color": "#ef4444", "type": "dashed", "width": 1.5}, "label": {"formatter": f"SL {_fmt_cur(l_sl_line, is_jp)}", "color": "#fca5a5", "fontSize": 9, "position": "insideStartBottom"}})
+                    ml_data.append({"yAxis": round(l_sl_line, 2), "lineStyle": {"color": "#ef4444", "type": "dashed", "width": 1.5}, "label": _h_badge(f"SL {_fmt_cur(l_sl_line, is_jp)}", "#fca5a5", "insideStartBottom")})
                 aux_cands = []
                 if isinstance(lab_full, dict) and lab_full:
                     if lab_full.get("ob_support_px") is not None:
@@ -3541,7 +3573,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     try:
                         px_a = float(raw_px_a)
                         if px_a > 0 and curr_px > 0 and abs(px_a - curr_px) / curr_px <= 0.12:
-                            ml_data.append({"yAxis": round(px_a, 2), "lineStyle": {"color": col_a, "type": "dotted", "width": 1.2}, "label": {"formatter": f"{lbl_a} {_fmt_cur(px_a, is_jp)}", "color": col_a, "fontSize": 8.5, "position": "insideStartTop"}})
+                            ml_data.append({"yAxis": round(px_a, 2), "lineStyle": {"color": col_a, "type": "dotted", "width": 1.2}, "label": _h_badge(f"{lbl_a} {_fmt_cur(px_a, is_jp)}", col_a, "insideEndTop")})
                     except Exception:
                         pass
             ml_cfg = {"symbol": ["none", "none"], "data": ml_data} if ml_data else {}
@@ -3560,6 +3592,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                                 "position": "insideBottom",
                                 "color": "#fbbf24",
                                 "fontSize": 8,
+                                "backgroundColor": "rgba(11, 17, 32, 0.78)",
+                                "padding": [1, 3],
+                                "borderRadius": 2,
                             },
                         },
                         {"xAxis": hvz["end_slot"]},
@@ -3570,10 +3605,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 cur_peak_i = traj["live_peak_idx"] if use_live_basis else traj["locked_peak_idx"]
                 d_s, d_e = max(0, cur_dip_i - 2), min(n_sl - 1, cur_dip_i + 2)
                 p_s, p_e = max(0, cur_peak_i - 2), min(n_sl - 1, cur_peak_i + 2)
-                ma_data.append([{"name": "押目帯", "xAxis": traj["slots"][d_s], "itemStyle": {"color": "rgba(16, 185, 129, 0.09)"}, "label": {"position": "insideTop", "color": "#6ee7b7", "fontSize": 8.5}}, {"xAxis": traj["slots"][d_e]}])
-                ma_data.append([{"name": "利確帯", "xAxis": traj["slots"][p_s], "itemStyle": {"color": "rgba(239, 68, 68, 0.09)"}, "label": {"position": "insideTop", "color": "#fca5a5", "fontSize": 8.5}}, {"xAxis": traj["slots"][p_e]}])
+                ma_data.append([{"name": "押目帯", "xAxis": traj["slots"][d_s], "itemStyle": {"color": "rgba(16, 185, 129, 0.09)"}, "label": {"position": "insideTop", "color": "#6ee7b7", "fontSize": 8.5, "backgroundColor": "rgba(11, 17, 32, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][d_e]}])
+                ma_data.append([{"name": "利確帯", "xAxis": traj["slots"][p_s], "itemStyle": {"color": "rgba(239, 68, 68, 0.09)"}, "label": {"position": "insideTop", "color": "#fca5a5", "fontSize": 8.5, "backgroundColor": "rgba(11, 17, 32, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][p_e]}])
                 if vp["overhead_pct"] >= 25.0:
-                    ma_data.append([{"name": "売り壁", "yAxis": round(vp["res_px"] * 0.996, 2), "itemStyle": {"color": "rgba(168, 85, 247, 0.13)"}, "label": {"position": "insideLeft", "color": "#d8b4fe", "fontSize": 8.5}}, {"yAxis": round(vp["res_px"] * 1.004, 2)}])
+                    ma_data.append([{"name": "売り壁", "yAxis": round(vp["res_px"] * 0.996, 2), "itemStyle": {"color": "rgba(168, 85, 247, 0.13)"}, "label": {"position": "insideRight", "color": "#d8b4fe", "fontSize": 8.5, "backgroundColor": "rgba(11, 17, 32, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"yAxis": round(vp["res_px"] * 1.004, 2)}])
             ma_cfg = {"silent": True, "data": ma_data} if ma_data else {}
 
             # 修正11: 過去平均出来高は「平均出来高」、場中は「当日出来高」を別バーで重ねて表示
@@ -3746,16 +3781,35 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 sp_pts = [{"value": [sp["time"], sp["price"]], "itemStyle": {"color": "#10b981" if sp["dir"] > 0 else "#ef4444", "borderColor": "#ffffff", "borderWidth": 1}} for sp in traj["vol_spikes"]]
                 s_list.append({"name": "大口約定", "type": "scatter", "yAxisIndex": 0, "symbol": "diamond", "symbolSize": 9, "data": sp_pts, "z": 10})
 
+            def _edge_aware_pulse(pt_name: str, pt_time: str, pt_px: float, pt_col: str) -> dict:
+                try:
+                    s_idx = traj["slots"].index(pt_time)
+                except ValueError:
+                    s_idx = len(traj["slots"]) // 2
+                n_tot_s = len(traj["slots"])
+                al = "left" if s_idx <= 4 else ("right" if s_idx >= n_tot_s - 5 else "center")
+                return {
+                    "name": pt_name,
+                    "value": [pt_time, pt_px],
+                    "itemStyle": {"color": pt_col},
+                    "label": {
+                        "align": al,
+                        "backgroundColor": "rgba(11, 17, 32, 0.82)",
+                        "padding": [1, 3],
+                        "borderRadius": 3,
+                    },
+                }
+
             pulse_pts = [
-                {"name": "押目", "value": [active_dip_time, active_dip_px], "itemStyle": {"color": "#10b981"}},
-                {"name": "高値", "value": [active_peak_time, active_peak_px], "itemStyle": {"color": "#f43f5e"}}
+                _edge_aware_pulse("押目", active_dip_time, active_dip_px, "#10b981"),
+                _edge_aware_pulse("高値", active_peak_time, active_peak_px, "#f43f5e"),
             ]
             if traj["has_actual"] and traj["last_act_idx"] >= 0:
                 li = traj["last_act_idx"]
-                pulse_pts.append({"name": "NOW", "value": [traj["slots"][li], traj["actual"][li]], "itemStyle": {"color": "#ffffff"}})
+                pulse_pts.append(_edge_aware_pulse("NOW", traj["slots"][li], traj["actual"][li], "#ffffff"))
             if cvd_div.get("marker"):
                 mk_d = cvd_div["marker"]
-                pulse_pts.append({"name": mk_d["name"], "value": [mk_d["time"], mk_d["price"]], "itemStyle": {"color": mk_d["color"]}})
+                pulse_pts.append(_edge_aware_pulse(mk_d["name"], mk_d["time"], mk_d["price"], mk_d["color"]))
             s_list.append({
                 "name": "重要点", "type": "effectScatter", "yAxisIndex": 0, "data": pulse_pts,
                 "symbolSize": 8, "rippleEffect": {"brushType": "stroke", "scale": 3.2},
@@ -3766,7 +3820,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             _render_echarts({
                 "backgroundColor": "#0b1120",
                 "legend": {"data": l_names, "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2, "left": 4, "right": 72, "itemWidth": 12, "itemHeight": 8},
-                "grid": {"top": 60, "bottom": 24, "left": 6, "right": right_pad, "containLabel": False},
+                "grid": {"top": 66, "bottom": 24, "left": 6, "right": right_pad, "containLabel": False},
                 "dataZoom": [{"type": "inside", "xAxisIndex": 0, "filterMode": "none"}],
                 "xAxis": {"type": "category", "boundaryGap": False, "data": traj["slots"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,0.2)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9.5, "interval": "auto", "hideOverlap": True}},
                 "yAxis": [
