@@ -4041,7 +4041,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 "matched_dates": traj["knn_match"]["matched_dates"],
                 "mean_dist": traj["knn_match"]["mean_dist"],
             },
-            "invalidation_alert": invalidation_alert,
+            "invalidation_alert": inv_al,
             "weights_evolution": {
                 "active_cluster": traj["weights_evolution"]["active_cluster"],
                 "active_regime": traj["weights_evolution"]["active_regime"],
