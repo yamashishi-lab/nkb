@@ -730,7 +730,7 @@ def _calc_first_passage_prob(curr_px: float, target_px: float, rem_sigma_pct: fl
 
 
 def _calc_two_barrier_tp_prob(curr_px: float, tp_px: float, sl_px: float, is_long: bool, rem_sigma_pct: float, rem_drift_pct: float = 0.0) -> float:
-    """修正8: 二壁問題（SLにタッチする前にTPへ先に到達する条件付き確率）"""
+    """修正8: 二壁問題（SLにタッチする前にTPへ先に到達する条件付き確率・片壁確率上限キャップ付）"""
     if curr_px <= 0 or tp_px <= 0 or sl_px <= 0:
         return 0.0
     if is_long:
@@ -762,7 +762,8 @@ def _calc_two_barrier_tp_prob(curr_px: float, tp_px: float, sl_px: float, is_lon
     p_reach_any = _calc_first_passage_prob(curr_px, tp_px, rem_sigma_pct, rem_drift_pct) / 100.0
     p_sl_first_reach = _calc_first_passage_prob(curr_px, sl_px, rem_sigma_pct, rem_drift_pct) / 100.0
     p_either = min(1.0, p_reach_any + p_sl_first_reach * (1.0 - p_reach_any))
-    joint_prob = float(np.clip(p_hit_tp_first * p_either * 100.0, 1.0, 99.0))
+    raw_joint = min(p_hit_tp_first * p_either, p_reach_any)
+    joint_prob = float(np.clip(raw_joint * 100.0, 1.0, 99.0))
     return round(joint_prob, 1)
 
 
@@ -2967,7 +2968,7 @@ def _generate_detailed_memo_cached(
                 continue
 
     lab_extra = f"\n・LAB連携情報: {lab_deep_ctx}" if lab_deep_ctx else ""
-    bull = f"・LAB本体判定: {lab_note}{lab_extra}。現在値 {px_s} に対しアナリスト目標乖離は {up}、高信頼ニュース強気度 {pos_pct}%（一次報道{t1}件）。\n・{bull_trig} を明確に上抜ければ強気突破が発動し、上値メド {bull_tgt} を目指す展開。\n・下値は大口買い支え帯 {sup_s} がサポートとして機能しやすい構造。"
+    bull = f"・LAB本体判定: {lab_note}{lab_extra}。現在値 {px_s} に対しアナリスト目標乖離は {up}、高信頼ニュース強気度 {pos_pct}%（一次報道{t1}件）。\n・{bull_trig} を明確に上抜ければ強気突破が発動し、上値メド {bull_tgt} を目指す展開。\n・下値は大口買い支え帯 {sup_s} をサポートとして機能しやすい構造。"
     bear = f"・{ml} との相関係数が {mc}（β={mb}）で、夜間先物や米市場の急変時に連れ安リスクあり。\n・上値しこり玉は {ovh}%、直上の大口売り壁 {res_s} 付近では戻り売りに要注意。\n・{bear_trig} 割れで下値メド {bear_tgt} までの下振れを警戒し早期撤退。ガバナンス報道は {gov_cnt}件検知。"
     cat = f"・大口・インサイダー動向: {whale_sum}。\n・勝負時間帯は押し目候補の {dip_t} 前後での反発確認と、ピーク想定の {peak_t} 前後での分割利確。\n・寄付直後に想定始値 {traj_open} を維持できるかが最初の分岐点。"
     return f"🟢 Bull Case（強気シナリオ）\n{bull}\n\n🔴 Bear Case（弱気・死角リスク）\n{bear}\n\n⚡ Next Catalyst（注目トリガー）\n{cat}", f"⚙️ AUTO QUANT MEMO（一次報道{t1}件・実測詳細生成）"
@@ -3122,6 +3123,18 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         else:
             prev_px = curr_px_1d
 
+        # 5分足の当日最新約定値を先行取得し、VP(上値しこり玉)も現在値と完全同期させる
+        curr_px_rt = curr_px_1d
+        if df_5m is not None and not df_5m.empty:
+            tmp_now_5m = df_5m.copy()
+            idx_now_5m = _convert_5m_index_to_market_tz(tmp_now_5m, is_jp)
+            tmp_now_5m["_d"] = idx_now_5m.strftime("%Y-%m-%d")
+            sub_now_today = tmp_now_5m[tmp_now_5m["_d"] == market_today_str]
+            if not sub_now_today.empty:
+                last_5m_c = float(sub_now_today["Close"].iloc[-1])
+                if last_5m_c > 0:
+                    curr_px_rt = round(last_5m_c, 2)
+
         mkt_regime = _detect_market_regime(df_1d)
         macro_sens = _compute_macro_sens(df_1d["Close"], macro_data)
         dow_stats, next_wd = _compute_dow_edge(df_1d, is_jp)
@@ -3131,9 +3144,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             news_res = fut_news.result()
             gov_risks, whale_news = fut_gov.result()
         whale_anom = _detect_whale_anomaly(data["insider_tx"], whale_news, market_today_str)
-        vp = _compute_vp(df_1d, curr_px_1d, is_jp)
+        vp = _compute_vp(df_1d, curr_px_rt, is_jp)
         traj = _build_dual_5m_trajectory(
-            fc, curr_px_1d, prev_px, df_1d, df_5m, macro_sens, macro_data,
+            fc, curr_px_rt, prev_px, df_1d, df_5m, macro_sens, macro_data,
             news_res, whale_anom, dow_stats[next_wd]["avg"], vp, is_jp,
             mkt_regime=mkt_regime, active_lab=active_lab, df_bench_5m=df_bench_5m
         )
@@ -3142,7 +3155,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         if traj["has_actual"] and traj["last_act_idx"] >= 0 and traj["actual"][traj["last_act_idx"]] is not None:
             curr_px = float(traj["actual"][traj["last_act_idx"]])
         else:
-            curr_px = curr_px_1d
+            curr_px = curr_px_rt
 
         round_level = _compute_round_number_level(curr_px, is_jp)
         chg_pct = ((curr_px - prev_px) / max(prev_px, 1e-4)) * 100.0
@@ -3190,43 +3203,51 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     out_a.append(round(float(val_s) * (1.0 + (shock_ext_pct / 100.0) * w_rem), 2))
             return out_a
 
+        # 朝ロック系列は不変の基準値としてそのまま維持し、What-Ifショックはライブ修正・場前シミュレーションのみに適用
+        disp_locked_p50 = list(traj["locked_p50"])
+        disp_locked_p85 = list(traj["locked_p85"])
+        disp_locked_p15 = list(traj["locked_p15"])
+        disp_locked_bdiff = list(traj["locked_bdiff"])
+        disp_locked_p32 = list(traj["locked_p32"])
+        disp_locked_bdiff_in = list(traj["locked_bdiff_in"])
+
         if use_live_basis:
-            base_close_px = traj["live_close_px"]
-            base_bull_trig = traj["live_bull_trig"]
-            base_bull_tgt = traj["live_bull_target"]
-            base_bear_trig = traj["live_bear_trig"]
-            base_bear_tgt = traj["live_bear_target"]
+            active_close_px = round(traj["live_close_px"] * shock_mult, 2)
+            active_close_chg = round((active_close_px - traj["anchor_base_close"]) / max(traj["anchor_base_close"], 1e-4) * 100.0, 2)
+            active_bull_trig = round(traj["live_bull_trig"] * shock_mult, 2)
+            active_bull_tgt = round(traj["live_bull_target"] * shock_mult, 2)
+            active_bear_trig = round(traj["live_bear_trig"] * shock_mult, 2)
+            active_bear_tgt = round(traj["live_bear_target"] * shock_mult, 2)
             active_dip_time = traj["live_dip_time"]
             active_dip_px = round(traj["live_dip_px"] * shock_mult, 2)
             active_peak_time = traj["live_peak_time"]
             active_peak_px = round(traj["live_peak_px"] * shock_mult, 2)
-        else:
-            base_close_px = traj["locked_close_px"]
-            base_bull_trig = traj["locked_bull_trig"]
-            base_bull_tgt = traj["locked_bull_target"]
-            base_bear_trig = traj["locked_bear_trig"]
-            base_bear_tgt = traj["locked_bear_target"]
+        elif not traj["has_actual"]:
+            active_close_px = round(traj["locked_close_px"] * shock_mult, 2)
+            active_close_chg = round((active_close_px - traj["anchor_base_close"]) / max(traj["anchor_base_close"], 1e-4) * 100.0, 2)
+            active_bull_trig = round(traj["locked_bull_trig"] * shock_mult, 2)
+            active_bull_tgt = round(traj["locked_bull_target"] * shock_mult, 2)
+            active_bear_trig = round(traj["locked_bear_trig"] * shock_mult, 2)
+            active_bear_tgt = round(traj["locked_bear_target"] * shock_mult, 2)
             active_dip_time = traj["locked_dip_time"]
             active_dip_px = round(traj["locked_dip_px"] * shock_mult, 2)
             active_peak_time = traj["locked_peak_time"]
             active_peak_px = round(traj["locked_peak_px"] * shock_mult, 2)
+        else:
+            active_close_px = round(traj["locked_close_px"], 2)
+            active_close_chg = round((active_close_px - traj["anchor_base_close"]) / max(traj["anchor_base_close"], 1e-4) * 100.0, 2)
+            active_bull_trig = round(traj["locked_bull_trig"], 2)
+            active_bull_tgt = round(traj["locked_bull_target"], 2)
+            active_bear_trig = round(traj["locked_bear_trig"], 2)
+            active_bear_tgt = round(traj["locked_bear_target"], 2)
+            active_dip_time = traj["locked_dip_time"]
+            active_dip_px = round(traj["locked_dip_px"], 2)
+            active_peak_time = traj["locked_peak_time"]
+            active_peak_px = round(traj["locked_peak_px"], 2)
 
-        active_close_px = round(base_close_px * shock_mult, 2)
-        active_close_chg = round((active_close_px - traj["anchor_base_close"]) / max(traj["anchor_base_close"], 1e-4) * 100.0, 2)
-        active_bull_trig = round(base_bull_trig * shock_mult, 2)
-        active_bull_tgt = round(base_bull_tgt * shock_mult, 2)
-        active_bear_trig = round(base_bear_trig * shock_mult, 2)
-        active_bear_tgt = round(base_bear_tgt * shock_mult, 2)
         active_open_gap_pct = round(traj["est_open_gap_pct"] + (shock_ext_pct if not traj["has_actual"] else 0.0), 2)
         active_open_px = round(traj["anchor_base_close"] * (1.0 + active_open_gap_pct / 100.0), 2)
         active_rem_drift = traj["rem_drift_pct"] + (shock_ext_pct / 100.0) * 0.65
-
-        disp_locked_p50 = [round(v * shock_mult, 2) if v is not None else None for v in traj["locked_p50"]]
-        disp_locked_p85 = [round(v * shock_mult, 2) if v is not None else None for v in traj["locked_p85"]]
-        disp_locked_p15 = [round(v * shock_mult, 2) if v is not None else None for v in traj["locked_p15"]]
-        disp_locked_bdiff = [round(v * shock_mult, 2) if v is not None else None for v in traj["locked_bdiff"]]
-        disp_locked_p32 = [round(v * shock_mult, 2) if v is not None else None for v in traj["locked_p32"]]
-        disp_locked_bdiff_in = [round(v * shock_mult, 2) if v is not None else None for v in traj["locked_bdiff_in"]]
 
         disp_live_p50 = _scale_live_arr(traj["live_p50"])
         disp_live_p85 = _scale_live_arr(traj["live_p85"])
@@ -3413,7 +3434,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
             is_short_style = in_style in ("デイトレード", "スキャルピング")
             line_opts = [
-                "場中30分・3分岐点線（確率%）", "類似実測波形（Top-1）", "高ボラ狩り場帯",
+                "場中30分・3分岐点線（スコア比%）", "類似実測波形（Top-1）", "高ボラ狩り場帯",
                 "予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "転換時間帯ガイド",
                 "押目・利確ゾーン", "VWAP", "VWAP±σ",
                 "心理的キリ番節目", "寄り30分高安（ORB）", "大口約定（◆）", "出来高"
@@ -3428,14 +3449,14 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
             if sel_preset == "📈 今の予測":
                 pr_mode_idx = 2
-                short_defaults = ["場中30分・3分岐点線（確率%）", "類似実測波形（Top-1）", "高ボラ狩り場帯"] if is_short_style else ["場中30分・3分岐点線（確率%）"]
+                short_defaults = ["場中30分・3分岐点線（スコア比%）", "類似実測波形（Top-1）", "高ボラ狩り場帯"] if is_short_style else ["場中30分・3分岐点線（スコア比%）"]
                 pr_lines = short_defaults + ["予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "転換時間帯ガイド", "押目・利確ゾーン", "VWAP", "心理的キリ番節目", "大口約定（◆）", "出来高"] + (["LAB TP/SL"] if active_lab else [])
             elif sel_preset == "🔍 朝の答え合わせ":
                 pr_mode_idx = 1
-                pr_lines = ["場中30分・3分岐点線（確率%）", "予測レンジ帯（ファン）", "転換時間帯ガイド", "寄り30分高安（ORB）", "出来高"]
+                pr_lines = ["場中30分・3分岐点線（スコア比%）", "予測レンジ帯（ファン）", "転換時間帯ガイド", "寄り30分高安（ORB）", "出来高"]
             else:
                 pr_mode_idx = 0
-                pr_lines = ["場中30分・3分岐点線（確率%）", "高ボラ狩り場帯", "VWAP", "VWAP±σ", "転換時間帯ガイド", "心理的キリ番節目", "大口約定（◆）", "押目・利確ゾーン", "出来高"] + (["LAB TP/SL"] if active_lab else [])
+                pr_lines = ["場中30分・3分岐点線（スコア比%）", "高ボラ狩り場帯", "VWAP", "VWAP±σ", "転換時間帯ガイド", "心理的キリ番節目", "大口約定（◆）", "押目・利確ゾーン", "出来高"] + (["LAB TP/SL"] if active_lab else [])
 
             style_preset_sig = f"{sel_preset}::{is_short_style}"
             if st.session_state.get("dd_last_preset") != sel_preset or st.session_state.get("dd_last_style_sig") != style_preset_sig:
@@ -3659,7 +3680,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 })
                 l_names.insert(0, "当日実測")
 
-            show_3way_now = bool("場中30分・3分岐点線（確率%）" in opt_lines and short_3way.get("active"))
+            show_3way_now = bool("場中30分・3分岐点線（スコア比%）" in opt_lines and short_3way.get("active"))
             if show_3way_now:
                 s_list.extend([
                     {
