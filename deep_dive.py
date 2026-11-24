@@ -121,7 +121,7 @@ DEFAULT_WEIGHTS_EVOLUTION = {
 
 
 # =========================================================================
-# 1. DEEP DIVE v15.4 専用CSS
+# 1. DEEP DIVE v16.0 専用CSS
 # =========================================================================
 def _inject_dd_css():
     css = """
@@ -147,6 +147,17 @@ def _inject_dd_css():
         padding: 3px 9px; border-radius: 99px; border: 1px solid;
         display: inline-flex; align-items: center; gap: 4px;
     }
+    .dd-breaking-ticker {
+        display: flex; align-items: center; gap: 8px;
+        background: linear-gradient(90deg, rgba(239, 68, 68, 0.16) 0%, rgba(15, 23, 42, 0.95) 100%);
+        border: 1px solid rgba(239, 68, 68, 0.45); border-left: 4px solid #ef4444;
+        border-radius: 7px; padding: 5px 10px; margin-bottom: 6px;
+        font-size: 11px; color: #fecaca; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .dd-breaking-ticker.bull {
+        background: linear-gradient(90deg, rgba(16, 185, 129, 0.16) 0%, rgba(15, 23, 42, 0.95) 100%);
+        border-color: rgba(16, 185, 129, 0.45); border-left-color: #10b981; color: #d1fae5;
+    }
     .dd-winrate-bar {
         display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
         background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.18);
@@ -170,6 +181,35 @@ def _inject_dd_css():
         border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px;
         padding: 6px 10px; margin: 5px 0 6px 0;
         font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    }
+    .dd-legend-panel {
+        background: rgba(11, 17, 32, 0.94); border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px; padding: 8px 10px; margin: 5px 0 7px 0;
+    }
+    .dd-trans-banner {
+        font-size: 11.2px; font-weight: 700; line-height: 1.45;
+        padding: 6px 9px; border-radius: 7px; margin-bottom: 7px;
+        border-left: 3.5px solid #38bdf8; background: rgba(56, 189, 248, 0.10); color: #e0f2fe;
+    }
+    .dd-trans-banner.exp-up {
+        border-left-color: #10b981; background: rgba(16, 185, 129, 0.14); color: #d1fae5;
+    }
+    .dd-trans-banner.exp-down {
+        border-left-color: #ef4444; background: rgba(239, 68, 68, 0.14); color: #fecaca;
+    }
+    .dd-legend-grid {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
+    }
+    @media (max-width: 640px) { .dd-legend-grid { grid-template-columns: repeat(2, 1fr); } }
+    .dd-leg-card {
+        background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 6px; padding: 5px 7px; display: flex; flex-direction: column; gap: 2px;
+    }
+    .dd-leg-head {
+        display: flex; align-items: center; gap: 6px; font-size: 10.2px; font-weight: 800; color: #f8fafc;
+    }
+    .dd-leg-desc {
+        font-size: 9.5px; color: #94a3b8; line-height: 1.3;
     }
     .dd-prob-meter {
         background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(56, 189, 248, 0.25);
@@ -671,7 +711,7 @@ def _update_weights_two_stage(
 
 
 # =========================================================================
-# 3. ヘルパー ＆ 描画コンポーネント（ECharts / Live Clock / Sparkline）
+# 3. ヘルパー ＆ 描画コンポーネント（ECharts / Live Clock / Sparkline / 凡例UI）
 # =========================================================================
 def _fmt_cur(val, is_jp: bool) -> str:
     if val is None or (isinstance(val, float) and np.isnan(val)):
@@ -797,8 +837,8 @@ def _render_echarts(
                 var tm = params[0].axisValue;
                 var parts = ['<span style="color:#7dd3fc;font-weight:800;">' + tm + '</span>'];
                 var shortMap = {{
-                    '当日実測':'実測', 'ライブ修正':'ライブ', '朝ロック':'ロック', 'VWAP':'VWAP',
-                    '類似実測(Top-1)':'類似1位', '上昇分岐':'▲上', '横ばい分岐':'▶横', '下落分岐':'▼下'
+                    '当日実測':'実測', 'ライブ修正':'ライブ', '朝ロック':'ロック', '朝ロック(無効化済)':'旧想定',
+                    'VWAP':'VWAP', '類似実測(Top-1)':'類似1位', '上昇分岐':'▲上', '横ばい分岐':'▶横', '下落分岐':'▼下'
                 }};
                 for (var i = 0; i < params.length; i++) {{
                     var p = params[i];
@@ -994,8 +1034,133 @@ def _build_spark_svg(prices: np.ndarray) -> str:
     pts = [f"{round((i/max(len(prices)-1,1))*w,1)},{round(h-2.0-((float(p)-p_min)/span)*(h-4.0),1)}" for i, p in enumerate(prices)]
     col = "#10b981" if prices[-1] >= prices[0] else "#ef4444"
     return f'<svg width="92" height="26" viewBox="0 0 92 26" style="display:block;margin-left:auto;"><polyline fill="none" stroke="{col}" stroke-width="1.8" points="{" ".join(pts)}"/></svg>'
+
+
+def _render_chart_legend_panel(
+    traj: dict, chart_mode: str, opt_lines: list, short_3way: dict,
+    exp_reg: dict, active_dip_time: str, active_peak_time: str,
+    cur_vwap_now, curr_px: float, is_jp: bool, active_lab
+):
+    """要件4: チャート外の1行ステータス翻訳バナー ＋ アクティブ・レイヤー限定視覚凡例カード"""
+    exp_active = bool(exp_reg.get("active"))
+    exp_dir = exp_reg.get("dir", "NONE")
+
+    if exp_active and exp_dir == "UP":
+        banner_cls = "dd-trans-banner exp-up"
+        banner_txt = (
+            "🚀 実測(白)が朝想定(紫)を大幅突破 → 急騰ブレイクモード中。"
+            "紫線は無視し、VWAP(黄点線)や突破ライン付近の押し目追従を優先"
+        )
+    elif exp_active and exp_dir == "DOWN":
+        banner_cls = "dd-trans-banner exp-down"
+        banner_txt = (
+            "🔻 実測(白)が朝想定(紫)を下抜け → 急落ブレイクモード中。"
+            "紫線は無視し、VWAP(黄点線)での戻り売り・損切り徹底を優先"
+        )
+    elif traj.get("has_actual"):
+        vw_note = ""
+        if cur_vwap_now and cur_vwap_now > 0:
+            vw_note = "VWAP(黄点線)上で買い優勢" if curr_px >= cur_vwap_now else "VWAP(黄点線)下で戻り待ち"
+        else:
+            vw_note = "VWAP(黄点線)の攻防に注目"
+        banner_txt = (
+            f"📊 実測(白)は朝想定レンジ内で推移中 → "
+            f"押し目候補 {active_dip_time} 前後の反発と {vw_note}"
+        )
+        banner_cls = "dd-trans-banner"
+    else:
+        banner_cls = "dd-trans-banner"
+        banner_txt = (
+            f"🕒 寄り前待機モード → 想定始値 {_fmt_cur(traj['est_open_px'], is_jp)} からの"
+            f"押し目候補 {active_dip_time}・高値想定 {active_peak_time} を事前チェック"
+        )
+
+    def _swatch_line(color: str, style: str = "solid", width: int = 2) -> str:
+        return f'<span style="display:inline-block;width:18px;height:0;border-top:{width}px {style} {color};flex-shrink:0;"></span>'
+
+    def _swatch_band(bg: str, border: str) -> str:
+        return f'<span style="display:inline-block;width:18px;height:10px;background:{bg};border:1px solid {border};border-radius:2px;flex-shrink:0;"></span>'
+
+    cards = []
+    if traj.get("has_actual"):
+        cards.append((_swatch_line("#ffffff", "solid", 3), "当日実測", "実際の株価の動き（主役）"))
+
+    if chart_mode in ("🔴 ライブ修正", "⚡ 両方重ね"):
+        cards.append((_swatch_line("#38bdf8", "solid", 3), "ライブ修正", "今の勢いを反映した最新着地予測"))
+
+    if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
+        if exp_active:
+            cards.append((_swatch_line("rgba(148,163,184,0.55)", "dotted", 2), "朝ロック(無効化)", "想定外ブレイクで参考線へ降格"))
+        else:
+            lk_c = "#c084fc" if chart_mode == "⚡ 両方重ね" else "#38bdf8"
+            lk_st = "dashed" if chart_mode == "⚡ 両方重ね" else "solid"
+            cards.append((_swatch_line(lk_c, lk_st, 2), "朝ロック", "寄り前固定の当初想定（基準線）"))
+
+    if "場中30分・3分岐点線（スコア比%）" in opt_lines and short_3way.get("active"):
+        tri_sw = (
+            '<span style="display:inline-flex;flex-direction:column;gap:2px;width:18px;flex-shrink:0;">'
+            '<span style="border-top:1.5px dashed #10b981;"></span>'
+            '<span style="border-top:1.5px dotted #94a3b8;"></span>'
+            '<span style="border-top:1.5px dashed #ef4444;"></span>'
+            '</span>'
+        )
+        cards.append((tri_sw, "短期30分3分岐", "30分後に上/横/下へ進む確率と軌道"))
+
+    if "VWAP" in opt_lines and traj.get("has_actual"):
+        cards.append((_swatch_line("#fbbf24", "dotted", 2), "VWAP", "機関の平均買値（上なら買い優勢）"))
+
+    if "VWAP±σ" in opt_lines and traj.get("has_actual"):
+        cards.append((_swatch_line("rgba(251,191,36,0.7)", "dashed", 1), "VWAP±1σ/2σ", "買われすぎ・売られすぎの標準偏差帯"))
+
+    if "類似実測波形（Top-1）" in opt_lines and isinstance(traj.get("medoid_analog"), dict) and traj["medoid_analog"].get("data"):
+        cards.append((_swatch_line("#f59e0b", "solid", 2), "類似実測Top-1", "過去に最も似た日のリアル波形"))
+
+    if "予測レンジ帯（ファン）" in opt_lines:
+        cards.append((_swatch_band("rgba(56,189,248,0.25)", "rgba(99,102,241,0.55)"), "予測レンジ帯", "値動きが収まりやすい確率ゾーン"))
+
+    if "高ボラ狩り場帯" in opt_lines and traj.get("high_vol_zones"):
+        cards.append((_swatch_band("rgba(245,158,11,0.18)", "rgba(251,191,36,0.5)"), "高ボラ狩り場帯", "値幅が出やすく仕掛けが入りやすい時間"))
+
+    if "心理的キリ番節目" in opt_lines:
+        cards.append((_swatch_line("#fde047", "dotted", 2), "キリ番節目", "注文が集中しやすいキリの良い価格"))
+
+    if "寄り30分高安（ORB）" in opt_lines and traj.get("orb_high") and traj.get("orb_low"):
+        cards.append((_swatch_line("#7dd3fc", "dashed", 1), "寄り30分ORB", "寄り30分の高安レンジ（ブレイク基準）"))
+
+    if "大口約定（◆）" in opt_lines and traj.get("vol_spikes"):
+        dm_sw = '<span style="display:inline-block;width:18px;text-align:center;color:#10b981;font-size:11px;line-height:1;flex-shrink:0;">◆</span>'
+        cards.append((dm_sw, "大口約定◆", "通常2.5倍以上の出来高スパイク発生点"))
+
+    if active_lab and "LAB TP/SL" in opt_lines:
+        cards.append((_swatch_line("#10b981", "dashed", 2), "LAB TP/SL", "LAB上位足が算出した利確・損切り線"))
+
+    cards_html = "".join(
+        f'<div class="dd-leg-card"><div class="dd-leg-head">{sw}<span>{html.escape(nm)}</span></div>'
+        f'<div class="dd-leg-desc">{html.escape(desc)}</div></div>'
+        for sw, nm, desc in cards
+    )
+
+    st.markdown(f"""
+    <div class="dd-legend-panel">
+      <div class="{banner_cls}">{html.escape(banner_txt)}</div>
+      <div class="dd-legend-grid">{cards_html}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("❓ 専門指標とチャートの読み方（用語クイック辞典）", expanded=False):
+        st.markdown("""
+        <div style="font-size:11.5px;line-height:1.65;color:#cbd5e1;">
+        ・<b>EXPANSION（急騰/急落ブレイク）モード：</b> 実測が朝想定バンドを連続突破・大出来高伴い急変した際に自動発動。古い紫線を無効化し、青線の追従上限とレジサポ転換を解放します。<br>
+        ・<b>RVOL（相対出来高）：</b> 過去の同時間帯平均と比べた今の出来高倍率。1.8x超は機関投資家参加の本物トレンド、0.75x未満はダマシになりやすい閑散相場です。<br>
+        ・<b>OHLCV疑似CVD：</b> 5分足のヒゲと終値位置から「買い圧力と売り圧力の累積差」を推計した指標。高値更新なのにCVDが下がると天井失速のサインです。<br>
+        ・<b>ORB（寄り30分高安）：</b> 市場開始30分間の高値と安値。このレンジを出来高を伴い抜けた方向へ1日のトレンドが出やすくなります。<br>
+        ・<b>二壁FPT到達確率：</b> 大引けまでに「損切りライン(SL)へ先に触れずに利確目標(TP)へ到達する」確率モデルに基づく物理確率です。
+        </div>
+        """, unsafe_allow_html=True)
+
+
 # =========================================================================
-# 4. マーケット・ニュース・株主データ取得
+# 4. マーケット・ニュース・株主データ取得（要件1・要件3：TTL分離＆超短期速報）
 # =========================================================================
 MACRO_TICKERS = {
     "SOX": ("^SOX", "米SOX"),
@@ -1009,11 +1174,17 @@ MACRO_TICKERS = {
     "VIX": ("^VIX", "VIX"),
 }
 INTRADAY_RT_MACRO_KEYS = {"NK_FUT", "ES_FUT", "NQ_FUT", "USDJPY"}
-TIER1_SOURCES = ["REUTERS", "ロイター", "BLOOMBERG", "ブルームバーグ", "WSJ", "WALL STREET JOURNAL", "FINANCIAL TIMES", "NIKKEI", "日経", "日本経済新聞", "KABUTAN", "株探", "PR TIMES", "CNBC", "SEC"]
-TIER2_SOURCES = ["YAHOO", "MINKABU", "みんかぶ", "MARKETWATCH", "BARRON", "FORBES", "東洋経済", "ダイヤモンド", "JIJI", "時事", "共同通信"]
+TIER1_SOURCES = ["REUTERS", "ロイター", "BLOOMBERG", "ブルームバーグ", "WSJ", "WALL STREET JOURNAL", "FINANCIAL TIMES", "NIKKEI", "日経", "日本経済新聞", "KABUTAN", "株探", "PR TIMES", "CNBC", "SEC", "YAHOO FINANCE"]
+TIER2_SOURCES = ["YAHOO", "MINKABU", "みんかぶ", "MARKETWATCH", "BARRON", "FORBES", "東洋経済", "ダイヤモンド", "JIJI", "時事", "共同通信", "GLOBENEWSWIRE", "ACCESSWIRE"]
 NOISE_SOURCES = ["まとめ", "ブログ", "2ch", "5ch", "note.com"]
 NEG_GUARD_PATTERNS = ["赤字縮小", "赤字脱却", "赤字解消", "下落せず", "懸念後退", "懸念払拭", "リスク軽減", "リスク後退", "不祥事.*他社", "訴訟.*和解", "訴訟.*勝訴"]
 GENERIC_CORP_TOKENS = {"THE", "A", "AN", "GLOBAL", "JAPAN", "NIPPON", "INTERNATIONAL", "HOLDINGS", "GROUP", "CORP", "CORPORATION", "INC", "LTD", "CO", "FIRST", "NEW", "AMERICAN"}
+
+# 要件3: 特大カタリスト辞書（日英）
+CATALYST_POS_JP = ["上方修正", "増配", "自社株買い", "TOB", "業務提携", "資本提携", "ストップ高", "S高", "黒字転換", "最高益", "材料視"]
+CATALYST_NEG_JP = ["下方修正", "無配", "増資", "希薄化", "ストップ安", "S安"]
+CATALYST_POS_EN = ["GUIDANCE RAISE", "RAISES GUIDANCE", "FDA", "APPROVAL", "BUYBACK", "CONTRACT", "SHORT SQUEEZE", "PRICE TARGET RAISED", "BEAT"]
+CATALYST_NEG_EN = ["OFFERING", "DILUTION", "GUIDANCE CUT", "SEC PROBE"]
 
 
 def _extract_core_corp_token(corp_name: str, short_code: str) -> str:
@@ -1024,10 +1195,9 @@ def _extract_core_corp_token(corp_name: str, short_code: str) -> str:
     return short_code
 
 
-@st.cache_data(ttl=90)
-def _load_macro_data() -> dict:
+@st.cache_data(ttl=600)
+def _load_macro_daily_base() -> dict:
     codes = [v[0] for v in MACRO_TICKERS.values()]
-    rt_codes = [MACRO_TICKERS[k][0] for k in INTRADAY_RT_MACRO_KEYS if k in MACRO_TICKERS]
     out = {}
     try:
         raw = yf.download(codes, period="6mo", interval="1d", group_by="ticker", threads=True, progress=False, timeout=8.0)
@@ -1051,31 +1221,47 @@ def _load_macro_data() -> dict:
                 pass
     except Exception:
         pass
+    return out
 
+
+@st.cache_data(ttl=20)
+def _load_macro_rt_quotes() -> dict:
+    rt_codes = [MACRO_TICKERS[k][0] for k in INTRADAY_RT_MACRO_KEYS if k in MACRO_TICKERS]
+    rt_map = {}
     try:
-        raw_rt = yf.download(rt_codes, period="2d", interval="15m", group_by="ticker", prepost=True, threads=True, progress=False, timeout=6.0)
+        raw_rt = yf.download(rt_codes, period="2d", interval="5m", group_by="ticker", prepost=True, threads=True, progress=False, timeout=5.0)
         for k in INTRADAY_RT_MACRO_KEYS:
-            if k not in out:
-                continue
             tk = MACRO_TICKERS[k][0]
             try:
                 df_rt = raw_rt[tk].dropna(subset=["Close"]) if isinstance(raw_rt.columns, pd.MultiIndex) else raw_rt.dropna(subset=["Close"])
                 if not df_rt.empty:
                     rt_last = float(df_rt["Close"].iloc[-1])
-                    ref_prev = float(out[k]["prev_close"])
-                    if rt_last > 0 and ref_prev > 0:
-                        out[k]["last"] = rt_last
-                        out[k]["diff_pct"] = round((rt_last - ref_prev) / max(abs(ref_prev), 1e-4) * 100.0, 2)
-                        out[k]["is_rt"] = True
+                    if rt_last > 0:
+                        rt_map[k] = rt_last
             except Exception:
                 pass
     except Exception:
         pass
+    return rt_map
 
+
+def _load_macro_data() -> dict:
+    base = _load_macro_daily_base()
+    rt_map = _load_macro_rt_quotes()
+    out = {}
+    for k, item in base.items():
+        copied = dict(item)
+        if k in rt_map and copied.get("prev_close", 0.0) > 0:
+            rt_last = rt_map[k]
+            ref_prev = float(copied["prev_close"])
+            copied["last"] = rt_last
+            copied["diff_pct"] = round((rt_last - ref_prev) / max(abs(ref_prev), 1e-4) * 100.0, 2)
+            copied["is_rt"] = True
+        out[k] = copied
     return out
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=20)
 def _load_benchmark_5m(is_jp: bool) -> pd.DataFrame:
     """指数ベータ分離用の市場ベンチマーク5分足（日本株=1306.T/^N225, 米国株=QQQ/SPY）"""
     cands = ["1306.T", "^N225"] if is_jp else ["QQQ", "SPY"]
@@ -1116,16 +1302,14 @@ def _fetch_jp_holders(code4: str) -> list:
     return holders
 
 
-@st.cache_data(ttl=60)
-def _load_stock_core(code: str) -> dict:
+@st.cache_data(ttl=1800)
+def _load_stock_static(code: str) -> dict:
+    """要件1: 静的データ（1年日足・info・決算履歴・大株主・インサイダー）を30分キャッシュに分離"""
     tkr = yf.Ticker(code)
     df_1d = tkr.history(period="1y", interval="1d", auto_adjust=True)
     if df_1d is not None and not df_1d.empty:
         df_1d.index = pd.to_datetime(df_1d.index).tz_localize(None).normalize()
         df_1d = df_1d[~df_1d.index.duplicated(keep="last")]
-    df_5m = tkr.history(period="1mo", interval="5m", auto_adjust=True)
-    if df_5m is not None and not df_5m.empty:
-        df_5m = df_5m.dropna(subset=["Close"]).copy()
     try:
         info = tkr.info or {}
     except Exception:
@@ -1192,18 +1376,42 @@ def _load_stock_core(code: str) -> dict:
         pass
 
     return {
-        "df_1d": df_1d, "df_5m": df_5m, "info": info,
+        "df_1d": df_1d, "info": info,
         "earnings_hist": earnings_hist, "next_earnings_days": next_earnings_days,
         "inst_holders": inst_holders, "insider_tx": insider_tx
     }
+
+
+@st.cache_data(ttl=20)
+def _load_stock_intraday(code: str) -> pd.DataFrame:
+    """要件1: 場中5分足は20秒キャッシュで最新値追従"""
+    try:
+        tkr = yf.Ticker(code)
+        df_5m = tkr.history(period="1mo", interval="5m", auto_adjust=True)
+        if df_5m is not None and not df_5m.empty:
+            return df_5m.dropna(subset=["Close"]).copy()
+    except Exception:
+        pass
+    return pd.DataFrame()
+
+
+def _load_stock_core(code: str) -> dict:
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_st = ex.submit(_load_stock_static, code)
+        f_in = ex.submit(_load_stock_intraday, code)
+        st_data = f_st.result()
+        df_5m = f_in.result()
+    out = dict(st_data)
+    out["df_5m"] = df_5m
+    return out
 
 
 def _fetch_rss(url: str, lang_tag: str) -> list:
     out = []
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=4.0) as r:
-            for it in ET.fromstring(r.read()).findall("./channel/item")[:12]:
+        with urllib.request.urlopen(req, timeout=3.8) as r:
+            for it in ET.fromstring(r.read()).findall("./channel/item")[:14]:
                 t = (it.findtext("title") or "").strip()
                 pub_raw = (it.findtext("pubDate") or "").strip()
                 if t:
@@ -1220,8 +1428,105 @@ def _fetch_rss(url: str, lang_tag: str) -> list:
     return out
 
 
+def _fetch_kabutan_news_fast(code4: str) -> list:
+    """要件3: 日本株向け高速速報ソース（株探 銘柄ニュース＆適時開示）"""
+    items = []
+    try:
+        url = f"https://kabutan.jp/stock/news?code={urllib.parse.quote(code4)}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=3.5, context=ssl.create_default_context()) as r:
+            page = r.read().decode("utf-8", errors="ignore")
+        tz_jst = ZoneInfo("Asia/Tokyo") if ZoneInfo is not None else datetime.timezone(datetime.timedelta(hours=9))
+        now_jst = datetime.datetime.now(tz_jst)
+        for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", page, re.DOTALL):
+            m_time = re.search(r"<time[^>]*datetime=[\"']([^\"']+)[\"'][^>]*>([^<]*)</time>", tr)
+            m_link = re.search(r"<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", tr, re.DOTALL)
+            if not m_link:
+                continue
+            raw_href = html.unescape(m_link.group(1)).strip()
+            title_txt = re.sub(r"<[^>]+>", "", html.unescape(m_link.group(2))).strip()
+            if not title_txt or len(title_txt) < 4:
+                continue
+            full_link = raw_href if raw_href.startswith("http") else f"https://kabutan.jp{raw_href}"
+            pub_raw = ""
+            pub_disp = ""
+            if m_time:
+                dt_iso = m_time.group(1).strip()
+                pub_disp = m_time.group(2).strip() or dt_iso[:16]
+                try:
+                    dt_p = datetime.datetime.fromisoformat(dt_iso.replace("Z", "+00:00"))
+                    if dt_p.tzinfo is None:
+                        dt_p = dt_p.replace(tzinfo=tz_jst)
+                    pub_raw = email.utils.format_datetime(dt_p.astimezone(datetime.timezone.utc))
+                except Exception:
+                    pub_raw = email.utils.format_datetime(now_jst.astimezone(datetime.timezone.utc))
+            items.append({
+                "title": title_txt,
+                "link": full_link,
+                "source": "株探(Kabutan)",
+                "pub": pub_disp or "速報",
+                "pub_raw": pub_raw,
+                "lang": "JP",
+            })
+            if len(items) >= 8:
+                break
+    except Exception:
+        pass
+    return items
+
+
+def _fetch_yf_news_fast(code: str) -> list:
+    """要件3: 米国株向け高速速報ソース（yfinance.Ticker.news）"""
+    items = []
+    try:
+        raw_n = yf.Ticker(code).news or []
+        for it in raw_n[:10]:
+            if not isinstance(it, dict):
+                continue
+            content = it.get("content") if isinstance(it.get("content"), dict) else it
+            title = str(content.get("title") or it.get("title") or "").strip()
+            if not title:
+                continue
+            pub_raw = ""
+            pub_disp = ""
+            pub_date_iso = content.get("pubDate") or content.get("displayTime")
+            ts_unix = it.get("providerPublishTime")
+            if pub_date_iso:
+                try:
+                    dt_p = datetime.datetime.fromisoformat(str(pub_date_iso).replace("Z", "+00:00"))
+                    if dt_p.tzinfo is None:
+                        dt_p = dt_p.replace(tzinfo=datetime.timezone.utc)
+                    pub_raw = email.utils.format_datetime(dt_p.astimezone(datetime.timezone.utc))
+                    pub_disp = dt_p.strftime("%m/%d %H:%M")
+                except Exception:
+                    pass
+            elif ts_unix:
+                try:
+                    dt_p = datetime.datetime.fromtimestamp(float(ts_unix), tz=datetime.timezone.utc)
+                    pub_raw = email.utils.format_datetime(dt_p)
+                    pub_disp = dt_p.strftime("%m/%d %H:%M")
+                except Exception:
+                    pass
+            prov = content.get("provider") if isinstance(content.get("provider"), dict) else {}
+            src = str(prov.get("displayName") or it.get("publisher") or "Yahoo Finance").strip()
+            click_u = content.get("clickThroughUrl") if isinstance(content.get("clickThroughUrl"), dict) else {}
+            canon_u = content.get("canonicalUrl") if isinstance(content.get("canonicalUrl"), dict) else {}
+            link = str(click_u.get("url") or canon_u.get("url") or it.get("link") or "").strip()
+            items.append({
+                "title": title,
+                "link": link,
+                "source": src,
+                "pub": pub_disp or "Wire",
+                "pub_raw": pub_raw,
+                "lang": "EN",
+            })
+    except Exception:
+        pass
+    return items
+
+
 def _calc_rss_time_decay(pub_raw: str, now_utc: datetime.datetime) -> tuple:
-    """RSS pubDate をパースし、24h以内=1.0 / 72h以内=0.3 / それ以前=0.0 の時間減衰を返す"""
+    """要件3: 15分以内=3.0 / 1h以内=2.0 / 3h以内=1.2 / 24h以内=0.6 / 72h以内=0.2 の場中速報時間減衰"""
     if not pub_raw:
         return 0.0, 999.0
     try:
@@ -1233,10 +1538,16 @@ def _calc_rss_time_decay(pub_raw: str, now_utc: datetime.datetime) -> tuple:
         else:
             dt_parsed = dt_parsed.astimezone(datetime.timezone.utc)
         age_hours = max(0.0, (now_utc - dt_parsed).total_seconds() / 3600.0)
+        if age_hours <= 0.25:
+            return 3.0, round(age_hours, 2)
+        if age_hours <= 1.0:
+            return 2.0, round(age_hours, 2)
+        if age_hours <= 3.0:
+            return 1.2, round(age_hours, 1)
         if age_hours <= 24.0:
-            return 1.0, round(age_hours, 1)
+            return 0.6, round(age_hours, 1)
         if age_hours <= 72.0:
-            return 0.3, round(age_hours, 1)
+            return 0.2, round(age_hours, 1)
         return 0.0, round(age_hours, 1)
     except Exception:
         return 0.0, 999.0
@@ -1249,45 +1560,90 @@ def _strip_neg_guards(text: str) -> str:
     return cleaned
 
 
-@st.cache_data(ttl=120)
-def _fetch_global_intel(corp_name: str, short_code: str) -> dict:
+@st.cache_data(ttl=45)
+def _fetch_global_intel(corp_name: str, short_code: str, full_code: str = "") -> dict:
+    """要件3: 45秒キャッシュ＋株探/yfinance高速ソース並列統合＋特大カタリスト辞書"""
     core_tok = _extract_core_corp_token(corp_name, short_code)
+    is_jp_code = full_code.endswith(".T") or bool(re.match(r"^[0-9]{3}[0-9A-Z]$", short_code))
     q_jp = f"{corp_name} OR {short_code} 株価"
     q_en = f"{short_code} OR \"{core_tok}\" stock (Reuters OR Bloomberg OR CNBC OR WSJ)"
     u_jp = f"https://news.google.com/rss/search?q={urllib.parse.quote(q_jp)}&hl=ja&gl=JP&ceid=JP:ja"
     u_en = f"https://news.google.com/rss/search?q={urllib.parse.quote(q_en)}&hl=en-US&gl=US&ceid=US:en"
+
     raw_items = []
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        f1, f2 = ex.submit(_fetch_rss, u_jp, "JP"), ex.submit(_fetch_rss, u_en, "EN")
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        f1 = ex.submit(_fetch_rss, u_jp, "JP")
+        f2 = ex.submit(_fetch_rss, u_en, "EN")
+        f3 = ex.submit(_fetch_kabutan_news_fast, short_code) if is_jp_code else ex.submit(_fetch_yf_news_fast, full_code or short_code)
+        raw_items.extend(f3.result())
         raw_items.extend(f1.result())
         raw_items.extend(f2.result())
 
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     pos_w = ["上昇", "急騰", "最高益", "上方修正", "増配", "自社株買い", "好調", "提携", "買い", "黒字", "成長", "SURGE", "BEAT", "UPGRADE", "RECORD", "BUY", "GROWTH", "RALLY"]
     neg_w = ["下落", "急落", "下方修正", "赤字", "減益", "不祥事", "訴訟", "不正", "辞任", "懸念", "売り", "リスク", "DROP", "FALL", "MISS", "DOWNGRADE", "LAWSUIT", "PROBE", "CUT", "SLUMP"]
+
     filtered, seen_t = [], set()
+    catalyst_hits = []
+    breaking_list = []
+
     for it in raw_items:
         src_up = (it["source"] + " " + it["title"]).upper()
         if any(ns.upper() in src_up for ns in NOISE_SOURCES):
             continue
-        nk = re.sub(r"\W+", "", it["title"].lower())[:24]
+        nk = re.sub(r"\W+", "", it["title"].lower())[:26]
         if nk in seen_t:
             continue
         seen_t.add(nk)
 
         decay_w, age_h = _calc_rss_time_decay(it.get("pub_raw", ""), now_utc)
         trust, base_wt = ("S", 2.0) if any(t1 in src_up for t1 in TIER1_SOURCES) else (("A", 1.3) if any(t2 in src_up for t2 in TIER2_SOURCES) else ("B", 0.7))
-        eff_wt = round(base_wt * decay_w, 3)
 
-        t_up = _strip_neg_guards(it["title"]).upper()
+        cleaned_raw = _strip_neg_guards(it["title"])
+        t_up = cleaned_raw.upper()
         p_h, n_h = sum(1 for w in pos_w if w in t_up), sum(1 for w in neg_w if w in t_up)
+
+        cat_dir = None
+        cat_kw_hit = ""
+        for kw in CATALYST_POS_JP:
+            if kw in cleaned_raw:
+                cat_dir, cat_kw_hit = "POS", kw
+                break
+        if not cat_dir:
+            for kw in CATALYST_POS_EN:
+                if kw in t_up:
+                    cat_dir, cat_kw_hit = "POS", kw
+                    break
+        if not cat_dir:
+            for kw in CATALYST_NEG_JP:
+                if kw in cleaned_raw:
+                    cat_dir, cat_kw_hit = "NEG", kw
+                    break
+        if not cat_dir:
+            for kw in CATALYST_NEG_EN:
+                if kw in t_up:
+                    cat_dir, cat_kw_hit = "NEG", kw
+                    break
+
+        is_breaking = bool(age_h <= 1.0)
+        cat_mult = 1.65 if (cat_dir and is_breaking) else (1.25 if cat_dir else 1.0)
+        eff_wt = round(base_wt * decay_w * cat_mult, 3)
+
+        sent = cat_dir if cat_dir else ("POS" if p_h > n_h else ("NEG" if n_h > p_h else "NEU"))
+        if cat_dir and is_breaking:
+            catalyst_hits.append({"dir": cat_dir, "kw": cat_kw_hit, "title": it["title"], "age_min": int(round(age_h * 60))})
+        if is_breaking and decay_w > 0:
+            breaking_list.append({"title": it["title"], "source": it["source"], "sent": sent, "age_min": max(1, int(round(age_h * 60))), "link": it["link"]})
+
         filtered.append({
             **it,
             "trust": trust,
             "w_trust": eff_wt,
             "decay_w": decay_w,
             "age_h": age_h,
-            "sent": "POS" if p_h > n_h else ("NEG" if n_h > p_h else "NEU"),
+            "is_breaking": is_breaking,
+            "catalyst_kw": cat_kw_hit,
+            "sent": sent,
         })
 
     filtered.sort(key=lambda x: (-x["decay_w"], {"S": 0, "A": 1, "B": 2}[x["trust"]], 0 if x["lang"] == "EN" else 1))
@@ -1295,12 +1651,32 @@ def _fetch_global_intel(corp_name: str, short_code: str) -> dict:
     wp = sum(x["w_trust"] for x in fresh_items if x["sent"] == "POS")
     wn = sum(x["w_trust"] for x in fresh_items if x["sent"] == "NEG")
     wtot = max(sum(x["w_trust"] for x in fresh_items), 1.0)
+
+    has_cat_60m = len(catalyst_hits) > 0
+    score_cap = 1.5 if has_cat_60m else 1.0
+    raw_shock = ((wp - wn) / wtot) * (1.35 if has_cat_60m else 1.0) if fresh_items else 0.0
+    shock_sc = round(float(np.clip(raw_shock, -score_cap, score_cap)), 2)
+
+    catalyst_alert = None
+    if catalyst_hits:
+        top_c = catalyst_hits[0]
+        catalyst_alert = {
+            "active": True,
+            "dir": top_c["dir"],
+            "kw": top_c["kw"],
+            "title": top_c["title"],
+            "age_min": top_c["age_min"],
+            "boost_drift_pct": round((0.85 if top_c["dir"] == "POS" else -0.85), 2),
+        }
+
     return {
         "items": filtered[:10],
         "pos_pct": round(wp / wtot * 100) if fresh_items else 50,
-        "shock_score": round(float(np.clip((wp - wn) / wtot, -1.0, 1.0)), 2) if fresh_items else 0.0,
+        "shock_score": shock_sc,
         "tier1_cnt": sum(1 for x in fresh_items if x["trust"] == "S"),
         "fresh_cnt": len(fresh_items),
+        "catalyst_alert": catalyst_alert,
+        "breaking_news": breaking_list[0] if breaking_list else None,
     }
 
 
@@ -1356,7 +1732,7 @@ def _fetch_gov_and_whales(corp_name: str, short_code: str, is_jp: bool = True) -
 
 
 # =========================================================================
-# 5. 機関投資家プロ仕様指標 ＆ LAB解析修飾子 ＆ NumPy軽量ML3分岐回帰
+# 5. 機関投資家プロ仕様指標 ＆ 急騰ブレイク検知 ＆ NumPy軽量ML3分岐回帰
 # =========================================================================
 def _compute_round_number_level(curr_px: float, is_jp: bool) -> float:
     if is_jp:
@@ -1405,6 +1781,99 @@ def _detect_whale_anomaly(insider_tx: list, whale_news: list, ref_today_str: str
     if len(bear_sigs) > len(bull_sigs):
         return {"detected": True, "dir": "BEAR", "adj_pct": round(-min(0.65, 0.25 * (len(bear_sigs) - len(bull_sigs))), 2), "summary": " / ".join(bear_sigs[:2])}
     return {"detected": False, "dir": "NEUTRAL", "adj_pct": 0.0, "summary": "直近30日以内の特異な大口異変なし"}
+
+
+def _detect_expansion_regime(
+    has_actual: bool, last_act_idx: int, slots: list, actual_arr: list,
+    locked_p85: list, locked_p15: list, is_locked: bool,
+    vwap_arr: list, vwap_p2_arr: list, vwap_m2_arr: list,
+    vwap_p1_arr: list, vwap_m1_arr: list,
+    act_vol_map: dict, act_dir_map: dict, slot_vols: np.ndarray,
+    rvol: float, catalyst_alert: dict = None
+) -> dict:
+    """要件2: 急騰・急落ブレイク（EXPANSIONモード）の自動検知"""
+    default_exp = {
+        "active": False,
+        "dir": "NONE",
+        "reasons": [],
+        "unconfirmed_catalyst": False,
+        "label": "通常レジーム",
+    }
+    if not has_actual or last_act_idx < 1:
+        return default_exp
+
+    reasons_up = []
+    reasons_dn = []
+    unconfirmed_cat = False
+
+    # 条件1: 朝ロック上限/下限バンドの2本以上連続突破
+    if is_locked and last_act_idx >= 1:
+        valid_pairs = [
+            (actual_arr[i], locked_p85[i], locked_p15[i])
+            for i in range(max(0, last_act_idx - 2), last_act_idx + 1)
+            if actual_arr[i] is not None and locked_p85[i] is not None and locked_p15[i] is not None
+        ]
+        if len(valid_pairs) >= 2:
+            if all(a > hi for a, hi, _ in valid_pairs[-2:]):
+                reasons_up.append("朝ロック上限バンド(85%帯)を2本連続上抜け")
+            if all(a < lo for a, _, lo in valid_pairs[-2:]):
+                reasons_dn.append("朝ロック下限バンド(15%帯)を2本連続下抜け")
+
+    # 条件2: RVOL >= 2.2 かつ VWAP±2σ突破
+    cur_a = actual_arr[last_act_idx]
+    cur_p2 = vwap_p2_arr[last_act_idx]
+    cur_m2 = vwap_m2_arr[last_act_idx]
+    if rvol is not None and rvol >= 2.2 and cur_a is not None:
+        if cur_p2 is not None and cur_a > cur_p2:
+            reasons_up.append(f"大商いRVOL({rvol:.2f}x)＋VWAP+2σ突破")
+        if cur_m2 is not None and cur_a < cur_m2:
+            reasons_dn.append(f"大商いRVOL({rvol:.2f}x)＋VWAP-2σ割れ")
+
+    # 条件3: 直近3本（15分）連続陽線/陰線 ＋ 出来高3.0倍以上 ＋ VWAP乖離±1.5σ超（記事化前の大口介入検知）
+    recent_indices = [i for i in range(max(0, last_act_idx - 4), last_act_idx + 1) if actual_arr[i] is not None][-3:]
+    if len(recent_indices) == 3:
+        dirs3 = [act_dir_map.get(slots[i], 0) for i in recent_indices]
+        act_v3 = sum(float(act_vol_map.get(slots[i], 0.0)) for i in recent_indices)
+        avg_v3 = sum(float(slot_vols[i]) for i in recent_indices)
+        rvol3 = (act_v3 / avg_v3) if avg_v3 > 0 else 0.0
+
+        vw_now = vwap_arr[last_act_idx]
+        p1_now = vwap_p1_arr[last_act_idx]
+        m1_now = vwap_m1_arr[last_act_idx]
+        if rvol3 >= 3.0 and vw_now and p1_now and m1_now and cur_a is not None:
+            sd_est = max(p1_now - vw_now, 1e-4)
+            z_vwap = (cur_a - vw_now) / sd_est
+            if all(d > 0 for d in dirs3) and z_vwap >= 1.5:
+                reasons_up.append(f"直近15分3連続陽線＋出来高{rvol3:.1f}倍＋VWAP+{z_vwap:.1f}σ（未確認カタリスト・踏み上げ初動）")
+                unconfirmed_cat = True
+            elif all(d < 0 for d in dirs3) and z_vwap <= -1.5:
+                reasons_dn.append(f"直近15分3連続陰線＋出来高{rvol3:.1f}倍＋VWAP{z_vwap:.1f}σ（未確認悪材料・投げ売り初動）")
+                unconfirmed_cat = True
+
+    # 条件4: 直近60分特大カタリスト速報ヒット
+    if isinstance(catalyst_alert, dict) and catalyst_alert.get("active"):
+        if catalyst_alert.get("dir") == "POS":
+            reasons_up.append(f"速報特大カタリスト検知「{catalyst_alert.get('kw','')}」({catalyst_alert.get('age_min',1)}分前)")
+        elif catalyst_alert.get("dir") == "NEG":
+            reasons_dn.append(f"速報悪材料カタリスト検知「{catalyst_alert.get('kw','')}」({catalyst_alert.get('age_min',1)}分前)")
+
+    if reasons_up and len(reasons_up) >= len(reasons_dn):
+        return {
+            "active": True,
+            "dir": "UP",
+            "reasons": reasons_up,
+            "unconfirmed_catalyst": unconfirmed_cat,
+            "label": "急騰ブレイクモード",
+        }
+    if reasons_dn:
+        return {
+            "active": True,
+            "dir": "DOWN",
+            "reasons": reasons_dn,
+            "unconfirmed_catalyst": unconfirmed_cat,
+            "label": "急落ブレイクモード",
+        }
+    return default_exp
 
 
 def _detect_cvd_divergence(slots: list, actual_arr: list, cvd_arr: list, act_vol_map: dict) -> dict:
@@ -1680,7 +2149,7 @@ def _parse_float_safe(val, default_val=None):
 
 
 def _extract_lab_quant_modifiers(active_lab: dict, lab_council: dict) -> dict:
-    """改修②: YAMASHISHI LABの22日検証・5名監査官結論・VPIN・RS30を定量修飾子へ変換"""
+    """YAMASHISHI LABの22日検証・5名監査官結論・VPIN・RS30を定量修飾子へ変換"""
     res = {
         "has_lab": False,
         "lab_trust_mult": 1.0,
@@ -1749,7 +2218,7 @@ def _fit_short_3way_logreg(
     df_5m: pd.DataFrame, is_jp: bool, slots: list, slot_vols: np.ndarray,
     atr_pct: float, horizon_slots: int = 6
 ) -> dict:
-    """改修⑤: 外部ML不使用・NumPyのみによる銘柄固有3クラス・ソフトマックス回帰"""
+    """外部ML不使用・NumPyのみによる銘柄固有3クラス・ソフトマックス回帰"""
     empty_ml = {
         "fitted": False,
         "n_samples": 0,
@@ -1880,8 +2349,11 @@ def _fit_short_3way_logreg(
         return empty_ml
 
 
-def _apply_hvn_ob_bounce(mid: float, ref_px: float, hvn_wall_px: float, ob_sup_px: float, vp: dict) -> float:
-    """ref_px を基準に、未突破の上値抵抗・未割れの支持帯のみを有効化して張り付きを防止"""
+def _apply_hvn_ob_bounce(
+    mid: float, ref_px: float, hvn_wall_px: float, ob_sup_px: float, vp: dict,
+    exp_dir: str = "NONE"
+) -> float:
+    """要件2: EXPANSION UP時は上値減衰を解除し、突破済みの抵抗帯をレジサポ転換の押し目支持帯へ反転"""
     if ref_px <= 0:
         return mid
 
@@ -1893,11 +2365,6 @@ def _apply_hvn_ob_bounce(mid: float, ref_px: float, hvn_wall_px: float, ob_sup_p
     elif float(vp.get("res_px", 0.0)) > ref_px * 1.002:
         res_wall = float(vp["res_px"])
 
-    if res_wall > 0 and mid > res_wall * 0.995:
-        damp = 0.35 if is_hvn else (0.45 if vp.get("overhead_pct", 0.0) >= 35.0 else 1.0)
-        if damp < 1.0:
-            mid = res_wall * 0.995 + (mid - res_wall * 0.995) * damp
-
     sup_floor = 0.0
     is_ob = False
     if 0 < ob_sup_px < ref_px * 0.998:
@@ -1905,6 +2372,36 @@ def _apply_hvn_ob_bounce(mid: float, ref_px: float, hvn_wall_px: float, ob_sup_p
         is_ob = True
     elif 0 < float(vp.get("sup_px", 0.0)) < ref_px * 0.998:
         sup_floor = float(vp["sup_px"])
+
+    # EXPANSION UP時: すでに現在値(ref_px)が上回った旧抵抗帯（HVN/VP抵抗）をレジサポ転換の支持床へ転用
+    if exp_dir == "UP":
+        flipped_floors = [
+            px for px in (hvn_wall_px, float(vp.get("res_px", 0.0)), sup_floor)
+            if 0 < px < ref_px * 0.999
+        ]
+        if flipped_floors:
+            best_floor = max(flipped_floors)
+            if mid < best_floor * 1.003:
+                mid = best_floor * 1.003 - (best_floor * 1.003 - mid) * 0.30
+        return mid
+
+    # EXPANSION DOWN時: すでに現在値(ref_px)が下回った旧支持帯（OB/VP支持）をレジサポ転換の上値蓋へ転用
+    if exp_dir == "DOWN":
+        flipped_ceilings = [
+            px for px in (ob_sup_px, float(vp.get("sup_px", 0.0)), res_wall)
+            if px > ref_px * 1.001
+        ]
+        if flipped_ceilings:
+            best_ceil = min(flipped_ceilings)
+            if mid > best_ceil * 0.997:
+                mid = best_ceil * 0.997 + (mid - best_ceil * 0.997) * 0.30
+        return mid
+
+    # 通常レジーム時
+    if res_wall > 0 and mid > res_wall * 0.995:
+        damp = 0.35 if is_hvn else (0.45 if vp.get("overhead_pct", 0.0) >= 35.0 else 1.0)
+        if damp < 1.0:
+            mid = res_wall * 0.995 + (mid - res_wall * 0.995) * damp
 
     if sup_floor > 0 and mid < sup_floor * 1.005:
         cushion = 0.38 if is_ob else 0.65
@@ -1922,7 +2419,8 @@ def _compute_short_horizon_3way(
     hvn_wall_px: float, ob_sup_px: float, vp: dict,
     shock_ext_pct: float = 0.0, horizon_slots: int = 6,
     ml_model: dict = None, cum_cvd_now: float = 0.0, cum_vol_now: float = 0.0,
-    lab_dir_score: float = 0.0, lab_rs30: float = None
+    lab_dir_score: float = 0.0, lab_rs30: float = None,
+    exp_dir: str = "NONE"
 ) -> dict:
     """場中リアルタイム「現在値→短期30分・3分岐点線（NumPy軽量ML＋ルールハイブリッド）」"""
     empty_res = {
@@ -2008,7 +2506,6 @@ def _compute_short_horizon_3way(
     else:
         log_down += float(np.clip((-knn_end_rel) * 75.0, 0.08, 0.65))
 
-    # 改修②: LAB方向性（信頼度係数済）＆ RS30 を短期3分岐スコアへ反映
     if lab_dir_score > 0.01:
         log_up += float(np.clip(lab_dir_score * 0.48, 0.0, 0.55))
     elif lab_dir_score < -0.01:
@@ -2019,6 +2516,13 @@ def _compute_short_horizon_3way(
             log_up += float(np.clip(lab_rs30 * 0.22, 0.05, 0.40))
         elif lab_rs30 < -0.15:
             log_down += float(np.clip((-lab_rs30) * 0.22, 0.05, 0.40))
+
+    if exp_dir == "UP":
+        log_up += 0.55
+        log_down -= 0.35
+    elif exp_dir == "DOWN":
+        log_down += 0.55
+        log_up -= 0.35
 
     if shock_ext_pct > 0.01:
         log_up += float(np.clip(shock_ext_pct * 0.70, 0.0, 1.40))
@@ -2032,7 +2536,6 @@ def _compute_short_horizon_3way(
     exps_rule = np.exp(logits_rule)
     probs_rule = exps_rule / np.sum(exps_rule)
 
-    # 改修⑤: NumPy軽量3クラス・ソフトマックス回帰とのブレンド
     ml_used = False
     ml_samples = int(ml_model.get("n_samples", 0)) if isinstance(ml_model, dict) else 0
     probs_final = probs_rule
@@ -2048,6 +2551,8 @@ def _compute_short_horizon_3way(
             probs_ml = exps_ml / np.sum(exps_ml)
 
             w_ml = float(np.clip(ml_samples / (ml_samples + 120.0), 0.25, 0.70))
+            if exp_dir in ("UP", "DOWN"):
+                w_ml *= 0.65
             probs_final = w_ml * probs_ml + (1.0 - w_ml) * probs_rule
             probs_final = probs_final / np.sum(probs_final)
             ml_used = True
@@ -2090,16 +2595,16 @@ def _compute_short_horizon_3way(
 
         up_shock_add = max(0.0, shock_ratio) * 0.45 * step_frac
         up_raw = anchor_px * (1.0 + local_shape * 0.65 + cum_sig * 1.05 + up_shock_add)
-        up_raw = _apply_hvn_ob_bounce(up_raw, anchor_px, hvn_wall_px, ob_sup_px, vp)
+        up_raw = _apply_hvn_ob_bounce(up_raw, anchor_px, hvn_wall_px, ob_sup_px, vp, exp_dir=exp_dir)
         up_raw = max(up_raw, anchor_px * (1.0 + 0.0005 * k))
 
         flat_center = anchor_px + (vwap_mid_target - anchor_px) * (0.45 * step_frac)
         flat_wave = anchor_px * (local_shape * 0.35 + shock_ratio * 0.15 * step_frac)
-        flat_raw = _apply_hvn_ob_bounce(flat_center + flat_wave, anchor_px, hvn_wall_px, ob_sup_px, vp)
+        flat_raw = _apply_hvn_ob_bounce(flat_center + flat_wave, anchor_px, hvn_wall_px, ob_sup_px, vp, exp_dir=exp_dir)
 
         dn_shock_sub = max(0.0, -shock_ratio) * 0.45 * step_frac
         dn_raw = anchor_px * (1.0 + local_shape * 0.65 - cum_sig * 1.05 - dn_shock_sub)
-        dn_raw = _apply_hvn_ob_bounce(dn_raw, anchor_px, hvn_wall_px, ob_sup_px, vp)
+        dn_raw = _apply_hvn_ob_bounce(dn_raw, anchor_px, hvn_wall_px, ob_sup_px, vp, exp_dir=exp_dir)
         dn_raw = min(dn_raw, anchor_px * (1.0 - 0.0005 * k))
         dn_raw = max(dn_raw, anchor_px * 0.5)
 
@@ -2128,7 +2633,7 @@ def _compute_bayesian_scenario_probs(
     bull_trig: float, bull_target: float, bear_trig: float, bear_target: float,
     rem_sigma_pct: float, rem_drift_pct: float,
     rvol: float, cvd_div: dict, gap_open15: dict,
-    cur_vwap: float, shock_ext_pct: float = 0.0
+    cur_vwap: float, shock_ext_pct: float = 0.0, exp_dir: str = "NONE"
 ) -> dict:
     """4シナリオの対数スコア整合性を統一したリアルタイム・シナリオ配分"""
     fpt_bull = _calc_first_passage_prob(curr_px, bull_trig, rem_sigma_pct, rem_drift_pct) / 100.0
@@ -2139,6 +2644,15 @@ def _compute_bayesian_scenario_probs(
     log_bear = math.log(max(fpt_bear, 0.05)) - est_close_chg * 0.35 - shock_ext_pct * 0.60
     log_range = math.log(p_stay_inside) + 0.55 - abs(est_close_chg) * 0.20
     log_fade = math.log(max(min(abs(est_open_gap_pct) / 2.5, 0.75), 0.08)) + 0.35
+
+    if exp_dir == "UP":
+        log_bull += 0.90
+        log_range -= 0.35
+        log_fade -= 0.45
+    elif exp_dir == "DOWN":
+        log_bear += 0.90
+        log_range -= 0.35
+        log_fade -= 0.45
 
     if rvol is not None:
         if rvol >= 1.5:
@@ -2279,8 +2793,10 @@ def _audit_meta_labeling_accuracy(
         "mean_err": round(avg_err, 2),
         "detail": f"{scope_lbl} (大引け確定 N={n_samples}): 予測帯収束率 {avg_cone:.1f}% / 平均誤差 {avg_err:.2f}%",
     }
+
+
 # =========================================================================
-# 6. デュアル5分足軌道エンジン（出来高時計・昼休みジャンプ分散・LAB高度指標反映）
+# 6. デュアル5分足軌道エンジン（EXPANSION解放・出来高時計・昼休み分散・LAB連動）
 # =========================================================================
 def _build_dual_5m_trajectory(
     fc_code: str, curr_px: float, prev_px: float, df_1d: pd.DataFrame, df_5m: pd.DataFrame,
@@ -2395,7 +2911,6 @@ def _build_dual_5m_trajectory(
     raw_dow_x = float(dow_next_avg)
     raw_wick_x = float(_compute_wick_bias(df_1d))
 
-    # 改修②: LAB方向性バイアスに22日検証＋5名監査官の信頼度シュリンク係数(lab_trust_mult)を適用
     mods = lab_mods if isinstance(lab_mods, dict) else {}
     lab_trust_mult = float(mods.get("lab_trust_mult", 1.0))
     vpin_vboost = float(mods.get("vpin_vboost", 1.0))
@@ -2604,7 +3119,7 @@ def _build_dual_5m_trajectory(
                 u_shape = 1.35 if (i < 6 or i >= n_slots - 6) else 0.85
                 slot_inc_stds[i] = 0.0022 * u_shape
 
-    # 改修③: 出来高時計（Volume Clock）の累積進行率配列 vol_frac を算出
+    # 出来高時計（Volume Clock）の累積進行率配列 vol_frac を算出
     tot_slot_vol = float(np.sum(slot_vols))
     if tot_slot_vol > 0 and n_slots > 1:
         cum_v_arr = np.cumsum(slot_vols)
@@ -2616,7 +3131,7 @@ def _build_dual_5m_trajectory(
         vol_frac = np.linspace(0.0, 1.0, max(n_slots, 1))
         vol_clock_active = False
 
-    # 改修④: 日本株の昼休み（11:30→12:30）ジャンプ分散の個別計測＆注入
+    # 日本株の昼休み（11:30→12:30）ジャンプ分散の個別計測＆注入
     lunch_jump_std_pct = 0.0
     pm_open_idx = (lunch_idx + 1) if (is_jp and lunch_idx is not None and (lunch_idx + 1) < n_slots) else None
     if pm_open_idx is not None:
@@ -2637,7 +3152,6 @@ def _build_dual_5m_trajectory(
         slot_inc_stds[pm_open_idx] = lj_std
         lunch_jump_std_pct = round(lj_std * 100.0, 2)
 
-    # 改修⑤: 銘柄固有の過去5分足データからNumPy軽量3クラス・ロジスティック回帰モデルを学習
     ml_3way_model = _fit_short_3way_logreg(
         df_5m, is_jp, slots, slot_vols, float(vol_cls["atr_pct"]), horizon_slots=6
     )
@@ -2711,9 +3225,12 @@ def _build_dual_5m_trajectory(
         act_low_map, act_high_map, act_vol_map, slot_vols, prev_px
     )
 
+    # 要件3: 直近60分特大カタリスト速報ドリフト加算
+    cat_al = news_res.get("catalyst_alert")
+    cat_drift_boost = (float(cat_al.get("boost_drift_pct", 0.0)) / 100.0) if (isinstance(cat_al, dict) and cat_al.get("active")) else 0.0
+
     est_open = anchor_base_close * (1.0 + tot_gap / 100.0)
-    drift = float(np.clip((raw_news_x * idr_w["news"]) + ((dow_adj + wick_adj + calib_pct + lab_bias_pct) / 100.0), -0.032, 0.032))
-    # 改修②: VPIN毒性フローブースト(vpin_vboost)をバンド倍率へ反映
+    drift = float(np.clip((raw_news_x * idr_w["news"]) + ((dow_adj + wick_adj + calib_pct + lab_bias_pct) / 100.0) + cat_drift_boost, -0.045, 0.045))
     vboost = (1.0 + abs(raw_news_x) * 0.25) * (1.0 + max(0.0, vix_d / 100.0) * 1.2) * vpin_vboost
 
     start_rem_idx = (last_act_idx + 1) if (has_actual and last_act_idx >= 0) else 0
@@ -2736,10 +3253,9 @@ def _build_dual_5m_trajectory(
     p50, p85, p15, bdiff = [], [], [], []
     p68, p32, bdiff_inner = [], [], []
     for i, sl in enumerate(slots):
-        # 改修③: 出来高時計進行率 vol_frac[i] によるドリフト進行
         v_prog = float(vol_frac[i])
         mid = est_open * (1.0 + slot_means[i] + drift * v_prog)
-        mid = _apply_hvn_ob_bounce(mid, est_open, hvn_wall_px, ob_sup_px, vp)
+        mid = _apply_hvn_ob_bounce(mid, est_open, hvn_wall_px, ob_sup_px, vp, exp_dir="NONE")
 
         up_out_spread = max((slot_q90[i] - slot_means[i]) * vboost, slot_stds[i] * vboost * 0.65)
         dn_out_spread = max((slot_means[i] - slot_q10[i]) * vboost, slot_stds[i] * vboost * 0.65)
@@ -2759,8 +3275,82 @@ def _build_dual_5m_trajectory(
         p32.append(round(float(lo_in), 2))
         bdiff_inner.append(round(float(hi_in - lo_in), 2))
 
+    saved_today = stock_hist.get(market_today_str) if isinstance(stock_hist.get(market_today_str), dict) else None
+    has_premarket_lock = bool(saved_today and saved_today.get("locked_premarket") is True)
+
+    if has_actual and has_premarket_lock:
+        locked_p50 = saved_today["p50"]
+        locked_p85 = saved_today["p85"]
+        locked_p15 = saved_today["p15"]
+        locked_bdiff = saved_today["band_diff"]
+        locked_p32 = saved_today.get("p32", [round(m - (m - l) * 0.52, 2) for m, l in zip(locked_p50, locked_p15)])
+        locked_bdiff_in = saved_today.get("band_diff_in", [round(d * 0.52, 2) for d in locked_bdiff])
+        is_locked = True
+    else:
+        locked_p50, locked_p85, locked_p15, locked_bdiff = p50, p85, p15, bdiff
+        locked_p32, locked_bdiff_in = p32, bdiff_inner
+        is_locked = False
+        if not has_actual and _is_valid_premarket_lock_window(is_jp, target_date):
+            stock_hist[target_date] = {
+                "p50": p50, "p85": p85, "p15": p15, "band_diff": bdiff,
+                "p32": p32, "band_diff_in": bdiff_inner,
+                "locked_premarket": True,
+                "locked_at": _get_market_now(is_jp).strftime("%Y-%m-%d %H:%M:%S"),
+                "regime_code": regime_code,
+                "cluster_key": cluster_key,
+                "pred_open_px": round(float(est_open), 4),
+                "pred_open_gap_pct": round(float(tot_gap), 4),
+                "slot_mean_end_pct": round(float(slot_means[-1]) * 100.0, 4),
+                "factor_contribs": {
+                    "open_gap": {
+                        "macro": round(raw_macro_x, 4),
+                        "fx": round(raw_fx_x, 4),
+                        "news": round(raw_news_x, 4),
+                        "whale": round(raw_whale_x, 4),
+                        "lab_bias": round(lab_strength_dir, 4),
+                    },
+                    "intraday_drift": {
+                        "news": round(raw_news_x, 4),
+                        "dow": round(raw_dow_x, 4),
+                        "wick": round(raw_wick_x, 4),
+                        "calib": round(raw_calib_pct, 4),
+                        "lab_bias": round(lab_strength_dir, 4),
+                    },
+                },
+            }
+            if len(stock_hist) > 15:
+                for old_k in sorted(stock_hist.keys())[:-15]:
+                    del stock_hist[old_k]
+            ledger[fc_code] = stock_hist
+            _dd_db_set("dd_forecast_ledger_v9", ledger)
+
+    # 要件2: EXPANSIONモード自動検知（急騰・急落ブレイク）
+    expansion_reg = _detect_expansion_regime(
+        has_actual, last_act_idx, slots, actual_arr,
+        locked_p85, locked_p15, is_locked,
+        vwap_arr, vwap_p2_arr, vwap_m2_arr, vwap_p1_arr, vwap_m1_arr,
+        act_vol_map, act_dir_map, slot_vols, rvol, catalyst_alert=cat_al
+    )
+    exp_dir = expansion_reg["dir"] if expansion_reg["active"] else "NONE"
+
+    # EXPANSIONモード時は当日直近30分（6本）の実現ボラティリティを計測し、過去日分散と比較して大きい方を採用
+    realized_30m_inc_std = 0.0
+    if has_actual and last_act_idx >= 2:
+        rec_rets = []
+        for idx_r in range(max(1, last_act_idx - 5), last_act_idx + 1):
+            if actual_arr[idx_r] is not None and actual_arr[idx_r - 1] is not None and actual_arr[idx_r - 1] > 0:
+                rec_rets.append((actual_arr[idx_r] - actual_arr[idx_r - 1]) / actual_arr[idx_r - 1])
+        if len(rec_rets) >= 2:
+            realized_30m_inc_std = float(np.std(rec_rets))
+
+    eff_slot_inc_stds = slot_inc_stds.copy()
+    if expansion_reg["active"] and realized_30m_inc_std > 0:
+        eff_slot_inc_stds = np.maximum(eff_slot_inc_stds, realized_30m_inc_std)
+        if start_rem_idx < n_slots:
+            rem_sigma_pct = max(float(np.sqrt(np.sum(eff_slot_inc_stds[start_rem_idx:] ** 2))), 0.002) * vboost
+
     target_atr = max(float(vol_cls["atr_pct"]), 0.8)
-    max_r_cap = (target_atr * 1.4) / 100.0
+    max_r_cap = ((target_atr * 2.8) / 100.0) if expansion_reg["active"] else ((target_atr * 1.4) / 100.0)
     premarket_medoid = None
     if use_maps and rdates:
         n_r = len(use_maps)
@@ -2812,55 +3402,6 @@ def _build_dual_5m_trajectory(
             "data": med_path,
             "mode": "PREMARKET",
         }
-
-    saved_today = stock_hist.get(market_today_str) if isinstance(stock_hist.get(market_today_str), dict) else None
-    has_premarket_lock = bool(saved_today and saved_today.get("locked_premarket") is True)
-
-    if has_actual and has_premarket_lock:
-        locked_p50 = saved_today["p50"]
-        locked_p85 = saved_today["p85"]
-        locked_p15 = saved_today["p15"]
-        locked_bdiff = saved_today["band_diff"]
-        locked_p32 = saved_today.get("p32", [round(m - (m - l) * 0.52, 2) for m, l in zip(locked_p50, locked_p15)])
-        locked_bdiff_in = saved_today.get("band_diff_in", [round(d * 0.52, 2) for d in locked_bdiff])
-        is_locked = True
-    else:
-        locked_p50, locked_p85, locked_p15, locked_bdiff = p50, p85, p15, bdiff
-        locked_p32, locked_bdiff_in = p32, bdiff_inner
-        is_locked = False
-        if not has_actual and _is_valid_premarket_lock_window(is_jp, target_date):
-            stock_hist[target_date] = {
-                "p50": p50, "p85": p85, "p15": p15, "band_diff": bdiff,
-                "p32": p32, "band_diff_in": bdiff_inner,
-                "locked_premarket": True,
-                "locked_at": _get_market_now(is_jp).strftime("%Y-%m-%d %H:%M:%S"),
-                "regime_code": regime_code,
-                "cluster_key": cluster_key,
-                "pred_open_px": round(float(est_open), 4),
-                "pred_open_gap_pct": round(float(tot_gap), 4),
-                "slot_mean_end_pct": round(float(slot_means[-1]) * 100.0, 4),
-                "factor_contribs": {
-                    "open_gap": {
-                        "macro": round(raw_macro_x, 4),
-                        "fx": round(raw_fx_x, 4),
-                        "news": round(raw_news_x, 4),
-                        "whale": round(raw_whale_x, 4),
-                        "lab_bias": round(lab_strength_dir, 4),
-                    },
-                    "intraday_drift": {
-                        "news": round(raw_news_x, 4),
-                        "dow": round(raw_dow_x, 4),
-                        "wick": round(raw_wick_x, 4),
-                        "calib": round(raw_calib_pct, 4),
-                        "lab_bias": round(lab_strength_dir, 4),
-                    },
-                },
-            }
-            if len(stock_hist) > 15:
-                for old_k in sorted(stock_hist.keys())[:-15]:
-                    del stock_hist[old_k]
-            ledger[fc_code] = stock_hist
-            _dd_db_set("dd_forecast_ledger_v9", ledger)
 
     knn_match = {"matched_dates": [], "mean_dist": None, "knn_rel_moves": {}, "knn_q10": {}, "knn_q90": {}, "analog_paths": []}
     atr_norm_pct = max(vol_cls["atr_pct"] / 100.0, 0.005)
@@ -2996,7 +3537,6 @@ def _build_dual_5m_trajectory(
                 b_mom_now = b_today_vals[-1] - b_today_vals[max(0, len(b_today_vals) - 6)]
                 bench_live_alpha_adj = float(np.clip(bench_beta_5m * b_mom_now * 0.45, -0.012, 0.012))
 
-        # 改修④: 日本株の前場引け〜後場寄り待ち(last_act_idx == lunch_idx)時の昼休み先物・為替変動ギャップ補正
         lunch_gap_ratio = 0.0
         if is_jp and lunch_idx is not None and last_act_idx == lunch_idx:
             nk_d = float(macro_data.get("NK_FUT", {}).get("diff_pct", 0.0))
@@ -3008,7 +3548,12 @@ def _build_dual_5m_trajectory(
             lunch_gap_adj_pct = round(lunch_gap_pct, 2)
             lunch_gap_ratio = lunch_gap_pct / 100.0
 
-        live_vwap_bias = float(np.clip(vwap_gap * 0.45 + mom_30m * 0.35 + gap15_bias + bench_live_alpha_adj, -0.020, 0.020))
+        # 要件2: EXPANSIONモード時は live_vwap_bias のクリップを ±0.045 / drift を ±0.055 へ解放
+        bias_cap = 0.045 if expansion_reg["active"] else 0.020
+        drift_eff = float(np.clip(drift, -0.055, 0.055)) if expansion_reg["active"] else float(np.clip(drift, -0.032, 0.032))
+        unconf_boost = (0.008 if exp_dir == "UP" else (-0.008 if exp_dir == "DOWN" else 0.0)) if expansion_reg.get("unconfirmed_catalyst") else 0.0
+
+        live_vwap_bias = float(np.clip(vwap_gap * 0.45 + mom_30m * 0.35 + gap15_bias + bench_live_alpha_adj + unconf_boost, -bias_cap, bias_cap))
         knn_moves = knn_match["knn_rel_moves"]
         knn_q10_m = knn_match["knn_q10"]
         knn_q90_m = knn_match["knn_q90"]
@@ -3017,18 +3562,18 @@ def _build_dual_5m_trajectory(
         v_rem_denom = max(1.0 - v_anchor, 1e-4)
 
         for i in range(last_act_idx, n_slots):
-            # 改修③: 出来高時計の残存進行率 rem_v_frac による軌道進行
             rem_v_frac = float(np.clip((vol_frac[i] - v_anchor) / v_rem_denom, 0.0, 1.0)) if i > last_act_idx else 0.0
             pm_shift = lunch_gap_ratio if (pm_open_idx is not None and i >= pm_open_idx) else 0.0
-            base_rel = (slot_means[i] - anchor_mean) + (drift * 0.6 + live_vwap_bias) * rem_v_frac + pm_shift
-            rel_move = (0.70 * base_rel + 0.30 * (knn_moves[i] + pm_shift)) if (i in knn_moves) else base_rel
+            base_rel = (slot_means[i] - anchor_mean) + (drift_eff * 0.6 + live_vwap_bias) * rem_v_frac + pm_shift
+            knn_wt = 0.15 if expansion_reg["active"] else 0.30
+            rel_move = ((1.0 - knn_wt) * base_rel + knn_wt * (knn_moves[i] + pm_shift)) if (i in knn_moves) else base_rel
             mid = anchor_px * (1.0 + rel_move)
-            mid = _apply_hvn_ob_bounce(mid, anchor_px, hvn_wall_px, ob_sup_px, vp)
+            mid = _apply_hvn_ob_bounce(mid, anchor_px, hvn_wall_px, ob_sup_px, vp, exp_dir=exp_dir)
 
             if i == last_act_idx:
                 u_step_sig = 0.0012
             else:
-                u_step_sig = float(np.sqrt(np.sum(slot_inc_stds[last_act_idx + 1:i + 1] ** 2)))
+                u_step_sig = float(np.sqrt(np.sum(eff_slot_inc_stds[last_act_idx + 1:i + 1] ** 2)))
 
             skew_up = max((slot_q90[i] - slot_means[i]) / max(slot_stds[i], 1e-4), 0.75)
             skew_dn = max((slot_means[i] - slot_q10[i]) / max(slot_stds[i], 1e-4), 0.75)
@@ -3053,10 +3598,11 @@ def _build_dual_5m_trajectory(
             live_p32[i] = round(float(lo_in), 2)
             live_bdiff_in[i] = round(float(hi_in - lo_in), 2)
     else:
+        drift_eff = drift
         live_p50, live_p85, live_p15, live_bdiff = p50, p85, p15, bdiff
         live_p32, live_bdiff_in = p32, bdiff_inner
 
-    rem_drift_pct = ((drift * 0.6 + live_vwap_bias) * rem_frac_now + (lunch_gap_adj_pct / 100.0)) if has_actual else drift
+    rem_drift_pct = ((drift_eff * 0.6 + live_vwap_bias) * rem_frac_now + (lunch_gap_adj_pct / 100.0)) if has_actual else drift_eff
 
     verify_stats = {"has_verify": False, "in_cone_pct": 0.0, "err_pct": 0.0, "n_pts": 0, "finalized": False}
     if has_actual and is_locked:
@@ -3144,6 +3690,7 @@ def _build_dual_5m_trajectory(
         "vwap_p1": vwap_p1_arr, "vwap_m1": vwap_m1_arr, "vwap_p2": vwap_p2_arr, "vwap_m2": vwap_m2_arr,
         "rvol": rvol, "orb_high": orb_high, "orb_low": orb_low, "vol_spikes": vol_spikes,
         "avg_5m_vol": avg_5m_vol, "cvd_div": cvd_div, "gap_open15": gap_open15,
+        "expansion_regime": expansion_reg,
         "gap_fill": gap_fill_stats, "rem_sigma_pct": rem_sigma_pct, "rem_drift_pct": rem_drift_pct, "rem_frac_now": rem_frac_now,
         "locked_p50": locked_p50, "locked_p85": locked_p85, "locked_p15": locked_p15, "locked_bdiff": locked_bdiff,
         "locked_p32": locked_p32, "locked_bdiff_in": locked_bdiff_in,
@@ -3199,7 +3746,7 @@ def _build_dual_5m_trajectory(
             "bench_live_alpha_adj": bench_live_alpha_adj,
             "knn_rel_moves": knn_match["knn_rel_moves"],
             "slot_means": slot_means,
-            "slot_inc_stds": slot_inc_stds,
+            "slot_inc_stds": eff_slot_inc_stds,
             "vboost": vboost,
             "hvn_wall_px": hvn_wall_px,
             "ob_sup_px": ob_sup_px,
@@ -3207,6 +3754,7 @@ def _build_dual_5m_trajectory(
             "cum_vol_now": cum_vol_latest,
             "lab_dir_score": lab_strength_dir,
             "lab_rs30": lab_rs30,
+            "exp_dir": exp_dir,
         },
         "knn_match": {
             "matched_dates": knn_match["matched_dates"],
@@ -3363,16 +3911,18 @@ def _render_unified_guide():
     st.markdown("""
     <div class="dd-guide-box">
     <b>🔰 最初に見る3ポイント</b><br>
-    1. <b>予測軌道チャート:</b> 白線(実測)と「場中30分・3分岐点線（▲上昇 / ▶横ばい / ▼下落 %）」、さらに実在した過去日のリアル波形「類似実測波形(Top-1・指数分離＆ATR補正済)」で押し目の深さと値幅を確認。右上の <b>⛶ 横拡大</b> でスマホ横向きフル大画面にできます。<br>
-    2. <b>シナリオ配分メーター＆シナリオカード:</b> 1日全体の4シナリオ配分比と「押し目・高値の時間帯」「上下トリガー価格」をチェック。<br>
+    1. <b>予測軌道チャート＆チャート外凡例パネル:</b> 白線(実測)と「場中30分・3分岐点線（▲上昇 / ▶横ばい / ▼下落 %）」、さらにチャート直下の「動的ライン解説パネル」で各線の意味を即座に確認できます。右上の <b>⛶ 横拡大</b> でスマホ横向きフル大画面にできます。<br>
+    2. <b>急騰・急落ブレイク（EXPANSION）自動切替:</b> 想定外の急騰時は朝ロック(紫線)を自動で薄グレー点線へ降格させ、青線の追従上限・レジサポ転換・ORB1.618倍メドを解放します。<br>
     3. <b>What-If衝撃波シミュレーター＆適正ロット電卓:</b> 先物・為替の追加ショックをスライダーで模擬し、100株単元・流動性インパクト・二壁FPT到達確率を即算出。<br>
     <hr style="border-color:rgba(56,189,248,0.22);margin:7px 0;">
-    <b>■ v15.4 クオンツ＆ML強化ガイド</b><br>
-    ・<b>場中30分・3分岐点線（🤖NumPy軽量ML＋ルール融合）:</b> 過去1ヶ月の銘柄固有5分足から学習した3クラス・ロジスティック回帰と場中マイクロ構造を融合し、6本(30分)先の確率(%)を算出。<br>
-    ・<b>出来高時計（Volume Clock）＆昼休みジャンプ分散:</b> 均等時間ではなく「累積出来高の進行率」で日中軌道を駆動し、日本株の11:30→12:30ギャップ分散と先物変動も自動補正。<br>
-    ・<b>YAMASHISHI LAB高度連動:</b> 22日検証のPF/勝率や5名監査官の警戒結論でバイアス信頼度を自動調整し、VPIN高値時は予測バンド幅を拡張。TP/SLは現在値±12%外を自動ガードしY軸潰れを防止。
+    <b>■ v16.0 クオンツ＆速報強化ガイド</b><br>
+    ・<b>超短期速報サーチ（45秒更新）:</b> 日本株は「株探」適時開示・ニュース、米国株は「Yahoo Finance」速報を並列統合。15分以内の速報は3.0倍重みで軌道へ即時反映します。<br>
+    ・<b>キャッシュ分離高速化:</b> 場中5分足・先物は20秒キャッシュ、日足・株主・財務は30分キャッシュに分離し、軽快さと鮮度を両立。<br>
+    ・<b>出来高時計（Volume Clock）＆NumPy軽量ML:</b> 累積出来高の進行率と銘柄固有3クラス回帰で場中マイクロ構造を予測。
     </div>
     """, unsafe_allow_html=True)
+
+
 # =========================================================================
 # 8. メインエントリ関数（YAMASHISHI LAB から呼び出す）
 # =========================================================================
@@ -3383,8 +3933,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     with h1:
         st.markdown(
             '<div class="glass-header" style="margin-bottom:4px;padding:8px 12px;">'
-            '<div class="brand-luxury" style="font-size:15px;">YAMASHISHI DEEP DIVE v15.4</div>'
-            '<div style="font-size:10px;color:#94a3b8;">出来高時計・昼休みジャンプ分散・NumPy軽量ML3分岐・LAB高度指標完全連動</div>'
+            '<div class="brand-luxury" style="font-size:15px;">YAMASHISHI DEEP DIVE v16.0</div>'
+            '<div style="font-size:10px;color:#94a3b8;">急騰ブレイク自動解放・超短期速報サーチ・動的ライン解説・LAB高度連動</div>'
             '</div>',
             unsafe_allow_html=True
         )
@@ -3479,7 +4029,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         macro_sens = _compute_macro_sens(df_1d["Close"], macro_data)
         dow_stats, next_wd = _compute_dow_edge(df_1d, is_jp)
         with ThreadPoolExecutor(max_workers=2) as ex_intel:
-            fut_news = ex_intel.submit(_fetch_global_intel, corp_name, short_code)
+            fut_news = ex_intel.submit(_fetch_global_intel, corp_name, short_code, fc)
             fut_gov = ex_intel.submit(_fetch_gov_and_whales, corp_name, short_code, is_jp)
             news_res = fut_news.result()
             gov_risks, whale_news = fut_gov.result()
@@ -3500,6 +4050,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         round_level = _compute_round_number_level(curr_px, is_jp)
         chg_pct = ((curr_px - prev_px) / max(prev_px, 1e-4)) * 100.0
         chg_col = "#10b981" if chg_pct >= 0 else "#ef4444"
+
+        exp_reg = traj.get("expansion_regime", {"active": False, "dir": "NONE", "reasons": [], "label": "通常レジーム"})
+        exp_active = bool(exp_reg.get("active"))
+        exp_dir = exp_reg.get("dir", "NONE")
 
         presets = ["📈 今の予測", "🔍 朝の答え合わせ", "🏦 大口・節目"]
         modes = ["🔴 ライブ修正", "🔒 朝ロック検証", "⚡ 両方重ね"]
@@ -3606,7 +4160,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             cum_cvd_now=s3_ctx.get("cum_cvd_now", 0.0),
             cum_vol_now=s3_ctx.get("cum_vol_now", 0.0),
             lab_dir_score=s3_ctx.get("lab_dir_score", 0.0),
-            lab_rs30=s3_ctx.get("lab_rs30")
+            lab_rs30=s3_ctx.get("lab_rs30"),
+            exp_dir=exp_dir
         )
 
         cur_vwap_now = traj["vwap"][traj["last_act_idx"]] if (traj["has_actual"] and traj["last_act_idx"] >= 0) else None
@@ -3616,11 +4171,40 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             active_bull_trig, active_bull_tgt, active_bear_trig, active_bear_tgt,
             traj["rem_sigma_pct"], active_rem_drift,
             traj["rvol"], traj["cvd_div"], traj["gap_open15"],
-            cur_vwap_now, shock_ext_pct=shock_ext_pct
+            cur_vwap_now, shock_ext_pct=shock_ext_pct, exp_dir=exp_dir
         )
 
         status_pills = []
         alert_blocks = []
+
+        # 要件2: EXPANSIONモード発火時のステータスバー・アラート明示
+        if exp_active:
+            if exp_dir == "UP":
+                status_pills.append('<span class="dd-st-pill" style="border-color:#10b981;background:rgba(16,185,129,0.22);color:#6ee7b7;">🚀 急騰ブレイク稼働中</span>')
+                alert_blocks.append(
+                    '<div class="dd-quant-box"><b>🚀 急騰ブレイクモード稼働中（朝想定を自動解除・トレンド追従へ切替）</b><br>'
+                    + "<br>".join([f"・{html.escape(r)}" for r in exp_reg["reasons"]])
+                    + "</div>"
+                )
+            else:
+                status_pills.append('<span class="dd-st-pill" style="border-color:#ef4444;background:rgba(239,68,68,0.22);color:#fecaca;">🔻 急落ブレイク稼働中</span>')
+                alert_blocks.append(
+                    '<div class="dd-warn-box"><b>🔻 急落ブレイクモード稼働中（朝想定を自動解除・下落追従へ切替）</b><br>'
+                    + "<br>".join([f"・{html.escape(r)}" for r in exp_reg["reasons"]])
+                    + "</div>"
+                )
+
+        # 要件3: 60分以内特大カタリストアラート
+        cat_al = news_res.get("catalyst_alert")
+        if isinstance(cat_al, dict) and cat_al.get("active"):
+            c_col = "#10b981" if cat_al["dir"] == "POS" else "#ef4444"
+            c_cls = "dd-quant-box" if cat_al["dir"] == "POS" else "dd-warn-box"
+            status_pills.append(f'<span class="dd-st-pill" style="border-color:{c_col};background:rgba(15,23,42,0.9);color:{c_col};">📰 速報材料: {html.escape(cat_al["kw"])}</span>')
+            alert_blocks.append(
+                f'<div class="{c_cls}"><b>📰 60分以内・特大カタリスト速報検知（{cat_al["age_min"]}分前 / キーワード: {html.escape(cat_al["kw"])}）</b><br>'
+                f'{html.escape(cat_al["title"])}（ライブ軌道へ {cat_al["boost_drift_pct"]:+.2f}% 即時反映済）</div>'
+            )
+
         meta_a = traj["meta_audit"]
         meta_hit_str = f" ({meta_a['hit_rate']:.0f}%)" if meta_a["n"] >= 3 else ""
         status_pills.append(
@@ -3749,6 +4333,20 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         t1, t2, t3, t4 = st.tabs(["翌営業日 1日軌道", "マクロβ・曜日", "財務・大口株主", "リスク・AIメモ"])
 
         with t1:
+            # 要件3: 直近60分以内の速報ティッカー（存在する場合のみチャート直上に1行表示）
+            brk = news_res.get("breaking_news")
+            if isinstance(brk, dict) and brk.get("title"):
+                b_cls = "dd-breaking-ticker bull" if brk.get("sent") == "POS" else "dd-breaking-ticker"
+                b_tag = "🔥 速報(買い)" if brk.get("sent") == "POS" else ("⚠️ 速報(売り)" if brk.get("sent") == "NEG" else "⚡ 速報")
+                b_url = html.escape(brk.get("link") or "#")
+                st.markdown(
+                    f'<div class="{b_cls}">'
+                    f'<span style="font-weight:800;flex-shrink:0;">{b_tag} [{brk.get("age_min",1)}分前]</span>'
+                    f'<a href="{b_url}" target="_blank" style="color:inherit;text-decoration:none;overflow:hidden;text-overflow:ellipsis;">'
+                    f'{html.escape(brk["title"])} ({html.escape(brk.get("source") or "速報")})</a></div>',
+                    unsafe_allow_html=True
+                )
+
             rvol_v = traj["rvol"]
             rvol_txt, rvol_c = (f"{rvol_v:.2f}x (機関)", "#10b981") if (rvol_v and rvol_v >= 1.8) else ((f"{rvol_v:.2f}x (閑散)", "#f59e0b") if (rvol_v and rvol_v < 0.75) else ((f"{rvol_v:.2f}x (通常)", "#38bdf8") if rvol_v else ("場前待機", "#94a3b8")))
             gf = traj["gap_fill"]
@@ -3880,7 +4478,19 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 ml_data.append({"yAxis": traj["orb_high"], "lineStyle": {"color": "rgba(56,189,248,0.45)", "type": "dashed", "width": 1.0}, "label": _h_badge("ORB高", "#7dd3fc", "insideEndTop")})
                 ml_data.append({"yAxis": traj["orb_low"], "lineStyle": {"color": "rgba(244,63,94,0.45)", "type": "dashed", "width": 1.0}, "label": _h_badge("ORB安", "#fda4af", "insideEndBottom")})
 
-            # 改修②: メインチャートの TP/SL 距離ガード（現在値±12%超は除外し、Y軸潰れを防止）
+            # 要件2: EXPANSIONモード発火時は ORB値幅の1.618倍（フィボナッチ拡張）メドを描画
+            if exp_active and traj["orb_high"] and traj["orb_low"]:
+                orb_rng = max(float(traj["orb_high"]) - float(traj["orb_low"]), 0.0)
+                if orb_rng > 0:
+                    if exp_dir == "UP":
+                        orb_ext_up = round(float(traj["orb_low"]) + orb_rng * 1.618, 2)
+                        if curr_px > 0 and abs(orb_ext_up - curr_px) / curr_px <= 0.14:
+                            ml_data.append({"yAxis": orb_ext_up, "lineStyle": {"color": "rgba(34,211,238,0.65)", "type": "dotted", "width": 1.4}, "label": _h_badge(f"ORB拡張1.618 {_fmt_cur(orb_ext_up, is_jp)}", "#67e8f9", "insideEndTop")})
+                    elif exp_dir == "DOWN":
+                        orb_ext_dn = round(max(float(traj["orb_high"]) - orb_rng * 1.618, curr_px * 0.5), 2)
+                        if curr_px > 0 and abs(orb_ext_dn - curr_px) / curr_px <= 0.14:
+                            ml_data.append({"yAxis": orb_ext_dn, "lineStyle": {"color": "rgba(251,113,133,0.65)", "type": "dotted", "width": 1.4}, "label": _h_badge(f"ORB拡張1.618 {_fmt_cur(orb_ext_dn, is_jp)}", "#fda4af", "insideEndBottom")})
+
             lab_tpsl_hidden = False
             if active_lab and "LAB TP/SL" in opt_lines:
                 l_tp_line = float(active_lab.get("tp", active_lab.get("raw_tp", 0.0)) or 0.0)
@@ -3958,7 +4568,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 p_s, p_e = max(0, cur_peak_i - 2), min(n_sl - 1, cur_peak_i + 2)
                 ma_data.append([{"name": "押目帯", "xAxis": traj["slots"][d_s], "itemStyle": {"color": "rgba(16, 185, 129, 0.09)"}, "label": {"position": "insideTop", "color": "#6ee7b7", "fontSize": 8.5, "backgroundColor": "rgba(11, 17, 32, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][d_e]}])
                 ma_data.append([{"name": "利確帯", "xAxis": traj["slots"][p_s], "itemStyle": {"color": "rgba(239, 68, 68, 0.09)"}, "label": {"position": "insideTop", "color": "#fca5a5", "fontSize": 8.5, "backgroundColor": "rgba(11, 17, 32, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][p_e]}])
-                if vp["overhead_pct"] >= 25.0:
+                if vp["overhead_pct"] >= 25.0 and not exp_active:
                     ma_data.append([{"name": "売り壁", "yAxis": round(vp["res_px"] * 0.996, 2), "itemStyle": {"color": "rgba(168, 85, 247, 0.13)"}, "label": {"position": "insideRight", "color": "#d8b4fe", "fontSize": 8.5, "backgroundColor": "rgba(11, 17, 32, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"yAxis": round(vp["res_px"] * 1.004, 2)}])
             ma_cfg = {"silent": True, "data": ma_data} if ma_data else {}
 
@@ -4034,16 +4644,24 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     {"name": "VWAP-2σ", "type": "line", "yAxisIndex": 0, "data": traj["vwap_m2"], "itemStyle": {"color": "rgba(16,185,129,0.45)"}, "lineStyle": {"color": "rgba(16,185,129,0.45)", "width": 1.0, "type": "dotted"}, "showSymbol": False, "silent": True},
                 ])
 
+            # 要件2: EXPANSIONモード時は紫線（朝ロック）を極薄グレー点線へ自動降格し凡例に(無効化済)付与
             if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
                 is_both = (chart_mode == "⚡ 両方重ね")
-                lk_col = "#c084fc" if is_both else "#38bdf8"
+                if exp_active:
+                    lk_name = "朝ロック(無効化済)"
+                    lk_col = "rgba(148, 163, 184, 0.32)"
+                    lk_style = {"color": "rgba(148,163,184,0.32)", "width": 1.3, "type": "dotted"}
+                else:
+                    lk_name = "朝ロック"
+                    lk_col = "#c084fc" if is_both else "#38bdf8"
+                    lk_style = {"color": lk_col, "width": 2.0 if is_both else 2.6, "type": "dashed" if is_both else "solid", "shadowBlur": 8, "shadowColor": "rgba(192,132,252,0.45)"}
                 s_list.append({
-                    "name": "朝ロック", "type": "line", "yAxisIndex": 0, "data": disp_locked_p50,
+                    "name": lk_name, "type": "line", "yAxisIndex": 0, "data": disp_locked_p50,
                     "itemStyle": {"color": lk_col},
-                    "lineStyle": {"color": lk_col, "width": 2.0 if is_both else 2.6, "type": "dashed" if is_both else "solid", "shadowBlur": 8, "shadowColor": "rgba(192,132,252,0.45)"},
+                    "lineStyle": lk_style,
                     "showSymbol": False, "markLine": ml_cfg, "markArea": ma_cfg
                 })
-                l_names.append("朝ロック")
+                l_names.append(lk_name)
 
             if chart_mode in ("🔴 ライブ修正", "⚡ 両方重ね"):
                 s_list.append({
@@ -4180,7 +4798,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 "series": s_list
             }, height=345, use_hud_tooltip=True, is_jp=is_jp, enable_fullscreen=True)
 
-            # 改修⑤: 3分岐ストリップUIに 🤖ML学習(N=xxx) バッジを表示
             if show_3way_now:
                 mins_ahead = short_3way["horizon"] * 5
                 ml_badge_html = (
@@ -4198,6 +4815,12 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                   </span>
                 </div>
                 """, unsafe_allow_html=True)
+
+            # 要件4: チャート直下に「動的ライン解説パネル」を配置
+            _render_chart_legend_panel(
+                traj, chart_mode, opt_lines, short_3way, exp_reg,
+                active_dip_time, active_peak_time, cur_vwap_now, curr_px, is_jp, active_lab
+            )
 
             basis_txt = "ライブ連動" if use_live_basis else "朝ロック基準"
             shock_badge_txt = f" / 衝撃波{shock_ext_pct:+.2f}%" if abs(shock_ext_pct) > 0.01 else ""
@@ -4415,8 +5038,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             </div>
             """, unsafe_allow_html=True)
 
-            # 改修⑥: 全ファクター内訳 Expander に LAB高度連動・出来高時計・昼休みジャンプσ・ML学習サンプル数を追加表示
-            with st.expander("🔬 全ファクター内訳（16項目）＆ クラスタ別3脳SGD進化重み", expanded=False):
+            with st.expander("🔬 全ファクター内訳（17項目）＆ クラスタ別3脳SGD進化重み", expanded=False):
                 b5m_status = "有効" if traj["has_bench_5m"] else "フォールバック"
                 ld_date = html.escape(str(ld.get("date", "-")))
                 ld_cluster = html.escape(str(ld.get("cluster", "-")))
@@ -4439,6 +5061,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 ml_info_d = traj.get("ml_3way_model", {})
                 ml_n_cnt = int(ml_info_d.get("n_samples", 0))
                 ml_stat_str = f"稼働中（N={ml_n_cnt}本学習済）" if ml_info_d.get("fitted") else f"サンプル蓄積中（N={ml_n_cnt}/60本）"
+                exp_stat_str = f"稼働中（{exp_reg['label']} / 紫線降格・レジサポ反転済）" if exp_active else "通常レジーム（朝ロック基準維持）"
 
                 c_macro = "#10b981" if f["macro_gap_pct"] >= 0 else "#ef4444"
                 c_fx = "#10b981" if f["fx_gap_pct"] >= 0 else "#ef4444"
@@ -4451,6 +5074,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
                 st.markdown(f"""
                 <div class="dd-dark-box" style="margin-bottom:8px;">
+                  <div class="dd-factor-row"><span>EXPANSION レジーム解放ステータス</span><span style="font-family:'JetBrains Mono',monospace;color:{'#10b981' if exp_active else '#94a3b8'};">{html.escape(exp_stat_str)}</span></div>
                   <div class="dd-factor-row"><span>主連動（{html.escape(f['mkt_label'])} {f['mkt_diff']:+.2f}% × β{f['mkt_beta']:+.2f} × 重み{og_now['macro']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{c_macro};">{f['macro_gap_pct']:+.2f}%</span></div>
                   <div class="dd-factor-row"><span>為替（ドル円 {f['fx_diff']:+.2f}% × β{f['fx_beta']:+.2f} × 重み{og_now['fx']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{c_fx};">{f['fx_gap_pct']:+.2f}%</span></div>
                   <div class="dd-factor-row"><span>日英高信頼ニュース時間減衰スコア（一次 {news_res['tier1_cnt']}件・重み{og_now['news']:.2f}）</span><span style="font-family:'JetBrains Mono',monospace;color:{c_news};">{f['news_gap_pct']:+.2f}%</span></div>
@@ -4570,8 +5194,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     s_col = "#10b981" if it["sent"] == "POS" else ("#ef4444" if it["sent"] == "NEG" else "#94a3b8")
                     src_lbl = html.escape(it["source"] or "Wire")
                     pub_lbl = html.escape(it["pub"])
+                    brk_tag = '<span style="background:rgba(239,68,68,0.25);color:#fecaca;font-weight:800;font-size:9px;padding:0 4px;border-radius:3px;margin-right:4px;">速報</span>' if it.get("is_breaking") else ""
+                    cat_tag = f'<span style="background:rgba(250,204,21,0.2);color:#fde047;font-weight:800;font-size:9px;padding:0 4px;border-radius:3px;margin-right:4px;">材料:{html.escape(it["catalyst_kw"])}</span>' if it.get("catalyst_kw") else ""
                     n_parts.append(
                         f'<div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(148,163,184,0.12);">'
+                        f'{brk_tag}{cat_tag}'
                         f'<span style="color:{tr_col};font-weight:800;font-size:10px;border:1px solid;padding:0 4px;border-radius:3px;margin-right:4px;">信頼度{it["trust"]}/{it["lang"]}</span>'
                         f'<span style="color:{s_col};font-weight:800;font-size:10px;margin-right:4px;">[{it["sent"]}]</span>'
                         f'<span style="color:#94a3b8;font-size:9.5px;margin-right:4px;">(鮮度重み {it["decay_w"]:.1f})</span>'
@@ -4587,6 +5214,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "comp_score": int(comp_score),
             "meter_lbl": str(meter_lbl),
             "mkt_regime": mkt_regime,
+            "expansion_regime": expansion_reg,
             "est_open_gap_pct": float(active_open_gap_pct),
             "est_close_px": float(active_close_px),
             "est_close_chg": float(active_close_chg),
