@@ -863,7 +863,84 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
             else: st.warning("⚠️ この端末は未登録です。初回は下のフォームから専用コードでログインしてください（次回から自動登録されます）。")
 
 def inject_css():
-    css = """@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');html,body,[class*="css"]{font-family:'Plus Jakarta+Sans',sans-serif;font-size:14px;background-color:#050811;color:#e2e8f0;}div[data-baseweb="popover"],div[data-baseweb="menu"],div[role="listbox"],ul[role="listbox"]{z-index:2147483647!important;pointer-events:auto!important;}header[data-testid="stHeader"]{background:transparent!important;pointer-events:none!important;height:3.5rem!important;z-index:999980!important;}header[data-testid="stHeader"] [data-testid="stToolbar"],header[data-testid="stHeader"] [data-testid="stActionButtons"]{display:none!important;}section[data-testid="stSidebar"]{position:fixed!important;top:0!important;left:0!important;height:100vh!important;z-index:999995!important;width:330px!important;max-width:88vw!important;min-width:320px!important;background:rgba(8,12,22,0.98)!important;backdrop-filter:blur(25px)!important;border-right:1px solid rgba(56,189,248,0.35)!important;visibility:visible!important;transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)!important;}section[data-testid="stSidebar"]:not([aria-expanded="true"]){transform:translateX(-120%)!important;pointer-events:none!important;}section[data-testid="stSidebar"][aria-expanded="true"]{transform:translateX(0)!important;pointer-events:auto!important;}section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"]{pointer-events:auto!important;}[data-testid="collapsedControl"],[data-testid="stSidebarCollapsedControl"],[data-testid="stSidebarCollapseButton"],header button[kind="headerNoPadding"],section[data-testid="stSidebar"] button[aria-label*="Close"],section[data-testid="stSidebar"] button[aria-label*="閉じる"],section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]{display:none!important;opacity:0!important;position:absolute!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none!important;z-index:-1!important;}section[data-testid="stSidebar"]+div,section.main,.stApp>header+div>div{margin-left:0!important;width:100%!important;max-width:100%!important;}.sidebar-section-card{background:rgba(15,23,42,0.65);border:1px solid rgba(56,189,248,0.18);border-radius:10px;padding:10px 12px;margin-bottom:12px;}.sidebar-header-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#38bdf8;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:5px;}.fixed-top-nav-bar{position:fixed!important;top:10px!important;left:50%!important;transform:translateX(-50%)!important;z-index:999980!important;width:min(170px,calc(100vw - 4rem))!important;background:transparent!important;border:none!important;margin:0!important;padding:0!important;pointer-events:auto!important;}div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}.fixed-top-nav-bar div[data-testid="stHorizontalBlock"]{background:transparent!important;border:none!important;width:100%!important;display:flex!important;justify-content:center!important;}.fixed-top-nav-bar button{width:100%!important;height:30px!important;min-height:30px!important;max-height:30px!important;background:rgba(15,23,42,0.75)!important;color:#93c5fd!important;border:1px solid rgba(56,189,248,0.35)!important;border-radius:20px!important;box-shadow:0 0 8px rgba(56,189,248,0.25)!important;font-size:11.5px!important;font-weight:700!important;letter-spacing:0.5px!important;cursor:pointer!important;transition:all 0.15s ease!important;}.fixed-top-nav-bar button:hover{background:rgba(15,23,42,0.8)!important;border-color:rgba(56,189,248,0.45)!important;color:#93c5fd!important;box-shadow:0 0 10px rgba(56,189,248,0.3)!important;}.fixed-top-nav-bar button:active{background:rgba(56,189,248,0.25)!important;border-color:#38bdf8!important;color:#ffffff!important;box-shadow:0 0 25px rgba(56,189,248,0.95),inset 0 0 12px rgba(56,189,248,0.6)!important;transform:scale(0.96)!important;}.brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,24px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;display:block;width:100%;}.glass-header{background:radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);border:1px solid rgba(148,163,184,0.18);border-radius:14px;padding:14px;margin-bottom:16px;box-shadow:0 10px 28px rgba(0,0,0,0.45);}.rank-card,.search-result-card{background:linear-gradient(180deg,#0f172a 0%,#090d16 100%)!important;color:#f8fafc!important;border-radius:16px;padding:16px 18px;margin-top:14px;margin-bottom:24px;box-shadow:0 12px 32px rgba(0,0,0,0.65);border:1px solid rgba(148,163,184,0.22);border-left:5px solid #38bdf8;}.search-result-card{border-left-color:#f59e0b;}.prob-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:800;color:#38bdf8!important;}.expect-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(14px,3.8vw,16.5px);font-weight:900;color:#fde047!important;}.winrate-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(65px,1fr));gap:6px;background:rgba(15,23,42,0.85)!important;border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:7px 6px;margin-top:5px!important;text-align:center;}.trade-plan-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:6px;margin-top:5px!important;background:rgba(2,6,23,0.7)!important;padding:7px 6px;border-radius:8px;border:1px solid rgba(148,163,184,0.18);text-align:center;}.order-ticket-box{background:linear-gradient(135deg,rgba(15,23,42,0.96) 0%,rgba(8,47,73,0.92) 100%);border:1.5px solid #38bdf8;border-radius:10px;padding:10px 12px;margin-bottom:10px;box-shadow:0 4px 16px rgba(56,189,248,0.18);}.order-ticket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-top:6px;}.order-ticket-cell{background:rgba(2,6,23,0.78);border:1px solid rgba(148,163,184,0.22);border-radius:6px;padding:6px 8px;}.admin-table-container{width:100%;overflow-x:auto;background:#0b0f19;border:1px solid rgba(56,189,248,0.25);border-radius:10px;margin-top:10px;}.admin-table{width:100%;border-collapse:collapse;font-size:11.5px;text-align:left;color:#e2e8f0;}.admin-table th{background:#1e293b;color:#38bdf8;padding:8px 10px;border-bottom:1px solid rgba(56,189,248,0.3);font-weight:700;white-space:nowrap;}.admin-table td{padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.1);white-space:nowrap;}.admin-table tr:hover{background:rgba(56,189,248,0.05);}.ai-council-box{background:rgba(8,12,22,0.98);border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-top:12px;}.ai-engine-status-pill{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:6px;margin-bottom:8px;display:block;}.council-scroll-window{max-height:440px!important;height:400px!important;overflow-y:auto!important;overflow-x:hidden!important;padding-right:8px;padding-top:4px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth;will-change:scroll-position;}.council-scroll-window::-webkit-scrollbar{width:6px;}.council-scroll-window::-webkit-scrollbar-track{background:rgba(15,23,42,0.6);border-radius:4px;}.council-scroll-window::-webkit-scrollbar-thumb{background:#38bdf8;border-radius:4px;}.chat-bubble-ai,.chat-bubble-user,.chat-bubble-agree,.chat-bubble-doubt,.chat-bubble-rage{padding:9px 12px;border-radius:8px;margin-bottom:4px;font-size:12px;line-height:1.5;word-break:break-word;}.chat-bubble-ai{background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;}.chat-bubble-agree{background:rgba(6,78,59,0.65);border-left:3px solid #10b981;}.chat-bubble-doubt{background:rgba(120,53,15,0.65);border-left:3px solid #f59e0b;}.chat-bubble-rage{background:rgba(127,29,29,0.65);border-left:3px solid #ef4444;}.chat-bubble-user{background:rgba(56,189,248,0.24);border-left:4px solid #38bdf8;border-right:2px solid rgba(56,189,248,0.4);text-align:left;padding:10px 14px;margin-bottom:6px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.4);scroll-margin-top:6px!important;}.round-divider{font-size:11px;font-weight:800;color:#94a3b8;text-align:center;margin:6px 0;letter-spacing:1px;}.beginner-action-box{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;color:#d1fae5;}.sizing-box{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;background:rgba(2,6,23,0.7);border:1px solid rgba(148,163,184,0.16);padding:7px 12px;border-radius:6px;margin-top:5px;font-size:11.5px;}.combat-guide-box{background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.28);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#bae6fd;line-height:1.5;}.macro10y-box{background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.34);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#e9d5ff;line-height:1.5;}.daily2y-box{background:rgba(14,165,233,0.10);border:1px solid rgba(14,165,233,0.36);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:10.8px;color:#bae6fd;line-height:1.5;}.forward-verify-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px;background:linear-gradient(90deg,rgba(16,185,129,0.14),rgba(56,189,248,0.14));border:1px solid rgba(56,189,248,0.35);padding:6px 10px;border-radius:6px;margin-top:5px;font-size:11px;color:#e2e8f0;}.quant-detail-drawer{margin-top:6px;font-size:11.5px;cursor:pointer;}.signal-10tier-badge{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;display:flex;justify-content:space-between;margin-bottom:6px;}.pill-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;border:1px solid rgba(148,163,184,0.3);margin-right:3px;display:inline-block;white-space:nowrap!important;}.quantum-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);color:#c084fc;margin-right:3px;display:inline-block;white-space:nowrap!important;}.inst-badge{font-size:clamp(9.5px,2.5vw,11px);padding:2px 5px;border-radius:4px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;margin-right:0px;display:inline-block;white-space:nowrap!important;}.badge-single-line{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scrollbar-width:none!important;margin-bottom:6px!important;gap:2px!important;white-space:nowrap!important;}.badge-single-line::-webkit-scrollbar{display:none!important;}.ipo-link-btn{display:inline-block;padding:5px 12px;background:rgba(245,158,11,0.2);border:1px solid #f59e0b;border-radius:6px;color:#fde047;text-decoration:none;font-size:11.5px;font-weight:700;margin-right:6px;margin-top:4px;}.consensus-banner{background:rgba(15,23,42,0.95);border:1px solid rgba(250,204,21,0.4);border-radius:10px;padding:12px;margin-top:12px;}.disclaimer-banner{background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:8px;padding:10px 14px;margin-top:25px;margin-bottom:15px;font-size:11px;line-height:1.6;color:#94a3b8;}.svg-chart-wrap{background:rgba(2,6,23,0.88);border:1px solid rgba(56,189,248,0.32);border-radius:10px;padding:8px 10px;margin-top:8px;margin-bottom:8px;overflow-x:auto;}.manual-card{background:rgba(15,23,42,0.92);border:1px solid rgba(56,189,248,0.28);border-left:4px solid #38bdf8;border-radius:10px;padding:12px 14px;margin-bottom:10px;}@keyframes alert-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,0.8);}70%{box-shadow:0 0 0 10px rgba(239,68,68,0);}100%{box-shadow:0 0 0 0 rgba(239,68,68,0);}}"""
+    css = """@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700;800&display=swap');
+html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#070b14;color:#e2e8f0;}
+.block-container{padding-top:2.9rem!important;}
+div[data-baseweb="popover"],div[data-baseweb="menu"],div[role="listbox"],ul[role="listbox"]{z-index:2147483647!important;pointer-events:auto!important;}
+header[data-testid="stHeader"]{background:transparent!important;pointer-events:none!important;height:3.5rem!important;z-index:999980!important;}
+header[data-testid="stHeader"] [data-testid="stToolbar"],header[data-testid="stHeader"] [data-testid="stActionButtons"]{display:none!important;}
+section[data-testid="stSidebar"]{position:fixed!important;top:0!important;left:0!important;height:100vh!important;z-index:999995!important;width:330px!important;max-width:88vw!important;min-width:320px!important;background:rgba(7,11,20,0.98)!important;backdrop-filter:blur(25px)!important;border-right:1px solid rgba(56,189,248,0.35)!important;visibility:visible!important;transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)!important;}
+section[data-testid="stSidebar"]:not([aria-expanded="true"]){transform:translateX(-120%)!important;pointer-events:none!important;}
+section[data-testid="stSidebar"][aria-expanded="true"]{transform:translateX(0)!important;pointer-events:auto!important;}
+section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"]{pointer-events:auto!important;}
+[data-testid="collapsedControl"],[data-testid="stSidebarCollapsedControl"],[data-testid="stSidebarCollapseButton"],header button[kind="headerNoPadding"],section[data-testid="stSidebar"] button[aria-label*="Close"],section[data-testid="stSidebar"] button[aria-label*="閉じる"],section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]{display:none!important;opacity:0!important;position:absolute!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none!important;z-index:-1!important;}
+section[data-testid="stSidebar"]+div,section.main,.stApp>header+div>div{margin-left:0!important;width:100%!important;max-width:100%!important;}
+.sidebar-section-card{background:rgba(15,23,42,0.65);border:1px solid rgba(56,189,248,0.18);border-radius:10px;padding:10px 12px;margin-bottom:12px;}
+.sidebar-header-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#38bdf8;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:5px;}
+.fixed-top-nav-bar{position:fixed!important;top:10px!important;left:50%!important;transform:translateX(-50%)!important;z-index:999980!important;width:min(170px,calc(100vw - 4rem))!important;background:transparent!important;border:none!important;margin:0!important;padding:0!important;pointer-events:auto!important;}
+div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}
+.fixed-top-nav-bar div[data-testid="stHorizontalBlock"]{background:transparent!important;border:none!important;width:100%!important;display:flex!important;justify-content:center!important;}
+.fixed-top-nav-bar button{width:100%!important;height:30px!important;min-height:30px!important;max-height:30px!important;background:rgba(15,23,42,0.75)!important;color:#93c5fd!important;border:1px solid rgba(56,189,248,0.35)!important;border-radius:20px!important;box-shadow:0 0 8px rgba(56,189,248,0.25)!important;font-size:11.5px!important;font-weight:700!important;letter-spacing:0.5px!important;cursor:pointer!important;transition:all 0.15s ease!important;}
+.fixed-top-nav-bar button:hover{background:rgba(15,23,42,0.85)!important;border-color:rgba(56,189,248,0.55)!important;color:#ffffff!important;}
+.fixed-top-nav-bar button:active{background:rgba(56,189,248,0.25)!important;border-color:#38bdf8!important;color:#ffffff!important;transform:scale(0.96)!important;}
+.brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,23px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;display:block;width:100%;}
+.glass-header{background:radial-gradient(circle at top right,rgba(168,85,247,0.12),transparent 60%),linear-gradient(145deg,rgba(15,23,42,0.88) 0%,rgba(7,11,20,0.96) 100%);backdrop-filter:blur(12px);border:1px solid rgba(148,163,184,0.16);border-radius:12px;padding:10px 13px;margin-bottom:8px;box-shadow:0 8px 24px rgba(0,0,0,0.45);}
+.lab-thin-ribbon{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scrollbar-width:none!important;gap:6px!important;padding:3px 2px!important;margin-bottom:6px!important;white-space:nowrap!important;}
+.lab-thin-ribbon::-webkit-scrollbar{display:none!important;}
+.lab-ribbon-chip{display:inline-flex;align-items:center;gap:4px;background:rgba(15,23,42,0.78);border:1px solid rgba(148,163,184,0.18);border-radius:6px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:10.5px;flex-shrink:0;}
+.rank-card,.search-result-card{background:linear-gradient(180deg,rgba(15,23,42,0.92) 0%,rgba(7,11,20,0.98) 100%)!important;backdrop-filter:blur(10px);color:#f8fafc!important;border-radius:14px;padding:13px 15px;margin-top:8px;margin-bottom:10px;box-shadow:0 10px 28px rgba(0,0,0,0.55);border:1px solid rgba(148,163,184,0.18);border-left:4px solid #38bdf8;font-variant-numeric:tabular-nums;}
+.search-result-card{border-left-color:#f59e0b;}
+.card-top-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
+.card-hero-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.card-kpi-right{text-align:right;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+.prob-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(13.5px,3.6vw,15.5px);font-weight:800;color:#38bdf8!important;}
+.expect-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(15px,4vw,18px);font-weight:900;color:#fde047!important;}
+.card-action-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:rgba(2,6,23,0.72);border:1px solid rgba(148,163,184,0.16);border-radius:9px;padding:7px 6px;margin-top:8px;text-align:center;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+@media (max-width:640px){.card-action-grid{grid-template-columns:repeat(2,1fr);}}
+.card-action-cell{padding:2px 4px;}
+.card-action-lbl{font-size:9.3px;color:#94a3b8;font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;}
+.card-action-val{font-size:12px;font-weight:800;margin-top:1px;}
+.card-perf-strip{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;background:rgba(15,23,42,0.72);border:1px solid rgba(56,189,248,0.22);border-radius:7px;padding:5px 9px;margin-top:6px;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:10.5px;color:#cbd5e1;}
+.winrate-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(65px,1fr));gap:6px;background:rgba(15,23,42,0.85)!important;border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:7px 6px;margin-top:6px!important;text-align:center;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+.trade-plan-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:6px;margin-top:6px!important;background:rgba(2,6,23,0.7)!important;padding:7px 6px;border-radius:8px;border:1px solid rgba(148,163,184,0.18);text-align:center;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+.order-ticket-box{background:linear-gradient(135deg,rgba(15,23,42,0.96) 0%,rgba(8,47,73,0.92) 100%);border:1.5px solid #38bdf8;border-radius:10px;padding:10px 12px;margin-bottom:10px;box-shadow:0 4px 16px rgba(56,189,248,0.18);font-variant-numeric:tabular-nums;}
+.order-ticket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-top:6px;}
+.order-ticket-cell{background:rgba(2,6,23,0.78);border:1px solid rgba(148,163,184,0.22);border-radius:6px;padding:6px 8px;font-family:'JetBrains Mono',monospace;}
+.admin-table-container{width:100%;overflow-x:auto;background:#0b0f19;border:1px solid rgba(56,189,248,0.25);border-radius:10px;margin-top:10px;}
+.admin-table{width:100%;border-collapse:collapse;font-size:11.5px;text-align:left;color:#e2e8f0;}
+.admin-table th{background:#1e293b;color:#38bdf8;padding:8px 10px;border-bottom:1px solid rgba(56,189,248,0.3);font-weight:700;white-space:nowrap;}
+.admin-table td{padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.1);white-space:nowrap;}
+.admin-table tr:hover{background:rgba(56,189,248,0.05);}
+.ai-council-box{background:rgba(8,12,22,0.98);border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-top:10px;}
+.ai-engine-status-pill{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:6px;margin-bottom:8px;display:block;}
+.council-scroll-window{max-height:440px!important;height:400px!important;overflow-y:auto!important;overflow-x:hidden!important;padding-right:8px;padding-top:4px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth;will-change:scroll-position;}
+.council-scroll-window::-webkit-scrollbar{width:6px;}
+.council-scroll-window::-webkit-scrollbar-track{background:rgba(15,23,42,0.6);border-radius:4px;}
+.council-scroll-window::-webkit-scrollbar-thumb{background:#38bdf8;border-radius:4px;}
+.chat-bubble-ai,.chat-bubble-user,.chat-bubble-agree,.chat-bubble-doubt,.chat-bubble-rage{padding:9px 12px;border-radius:8px;margin-bottom:4px;font-size:12px;line-height:1.5;word-break:break-word;}
+.chat-bubble-ai{background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;}
+.chat-bubble-agree{background:rgba(6,78,59,0.65);border-left:3px solid #10b981;}
+.chat-bubble-doubt{background:rgba(120,53,15,0.65);border-left:3px solid #f59e0b;}
+.chat-bubble-rage{background:rgba(127,29,29,0.65);border-left:3px solid #ef4444;}
+.chat-bubble-user{background:rgba(56,189,248,0.24);border-left:4px solid #38bdf8;border-right:2px solid rgba(56,189,248,0.4);text-align:left;padding:10px 14px;margin-bottom:6px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.4);scroll-margin-top:6px!important;}
+.round-divider{font-size:11px;font-weight:800;color:#94a3b8;text-align:center;margin:6px 0;letter-spacing:1px;}
+.beginner-action-box{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;color:#d1fae5;}
+.combat-guide-box{background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.26);padding:7px 10px;border-radius:6px;margin-top:6px;font-size:10.8px;color:#bae6fd;line-height:1.55;}
+.macro10y-box{background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.32);padding:7px 10px;border-radius:6px;margin-top:6px;font-size:10.8px;color:#e9d5ff;line-height:1.55;}
+.daily2y-box{background:rgba(14,165,233,0.10);border:1px solid rgba(14,165,233,0.34);padding:7px 10px;border-radius:6px;margin-top:6px;font-size:10.8px;color:#bae6fd;line-height:1.55;}
+.forward-verify-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px;background:linear-gradient(90deg,rgba(16,185,129,0.14),rgba(56,189,248,0.14));border:1px solid rgba(56,189,248,0.35);padding:6px 10px;border-radius:6px;margin-top:6px;font-size:11px;color:#e2e8f0;font-variant-numeric:tabular-nums;}
+.quant-detail-drawer{margin-top:8px;background:rgba(2,6,23,0.62);border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:7px 10px;font-size:11.5px;cursor:pointer;}
+.quant-detail-drawer summary{font-weight:800;color:#7dd3fc;outline:none;}
+.pill-badge{font-size:clamp(9.5px,2.4vw,10.5px);padding:2px 6px;border-radius:5px;border:1px solid rgba(148,163,184,0.28);margin-right:3px;display:inline-block;white-space:nowrap!important;font-family:'JetBrains Mono',monospace;}
+.quantum-badge{font-size:clamp(9.5px,2.4vw,10.5px);padding:2px 6px;border-radius:5px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);color:#c084fc;margin-right:3px;display:inline-block;white-space:nowrap!important;font-family:'JetBrains Mono',monospace;}
+.inst-badge{font-size:clamp(9.5px,2.4vw,10.5px);padding:2px 6px;border-radius:5px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;margin-right:3px;display:inline-block;white-space:nowrap!important;font-family:'JetBrains Mono',monospace;}
+.compact-bar-label{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#38bdf8;letter-spacing:0.6px;margin:4px 0 4px 2px;}
+.ipo-link-btn{display:inline-block;padding:5px 12px;background:rgba(245,158,11,0.2);border:1px solid #f59e0b;border-radius:6px;color:#fde047;text-decoration:none;font-size:11.5px;font-weight:700;margin-right:6px;margin-top:4px;}
+.consensus-banner{background:rgba(15,23,42,0.95);border:1px solid rgba(250,204,21,0.4);border-radius:10px;padding:12px;margin-top:10px;}
+.disclaimer-banner{background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:8px;padding:10px 14px;margin-top:25px;margin-bottom:15px;font-size:11px;line-height:1.6;color:#94a3b8;}
+.svg-chart-wrap{background:rgba(2,6,23,0.88);border:1px solid rgba(56,189,248,0.32);border-radius:10px;padding:8px 10px;margin-top:8px;margin-bottom:8px;overflow-x:auto;}
+.manual-card{background:rgba(15,23,42,0.92);border:1px solid rgba(56,189,248,0.28);border-left:4px solid #38bdf8;border-radius:10px;padding:12px 14px;margin-bottom:10px;}
+@keyframes alert-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,0.8);}70%{box-shadow:0 0 0 10px rgba(239,68,68,0);}100%{box-shadow:0 0 0 0 rgba(239,68,68,0);}}"""
     st.markdown(f'<div id="page_top_anchor"></div><style>{css}</style>', unsafe_allow_html=True)
 
 inject_css()
@@ -981,13 +1058,14 @@ def render_user_manual_page():
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
         st.rerun()
 
-    q_kw = st.text_input("🔍 分からない用語・記号を検索 (例: Grade, VWAP, SQN, HVN, RVOL, OB, ストップ高)", placeholder="キーワードを入力すると該当解説だけをリアルタイム絞り込み表示します...", key="manual_search_input").strip().lower()
+    q_kw = st.text_input("🔍 分からない用語・記号を検索 (例: Grade, VWAP, SQN, HVN, RVOL, OB, Fusion)", placeholder="キーワードを入力すると該当解説だけをリアルタイム絞り込み表示します...", key="manual_search_input").strip().lower()
 
     manual_sections = [
         {
             "cat_id": "grade",
-            "tab": "🚦 1. 執行品質グレード＆5条件ゲート",
+            "tab": "🚦 1. 執行品質グレード＆5条件ゲート・DD統合",
             "items": [
+                ("🔥 LAB × DEEP DIVE 双方向統合（Fusion期待度＆同期判定）", "上位足・日足・5分足60日を評価する『YAMASHISHI LAB』と、当日5分足軌道・CVD・30分3分岐を解析する『DEEP DIVE』を双方向連動させた統合判定です。両者の方向性が一致すれば『🟢 LAB×DD完全同期』、乖離している場合は『⚠️ LAB×DD乖離警戒（押し目/戻り待ち推奨）』を表示します。", "【実戦の目安】DEEP DIVEで解析した銘柄はLABのチャート・OCOチケット・5名監査官へ自動反映されます。"),
                 ("🟢 Grade-A: 即時執行適格（全5条件クリア）", "5つの定量条件すべてに合格した最上位シグナルです。上位足（週足10年・日足2年）と当日5分足の方向が一致し、かつ値動きの効率性・出来高・ヒゲ形状も良好なため、ルール通りのエントリーが最も機能しやすい状態です。", "【実戦の目安】5/5条件クリア。計画されたエントリー価格・逆指値（SL）・+1.0R半分利確に従って執行します。"),
                 ("🔵 Grade-B: 標準執行（4/5条件クリア・基準厳守）", "主要4条件をクリアした標準的な執行適格銘柄です。1項目だけ軽微な注意（例：ややRVOL控えめ等）があるため、飛びつき買いを避け、必ずVWAPや押し目支持線まで引きつけてから指値・逆指値で執行します。", "【実戦の目安】4/5条件クリア。高値追いせず引きつけてエントリー。"),
                 ("🟡 Grade-C: 様子見・押し目/戻り待機（3条件以下）", "上位足と短期足の方向が噛み合っていない、上ヒゲ（売り圧力）が強すぎる、出来高不足、または過去検証成績（PF/勝率）が基準未満の状態です。リークフリー検証でもGrade-Cの日は『見送り（NO TRADE）』として無駄打ちを遮断しています。", "【実戦の目安】新規エントリーは見送り、条件が揃ってGrade-B以上に昇格するまで待機します。"),
@@ -1042,7 +1120,7 @@ def render_user_manual_page():
             "items": [
                 ("5名のプロフェッショナル・クオンツ監査官の役割", "🔥 IGNIS（短期モメンタム・OR15初動執行） / 📐 TECHNOS（3階層MTF・LVN/HVN・OB構造解析） / 👁️ SENTINEL（しこり壁・VWAP+2σ過熱・悪材料監査） / 🛡️ AEGIS（リークフリー検証・SQN・ケリー資金管理） / 👑 NEXUS（5条件ゲート最終裁定統括）の5名が多角的に銘柄を監査します。", "【質問投下機能】各銘柄の合議ボックス下部の入力欄から、気になる点や売買相談を直接質問できます。"),
                 ("🎟️ 直近IPO・グロース実測分析タブの使い方", "上場前の注目新規承認・メガIPO観測企業（企業名・上場予定日・想定価格・主幹事・初値需給見立て）と、既上場IPO・グロース銘柄の公開価格比・初値比・ロックアップ期間（90日/180日）節目アラートを2階建てで一覧監視できます。", "【実戦のコツ】上場後75〜105日・165〜195日はVC等のロックアップ解除売りに注意が必要です。"),
-                ("📋 監視シート（相関リスク診断）＆ 📓 トレード日誌AI監査", "監視シートに2銘柄以上登録すると、直近60日の値動き相関係数とセクター集中度を自動計算し、同一テーマ偏重による同時被弾リスクを警告します。また、各銘柄カードの『🎯 このプランでエントリー記録』を押すとトレード日誌に保存され、決済後にAEGIS＆SENTINELが100点満点で規律採点を行います。", "【活用法】毎日の振り返りに使うことで、高値掴みや損切り遅れの癖を客観的に改善できます。")
+                ("📋 監視シート（相関リスク診断）＆ 📓 トレード日誌AI監査", "監視シートに2銘柄以上登録すると、直近60日の値動き相関係数とセクター集中度を自動計算し、同一テーマ偏重による同時被弾リスクを警告します。また、各銘柄カードの『🎯 日誌記録』を押すとトレード日誌に保存され、決済後にAEGIS＆SENTINELが100点満点で規律採点を行います。", "【活用法】毎日の振り返りに使うことで、高値掴みや損切り遅れの癖を客観的に改善できます。")
             ]
         }
     ]
@@ -1801,28 +1879,119 @@ def sanitize_and_verify_dialogue(turns: list, r: dict, uq: str = "") -> list:
     st.session_state["last_audit_similarity_penalty"] = int(max(0, round((max_sim - 0.25) * 30)))
     return sanitized
 
+# =========================================================================
+# DEEP DIVE 予測情報の双方向自動統合ヘルパー（Fusion Engine）
+# =========================================================================
+def _merge_dd_intel_into_lab_item(r: dict) -> dict:
+    if not isinstance(r, dict):
+        return r
+    out = dict(r)
+    fc = str(out.get("full_code", "")).strip().upper()
+    intel_entry = load_shared_ticker_intel().get(fc, {}) if fc else {}
+    dd_res = intel_entry.get("dd_result") if isinstance(intel_entry, dict) else None
+    dd_updated = str(intel_entry.get("dd_updated_at") or "") if isinstance(intel_entry, dict) else ""
+
+    lab_exp = float(out.get("expect_pct", 50.0) or 50.0)
+    if not isinstance(dd_res, dict) or not dd_res:
+        out["has_dd_intel"] = False
+        out["fusion_expect_pct"] = round(lab_exp, 1)
+        out["dd_sync_label"] = ""
+        out["dd_sync_ok"] = None
+        out["dd_intel"] = {}
+        return out
+
+    is_jp = ".T" in fc
+    side = str((out.get("strat") or {}).get("side", "LONG")).upper()
+    is_long = (side != "SHORT")
+
+    dd_fusion = dd_res.get("fusion_score")
+    dd_sc = float(dd_fusion if dd_fusion is not None else (dd_res.get("dd_score") or dd_res.get("comp_score") or lab_exp))
+    dd_close_chg = float(dd_res.get("est_close_chg", 0.0) or 0.0)
+    dd_close_px = float(dd_res.get("est_close_px", 0.0) or 0.0)
+    dd_open_px = float(dd_res.get("est_open_px", 0.0) or 0.0)
+    dip_time = str(dd_res.get("dip_time") or "-")
+    dip_px = float(dd_res.get("dip_px", 0.0) or 0.0)
+    peak_time = str(dd_res.get("peak_time") or "-")
+    peak_px = float(dd_res.get("peak_px", 0.0) or 0.0)
+
+    s3w = dd_res.get("short_horizon_3way") if isinstance(dd_res.get("short_horizon_3way"), dict) else {}
+    p_up = int(s3w.get("p_up", 33))
+    p_fl = int(s3w.get("p_flat", 34))
+    p_dn = int(s3w.get("p_down", 33))
+
+    exp_reg = dd_res.get("expansion_regime") if isinstance(dd_res.get("expansion_regime"), dict) else {}
+    cvd_div = dd_res.get("cvd_div") if isinstance(dd_res.get("cvd_div"), dict) else {}
+    scen_p = dd_res.get("scenario_probs") if isinstance(dd_res.get("scenario_probs"), dict) else {}
+
+    dir_match = (dd_close_chg >= -0.15) if is_long else (dd_close_chg <= 0.15)
+    if exp_reg.get("active"):
+        if (is_long and exp_reg.get("dir") == "DOWN") or ((not is_long) and exp_reg.get("dir") == "UP"):
+            dir_match = False
+
+    fusion_expect = round(float(np.clip(lab_exp * 0.50 + dd_sc * 0.50, 5.0, 99.0)), 1)
+    if dir_match:
+        sync_lbl = "🟢 LAB×DD完全同期"
+    else:
+        sync_lbl = "⚠️ LAB×DD乖離警戒（押し目/戻り待ち推奨）"
+
+    out["has_dd_intel"] = True
+    out["dd_updated_at"] = dd_updated
+    out["fusion_expect_pct"] = fusion_expect
+    out["dd_sync_label"] = sync_lbl
+    out["dd_sync_ok"] = dir_match
+    out["dd_intel"] = {
+        "fusion_score": dd_sc,
+        "est_open_px": dd_open_px,
+        "est_close_px": dd_close_px,
+        "est_close_chg": dd_close_chg,
+        "dip_time": dip_time,
+        "dip_px": dip_px,
+        "peak_time": peak_time,
+        "peak_px": peak_px,
+        "fusion_entry_px": float(dd_res.get("fusion_entry_px", 0.0) or 0.0),
+        "fusion_half_r_px": float(dd_res.get("fusion_half_r_px", 0.0) or 0.0),
+        "fusion_tp_px": float(dd_res.get("fusion_tp_px", 0.0) or 0.0),
+        "fusion_sl_px": float(dd_res.get("fusion_sl_px", 0.0) or 0.0),
+        "short_3way": {"active": bool(s3w.get("active")), "p_up": p_up, "p_flat": p_fl, "p_down": p_dn},
+        "expansion_active": bool(exp_reg.get("active")),
+        "expansion_label": str(exp_reg.get("label") or "通常レジーム"),
+        "expansion_dir": str(exp_reg.get("dir") or "NONE"),
+        "cvd_label": str(cvd_div.get("label") or "計測中"),
+        "cvd_state": str(cvd_div.get("state") or "WAIT"),
+        "scenario_probs": scen_p,
+        "verdict": str(dd_res.get("verdict") or ""),
+        "summary": str(dd_res.get("summary") or ""),
+    }
+    return out
+
 def _format_dd_shared_summary(dd_res: dict) -> str:
     if not isinstance(dd_res, dict) or not dd_res:
         return ""
     parts = []
-    for k_lbl, keys in [
-        ("DD総合判定", ("verdict", "judgment", "decision", "stance", "rating")),
-        ("DDスコア", ("dd_score", "total_score", "score", "confidence")),
-        ("DD要約", ("summary", "conclusion", "thesis", "core_insight", "reason")),
-        ("DDリスク/注意点", ("risk_note", "warning", "caution"))
-    ]:
-        for k in keys:
-            val = dd_res.get(k)
-            if val is not None and str(val).strip():
-                parts.append(f"{k_lbl}: {str(val).strip()[:160]}")
-                break
-    if not parts:
-        for k, v in list(dd_res.items())[:4]:
-            if isinstance(v, (str, int, float)) and str(v).strip():
-                parts.append(f"{k}: {str(v).strip()[:120]}")
+    f_sc = dd_res.get("fusion_score") or dd_res.get("dd_score")
+    if f_sc is not None:
+        parts.append(f"統合スコア:{float(f_sc):.1f}%")
+    if dd_res.get("est_close_chg") is not None:
+        parts.append(f"DD大引け予測:{float(dd_res['est_close_chg']):+.2f}%")
+    if dd_res.get("dip_time"):
+        parts.append(f"押目:{dd_res['dip_time']} / 高値:{dd_res.get('peak_time','-')}")
+    s3w = dd_res.get("short_horizon_3way")
+    if isinstance(s3w, dict) and s3w.get("active"):
+        parts.append(f"30分3分岐(▲{s3w.get('p_up',33)}%/▶{s3w.get('p_flat',34)}%/▼{s3w.get('p_down',33)}%)")
+    cvd = dd_res.get("cvd_div")
+    if isinstance(cvd, dict) and cvd.get("label"):
+        parts.append(f"CVD:{cvd['label']}")
+    exp_r = dd_res.get("expansion_regime")
+    if isinstance(exp_r, dict) and exp_r.get("active"):
+        parts.append(f"🚨{exp_r.get('label','ブレイク中')}")
+    if not parts and dd_res.get("verdict"):
+        parts.append(str(dd_res["verdict"])[:140])
     return " ｜ ".join(parts)
 
 def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: list, ig: dict, tc: dict, sn: dict, nx: dict, ae: dict, dd_summary: str = "") -> list:
+    r_m = _merge_dd_intel_into_lab_item(r)
+    dd_i = r_m.get("dd_intel", {})
+    has_dd = bool(r_m.get("has_dd_intel"))
     stock_kws = ["株", "買", "売", "配当", "決算", "チャート", "板", "気配", "PER", "PBR", "PTS", "利確", "損切", "ロット", "銘柄", "指数", "先物", "寄", "信用", "空売り"]
     game_kws = ["ゲーム", "ガチャ", "PS5", "Switch", "steam", "モンハン", "原神", "ポケモン", "RPG", "fps", "課金", "攻略", "ボス", "任天堂", "カプコン"]
     is_stock = any(kw in uq for kw in stock_kws) or (r['name'] in uq) or (r['code'] in uq) if uq else True
@@ -1837,7 +2006,10 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
     ft_win, ft_profit, ft_pf = float(ft.get("actual_win_rate", 50.0)), float(ft.get("total_profit_yen", 0.0)), float(ft.get("profit_factor", 0.0))
     ft_sqn, ft_dd, ft_avgr = float(ft.get("sqn", 0.0)), float(ft.get("max_dd_pct", 0.0)), float(ft.get("avg_r", 0.0))
     rs_30m = float(r.get("intraday_rs_30m", 0.0))
-    dd_suffix = f" 【DEEP DIVE共有知見: {dd_summary[:120]}】" if dd_summary else ""
+
+    dd_time_note = f"DD5分足軌道では押し目候補 {dd_i.get('dip_time','-')} / ピーク想定 {dd_i.get('peak_time','-')}（大引け予測 {dd_i.get('est_close_chg',0.0):+.2f}% / 30分3分岐 ▲{dd_i.get('short_3way',{}).get('p_up',33)}%/▼{dd_i.get('short_3way',{}).get('p_down',33)}%）を示唆。" if has_dd else ""
+    dd_cvd_note = f"DD側CVD状態は『{dd_i.get('cvd_label','-')}』、レジームは『{dd_i.get('expansion_label','通常レジーム')}』を検知。" if has_dd else ""
+    dd_fusion_note = f"【LAB×DD統合判定: {r_m.get('dd_sync_label','')} / 統合期待度 {r_m.get('fusion_expect_pct', r['expect_pct'])}%】" if has_dd else ""
 
     if not uq:
         diff_v, rvol_v = float(r.get("diff", 0.0)), float(r.get("rvol", 1.0))
@@ -1847,32 +2019,32 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
         clean_news = re.sub(r"\(.*?\)|\[.*?\]", "", web_hits[0]).strip() if web_hits else f"{theme_s}関連の需給思惑"
 
         if is_short:
-            ig_msg = f"【統計ルール推論】{r['name']}（{r['code']}・{exec_g}）は日足『{d2y_lbl}（{d2y_ma}）』×10年大局『{m10_lbl}』に対しSHORT優勢度{s_edge:+.1f} vs LONG優勢度{b_edge:+.1f}（上ヒゲ拒絶圧力{u_wick:.1f} / 30分RS={rs_30m:+.2f}%）で売りシグナル（{r['strat']['tactic_type']}）点灯。9:05〜13:30にVWAP（{r['vwap_price']}）割れの陰線確定後、次バー始値で空売り（SHORT）を執行します。"
+            ig_msg = f"【統計ルール推論】{r['name']}（{r['code']}・{exec_g}）は日足『{d2y_lbl}』×10年大局『{m10_lbl}』に対しSHORT優勢度{s_edge:+.1f}（上ヒゲ圧力{u_wick:.1f} / 30分RS={rs_30m:+.2f}%）で売りシグナル点灯。{dd_time_note} VWAP（{r['vwap_price']}）割れの陰線確定後、次バー始値で空売り（SHORT）を執行します。"
             ig_tone = "rage"
-            sn_msg = f"【統計ルール推論】価格帯別出来高構造（{vp_lbl}）、日足MA25（{d2y.get('ma25_str','-')}）、10年POC（{m10_poc}）と上ヒゲ圧力{u_wick:.1f}を厳格監視。構造的踏み上げ逆指値（{r['sl_price']}）を必ず設定し、+1.0R到達で50%買い戻し利確を徹底します。"
-            ae_msg = f"【統計ルール推論】リークフリー検証（実質勝率{ft_win:.1f}% / PF={ft_pf:.2f} / SQN={ft_sqn:.2f} / 平均{ft_avgr:+.2f}R / 最大DD={ft_dd:.1f}%）と許容リスクから推奨{r['lot_info']['shares']:,}株を算出。+1.0R到達で50%利確＋建値ロックを適用します。"
-            nx_msg = f"【統計ルール推論・統括】『{r['name']}（{exec_g}）』は週足10年『{m10_lbl}』×日足2年『{d2y_lbl}({d2y_sc}点)』×5分足SHORT優勢度({s_edge:+.1f})の3階層一致により【{r['strat']['tactic_type']}：{r['strat']['entry_mode']}】の空売り（SHORT）を採択。一括{r['lot_info']['shares']:,}株を次バー始値で新規売り約定させ、下落目標{r['tp_price']}・構造的逆指値{r['sl_price']}で執行します。{dd_suffix}"
+            sn_msg = f"【統計ルール推論】価格帯別出来高（{vp_lbl}）、日足MA25（{d2y.get('ma25_str','-')}）、10年POC（{m10_poc}）と上ヒゲ圧力{u_wick:.1f}を厳格監視。{dd_cvd_note} 踏み上げ逆指値（{r['sl_price']}）を必ず設定します。"
+            ae_msg = f"【統計ルール推論】リークフリー検証（実質勝率{ft_win:.1f}% / PF={ft_pf:.2f} / SQN={ft_sqn:.2f} / 平均{avg_r_v:+.2f}R / 最大DD={ft_dd:.1f}%）に基づき推奨{r['lot_info']['shares']:,}株を算出。+1.0R到達で50%買い戻し利確＋建値ロックを適用します。"
+            nx_msg = f"【統計ルール推論・統括】{dd_fusion_note}『{r['name']}（{exec_g}）』は週足10年×日足2年×5分足SHORT優勢度({s_edge:+.1f})の合致により空売り（SHORT）を採択。推奨{r['lot_info']['shares']:,}株を目標{r['tp_price']}・逆指値{r['sl_price']}で執行します。"
         else:
-            mode_note = f"（※{spec['pfx']}モードのため空売りを抑止・買い専念で判定）" if not spec["allow_short"] else f"（LONG優勢度{b_edge:+.1f} / 日次RSα={rs_al:+.2f}% / 30分RS={rs_30m:+.2f}%）"
+            mode_note = f"（※{spec['pfx']}モードのため買い専念）" if not spec["allow_short"] else f"（LONG優勢度{b_edge:+.1f} / 日次RSα={rs_al:+.2f}% / 30分RS={rs_30m:+.2f}%）"
             if spec["tf"] == "1d":
                 ref_ma = d2y.get("ma25_str", "-") if spec["pfx"] == "スイングトレード" else f"10年POC({m10_poc}) / MA75({d2y.get('ma75_str','-')})"
-                ig_msg = f"【統計ルール推論】{r['name']}（{exec_g}）は{spec['pfx']}基準（日足・週足）で{ref_ma}の支持帯と上値出来高構造（{vp_lbl}）を確認中。高値飛びつきは避け、押し目・反発陽線確定の翌営業日始値で執行します。{mode_note}"
+                ig_msg = f"【統計ルール推論】{r['name']}（{exec_g}）は{spec['pfx']}基準で{ref_ma}の支持帯と出来高構造（{vp_lbl}）を確認中。{dd_time_note} 押し目陽線確定の翌営業日始値で執行します。{mode_note}"
                 ig_tone = "agree"
-                sn_msg = f"【統計ルール推論】セクター（{genre_s}）の中期変動幅と価格帯別出来高（{vp_lbl}）の抵抗帯を警戒。日足52週位置({d2y.get('pos_52w_pct',50):.0f}%)と10年出来高集中帯（{m10_poc}）を背に、逆指値（{r['sl_price']}）を厳守します。"
-                ae_msg = f"【統計ルール推論】リークフリー検証（実質勝率{ft_win:.1f}% / PF={ft_pf:.2f} / SQN={ft_sqn:.2f} / 平均{ft_avgr:+.2f}R / 最大DD={ft_dd:.1f}%）に基づき、推奨{r['lot_info']['shares']:,}株・+1.0R到達時50%分割利確＋建値ロックで資本を防衛します。"
-                nx_msg = f"【統計ルール推論・統括】『{r['name']}（{exec_g}）』は週足10年『{m10_lbl}』×日足2年『{d2y_lbl}({d2y_sc}点)』が合致し【{r['strat']['tactic_type']}：{r['strat']['entry_mode']}】を採択。推奨{r['lot_info']['shares']:,}株を目標{r['tp_price']}・逆指値{r['sl_price']}（最大{spec['max_hold_days']}営業日）で執行します。{dd_suffix}"
+                sn_msg = f"【統計ルール推論】セクター（{genre_s}）の変動幅と価格帯別出来高（{vp_lbl}）の抵抗帯を警戒。{dd_cvd_note} 逆指値（{r['sl_price']}）を厳守します。"
+                ae_msg = f"【統計ルール推論】リークフリー検証（実質勝率{ft_win:.1f}% / PF={ft_pf:.2f} / SQN={ft_sqn:.2f} / 平均{avg_r_v:+.2f}R / 最大DD={ft_dd:.1f}%）に基づき、推奨{r['lot_info']['shares']:,}株・+1.0R半分利確＋建値ロックで資本を防衛します。"
+                nx_msg = f"【統計ルール推論・統括】{dd_fusion_note}『{r['name']}（{exec_g}）』は週足10年『{m10_lbl}』×日足2年『{d2y_lbl}({d2y_sc}点)』が合致し【{r['strat']['tactic_type']}】を採択。推奨{r['lot_info']['shares']:,}株を目標{r['tp_price']}・逆指値{r['sl_price']}（最大{spec['max_hold_days']}営業日）で執行します。"
             else:
                 if diff_v >= 2.5 and rvol_v >= 1.3:
-                    ig_msg, ig_tone = f"【統計ルール推論】{r['name']}（{exec_g}）が前日比+{diff_v}%・RVOL {rvol_v}倍・30分RS {rs_30m:+.2f}%で先行。OR15分安値を維持しつつVWAP（{r['vwap_price']}）押し目確認＋前バー高値更新陽線確定の次バー始値で執行します。{mode_note}", "agree"
+                    ig_msg, ig_tone = f"【統計ルール推論】{r['name']}（{exec_g}）が前日比+{diff_v}%・RVOL {rvol_v}倍・30分RS {rs_30m:+.2f}%で先行。{dd_time_note} OR15分安値を維持しつつVWAP（{r['vwap_price']}）押し目確認＋高値更新陽線確定の次バー始値で執行します。{mode_note}", "agree"
                 elif diff_v <= -1.5:
-                    ig_msg, ig_tone = f"【統計ルール推論】{r['name']}（{exec_g}）が{diff_v}%まで調整していますが、日足MA25（{d2y.get('ma25_str','-')}）・10年POC（{m10_poc}）と下ヒゲ支持力{l_wick:.1f}を背景にOR15分安値維持＆VWAP（{r['vwap_price']}）奪還・高値更新陽線確定を確認すれば反発の好機となります。{mode_note}", "doubt"
+                    ig_msg, ig_tone = f"【統計ルール推論】{r['name']}（{exec_g}）が{diff_v}%まで調整中。日足MA25（{d2y.get('ma25_str','-')}）・10年POC（{m10_poc}）と下ヒゲ支持力{l_wick:.1f}を背景に{dd_time_note} VWAP（{r['vwap_price']}）奪還・陽線確定を確認すれば反発の好機です。{mode_note}", "doubt"
                 else:
-                    ig_msg, ig_tone = f"【統計ルール推論】{r['name']}（{r['code']}・{exec_g}）は現在値{r['price']}（日足: {d2y_lbl} / 10年: {m10_lbl} / 30分RS: {rs_30m:+.2f}%）で推移。『{clean_news[:24]}』を意識しつつOR15分安値維持＋VWAP押し目確認・高値ブレイク陽線確定の次バー始値を待機します。{mode_note}", "agree"
-                sn_msg = f"【統計ルール推論】セクター（{genre_s}）の往復ビンタと上値出来高構造（{vp_lbl}）の抵抗帯を警戒。VWAP+2σ超のジャンピングキャッチおよびOR15分安値割れでの逆張り買いは厳禁とし、構造的逆指値（{r['sl_price']}）を厳守します。"
-                ae_msg = f"【統計ルール推論】日足ATR14と直近構造安値から算出した上限ロット（{r['lot_info']['shares']:,}株）および検証成績（実質勝率{ft_win:.1f}% / PF={ft_pf:.2f} / SQN={ft_sqn:.2f} / 最大DD={ft_dd:.1f}%）に基づき、+1.0R到達時50%分割利確＋建値ロックを徹底します。"
-                nx_msg = f"【統計ルール推論・統括】『{r['name']}（{exec_g}）』は週足10年『{m10_lbl}』×日足2年『{d2y_lbl}({d2y_sc}点)』×5分足OR15/VWAP波形が合致し【{r['strat']['tactic_type']}：{r['strat']['entry_mode']}】を採択。一括{r['lot_info']['shares']:,}株を次バー始値で約定させ、目標{r['tp_price']}・構造的逆指値{r['sl_price']}で執行します。{dd_suffix}"
+                    ig_msg, ig_tone = f"【統計ルール推論】{r['name']}（{r['code']}・{exec_g}）は現在値{r['price']}（日足:{d2y_lbl} / 30分RS:{rs_30m:+.2f}%）で推移。『{clean_news[:22]}』と{dd_time_note} VWAP押し目確認＋高値ブレイク陽線確定を待機します。{mode_note}", "agree"
+                sn_msg = f"【統計ルール推論】セクター（{genre_s}）の往復ビンタと上値出来高（{vp_lbl}）の抵抗帯を警戒。{dd_cvd_note} VWAP+2σ超の飛びつきとOR15分安値割れでの逆張り買いは厳禁とし、逆指値（{r['sl_price']}）を厳守します。"
+                ae_msg = f"【統計ルール推論】日足ATR14と検証成績（実質勝率{ft_win:.1f}% / PF={ft_pf:.2f} / SQN={ft_sqn:.2f} / 最大DD={ft_dd:.1f}%）に基づき推奨{r['lot_info']['shares']:,}株を算出。+1.0R到達時50%分割利確＋建値ロックを徹底します。"
+                nx_msg = f"【統計ルール推論・統括】{dd_fusion_note}『{r['name']}（{exec_g}）』は週足10年『{m10_lbl}』×日足2年『{d2y_lbl}({d2y_sc}点)』×5分足OR15/VWAP波形が合致し【{r['strat']['tactic_type']}】を採択。推奨{r['lot_info']['shares']:,}株を目標{r['tp_price']}・逆指値{r['sl_price']}で執行します。"
 
-        tc_msg = f"【{r['code']} 3階層MTF＆出来高構造診断】週足10年={m10_lbl}（10年POC={m10_poc}）｜日足2年={d2y_lbl}（{d2y_ma} / {vp_lbl} / 52W位置={d2y.get('pos_52w_pct',50):.0f}%）｜LONG優勢={b_edge:+.1f} vs SHORT優勢={s_edge:+.1f}｜30分RS={rs_30m:+.2f}%。リークフリー実質勝率{ft_win:.1f}%・PF={ft_pf:.2f}・SQN={ft_sqn:.2f}（累計{ft_profit:+,.0f}円）。{dd_suffix}"
+        tc_msg = f"【{r['code']} 3階層MTF＆DD統合診断】週足10年={m10_lbl}（POC={m10_poc}）｜日足2年={d2y_lbl}（{d2y_ma} / {vp_lbl}）｜LONG={b_edge:+.1f} vs SHORT={s_edge:+.1f}｜30分RS={rs_30m:+.2f}%。{dd_time_note} リークフリー実質勝率{ft_win:.1f}%・PF={ft_pf:.2f}・SQN={ft_sqn:.2f}。"
         return [
             {"speaker": f"{ig['icon']} {ig['name']}", "role_label": f"{ig.get('role_title','短期モメンタム執行')} [統計推論]", "tone": ig_tone, "text": ig_msg},
             {"speaker": f"{tc['icon']} {tc['name']}", "role_label": f"{tc.get('role_title','3階層MTF・出来高構造解析')} [統計推論]", "tone": "normal", "text": tc_msg},
@@ -1886,7 +2058,7 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
         f_sum = ("・" + "\n・".join([re.sub(r'\(.*?\)|\[.*?\]', '', h).strip() for h in web_hits][:2])) if web_hits else ""
         return [{"speaker": f"{tc['icon']} {tc['name']}", "role_label": "定量解析 [統計推論]", "tone": "normal", "text": f"【統計ルール推論】WEBの最新動向を照合しました。\n{f_sum}\n構造を因数分解して判断するのが合理的です。" if f_sum else "【統計ルール推論】利害関係とインセンティブの構造を整理して考えるのが最も合理的です。"}, {"speaker": f"{ig['icon']} {ig['name']}", "role_label": "短期モメンタム執行 [統計推論]", "tone": "agree", "text": "【統計ルール推論】結論から整理して合理的に判断しましょう。"}]
     side_act = "VWAP割れの陰線確定後の次バー始値で空売り（SHORT）一括エントリー" if is_short else f"{r['strat']['entry_mode']}に従いOR15分安値維持・順張り買い（LONG）エントリー"
-    return [{"speaker": f"{ig['icon']} {ig['name']}", "role_label": "短期モメンタム執行 [統計推論]", "tone": "agree", "text": f"【統計ルール推論】{r['name']}（現在{r['price']}・日足:{d2y_lbl}・出来高構造:{vp_lbl}）は、{side_act}が有効です。{dd_suffix}"}, {"speaker": f"{ae['icon']} {ae['name']}", "role_label": "検証・ケリー資金管理 [統計推論]", "tone": "normal", "text": f"【統計ルール推論】東証呼値丸め済みの逆指値（{r['sl_price']}）と+1.0R到達時50%分割利確＋建値ロック（SQN={ft_sqn:.2f} / 最大DD={ft_dd:.1f}%）で執行するのが合理的です。"}]
+    return [{"speaker": f"{ig['icon']} {ig['name']}", "role_label": "短期モメンタム執行 [統計推論]", "tone": "agree", "text": f"【統計ルール推論】{dd_fusion_note} {r['name']}（現在{r['price']}・日足:{d2y_lbl}）は、{side_act}が有効です。{dd_time_note}"}, {"speaker": f"{ae['icon']} {ae['name']}", "role_label": "検証・ケリー資金管理 [統計推論]", "tone": "normal", "text": f"【統計ルール推論】東証呼値丸め済みの逆指値（{r['sl_price']}）と+1.0R到達時50%分割利確＋建値ロック（SQN={ft_sqn:.2f} / 最大DD={ft_dd:.1f}%）で執行するのが合理的です。"}]
 
 def _parse_llm_json_turns(raw_res: str) -> list:
     if not raw_res: return []
@@ -1930,14 +2102,80 @@ def fetch_earnings_days_left(full_code: str):
 
 def build_tomorrow_forecast_svg(r: dict) -> str:
     try:
-        is_jp = ".T" in str(r.get("full_code", ""))
-        fc = str(r.get("full_code", ""))
-        cv = float(r.get("raw_close", 0.0))
-        tp = float(r.get("raw_tp", cv * 1.03))
-        sl = float(r.get("raw_sl", cv * 0.985))
-        vwap = float(r.get("raw_vwap", cv))
-        is_short = (r.get("strat", {}).get("side") == "SHORT")
+        r_m = _merge_dd_intel_into_lab_item(r)
+        is_jp = ".T" in str(r_m.get("full_code", ""))
+        fc = str(r_m.get("full_code", ""))
+        cv = float(r_m.get("raw_close", 0.0))
+        tp = float(r_m.get("raw_tp", cv * 1.03))
+        sl = float(r_m.get("raw_sl", cv * 0.985))
+        vwap = float(r_m.get("raw_vwap", cv))
+        is_short = (r_m.get("strat", {}).get("side") == "SHORT")
         if cv <= 0: return ""
+
+        has_dd = bool(r_m.get("has_dd_intel"))
+        dd_i = r_m.get("dd_intel", {})
+
+        if has_dd and float(dd_i.get("est_close_px", 0.0)) > 0:
+            dd_open = float(dd_i.get("est_open_px", cv)) or cv
+            dd_dip_px = float(dd_i.get("dip_px", 0.0)) or min(cv, vwap)
+            dd_dip_tm = str(dd_i.get("dip_time") or "押目")
+            dd_peak_px = float(dd_i.get("peak_px", 0.0)) or max(cv, tp)
+            dd_peak_tm = str(dd_i.get("peak_time") or "高値")
+            dd_close = float(dd_i.get("est_close_px", cv))
+            s3 = dd_i.get("short_3way", {})
+            header_sub = (
+                f"⚡ DD連動: 30分3分岐 ▲{s3.get('p_up',33)}% / ▶{s3.get('p_flat',34)}% / ▼{s3.get('p_down',33)}% ｜ "
+                f"CVD: {html.escape(dd_i.get('cvd_label','-'))}"
+            )
+            if is_short:
+                entry_pt = round_to_tse_tick(float(dd_i.get("fusion_entry_px") or dd_peak_px), fc, "nearest")
+                half_pt = round_to_tse_tick(float(dd_i.get("fusion_half_r_px") or (entry_pt - abs(sl - entry_pt))), fc, "floor")
+                all_p = [cv, dd_open, dd_peak_px, dd_dip_px, dd_close, entry_pt, half_pt, tp, sl]
+                p_min, p_max = min(all_p) * 0.996, max(all_p) * 1.004
+                span = max(p_max - p_min, 1e-4)
+                def to_y(val): return round(155.0 - ((val - p_min) / span) * 125.0, 1)
+                y_cur, y_op, y_pk, y_dp, y_cl = to_y(cv), to_y(dd_open), to_y(dd_peak_px), to_y(dd_dip_px), to_y(dd_close)
+                y_tp, y_sl, y_half = to_y(tp), to_y(sl), to_y(half_pt)
+                path_d = f"M 40 {y_cur} L 95 {y_op} Q 130 {y_pk}, 165 {y_pk} Q 215 {round((y_pk+y_dp)/2,1)}, 250 {y_dp} L 315 {y_cl}"
+                entry_lbl = f"📉 戻り売り {dd_peak_tm} ({fmt_px(dd_peak_px, is_jp, fc)})"
+                path_col = "#fb7185"
+                mid_cx, mid_cy = 165, y_pk
+            else:
+                entry_pt = round_to_tse_tick(float(dd_i.get("fusion_entry_px") or dd_dip_px), fc, "nearest")
+                half_pt = round_to_tse_tick(float(dd_i.get("fusion_half_r_px") or (entry_pt + abs(entry_pt - sl))), fc, "ceil")
+                all_p = [cv, dd_open, dd_dip_px, dd_peak_px, dd_close, entry_pt, half_pt, tp, sl]
+                p_min, p_max = min(all_p) * 0.996, max(all_p) * 1.004
+                span = max(p_max - p_min, 1e-4)
+                def to_y(val): return round(155.0 - ((val - p_min) / span) * 125.0, 1)
+                y_cur, y_op, y_dp, y_pk, y_cl = to_y(cv), to_y(dd_open), to_y(dd_dip_px), to_y(dd_peak_px), to_y(dd_close)
+                y_tp, y_sl, y_half = to_y(tp), to_y(sl), to_y(half_pt)
+                path_d = f"M 40 {y_cur} L 95 {y_op} Q 130 {y_dp}, 165 {y_dp} Q 215 {round((y_dp+y_pk)/2,1)}, 250 {y_pk} L 315 {y_cl}"
+                entry_lbl = f"🛒 押目買い {dd_dip_tm} ({fmt_px(dd_dip_px, is_jp, fc)})"
+                path_col = "#34d399"
+                mid_cx, mid_cy = 165, y_dp
+
+            return (
+                f'<div class="svg-chart-wrap" style="border-color:rgba(249,115,22,0.5);margin-top:8px;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;font-size:10.5px;font-weight:800;color:#fdba74;margin-bottom:4px;">'
+                f'<span>🗺️ LAB × DEEP DIVE 統合軌道ナビ（実測5分足予測座標）</span>'
+                f'<span style="font-family:JetBrains Mono,monospace;font-size:9.8px;color:#7dd3fc;">{header_sub}</span></div>'
+                f'<svg viewBox="0 0 360 182" width="100%" style="max-height:188px;display:block;">'
+                f'<line x1="35" y1="{y_tp}" x2="345" y2="{y_tp}" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3"/>'
+                f'<text x="342" y="{max(12.0, y_tp-3)}" fill="#6ee7b7" font-size="9" font-weight="bold" text-anchor="end">🎯 TP ({fmt_px(tp, is_jp, fc)})</text>'
+                f'<line x1="35" y1="{y_half}" x2="345" y2="{y_half}" stroke="#facc15" stroke-width="1" stroke-dasharray="3,3"/>'
+                f'<text x="342" y="{max(22.0, y_half-3)}" fill="#fde047" font-size="8.8" font-weight="bold" text-anchor="end">💰 +1.0R ({fmt_px(half_pt, is_jp, fc)})</text>'
+                f'<line x1="35" y1="{y_sl}" x2="345" y2="{y_sl}" stroke="#ef4444" stroke-width="1.4" stroke-dasharray="4,2"/>'
+                f'<text x="342" y="{min(176.0, y_sl+11)}" fill="#fca5a5" font-size="9" font-weight="bold" text-anchor="end">🛡️ SL ({fmt_px(sl, is_jp, fc)})</text>'
+                f'<path d="{path_d}" fill="none" stroke="{path_col}" stroke-width="2.6" stroke-dasharray="5,3"/>'
+                f'<circle cx="40" cy="{y_cur}" r="4" fill="#94a3b8"/><text x="40" y="{max(12.0, y_cur-6)}" fill="#cbd5e1" font-size="8.5" text-anchor="middle">現在</text>'
+                f'<circle cx="95" cy="{y_op}" r="3.8" fill="#c084fc"/><text x="95" y="{max(12.0, y_op-6)}" fill="#e9d5ff" font-size="8.5" text-anchor="middle">始値想定</text>'
+                f'<circle cx="{mid_cx}" cy="{mid_cy}" r="5.5" fill="#38bdf8" stroke="#fff" stroke-width="1.2"/>'
+                f'<rect x="92" y="{min(158.0, max(18.0, mid_cy+7))}" width="146" height="15" rx="4" fill="rgba(7,11,20,0.92)" stroke="#38bdf8" stroke-width="1"/>'
+                f'<text x="165" y="{min(168.5, max(28.5, mid_cy+17.5))}" fill="#7dd3fc" font-size="8.8" font-weight="bold" text-anchor="middle">{html.escape(entry_lbl)}</text>'
+                f'<circle cx="250" cy="{y_dp if is_short else y_pk}" r="4.2" fill="#facc15"/><text x="250" y="{max(12.0, (y_dp if is_short else y_pk)-6)}" fill="#fde047" font-size="8.5" text-anchor="middle">{html.escape(dd_dip_tm if is_short else dd_peak_tm)}</text>'
+                f'<circle cx="315" cy="{y_cl}" r="5.2" fill="#f97316" stroke="#fff" stroke-width="1.2"/><text x="315" y="{min(176.0, y_cl+12)}" fill="#fdba74" font-size="8.8" font-weight="bold" text-anchor="middle">大引け {fmt_px(dd_close, is_jp, fc)}</text>'
+                f'</svg></div>'
+            )
 
         if is_short:
             entry_pt = round_to_tse_tick(max(cv, vwap), fc, "nearest")
@@ -1964,7 +2202,7 @@ def build_tomorrow_forecast_svg(r: dict) -> str:
             path_col = "#34d399"
 
         return (
-            f'<div class="svg-chart-wrap" style="border-color:rgba(16,185,129,0.45);margin-top:10px;">'
+            f'<div class="svg-chart-wrap" style="border-color:rgba(16,185,129,0.45);margin-top:8px;">'
             f'<div style="font-size:11px;font-weight:800;color:#6ee7b7;margin-bottom:4px;">🗺️ 初心者向け・明日の想定値動きナビゲーション図（売買ポイント可視化）</div>'
             f'<svg viewBox="0 0 360 180" width="100%" style="max-height:185px;display:block;">'
             f'<line x1="35" y1="{y_tp}" x2="345" y2="{y_tp}" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3"/>'
@@ -2154,40 +2392,58 @@ def _build_equity_and_session_html(hist_rows: list, is_jp: bool) -> str:
     )
 
 def build_instant_verdict_html(r: dict) -> str:
-    ft = r.get("forward_test", {}); hist_rows = ft.get("history_rows", []); is_jp = ".T" in r.get("full_code", ""); is_short = (r.get("strat", {}).get("side") == "SHORT")
-    fc = str(r.get("full_code", ""))
-    m10 = r.get("macro_10y", {}); d2y = r.get("daily_2y", {})
+    r_m = _merge_dd_intel_into_lab_item(r)
+    has_dd = bool(r_m.get("has_dd_intel"))
+    dd_i = r_m.get("dd_intel", {})
+    ft = r_m.get("forward_test", {}); hist_rows = ft.get("history_rows", []); is_jp = ".T" in r_m.get("full_code", ""); is_short = (r_m.get("strat", {}).get("side") == "SHORT")
+    fc = str(r_m.get("full_code", ""))
+    m10 = r_m.get("macro_10y", {}); d2y = r_m.get("daily_2y", {})
     verified_span_days = int(ft.get("verified_span_days", len(hist_rows)))
-    cv = float(r.get("raw_close", 0.0))
-    tp_v = float(r.get("raw_tp", cv))
-    sl_v = float(r.get("raw_sl", cv))
-    vwap_v = float(r.get("raw_vwap", cv))
-    sh_cnt = int(r.get("lot_info", {}).get("shares", 100))
+    cv = float(r_m.get("raw_close", 0.0))
+    tp_v = float(r_m.get("raw_tp", cv))
+    sl_v = float(r_m.get("raw_sl", cv))
+    vwap_v = float(r_m.get("raw_vwap", cv))
+    sh_cnt = int(r_m.get("lot_info", {}).get("shares", 100))
     half_sh = max(1, int(round(sh_cnt * 0.5)))
 
     if is_short:
         side_order_lbl = f"{'信用新規売り' if is_jp else 'SHORT売り'} {sh_cnt:,}株"
-        entry_ref_px = round_to_tse_tick(max(cv, vwap_v) if vwap_v > 0 else cv, fc, "nearest")
-        half_r_px = round_to_tse_tick(entry_ref_px - abs(sl_v - entry_ref_px), fc, "floor")
+        base_ent = float(dd_i.get("fusion_entry_px") or dd_i.get("peak_px") or (max(cv, vwap_v) if vwap_v > 0 else cv)) if has_dd else (max(cv, vwap_v) if vwap_v > 0 else cv)
+        entry_ref_px = round_to_tse_tick(base_ent, fc, "nearest")
+        half_r_px = round_to_tse_tick(float(dd_i.get("fusion_half_r_px") or (entry_ref_px - abs(sl_v - entry_ref_px))) if has_dd else (entry_ref_px - abs(sl_v - entry_ref_px)), fc, "floor")
     else:
         side_order_lbl = f"{'現物/信用買い' if is_jp else 'LONG買い'} {sh_cnt:,}株"
-        entry_ref_px = round_to_tse_tick(min(cv, vwap_v) if vwap_v > 0 else cv, fc, "nearest")
+        base_ent = float(dd_i.get("fusion_entry_px") or dd_i.get("dip_px") or (min(cv, vwap_v) if vwap_v > 0 else cv)) if has_dd else (min(cv, vwap_v) if vwap_v > 0 else cv)
+        entry_ref_px = round_to_tse_tick(base_ent, fc, "nearest")
         if entry_ref_px <= sl_v and cv > sl_v:
             entry_ref_px = round_to_tse_tick(cv, fc, "nearest")
-        half_r_px = round_to_tse_tick(entry_ref_px + abs(entry_ref_px - sl_v), fc, "ceil")
+        half_r_px = round_to_tse_tick(float(dd_i.get("fusion_half_r_px") or (entry_ref_px + abs(entry_ref_px - sl_v))) if has_dd else (entry_ref_px + abs(entry_ref_px - sl_v)), fc, "ceil")
+
+    dd_oco_cells = ""
+    if has_dd:
+        s3 = dd_i.get("short_3way", {})
+        target_tm = dd_i.get("peak_time", "-") if is_short else dd_i.get("dip_time", "-")
+        target_px_s = fmt_px(float(dd_i.get("peak_px") if is_short else dd_i.get("dip_px")), is_jp, fc)
+        exp_warn_txt = f"🚨 {dd_i.get('expansion_label','通常')}" if dd_i.get("expansion_active") else f"CVD: {dd_i.get('cvd_label','-')}"
+        dd_oco_cells = (
+            f'<div class="order-ticket-cell" style="border-color:rgba(249,115,22,0.45);"><div style="font-size:9.5px;color:#fdba74;">🕒 DD{"戻り" if is_short else "押し目"}候補時刻</div><div style="font-size:11.5px;font-weight:800;color:#fed7aa;">{html.escape(target_tm)} ({target_px_s})</div></div>'
+            f'<div class="order-ticket-cell" style="border-color:rgba(249,115,22,0.45);"><div style="font-size:9.5px;color:#fdba74;">⚡ DD想定大引け＆3分岐</div><div style="font-size:11px;font-weight:800;color:#7dd3fc;">{fmt_px(float(dd_i.get("est_close_px",cv)), is_jp, fc)} ({float(dd_i.get("est_close_chg",0)):+.2f}%) ▲{s3.get("p_up",33)}%/▼{s3.get("p_down",33)}%</div></div>'
+            f'<div class="order-ticket-cell" style="border-color:rgba(249,115,22,0.45);"><div style="font-size:9.5px;color:#fdba74;">🛡️ DDブレイク・CVD警戒</div><div style="font-size:11px;font-weight:800;color:#fde047;">{html.escape(exp_warn_txt)}</div></div>'
+        )
 
     order_ticket_html = (
         f'<div class="order-ticket-box">'
         f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">'
         f'<span style="font-size:12.5px;font-weight:900;color:#38bdf8;">📱 スマホ証券アプリ即発注用・OCOオーダーチケットBOX</span>'
-        f'<span style="font-size:10px;color:#fde047;font-weight:700;">東証呼値丸め済・逆指値同時セット推奨</span>'
+        f'<span style="font-size:10px;color:#fde047;font-weight:700;">{"🔥 LAB×DD統合連動済" if has_dd else "東証呼値丸め済・逆指値同時セット推奨"}</span>'
         f'</div>'
         f'<div class="order-ticket-grid">'
         f'<div class="order-ticket-cell"><div style="font-size:9.5px;color:#94a3b8;">① 売買方向 ＆ 推奨株数</div><div style="font-size:12px;font-weight:900;color:{"#fb7185" if is_short else "#6ee7b7"};">{html.escape(side_order_lbl)}</div></div>'
         f'<div class="order-ticket-cell"><div style="font-size:9.5px;color:#94a3b8;">② 推奨エントリー目安</div><div style="font-size:12px;font-weight:800;color:#f8fafc;">{fmt_px(entry_ref_px, is_jp, fc)} 付近</div></div>'
         f'<div class="order-ticket-cell"><div style="font-size:9.5px;color:#fde047;">③ +1.0R 半分利確ライン</div><div style="font-size:12px;font-weight:800;color:#fde047;">{fmt_px(half_r_px, is_jp, fc)} ({half_sh:,}株利確)</div></div>'
-        f'<div class="order-ticket-cell"><div style="font-size:9.5px;color:#10b981;">④ 最終利確目標 (TP指値)</div><div style="font-size:12px;font-weight:900;color:#10b981;">{r.get("tp_price", "-")}</div></div>'
-        f'<div class="order-ticket-cell"><div style="font-size:9.5px;color:#ef4444;">⑤ 必須・損切り逆指値 (SL)</div><div style="font-size:12px;font-weight:900;color:#ef4444;">{r.get("sl_price", "-")}</div></div>'
+        f'<div class="order-ticket-cell"><div style="font-size:9.5px;color:#10b981;">④ 最終利確目標 (TP指値)</div><div style="font-size:12px;font-weight:900;color:#10b981;">{r_m.get("tp_price", "-")}</div></div>'
+        f'<div class="order-ticket-cell"><div style="font-size:9.5px;color:#ef4444;">⑤ 必須・損切り逆指値 (SL)</div><div style="font-size:12px;font-weight:900;color:#ef4444;">{r_m.get("sl_price", "-")}</div></div>'
+        f'{dd_oco_cells}'
         f'</div></div>'
     )
 
@@ -2212,12 +2468,12 @@ def build_instant_verdict_html(r: dict) -> str:
     pf_val = float(ft.get("profit_factor", 0.0)); pf_str = f"{pf_val:.2f}" if pf_val < 99.0 else "∞"
     sqn_val = float(ft.get("sqn", 0.0)); max_dd_val = float(ft.get("max_dd_pct", 0.0)); avg_r_val = float(ft.get("avg_r", 0.0))
     vp_struct_lbl = str(d2y.get("vp_struct_label", "⚖️ 標準出来高分布"))
-    rs_30m_val = float(r.get("intraday_rs_30m", 0.0))
+    rs_30m_val = float(r_m.get("intraday_rs_30m", 0.0))
     tp_lbl = "🎯 空売り利確目標(買い戻し)" if is_short else "🎯 最終目標利確価格"
     sl_lbl = "🛡️ 構造的踏み上げ逆指値" if is_short else "🛡️ 構造的初期逆指値(損切)"
-    tf_note = "日足マルチデイ検証" if r.get("strat", {}).get("tf") == "1d" else "5分足デイトレ検証"
+    tf_note = "日足マルチデイ検証" if r_m.get("strat", {}).get("tf") == "1d" else "5分足デイトレ検証"
     eq_sess_html = _build_equity_and_session_html(hist_rows, is_jp)
-    forecast_svg_html = build_tomorrow_forecast_svg(r)
+    forecast_svg_html = build_tomorrow_forecast_svg(r_m)
 
     daily2y_verdict_html = (
         f'<div style="background:rgba(14,165,233,0.14); border:1px solid rgba(14,165,233,0.42); border-radius:8px; padding:8px 11px; margin-bottom:8px; font-size:11.5px; line-height:1.65; color:#e0f2fe;">'
@@ -2239,7 +2495,7 @@ def build_instant_verdict_html(r: dict) -> str:
     forward_table_html = (
         f'<div style="background:rgba(2,6,23,0.85); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:10px 12px; margin-top:10px;">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:4px;">'
-        f'<span style="font-size:12.5px; font-weight:800; color:#38bdf8;">📊 直近{verified_span_days}営業日 完全リークフリー検証（{tf_note}・次バー始値+不利1ティックスリップ・コスト {r.get("combat_cost_pct",0.1)}%反映）</span>'
+        f'<span style="font-size:12.5px; font-weight:800; color:#38bdf8;">📊 直近{verified_span_days}営業日 完全リークフリー検証（{tf_note}・次バー始値+不利1ティックスリップ・コスト {r_m.get("combat_cost_pct",0.1)}%反映）</span>'
         f'<span style="font-size:11px; color:#fde047; font-weight:700;">約定 {traded_days}戦 / 見送り {notrade_cnt}日 ｜ 実質勝率: {ft.get("actual_win_rate", 0.0):.1f}% ({win_cnt}勝{lose_cnt}敗 / 建値{scratch_cnt}件) ｜ PF: <b style="color:#38bdf8;">{pf_str}</b> ｜ SQN: <b style="color:#c084fc;">{sqn_val:.2f}</b> ｜ 平均R: <b style="color:#6ee7b7;">{avg_r_val:+.2f}R</b> ｜ 最大DD: <b style="color:#f87171;">{max_dd_val:.1f}%</b> ｜ 累計純損益: <span style="color:{tot_p_col};">{tot_p_str}</span></span>'
         f'</div>'
         f'{eq_sess_html}'
@@ -2253,45 +2509,55 @@ def build_instant_verdict_html(r: dict) -> str:
         f'<div style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:12px; margin-top:5px;">'
         f'{macro10y_verdict_html}{daily2y_verdict_html}'
         f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px; text-align:center; margin-bottom:10px;">'
-        f'<div style="background:rgba(16,185,129,0.15); padding:6px; border-radius:6px; border:1px solid rgba(16,185,129,0.4);"><div style="font-size:10px; color:#a7f3d0;">{tp_lbl}</div><div style="font-size:14px; font-weight:800; color:#10b981;">{r["tp_price"]}</div></div>'
-        f'<div style="background:rgba(239,68,68,0.15); padding:6px; border-radius:6px; border:1px solid rgba(239,68,68,0.4);"><div style="font-size:10px; color:#fca5a5;">{sl_lbl}</div><div style="font-size:14px; font-weight:800; color:#ef4444;">{r["sl_price"]}</div></div>'
-        f'<div style="background:rgba(56,189,248,0.15); padding:6px; border-radius:6px; border:1px solid rgba(56,189,248,0.4);"><div style="font-size:10px; color:#bae6fd;">⏱️ 想定保有期間</div><div style="font-size:12.5px; font-weight:800; color:#38bdf8;">{r["strat"]["trade_duration"]}</div></div>'
-        f'</div><div style="font-size:12px; line-height:1.7; color:#e2e8f0;"><b>⚡ プロ執行アクション詳細プラン ({r["strat"]["style_name"]}専科 / {r["strat"].get("side","LONG")} / {html.escape(r.get("exec_grade",""))}):</b><br>{r["strat"]["step_plan"]}</div>'
-        f'</div><div class="beginner-action-box" style="margin-top:10px;">{r["strat"]["beginner_html"]}{forecast_svg_html}</div>{forward_table_html}'
+        f'<div style="background:rgba(16,185,129,0.15); padding:6px; border-radius:6px; border:1px solid rgba(16,185,129,0.4);"><div style="font-size:10px; color:#a7f3d0;">{tp_lbl}</div><div style="font-size:14px; font-weight:800; color:#10b981;">{r_m["tp_price"]}</div></div>'
+        f'<div style="background:rgba(239,68,68,0.15); padding:6px; border-radius:6px; border:1px solid rgba(239,68,68,0.4);"><div style="font-size:10px; color:#fca5a5;">{sl_lbl}</div><div style="font-size:14px; font-weight:800; color:#ef4444;">{r_m["sl_price"]}</div></div>'
+        f'<div style="background:rgba(56,189,248,0.15); padding:6px; border-radius:6px; border:1px solid rgba(56,189,248,0.4);"><div style="font-size:10px; color:#bae6fd;">⏱️ 想定保有期間</div><div style="font-size:12.5px; font-weight:800; color:#38bdf8;">{r_m["strat"]["trade_duration"]}</div></div>'
+        f'</div><div style="font-size:12px; line-height:1.7; color:#e2e8f0;"><b>⚡ プロ執行アクション詳細プラン ({r_m["strat"]["style_name"]}専科 / {r_m["strat"].get("side","LONG")} / {html.escape(r_m.get("exec_grade",""))}):</b><br>{r_m["strat"]["step_plan"]}</div>'
+        f'</div><div class="beginner-action-box" style="margin-top:10px;">{r_m["strat"]["beginner_html"]}{forecast_svg_html}</div>{forward_table_html}'
     )
 
 def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> tuple:
-    uq = (uq or "").strip(); st_style = r.get("strat", {}).get("style_name", "デイトレード")
+    r_m = _merge_dd_intel_into_lab_item(r)
+    uq = (uq or "").strip(); st_style = r_m.get("strat", {}).get("style_name", "デイトレード")
     rl = DEFAULT_AGENTS
     ig, tc, sn, ae, nx = rl["IGNIS"], rl["TECHNOS"], rl["SENTINEL"], rl["AEGIS"], rl["NEXUS"]
     h_lines = [f"ユーザー: {ht.get('text', '')}" if ht.get('is_user') else f"{re.sub(r'^[^\w]+', '', ht.get('speaker', '')).strip()}: {ht.get('text', '')}" for ht in (hist or [])[-6:] if "round" not in ht]
     h_str = "\n".join(h_lines) if h_lines else "（新規スレッド）"
-    is_stk = any(kw in uq for kw in ["株", "決算", "買い", "売り", "チャート", "PTS", "利確", "損切", "寄り", "板", "気配", "PER", "目標", "相場", "信用", "空売り", "ロット", "配当"]) or (r['name'] in uq) if uq else True
-    web_hits = (search_single_query(uq, 3, False) if not is_stk and len(uq) >= 2 else search_web_knowledge_parallel(f"{r['name']} {uq}", f"{r['code']} 株価")) if uq else search_web_knowledge_parallel(f"{r['name']} 株価 最新 ニュース", f"{r['name']} {r.get('genre', '')}")
-    web_str = "\n".join([f"・{h}" for h in web_hits]) if web_hits else f"・{r['name']}は直近{r.get('genre', '')}分野で需給思惑が継続中。"
-    m10 = r.get("macro_10y", {}); d2y = r.get("daily_2y", {})
+    is_stk = any(kw in uq for kw in ["株", "決算", "買い", "売り", "チャート", "PTS", "利確", "損切", "寄り", "板", "気配", "PER", "目標", "相場", "信用", "空売り", "ロット", "配当"]) or (r_m['name'] in uq) if uq else True
+    web_hits = (search_single_query(uq, 3, False) if not is_stk and len(uq) >= 2 else search_web_knowledge_parallel(f"{r_m['name']} {uq}", f"{r_m['code']} 株価")) if uq else search_web_knowledge_parallel(f"{r_m['name']} 株価 最新 ニュース", f"{r_m['name']} {r_m.get('genre', '')}")
+    web_str = "\n".join([f"・{h}" for h in web_hits]) if web_hits else f"・{r_m['name']}は直近{r_m.get('genre', '')}分野で需給思惑が継続中。"
+    m10 = r_m.get("macro_10y", {}); d2y = r_m.get("daily_2y", {})
 
-    fc_u = str(r.get("full_code", "")).strip().upper()
+    fc_u = str(r_m.get("full_code", "")).strip().upper()
     intel_entry = load_shared_ticker_intel().get(fc_u, {}) if fc_u else {}
     dd_res_shared = intel_entry.get("dd_result") if isinstance(intel_entry, dict) else None
     dd_summary_txt = _format_dd_shared_summary(dd_res_shared)
-    dd_prompt_block = f"\n【DEEP DIVE極限解析からの共有知見】\n・{dd_summary_txt}" if dd_summary_txt else ""
+    dd_prompt_block = ""
+    if r_m.get("has_dd_intel"):
+        dd_i = r_m.get("dd_intel", {})
+        s3 = dd_i.get("short_3way", {})
+        dd_prompt_block = (
+            f"\n【DEEP DIVE 5分足極限解析からの統合データ】\n"
+            f"・同期判定: {r_m.get('dd_sync_label','')} / 統合期待度: {r_m.get('fusion_expect_pct')}% (DD単体スコア={dd_i.get('fusion_score')}%)\n"
+            f"・5分足軌道: 想定始値={dd_i.get('est_open_px')} / 押し目候補={dd_i.get('dip_time')}({dd_i.get('dip_px')}) / ピーク想定={dd_i.get('peak_time')}({dd_i.get('peak_px')}) / 大引け予測={dd_i.get('est_close_px')}({dd_i.get('est_close_chg'):+.2f}%)\n"
+            f"・短期30分3分岐: ▲上昇{s3.get('p_up',33)}% / ▶横ばい{s3.get('p_flat',34)}% / ▼下落{s3.get('p_down',33)}% ｜ CVD={dd_i.get('cvd_label','-')} ｜ レジーム={dd_i.get('expansion_label','通常レジーム')}"
+        )
 
     has_api_key = bool(load_gemini_cfg().get("api_key"))
-    if not has_api_key: engine_status = "⚙️ 統計ルールベース自動推論（API未接続時・週足10Y×日足2Y×5分足60D数理テンプレート出力）"; llm_turns = []
+    if not has_api_key: engine_status = "⚙️ 統計ルールベース自動推論（API未接続時・週足10Y×日足2Y×5分足60D＋DD統合出力）"; llm_turns = []
     else:
-        ft = r.get("forward_test", {}); v_days = int(ft.get("verified_span_days", len(ft.get("history_rows", []))))
-        sys_p = f"""あなたはプロフェッショナル・クオンツ監査委員会の5名の専門監査官（IGNIS / TECHNOS / SENTINEL / AEGIS / NEXUS）です。対象銘柄固有の「事業テーマ」「最新ニュース」「過去10年週足大局({m10.get('regime_10y_label','')} / 10年CAGR={m10.get('cagr_10y',0):+.1f}% / 10年POC={m10.get('poc_10y_str','-')})」「日足2年中期トレンド({d2y.get('regime_1d_label','')} / {d2y.get('ma_align_label','')} / 上値出来高構造={d2y.get('vp_struct_label','')} / MA25={d2y.get('ma25_str','-')} / 日足ATR14={d2y.get('daily_atr14_str','-')})」「投資スタイル({st_style})」「売買方向({r['strat'].get('side','LONG')})」「実戦適格ゲート({r.get('exec_grade','')})」「日次RSα={r.get('rs_alpha',0):+.2f}% / 30分イントラデイRS={r.get('intraday_rs_30m',0):+.2f}%」「直近{v_days}営業日リークフリー検証成績（勝率/PF/SQN/平均R/最大DD）」に基づき論理的かつ簡潔に監査合議を行ってください。オウム返しや定型文は厳禁です。
+        ft = r_m.get("forward_test", {}); v_days = int(ft.get("verified_span_days", len(ft.get("history_rows", []))))
+        sys_p = f"""あなたはプロフェッショナル・クオンツ監査委員会の5名の専門監査官（IGNIS / TECHNOS / SENTINEL / AEGIS / NEXUS）です。対象銘柄固有の「事業テーマ」「最新ニュース」「過去10年週足大局({m10.get('regime_10y_label','')} / 10年CAGR={m10.get('cagr_10y',0):+.1f}% / 10年POC={m10.get('poc_10y_str','-')})」「日足2年中期トレンド({d2y.get('regime_1d_label','')} / {d2y.get('ma_align_label','')} / 上値出来高構造={d2y.get('vp_struct_label','')} / MA25={d2y.get('ma25_str','-')} / 日足ATR14={d2y.get('daily_atr14_str','-')})」「投資スタイル({st_style})」「売買方向({r_m['strat'].get('side','LONG')})」「実戦適格ゲート({r_m.get('exec_grade','')})」「直近{v_days}営業日リークフリー検証成績（勝率/PF/SQN/平均R/最大DD）」および「DEEP DIVE 5分足軌道・CVD・30分3分岐データ」に基づき論理的かつ簡潔に統合監査合議を行ってください。オウム返しや定型文は厳禁です。
 【これまでの会話ログ】\n{h_str}\n【最新WEBニュース】\n{web_str}{dd_prompt_block}
 【銘柄プロファイル】
-・銘柄: {r['code']} {r['name']} ({r.get('combat_tier','')} / {r.get('exec_grade','')}) / テーマ: {r.get('theme','')}
-・現在値: {r['price']} ({r.get('diff',0):+.2f}% / 日次RSα: {r.get('rs_alpha',0):+.2f}% / 30分RS: {r.get('intraday_rs_30m',0):+.2f}%) / 当日VWAP: {r['vwap_price']} / 目標: {r['tp_price']} / 逆指値: {r['sl_price']} / 戦術: {r['strat']['algo_name']} ({r['strat'].get('side','LONG')})
+・銘柄: {r_m['code']} {r_m['name']} ({r_m.get('combat_tier','')} / {r_m.get('exec_grade','')}) / テーマ: {r_m.get('theme','')}
+・現在値: {r_m['price']} ({r_m.get('diff',0):+.2f}% / 日次RSα: {r_m.get('rs_alpha',0):+.2f}% / 30分RS: {r_m.get('intraday_rs_30m',0):+.2f}%) / 当日VWAP: {r_m['vwap_price']} / 目標: {r_m['tp_price']} / 逆指値: {r_m['sl_price']} / 戦術: {r_m['strat']['algo_name']} ({r_m['strat'].get('side','LONG')})
 ・第1層(週足10Y): {m10.get('regime_10y_label','')} (スコア{m10.get('long_10y_score',50)}点 / CAGR {m10.get('cagr_10y',0):+.1f}% / POC {m10.get('poc_10y_str','-')})
 ・第2層(日足2Y): {d2y.get('regime_1d_label','')} (スコア{d2y.get('daily_trend_score',50)}点 / {d2y.get('ma_align_label','')} / 出来高構造={d2y.get('vp_struct_label','')})
-・第3層(5分足60D): RSI={r.get('rsi',50)}% / 時間帯補正RVOL={r.get('rvol',1.0)}倍 / 確定実質勝率: {ft.get('actual_win_rate',0):.1f}% ({ft.get('win_count',0)}勝{ft.get('lose_count',0)}敗 / PF={ft.get('profit_factor',0):.2f} / SQN={ft.get('sqn',0):.2f} / 平均R={ft.get('avg_r',0):+.2f}R / 最大DD={ft.get('max_dd_pct',0):.1f}%) 累計純損益: {ft.get('total_profit_yen',0):+,.0f}円
+・第3層(5分足60D): RSI={r_m.get('rsi',50)}% / 時間帯補正RVOL={r_m.get('rvol',1.0)}倍 / 確定実質勝率: {ft.get('actual_win_rate',0):.1f}% ({ft.get('win_count',0)}勝{ft.get('lose_count',0)}敗 / PF={ft.get('profit_factor',0):.2f} / SQN={ft.get('sqn',0):.2f} / 平均R={ft.get('avg_r',0):+.2f}R / 最大DD={ft.get('max_dd_pct',0):.1f}%) 累計純損益: {ft.get('total_profit_yen',0):+,.0f}円
 以下のJSON配列のみを出力（5名）：[{{"speaker": "アイコン 名前", "role_label": "専門スタンス", "tone": "agree|doubt|rage|normal", "text": "内容"}}]"""
-        r_name = r["name"]
-        user_msg = f"【今回の入力】\n『{uq if uq else f'（{r_name}の固有テーマ・週足10Y×日足2Y×5分足60Dの3階層MTF構造・出来高プロファイル・SQN検証成績と{st_style}執行を踏まえた初期監査合議）'}』"
+        r_name = r_m["name"]
+        user_msg = f"【今回の入力】\n『{uq if uq else f'（{r_name}のLAB上位足分析とDEEP DIVE 5分足軌道・CVD・3分岐データを統合した最終売買監査合議）'}』"
         raw_txt, used_mod = call_real_llm_api(sys_p, user_msg, expect_json=True)
         llm_turns = _parse_llm_json_turns(raw_txt)
         engine_status = f"🔵 Gemini AI生成クオンツ監査合議（稼働モデル: {GEMINI_MODEL_DISPLAY_NAMES.get(used_mod, used_mod)}）" if llm_turns else "⚙️ 統計ルールベース自動推論（API未接続/応答フォールバック時）"
@@ -2299,11 +2565,11 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> t
     turns = []
     if not hist:
         header_tag = "🔥 Gemini AI クオンツ監査合議" if llm_turns else "⚙️ 統計ルールベース自動推論（API未接続時）"
-        turns.append({"round": f"{header_tag} 【{r['code']}】{r['name']} ｜ {st_style} 3階層MTF5視点監査"})
-    turns.extend(llm_turns if llm_turns else _build_natural_fallback_dialogue(uq, r, st_style, web_hits, ig, tc, sn, nx, ae, dd_summary=dd_summary_txt))
-    turns = sanitize_and_verify_dialogue(turns, r, uq=uq)
-    rel_news_for_sync = [n for n in all_impact_news if r.get("full_code") in n.get("detail", {}).get("related_codes", [])]
-    sync_lab_intel_to_shared(r, council_turns=turns, rel_news_list=rel_news_for_sync, persist=True)
+        turns.append({"round": f"{header_tag} 【{r_m['code']}】{r_m['name']} ｜ {st_style} 3階層MTF＋DD統合監査"})
+    turns.extend(llm_turns if llm_turns else _build_natural_fallback_dialogue(uq, r_m, st_style, web_hits, ig, tc, sn, nx, ae, dd_summary=dd_summary_txt))
+    turns = sanitize_and_verify_dialogue(turns, r_m, uq=uq)
+    rel_news_for_sync = [n for n in all_impact_news if r_m.get("full_code") in n.get("detail", {}).get("related_codes", [])]
+    sync_lab_intel_to_shared(r_m, council_turns=turns, rel_news_list=rel_news_for_sync, persist=True)
     return turns, engine_status
 
 def run_gemini_council(r: dict, m5=None, seed: int = 0, uq: str = "", hist: list = None) -> dict:
@@ -2327,19 +2593,6 @@ def _app_rerun():
 
 def _render_council_sec_impl(r, uk, auto_open=False):
     is_open = auto_open or st.session_state["active_debates"].get(uk, False)
-    if not auto_open:
-        c1, c2 = st.columns([2.7, 1.1])
-        btn_lbl = "🔼 売買ガイドを閉じる" if is_open else ("🔴 空売り戦略と合議を見る" if r.get("strat", {}).get("side") == "SHORT" else "🔵 買い方ガイドと合議を見る")
-        if c1.button(btn_lbl, key=f"btn_open_{uk}", use_container_width=True):
-            st.session_state["focused_stock_item"] = r; st.session_state["scroll_top_trig"] = int(time.time() * 1000); _app_rerun()
-        if c2.button("✅ 監視済" if r["code"] in st.session_state["watchlist"] else "⭐ 監視追加", key=f"btn_watch_{uk}", use_container_width=True):
-            if r["code"] in st.session_state["watchlist"]:
-                del st.session_state["watchlist"][r["code"]]
-            else:
-                st.session_state["watchlist"][r["code"]] = r
-            cu = st.session_state.get("authenticated_user", "")
-            if cu: save_watchlist(cu, st.session_state["watchlist"])
-            st.rerun()
     if not is_open: return
 
     side_title = "空売り(SHORT)" if r.get("strat", {}).get("side") == "SHORT" else "順張り買い(LONG)"
@@ -2377,179 +2630,230 @@ if hasattr(st, "fragment"):
 else:
     render_council_sec = _render_council_sec_impl
 
+# =========================================================================
+# スッキリ3層構造 銘柄カード（情報量100%保持・プロ端末レイアウト）
+# =========================================================================
 def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extra_origin_badge: str = "", intraday_df: pd.DataFrame = None):
-    rel_news_list = [n for n in all_impact_news if r["full_code"] in n["detail"]["related_codes"]]
+    r_m = _merge_dd_intel_into_lab_item(r)
+    has_dd = bool(r_m.get("has_dd_intel"))
+    dd_i = r_m.get("dd_intel", {})
+    rel_news_list = [n for n in all_impact_news if r_m["full_code"] in n["detail"]["related_codes"]]
     rel_news = rel_news_list[0] if rel_news_list else None
-    fc_u = str(r.get("full_code", "")).strip().upper()
-    intel_entry = load_shared_ticker_intel().get(fc_u, {}) if fc_u else {}
-    dd_res_card = intel_entry.get("dd_result") if isinstance(intel_entry, dict) else None
-    dd_updated_card = str(intel_entry.get("dd_updated_at") or "") if isinstance(intel_entry, dict) else ""
-    dd_badge_html = '<span class="pill-badge" style="background:rgba(249,115,22,0.25);border-color:#f97316;color:#fdba74;font-weight:900;">🔥 DD極限解析済</span>' if (isinstance(dd_res_card, dict) and dd_res_card) else ""
-    dd_summary_line = ""
-    if isinstance(dd_res_card, dict) and dd_res_card:
-        dd_sum_s = _format_dd_shared_summary(dd_res_card)
-        if dd_sum_s:
-            dd_summary_line = f'<br>🔥 <b>DEEP DIVE極限解析フィードバック ({html.escape(dd_updated_card)}):</b> <span style="color:#fdba74;">{html.escape(dd_sum_s)}</span>'
+    fc_card = str(r_m.get("full_code", "")).strip().upper()
+    is_jp = ".T" in fc_card
 
-    dc, ds, ps = "#10b981" if r["diff"] >= 0 else "#ef4444", ("+" if r["diff"] > 0 else ""), ("+" if r["pts_gap_pct"] > 0 else "")
-    rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;">🏆 #{rank}</span>' if rank else ""
-    new_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#10b981;color:#6ee7b7;font-weight:800;">🆕 NEW昇格</span>' if r.get("is_new_challenger") else ""
-    lot, st_info = r["lot_info"], r["strat"]
+    dc, ds = ("#10b981" if r_m["diff"] >= 0 else "#ef4444"), ("+" if r_m["diff"] > 0 else "")
+    lot, st_info = r_m["lot_info"], r_m["strat"]
     is_short_card = (st_info.get("side") == "SHORT")
     spec = get_style_spec(st_info.get("style_name", "デイトレード"))
-    is_long_only_guard = (not spec["allow_short"]) or is_jp_tier3_short_restricted(r.get("full_code", ""), r.get("genre", ""))
-    n_banner = f'<div style="margin-top:6px; margin-bottom:4px;"><span style="display:inline-block; width:100%; text-align:center; background:linear-gradient(90deg, #b91c1c 0%, #ef4444 50%, #b91c1c 100%); color:#ffffff; font-weight:800; font-size:11.5px; padding:5px 8px; border-radius:6px; border:1px solid #fca5a5; animation:alert-pulse 2s infinite;">🚨【重大情報】{html.escape(rel_news["title"][:32] + "..." if len(rel_news["title"]) > 32 else rel_news["title"])}</span></div>' if rel_news else ""
+    is_long_only_guard = (not spec["allow_short"]) or is_jp_tier3_short_restricted(fc_card, r_m.get("genre", ""))
 
-    earnings_days = r.get("earnings_days_left")
-    earnings_badge = f'<span class="pill-badge" style="background:rgba(239,68,68,0.25);border-color:#ef4444;color:#fca5a5;font-weight:900;">⚠️ 決算跨ぎ警戒（残り{int(earnings_days)}日）</span>' if (earnings_days is not None and 0 <= int(earnings_days) <= 3) else ""
-
-    vwap_over_2s = bool(r.get("vwap_over_2sigma", False))
-    vwap_2s_badge = '<span class="pill-badge" style="background:rgba(244,63,94,0.25);border-color:#fb7185;color:#fecdd3;font-weight:900;">⚠️ VWAP+2σ過熱</span>' if (vwap_over_2s and not is_short_card) else ""
-    limit_up_tight = bool(r.get("limit_up_tight", False))
-    limit_up_badge = '<span class="pill-badge" style="background:rgba(245,158,11,0.28);border-color:#f59e0b;color:#fde047;font-weight:900;">⚠️ ストップ高上値余地極小</span>' if (limit_up_tight and not is_short_card) else ""
-
-    exec_grade = str(r.get("exec_grade", "🔵 Grade-B: 標準執行（VWAP厳守）"))
-    exec_score = int(r.get("exec_score", 3))
+    # 上段コアバッジ（最大4〜5個の重要バッジのみ表示）
+    rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;font-weight:900;">#{rank}</span>' if rank else ""
+    side_badge = '<span class="pill-badge" style="background:rgba(225,29,72,0.25);border-color:#fb7185;color:#fecdd3;font-weight:900;">SHORT</span>' if is_short_card else '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#34d399;color:#a7f3d0;font-weight:900;">LONG</span>'
+    exec_grade = str(r_m.get("exec_grade", "🔵 Grade-B: 標準執行（基準厳守）"))
+    exec_score = int(r_m.get("exec_score", 3))
     exec_badge_style = "background:rgba(16,185,129,0.22);border-color:#10b981;color:#6ee7b7;font-weight:900;" if exec_score >= 4 else ("background:rgba(56,189,248,0.20);border-color:#38bdf8;color:#7dd3fc;font-weight:800;" if exec_score == 3 else "background:rgba(245,158,11,0.22);border-color:#f59e0b;color:#fde047;font-weight:800;")
-    exec_badge_html = f'<span class="pill-badge" style="{exec_badge_style}">{html.escape(exec_grade.split("（")[0])}</span>'
+    exec_badge_html = f'<span class="pill-badge" style="{exec_badge_style}">{html.escape(exec_grade.split("（")[0].split(": ")[0])}</span>'
+    dd_badge_html = '<span class="pill-badge" style="background:rgba(249,115,22,0.25);border-color:#f97316;color:#fdba74;font-weight:900;">🔥 DD統合済</span>' if has_dd else ""
+    new_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#10b981;color:#6ee7b7;font-weight:800;">🆕 NEW</span>' if r_m.get("is_new_challenger") else ""
 
-    m10 = r.get("macro_10y", {}); d2y = r.get("daily_2y", {})
-    m10_badge_html = f'<span class="pill-badge" style="background:rgba(168,85,247,0.22);border-color:#c084fc;color:#f3e8ff;font-weight:800;">📅 10年大局 {int(m10.get("long_10y_score", 50))}点</span>'
-    d2y_badge_html = f'<span class="pill-badge" style="background:rgba(14,165,233,0.22);border-color:#38bdf8;color:#e0f2fe;font-weight:800;">📈 日足中期 {int(d2y.get("daily_trend_score", 50))}点</span>'
-    vp_struct_lbl = str(d2y.get("vp_struct_label", "⚖️ 標準出来高分布"))
-    vp_badge_style = "background:rgba(16,185,129,0.22);border-color:#10b981;color:#6ee7b7;font-weight:800;" if d2y.get("is_lvn_breakout") else ("background:rgba(245,158,11,0.22);border-color:#f59e0b;color:#fde047;font-weight:800;" if float(d2y.get("hvn_wall_price", 0.0)) > 0 else "background:rgba(148,163,184,0.16);border-color:#64748b;color:#cbd5e1;")
-    vp_badge_html = f'<span class="pill-badge" style="{vp_badge_style}">{html.escape(vp_struct_lbl)}</span>'
-    rs_30m_v = float(r.get("intraday_rs_30m", 0.0))
-    rs30_badge_html = f'<span class="pill-badge" style="background:rgba(56,189,248,0.18);border-color:#38bdf8;color:{"#6ee7b7" if rs_30m_v>=0 else "#fca5a5"};font-weight:800;">⚡ 30分RS {rs_30m_v:+.2f}%</span>'
+    # 警告系バッジ（発火時のみ簡潔表示）
+    warn_badges = ""
+    earnings_days = r_m.get("earnings_days_left")
+    if earnings_days is not None and 0 <= int(earnings_days) <= 3:
+        warn_badges += f'<span class="pill-badge" style="background:rgba(239,68,68,0.25);border-color:#ef4444;color:#fca5a5;font-weight:900;">⚠️決算{int(earnings_days)}日</span>'
+    if bool(r_m.get("vwap_over_2sigma", False)) and not is_short_card:
+        warn_badges += '<span class="pill-badge" style="background:rgba(244,63,94,0.25);border-color:#fb7185;color:#fecdd3;font-weight:900;">⚠️+2σ過熱</span>'
+    if bool(r_m.get("limit_up_tight", False)) and not is_short_card:
+        warn_badges += '<span class="pill-badge" style="background:rgba(245,158,11,0.28);border-color:#f59e0b;color:#fde047;font-weight:900;">⚠️S高接近</span>'
 
-    ft = r.get("forward_test", {}); lat = ft.get("latest_result", {}); is_jp = ".T" in r.get("full_code", "")
-    fc_card = str(r.get("full_code", ""))
-    verified_span_days = int(ft.get("verified_span_days", len(ft.get("history_rows", []))))
+    # 期待度表示（DD統合時は Fusion XX%、未統合時は LAB XX%）
+    disp_expect = r_m["fusion_expect_pct"] if has_dd else r_m["expect_pct"]
+    expect_lbl_top = "FUSION EXPECT" if has_dd else "LAB EXPECT"
+    sync_sub_html = f'<div style="font-size:9.5px;font-weight:800;color:{"#6ee7b7" if r_m.get("dd_sync_ok") else "#fde047"};margin-top:2px;">{html.escape(r_m.get("dd_sync_label",""))}</div>' if has_dd else ""
+
+    # エントリー目安（DD押し目/戻り時刻があれば併記）
+    cv = float(r_m.get("raw_close", 0.0))
+    vwap_v = float(r_m.get("raw_vwap", cv))
+    if has_dd:
+        ent_px_val = float(dd_i.get("fusion_entry_px") or (dd_i.get("peak_px") if is_short_card else dd_i.get("dip_px")) or cv)
+        ent_tm_hint = f" ({dd_i.get('peak_time','-')})" if is_short_card else f" ({dd_i.get('dip_time','-')})"
+        ent_disp = f"{fmt_px(ent_px_val, is_jp, fc_card)}{ent_tm_hint}"
+    else:
+        ent_px_val = round_to_tse_tick(max(cv, vwap_v) if is_short_card else (min(cv, vwap_v) if vwap_v > 0 else cv), fc_card, "nearest")
+        ent_disp = f"{fmt_px(ent_px_val, is_jp, fc_card)} 付近"
+
+    tp_sign_c = "+" if r_m["tp_pct"] > 0 else ""; sl_sign_c = "+" if r_m["sl_pct"] > 0 else ""
+    odd_lot_tag = " (S株)" if lot.get("is_odd_lot") else ""
+
+    # リークフリー検証1行バー
+    ft = r_m.get("forward_test", {})
+    w_cnt, l_cnt, t_days = int(ft.get("win_count", 0)), int(ft.get("lose_count", 0)), int(ft.get("total_days", 0))
+    pf_val = float(ft.get("profit_factor", 0.0)); pf_str = f"{pf_val:.2f}" if pf_val < 99.0 else "∞"
+    sqn_val = float(ft.get("sqn", 0.0))
     tot_p = float(ft.get("total_profit_yen", 0.0))
     tot_p_str = f"{'+' if tot_p >= 0 else ''}{tot_p:,.0f}円" if is_jp else f"{'+' if tot_p >= 0 else ''}${tot_p:,.2f}"
     tot_p_col = "#10b981" if tot_p >= 0 else "#ef4444"
-    lat_cat = lat.get("result_category") or ("WIN" if lat.get("is_win") is True else ("LOSE" if lat.get("is_win") is False else "NOTRADE"))
-    lat_ret = float(lat.get("return_pct", 0.0))
-    lat_ret_str = "未約定" if lat_cat == "NOTRADE" else f"{'+' if lat_ret >= 0 else ''}{lat_ret:.1f}%"
-    lat_col = "#10b981" if lat_cat == "WIN" else ("#f87171" if lat_cat == "LOSE" else ("#fde047" if lat_cat == "SCRATCH" else "#94a3b8"))
-    w_cnt, l_cnt, sc_cnt, t_days = int(ft.get("win_count", 0)), int(ft.get("lose_count", 0)), int(ft.get("scratch_count", 0)), int(ft.get("total_days", 0))
-    nt_cnt = int(ft.get("notrade_count", max(0, len(ft.get("history_rows", [])) - t_days)))
-    pf_val = float(ft.get("profit_factor", 0.0)); pf_str = f"{pf_val:.2f}" if pf_val < 99.0 else "∞"
-    sqn_val = float(ft.get("sqn", 0.0)); max_dd_val = float(ft.get("max_dd_pct", 0.0)); avg_r_val = float(ft.get("avg_r", 0.0))
-    ft_bar = f'<div class="forward-verify-bar"><span>📈<b>【直近{verified_span_days}営業日 リークフリー検証】</b>直近: <b style="color:{lat_col};">{html.escape(str(lat.get("outcome", "検証待機中")))} ({lat_ret_str})</b></span><span>約定 {t_days}戦(見送り{nt_cnt}日) 実質勝率: <b style="color:#fde047;">{ft.get("actual_win_rate", 0.0):.1f}% ({w_cnt}勝{l_cnt}敗/建値{sc_cnt})</b> ｜ PF: <b style="color:#38bdf8;">{pf_str}</b> ｜ SQN: <b style="color:#c084fc;">{sqn_val:.2f}</b> ｜ 平均R: <b style="color:#6ee7b7;">{avg_r_val:+.2f}R</b> ｜ 最大DD: <b style="color:#f87171;">{max_dd_val:.1f}%</b> ｜ 累計: <b style="color:{tot_p_col};">{tot_p_str}</b></span></div>'
-    odd_lot_tag = ' <span style="color:#fde047;font-size:10.5px;font-weight:700;">※単元未満株(S株)換算</span>' if lot.get("is_odd_lot") else ""
 
-    side_badge = '<span class="pill-badge" style="background:rgba(225,29,72,0.25);border-color:#fb7185;color:#fecdd3;font-weight:900;">📉 空売り(SHORT)</span>' if is_short_card else '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#34d399;color:#a7f3d0;font-weight:900;">📈 買い(LONG)</span>'
-    t3_guard_badge = '<span class="pill-badge" style="background:rgba(245,158,11,0.18);border-color:#f59e0b;color:#fde047;font-weight:800;">🛡️ 買い専念モード</span>' if is_long_only_guard else ""
-    sizing_label_html = f'<span>📦 <b>推奨ロット: {lot["shares"]:,}株</b>{odd_lot_tag} ({st_info["risk_posture"].split("（")[0]}) ｜ 建玉額 {lot["position_value"]:,.0f}円</span>'
-
-    tp_lbl_card = "🎯 空売り利確目標(買い戻し)" if is_short_card else "🎯 最終利確目標"
-    sl_lbl_card = "🛡️ 構造的踏み上げ逆指値" if is_short_card else "🛡️ 構造的初期逆指値(損切)"
-    tp_sign_c = "+" if r["tp_pct"] > 0 else ""; sl_sign_c = "+" if r["sl_pct"] > 0 else ""
-    gap_box_title = r.get("pts_label_title", "📊 理論寄付き試算値（前日終値×先物・資金フロー推計）")
-
-    macro10y_bar = f'<div class="macro10y-box">📅 <b>第1層・過去10年週足大局 ({html.escape(str(m10.get("years_span", "10Y")))}):</b> <b style="color:#fde047;">{html.escape(str(m10.get("regime_10y_label", "10年大局中立")))}</b> ｜ 10年CAGR: <b>{m10.get("cagr_10y", 0.0):+.1f}%</b> ｜ 10年高安位置: <b>{m10.get("pos_10y_pct", 50.0):.0f}%</b> ｜ 10年岩盤POC: <b style="color:#6ee7b7;">{html.escape(str(m10.get("poc_10y_str", "-")))}</b></div>'
-    daily2y_bar = f'<div class="daily2y-box">📈 <b>第2層・日足2年中期トレンド:</b> <b style="color:#fde047;">{html.escape(str(d2y.get("regime_1d_label", "日足中立")))}</b> ({html.escape(str(d2y.get("ma_align_label", "MA均衡")))}) ｜ 出来高構造: <b style="color:#6ee7b7;">{html.escape(vp_struct_lbl)}</b> ｜ MA25乖離: <b>{d2y.get("ma25_dev_pct", 0.0):+.1f}%</b> ｜ 日足MACDヒスト: <b>{d2y.get("macd_hist", 0.0):+.2f}</b> ｜ 52W位置: <b>{d2y.get("pos_52w_pct", 50.0):.0f}%</b> ｜ 日足ATR14: <b style="color:#6ee7b7;">{html.escape(str(d2y.get("daily_atr14_str", "-")))}</b></div>'
-
+    # 詳細ドロワー内用データ
+    m10 = r_m.get("macro_10y", {}); d2y = r_m.get("daily_2y", {})
+    vp_struct_lbl = str(d2y.get("vp_struct_label", "⚖️ 標準出来高分布"))
+    rs_30m_v = float(r_m.get("intraday_rs_30m", 0.0))
+    pdh_s = fmt_px(float(r_m.get("pdh", 0.0)), is_jp, fc_card) if float(r_m.get("pdh", 0.0)) > 0 else "-"
+    pdl_s = fmt_px(float(r_m.get("pdl", 0.0)), is_jp, fc_card) if float(r_m.get("pdl", 0.0)) > 0 else "-"
+    vp2_s = fmt_px(float(r_m.get("vwap_p2", 0.0)), is_jp, fc_card) if float(r_m.get("vwap_p2", 0.0)) > 0 else "-"
+    ob_s = fmt_px(float(r_m.get("ob_support_px", 0.0)), is_jp, fc_card) if float(r_m.get("ob_support_px", 0.0)) > 0 else "未検出"
+    lim_up_s = fmt_px(float(r_m.get("limit_up_px", 0.0)), is_jp, fc_card) if (is_jp and float(r_m.get("limit_up_px", 0.0)) > 0) else "制限なし"
     session_reg = get_tse_session_regime()
-    session_line = f'<br>🕒 <b>東証時間帯レジーム [{html.escape(session_reg["label"])}]:</b> {html.escape(session_reg["advice"])}'
-    combat_tier_lbl = html.escape(str(r.get("combat_tier", "Tier1: 超大型・機関コア主力"))); combat_cost_val = r.get("combat_cost_pct", 0.08)
-    if is_short_card:
-        combat_guide_html = f'<div class="combat-guide-box" style="background:rgba(225,29,72,0.1);border-color:rgba(251,113,133,0.35);color:#fecdd3;">⚔️ <b>執行品質＆実戦プロファイル:</b> <b>{html.escape(exec_grade)}</b> ｜ {combat_tier_lbl}（往復実質スリッページ想定: <b>{combat_cost_val:.2f}%</b>＋貸株料反映）{session_line}<br>※空売り（SHORT）推奨：9:05〜13:30に5分足VWAP割れ・陰線確定後の次バー始値で信用新規売り発注してください（表示価格は東証呼値丸め済）</div>'
-    elif spec["tf"] == "1d":
-        combat_guide_html = f'<div class="combat-guide-box">⚔️ <b>執行品質＆実戦プロファイル:</b> <b>{html.escape(exec_grade)}</b> ｜ {combat_tier_lbl}（往復実質スリッページ想定: <b>{combat_cost_val:.2f}%</b>）<br>※{html.escape(spec["pfx"])}は買い専念モードです。日足MA25・MA75・10年POCの支持帯反発を確認後、翌営業日始値（または分割買い）で発注してください（表示価格は東証呼値丸め済）</div>'
-    else:
-        combat_guide_html = f'<div class="combat-guide-box">⚔️ <b>執行品質＆実戦プロファイル:</b> <b>{html.escape(exec_grade)}</b> ｜ {combat_tier_lbl}（往復実質スリッページ想定: <b>{combat_cost_val:.2f}%</b>）{session_line}<br>※VWAP+2σ超乖離の飛びつきは禁止。9:05〜13:30の間にOR15分安値維持＋リアルタイム5分足VWAP・5本EMAへの押し目確認＋前バー高値更新陽線確定の次バー始値で発注してください（表示価格は東証呼値丸め済）</div>'
+    dd_drawer_html = ""
+    if has_dd:
+        s3 = dd_i.get("short_3way", {})
+        dd_drawer_html = (
+            f'<div style="background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.4);border-radius:6px;padding:6px 8px;margin-bottom:6px;color:#fed7aa;">'
+            f'🔥 <b>DEEP DIVE 5分足連動サマリー ({html.escape(r_m.get("dd_updated_at",""))}):</b> '
+            f'想定始値={fmt_px(float(dd_i.get("est_open_px",cv)), is_jp, fc_card)} ｜ 押目={html.escape(dd_i.get("dip_time","-"))}({fmt_px(float(dd_i.get("dip_px",cv)), is_jp, fc_card)}) ｜ 高値={html.escape(dd_i.get("peak_time","-"))}({fmt_px(float(dd_i.get("peak_px",cv)), is_jp, fc_card)}) ｜ 大引け予測={fmt_px(float(dd_i.get("est_close_px",cv)), is_jp, fc_card)} ({float(dd_i.get("est_close_chg",0)):+.2f}%) ｜ 30分3分岐=▲{s3.get("p_up",33)}%/▶{s3.get("p_flat",34)}%/▼{s3.get("p_down",33)}% ｜ CVD={html.escape(dd_i.get("cvd_label","-"))}'
+            f'</div>'
+        )
 
-    disp_name = html.escape(str(r.get("name", r["code"]))); disp_code = html.escape(str(r["code"]))
-    title_block = f'<span style="font-size:16.5px;font-weight:800;color:#f8fafc;white-space:nowrap;">{disp_name}</span> <span style="font-size:11.5px;color:#38bdf8;font-family:\'JetBrains Mono\',monospace;font-weight:700;white-space:nowrap;">[{disp_code}]</span> <span style="font-size:11px;color:#94a3b8;white-space:nowrap;">/ {html.escape(r["genre"])}</span>' if disp_name != disp_code else f'<span style="font-size:16.5px;font-weight:800;color:#f8fafc;white-space:nowrap;">{disp_code}</span> <span style="font-size:11px;color:#94a3b8;white-space:nowrap;">/ {html.escape(r["genre"])}</span>'
+    n_banner = f'<div style="margin-top:6px;"><span style="display:inline-block;width:100%;text-align:center;background:linear-gradient(90deg,#b91c1c 0%,#ef4444 50%,#b91c1c 100%);color:#ffffff;font-weight:800;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #fca5a5;">🚨【速報】{html.escape(rel_news["title"][:34] + "..." if len(rel_news["title"]) > 34 else rel_news["title"])}</span></div>' if rel_news else ""
+    intraday_svg_block = build_intraday_svg_chart(intraday_df, r_m) if (is_focused or is_custom) and intraday_df is not None else ""
 
-    intraday_svg_block = build_intraday_svg_chart(intraday_df, r) if (is_focused or is_custom) and intraday_df is not None else ""
-
-    pdh_s = fmt_px(float(r.get("pdh", 0.0)), is_jp, fc_card) if float(r.get("pdh", 0.0)) > 0 else "-"
-    pdl_s = fmt_px(float(r.get("pdl", 0.0)), is_jp, fc_card) if float(r.get("pdl", 0.0)) > 0 else "-"
-    vp2_s = fmt_px(float(r.get("vwap_p2", 0.0)), is_jp, fc_card) if float(r.get("vwap_p2", 0.0)) > 0 else "-"
-    ob_s = fmt_px(float(r.get("ob_support_px", 0.0)), is_jp, fc_card) if float(r.get("ob_support_px", 0.0)) > 0 else "未検出"
-    lim_up_s = fmt_px(float(r.get("limit_up_px", 0.0)), is_jp, fc_card) if (is_jp and float(r.get("limit_up_px", 0.0)) > 0) else "制限なし"
+    disp_name = html.escape(str(r_m.get("name", r_m["code"])))
+    disp_code = html.escape(str(r_m["code"]))
 
     st.markdown(
         f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
-        f'<div class="signal-10tier-badge" style="background:{r["tier_bg"]};color:{r["tier_color"]};"><span>{r["tier_label"]}</span><span>🔥 期待度 {r["expect_pct"]}% ｜ {st_info["algo_name"].split("】")[0]}】</span></div>'
-        f'<div class="badge-single-line">{rk_h}{dd_badge_html}{extra_origin_badge}{earnings_badge}{vwap_2s_badge}{limit_up_badge}{side_badge}{exec_badge_html}{vp_badge_html}{rs30_badge_html}{m10_badge_html}{d2y_badge_html}{t3_guard_badge}{new_badge}<span class="pill-badge" style="background:rgba(250,204,21,0.18);border-color:#facc15;color:#fde047;font-weight:900;">🔥 期待度 {r["expect_pct"]}%</span><span class="quantum-badge">⚛️ ボラ突破指数 {r["q_score"]}点</span><span class="inst-badge">🏛️ 5分足需給 {r["ms_score"]}点</span></div>'
-        f'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div style="min-width:0;flex:1;"><div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;">{title_block}</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;word-break:keep-all;">{html.escape(r["theme"])} ｜ 現在値: <b style="color:#f8fafc;">{r["price"]}</b> (<span style="color:{dc};font-weight:700;">{ds}{r["diff"]}%</span> / 日次RSα: <b style="color:{"#34d399" if r.get("rs_alpha",0)>=0 else "#fb7185"};">{r.get("rs_alpha",0):+.2f}%</b> / 30分RS: <b style="color:{"#34d399" if rs_30m_v>=0 else "#fb7185"};">{rs_30m_v:+.2f}%</b>)</div></div>'
-        f'<div style="text-align:right;white-space:nowrap;flex-shrink:0;"><div style="font-size:9px;color:#fde047;font-weight:700;">🔥 期待度 / テク強度</div><div style="white-space:nowrap;margin-top:1px;"><span class="expect-badge">{r["expect_pct"]}%</span><span style="color:#64748b;font-size:12px;margin:0 2px;">/</span><span class="prob-badge">{r["total_win_rate"]}pt</span></div></div></div>'
+        f'<div class="card-top-meta">'
+        f'<div>{rk_h}{side_badge}{exec_badge_html}{dd_badge_html}{extra_origin_badge}{new_badge}{warn_badges}</div>'
+        f'<span style="font-size:10px;color:#94a3b8;font-family:\'JetBrains Mono\',monospace;">{html.escape(r_m["genre"])} ｜ {html.escape(st_info["tactic_type"])}</span>'
+        f'</div>'
+        f'<div class="card-hero-row">'
+        f'<div style="min-width:0;flex:1;">'
+        f'<div style="font-size:16.5px;font-weight:800;color:#f8fafc;line-height:1.25;">{disp_name} <span style="font-size:11.5px;color:#38bdf8;font-family:\'JetBrains Mono\',monospace;">[{disp_code}]</span></div>'
+        f'<div style="font-size:11px;color:#94a3b8;margin-top:2px;">{html.escape(r_m["theme"])}</div>'
+        f'<div style="font-size:11.5px;color:#e2e8f0;margin-top:4px;font-family:\'JetBrains Mono\',monospace;">現在値: <b>{r_m["price"]}</b> (<span style="color:{dc};font-weight:800;">{ds}{r_m["diff"]}%</span>) ｜ VWAP: <b>{r_m["vwap_price"]}</b></div>'
+        f'{sync_sub_html}'
+        f'</div>'
+        f'<div class="card-kpi-right">'
+        f'<div style="font-size:9px;color:#fde047;font-weight:800;letter-spacing:0.5px;">{expect_lbl_top}</div>'
+        f'<div><span class="expect-badge">{disp_expect}%</span></div>'
+        f'<div style="font-size:10px;color:#94a3b8;">テク強度 <span class="prob-badge" style="font-size:11.5px;">{r_m["total_win_rate"]}pt</span></div>'
+        f'</div></div>'
         f'{n_banner}{intraday_svg_block}'
-        f'<div class="winrate-bar"><div><div style="font-size:9.5px;color:#fde047;">🔥 総合期待度</div><div style="font-size:12.5px;font-weight:900;color:#fef08a;">{r["expect_pct"]}%</div></div><div><div style="font-size:9.5px;color:#c084fc;">⚛️ WKB統計近似突破率</div><div style="font-size:12.5px;font-weight:800;color:#e9d5ff;">{r["q_tunnel"]}%</div></div><div><div style="font-size:9.5px;color:#6ee7b7;">🏛️ 5分足Kyle近似吸収率</div><div style="font-size:12.5px;font-weight:800;color:#a7f3d0;">{r["kyle_stealth"]}%</div></div><div><div style="font-size:9.5px;color:#94a3b8;">🌅 GU指数 / 陽線強度</div><div style="font-size:12px;font-weight:700;">{r["prob"]}% / {r["intraday_win_rate"]}%</div></div></div>'
-        f'<div class="trade-plan-box"><div><div style="font-size:9.5px;color:#94a3b8;">{html.escape(gap_box_title)}</div><div style="font-size:12px;font-weight:700;">{r["pts_est_price"]} ({ps}{r["pts_gap_pct"]}%)</div></div><div style="border-left:1px solid rgba(148,163,184,0.16);border-right:1px solid rgba(148,163,184,0.16);"><div style="font-size:9.5px;color:#10b981;">{tp_lbl_card}</div><div style="font-size:12px;font-weight:800;color:#10b981;">{r["tp_price"]} ({tp_sign_c}{r["tp_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#f87171;">{sl_lbl_card}</div><div style="font-size:12px;font-weight:800;color:#f87171;">{r["sl_price"]} ({sl_sign_c}{r["sl_pct"]}%)</div></div></div>'
-        f'<div class="sizing-box">{sizing_label_html}<span>当日VWAP(5分足算出): <b>{r["vwap_price"]}</b></span></div>'
-        f'{macro10y_bar}{daily2y_bar}{combat_guide_html}{ft_bar}'
-        f'<details class="quant-detail-drawer"><summary>⚛️ 週足10年 × 日足2年 × 5分足60日 3階層MTFアルゴリズム戦略詳細（OHLCV統計モデル）</summary><div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;line-height:1.5;"><b>{st_info["algo_name"]}</b><br>{st_info["core_logic"]}{dd_summary_line}<br>📍 <b>重要価格節目＆実戦ガード基準:</b> PDH(前日高値)=<b>{pdh_s}</b> / PDL(前日安値)=<b>{pdl_s}</b> ｜ VWAP+2σ過熱警戒線=<b>{vp2_s}</b> ｜ 機関OB支持帯=<b>{ob_s}</b> ｜ ストップ高上限=<b>{lim_up_s}</b><br>📅 <b>第1層・過去10年週足大局解析:</b> {html.escape(str(m10.get("regime_10y_label", "")))} ｜ 10年スコア={int(m10.get("long_10y_score", 50))}点 ｜ 10年CAGR={m10.get("cagr_10y", 0.0):+.1f}% ｜ 10年レンジ位置={m10.get("pos_10y_pct", 50.0):.1f}%（10年安値:{html.escape(str(m10.get("low_10y_str", "-")))} 〜 10年高値:{html.escape(str(m10.get("high_10y_str", "-")))}） ｜ 200週MA乖離={m10.get("ma200w_dev_pct", 0.0):+.1f}% ｜ 10年最大出来高POC={html.escape(str(m10.get("poc_10y_str", "-")))}<br>📈 <b>第2層・日足2年中期トレンド＆Volume Profile解析:</b> {html.escape(str(d2y.get("regime_1d_label", "")))} ｜ 上値出来高構造={html.escape(vp_struct_lbl)} ｜ 日足スコア={int(d2y.get("daily_trend_score", 50))}点 ｜ {html.escape(str(d2y.get("ma_align_label", "")))} ｜ MA5={html.escape(str(d2y.get("ma5_str", "-")))} / MA25={html.escape(str(d2y.get("ma25_str", "-")))}({d2y.get("ma25_dev_pct", 0.0):+.1f}%) / MA75={html.escape(str(d2y.get("ma75_str", "-")))}({d2y.get("ma75_dev_pct", 0.0):+.1f}%) / MA200={html.escape(str(d2y.get("ma200_str", "-")))} ｜ 日足MACD={d2y.get("macd_line", 0.0):+.2f} (Signal={d2y.get("macd_signal", 0.0):+.2f} / Hist={d2y.get("macd_hist", 0.0):+.2f}) ｜ 日足RSI(14)={d2y.get("daily_rsi14", 50.0):.1f}% ｜ 52週位置={d2y.get("pos_52w_pct", 50.0):.1f}% ｜ 日足ATR14={html.escape(str(d2y.get("daily_atr14_str", "-")))} (日足YZ Vol={round(d2y.get("daily_yz_vol", 0.3)*100, 1)}%)<br>⚖️ <b>双方向需給優位性比較:</b> <span style="color:#34d399;font-weight:700;">LONG優勢度 = {r.get("bull_edge", 0.0):+.1f}pt</span> vs <span style="color:#fb7185;font-weight:700;">SHORT優勢度 = {r.get("bear_edge", 0.0):+.1f}pt</span> ｜ <b>スタイル適合補正 = {r.get("style_fit_bonus", 0.0):+.1f}pt</b> ｜ <b>日次RSα = {r.get("rs_alpha", 0.0):+.2f}%</b> ｜ <b>30分イントラデイRS = {rs_30m_v:+.2f}%</b><br>🚦 <b>3階層MTF執行品質ゲート ({exec_score}/5達成):</b> {html.escape(r.get("exec_detail", ""))}<br>📊 <b>第3層・5分足60日OHLCV実測値 & 検証統計:</b> RSI(14)={r.get("rsi", 50)}% ｜ BVC-VPIN近似={r.get("vpin", 0.5)} ｜ 平滑化CLVフローZ={r.get("ofi_z", 0.0)} ｜ DFA Hurst={r.get("hurst", 0.5)} ｜ Kyle-λ近似={r.get("kyle_lambda", 0.0):.2e} ｜ BB拡大初動率={r.get("bb_exp_ratio", 1.0)}x ｜ 出来高スパイク陽線頻度={r.get("vol_spike_bull_pct", 0.0)}% ｜ CVaR(99%)={r.get("cvar95", 2.5)}% ｜ YZ年率Vol={round(r.get('yz_vol', 0.0)*100, 1)}% ｜ 効率性ER={r.get("eff_pct", 50)}% ｜ Payoff={r.get("payoff", 1.0)} (Kelly={r.get("kelly_pct", 0.0)}%) ｜ SQN={sqn_val:.2f} / 平均R={avg_r_val:+.2f}R / 最大DD={max_dd_val:.1f}% ｜ 🔥 時間帯補正RVOL={r.get("rvol", 1.0)}倍 / 報道{r.get("news_hits", 0)}件</div></details></div>',
+        f'<div class="card-action-grid">'
+        f'<div class="card-action-cell"><div class="card-action-lbl">① エントリー目安</div><div class="card-action-val" style="color:#38bdf8;">{html.escape(ent_disp)}</div></div>'
+        f'<div class="card-action-cell"><div class="card-action-lbl">② 最終利確 TP</div><div class="card-action-val" style="color:#10b981;">{r_m["tp_price"]} ({tp_sign_c}{r_m["tp_pct"]}%)</div></div>'
+        f'<div class="card-action-cell"><div class="card-action-lbl">③ 厳格逆指値 SL</div><div class="card-action-val" style="color:#ef4444;">{r_m["sl_price"]} ({sl_sign_c}{r_m["sl_pct"]}%)</div></div>'
+        f'<div class="card-action-cell"><div class="card-action-lbl">④ 推奨ロット</div><div class="card-action-val" style="color:#f8fafc;">{lot["shares"]:,}株{odd_lot_tag}</div></div>'
+        f'</div>'
+        f'<div class="card-perf-strip">'
+        f'<span>📊 検証22D: 勝率 <b style="color:#fde047;">{ft.get("actual_win_rate",0.0):.1f}%</b> ({w_cnt}勝{l_cnt}敗)</span>'
+        f'<span>PF <b style="color:#38bdf8;">{pf_str}</b> ｜ SQN <b style="color:#c084fc;">{sqn_val:.2f}</b> ｜ 累計 <b style="color:{tot_p_col};">{tot_p_str}</b></span>'
+        f'</div>'
+        f'<details class="quant-detail-drawer"><summary>📂 3階層MTF・東証プロファイル・全クオンツ指標を展開</summary>'
+        f'<div style="font-size:11px;color:#cbd5e1;margin-top:6px;line-height:1.6;">'
+        f'{dd_drawer_html}'
+        f'<b>■ 10年週足大局:</b> {html.escape(str(m10.get("regime_10y_label", "")))} (スコア{int(m10.get("long_10y_score", 50))}点 / CAGR={m10.get("cagr_10y", 0.0):+.1f}% / 10年POC={html.escape(str(m10.get("poc_10y_str", "-")))})<br>'
+        f'<b>■ 日足2年中期:</b> {html.escape(str(d2y.get("regime_1d_label", "")))} ({html.escape(str(d2y.get("ma_align_label", "")))} / {html.escape(vp_struct_lbl)} / MA25乖離={d2y.get("ma25_dev_pct", 0.0):+.1f}% / ATR14={html.escape(str(d2y.get("daily_atr14_str", "-")))})<br>'
+        f'<b>■ 執行プロファイル:</b> {html.escape(exec_grade)} ｜ {html.escape(str(r_m.get("combat_tier","")))} (コスト{r_m.get("combat_cost_pct",0.08):.2f}%) ｜ {html.escape(session_reg["label"])}<br>'
+        f'<b>■ 重要節目ガード:</b> PDH=<b>{pdh_s}</b> / PDL=<b>{pdl_s}</b> / VWAP+2σ=<b>{vp2_s}</b> / 機関OB=<b>{ob_s}</b> / S高上限=<b>{lim_up_s}</b><br>'
+        f'<b>■ 全クオンツ指標:</b> WKB突破率=<b>{r_m["q_tunnel"]}%</b> / Kyle吸収率=<b>{r_m["kyle_stealth"]}%</b> / VPIN=<b>{r_m["vpin"]}</b> / CLVフローZ=<b>{r_m["ofi_z"]}</b> / Hurst=<b>{r_m["hurst"]}</b> / RSI=<b>{r_m["rsi"]}%</b> / 時間帯RVOL=<b>{r_m["rvol"]}x</b> / 30分RS=<b>{rs_30m_v:+.2f}%</b> / Kelly=<b>{r_m["kelly_pct"]}%</b>'
+        f'</div></details></div>',
         unsafe_allow_html=True
     )
-    if st.button(f"🔥 DEEP DIVEで極限深掘り ({r['code']})", key=f"btn_dd_{kp}_{r['code']}", use_container_width=True):
-        st.session_state["dd_target_code"] = r["full_code"]
-        st.session_state["dd_target_style"] = st_info.get("style_name", "デイトレード")
-        st.session_state["dd_code_in"] = r["full_code"]
-        st.session_state["dd_style_in"] = st_info.get("style_name", "デイトレード")
-        st_name_cur = st_info.get("style_name", "default")
-        matched_council = []
-        for c_key_cand, c_val_cand in st.session_state.get("council_threads", {}).items():
-            if r["code"] in str(c_key_cand) and st_name_cur in str(c_key_cand) and isinstance(c_val_cand, list):
-                matched_council = c_val_cand
-                break
-        synced_entry = sync_lab_intel_to_shared(r, council_turns=matched_council if matched_council else None, rel_news_list=rel_news_list, persist=True)
-        st.session_state["dd_lab_ctx"] = {
-            "full_code": r["full_code"],
-            "side": st_info.get("side", "LONG"),
-            "expect_pct": float(r.get("expect_pct", 50.0)),
-            "exec_grade": str(r.get("exec_grade", "")),
-            "tp": float(r.get("raw_tp", 0.0)),
-            "sl": float(r.get("raw_sl", 0.0)),
-            "vwap": float(r.get("raw_vwap", 0.0)),
-            "lab_full": r,
-            "lab_council": synced_entry.get("lab_council", []),
-            "lab_related_news": synced_entry.get("lab_related_news", rel_news_list),
-            "lab_updated_at": synced_entry.get("lab_updated_at", ""),
-            "dd_result": synced_entry.get("dd_result"),
-            "dd_updated_at": synced_entry.get("dd_updated_at", ""),
-        }
-        st.session_state["navigation_page"] = "DEEP_DIVE"
-        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-        st.rerun()
-    if st.button(f"🎯 このプランでエントリー記録 ({r['name']})", key=f"btn_journal_add_{kp}_{r['code']}", use_container_width=True):
-        cu_j = st.session_state.get("authenticated_user", "")
-        if cu_j:
-            j_list = load_trade_journal(cu_j)
-            j_entry = {
-                "id": hashlib.md5(f"{r['full_code']}_{time.time_ns()}".encode()).hexdigest()[:10],
-                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "full_code": r["full_code"],
-                "code": r["code"],
-                "name": r["name"],
-                "genre": r["genre"],
-                "style": st_info.get("style_name", "デイトレード"),
+
+    # 横並びコンパクト・アクションバー（2×2グリッド配置で縦幅を圧縮）
+    uk_card = f"foc_{r_m['code']}" if (is_focused or is_custom) else f"{kp}_{r_m['code']}"
+    is_open_now = bool(is_focused or is_custom or st.session_state["active_debates"].get(uk_card, False))
+    b_col1, b_col2 = st.columns(2)
+    with b_col1:
+        if not (is_focused or is_custom):
+            g_lbl = "🔼 ガイドを閉じる" if is_open_now else ("🔴 空売りガイド・合議" if is_short_card else "🔵 売買ガイド・合議")
+            if st.button(g_lbl, key=f"btn_open_{uk_card}", use_container_width=True, type="primary"):
+                st.session_state["focused_stock_item"] = r_m
+                st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+                _app_rerun()
+        else:
+            if rel_news and st.button("🚨 速報ニュース解説", key=f"nb_{kp}_{r_m['code']}", use_container_width=True):
+                st.session_state["selected_news_item"] = rel_news
+                st.session_state["navigation_page"] = "NEWS_DETAIL"
+                st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+                st.rerun()
+        w_lbl = "✅ 監視解除" if r_m["code"] in st.session_state["watchlist"] else "⭐ 監視追加"
+        if st.button(w_lbl, key=f"btn_watch_{uk_card}", use_container_width=True):
+            if r_m["code"] in st.session_state["watchlist"]:
+                del st.session_state["watchlist"][r_m["code"]]
+            else:
+                st.session_state["watchlist"][r_m["code"]] = r_m
+            cu = st.session_state.get("authenticated_user", "")
+            if cu: save_watchlist(cu, st.session_state["watchlist"])
+            st.rerun()
+
+    with b_col2:
+        if st.button(f"🔥 DEEP DIVE ({r_m['code']})", key=f"btn_dd_{kp}_{r_m['code']}", use_container_width=True):
+            st.session_state["dd_target_code"] = r_m["full_code"]
+            st.session_state["dd_target_style"] = st_info.get("style_name", "デイトレード")
+            st.session_state["dd_code_in"] = r_m["full_code"]
+            st.session_state["dd_style_in"] = st_info.get("style_name", "デイトレード")
+            st_name_cur = st_info.get("style_name", "default")
+            matched_council = []
+            for c_key_cand, c_val_cand in st.session_state.get("council_threads", {}).items():
+                if r_m["code"] in str(c_key_cand) and st_name_cur in str(c_key_cand) and isinstance(c_val_cand, list):
+                    matched_council = c_val_cand
+                    break
+            synced_entry = sync_lab_intel_to_shared(r_m, council_turns=matched_council if matched_council else None, rel_news_list=rel_news_list, persist=True)
+            st.session_state["dd_lab_ctx"] = {
+                "full_code": r_m["full_code"],
                 "side": st_info.get("side", "LONG"),
-                "tactic_type": st_info.get("tactic_type", "Type-E"),
-                "exec_grade": exec_grade,
-                "entry_price": float(r.get("raw_close", 0.0)),
-                "tp_price": float(r.get("raw_tp", 0.0)),
-                "sl_price": float(r.get("raw_sl", 0.0)),
-                "vwap_price": float(r.get("raw_vwap", 0.0)),
-                "shares": int(lot.get("shares", 100)),
-                "status": "OPEN",
-                "exit_price": None,
-                "closed_at": None,
-                "pnl_yen": 0.0,
-                "pnl_pct": 0.0,
-                "ai_feedback": ""
+                "expect_pct": float(r_m.get("expect_pct", 50.0)),
+                "exec_grade": str(r_m.get("exec_grade", "")),
+                "tp": float(r_m.get("raw_tp", 0.0)),
+                "sl": float(r_m.get("raw_sl", 0.0)),
+                "vwap": float(r_m.get("raw_vwap", 0.0)),
+                "lab_full": r_m,
+                "lab_council": synced_entry.get("lab_council", []),
+                "lab_related_news": synced_entry.get("lab_related_news", rel_news_list),
+                "lab_updated_at": synced_entry.get("lab_updated_at", ""),
+                "dd_result": synced_entry.get("dd_result"),
+                "dd_updated_at": synced_entry.get("dd_updated_at", ""),
             }
-            j_list.insert(0, j_entry)
-            save_trade_journal(cu_j, j_list)
-            st.success(f"✅ 『{r['name']} ({r['code']})』をトレード日誌に記録しました！（『📓 トレード日誌＆AI監査』タブで確認・決済採点できます）")
-    if rel_news and st.button("🚨【速報】重大ニュースの詳細分析を開く", key=f"nb_{kp}_{r['code']}", use_container_width=True):
-        st.session_state["selected_news_item"] = rel_news; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
-    open_now = bool(is_focused or is_custom)
-    render_council_sec(r, f"foc_{r['code']}" if open_now else f"{kp}_{r['code']}", auto_open=open_now)
+            st.session_state["navigation_page"] = "DEEP_DIVE"
+            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+            st.rerun()
+
+        if st.button(f"🎯 日誌記録 ({r_m['code']})", key=f"btn_journal_add_{kp}_{r_m['code']}", use_container_width=True):
+            cu_j = st.session_state.get("authenticated_user", "")
+            if cu_j:
+                j_list = load_trade_journal(cu_j)
+                j_entry = {
+                    "id": hashlib.md5(f"{r_m['full_code']}_{time.time_ns()}".encode()).hexdigest()[:10],
+                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "full_code": r_m["full_code"],
+                    "code": r_m["code"],
+                    "name": r_m["name"],
+                    "genre": r_m["genre"],
+                    "style": st_info.get("style_name", "デイトレード"),
+                    "side": st_info.get("side", "LONG"),
+                    "tactic_type": st_info.get("tactic_type", "Type-E"),
+                    "exec_grade": exec_grade,
+                    "entry_price": float(r_m.get("raw_close", 0.0)),
+                    "tp_price": float(r_m.get("raw_tp", 0.0)),
+                    "sl_price": float(r_m.get("raw_sl", 0.0)),
+                    "vwap_price": float(r_m.get("raw_vwap", 0.0)),
+                    "shares": int(lot.get("shares", 100)),
+                    "status": "OPEN",
+                    "exit_price": None,
+                    "closed_at": None,
+                    "pnl_yen": 0.0,
+                    "pnl_pct": 0.0,
+                    "ai_feedback": ""
+                }
+                j_list.insert(0, j_entry)
+                save_trade_journal(cu_j, j_list)
+                st.success(f"✅ 『{r_m['name']} ({r_m['code']})』をトレード日誌に記録しました！")
+
+    render_council_sec(r_m, uk_card, auto_open=bool(is_focused or is_custom))
 def _compute_single_10y_metrics(df_w: pd.DataFrame, full_code: str) -> dict:
     is_jp = ".T" in str(full_code)
     default_res = {"cagr_10y": 0.0, "pos_10y_pct": 50.0, "poc_10y_price": 0.0, "poc_10y_str": "-", "low_10y_str": "-", "high_10y_str": "-", "ma200w_dev_pct": 0.0, "ma200w_slope_up": True, "long_10y_score": 50, "regime_10y_label": "📊 10年大局データ標準評価", "poc_relation_note": "データ蓄積中", "years_span": "10Y", "df_weekly_clean": None, "has_data": False}
@@ -3134,6 +3438,7 @@ def _build_historical_daily_slice_ctx(df_daily_clean: pd.DataFrame, prev_d: str,
         poc_10y_price = round_to_tse_tick(poc_raw, full_code, "nearest") if full_code else poc_raw
         ma200w_dev_pct = float(((px - ma200) / max(ma200, 1e-4)) * 100.0)
     return {"ma5": ma5, "ma25": ma25, "ma75": ma75, "ma200": ma200, "ma25_slope_up": ma25_slope_up, "bull_po": bull_po, "bear_po": bear_po, "macd_hist": macd_hist, "pos_52w_pct": pos_52w_pct, "daily_atr14": daily_atr14, "prev_trend_weak": prev_trend_weak, "poc_10y_price": poc_10y_price, "pos_10y_pct": pos_10y_pct, "ma200w_dev_pct": ma200w_dev_pct, "has_data": True}
+
 def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat: dict, pest: float, vwap20: float, tpv: float, slv: float, shares: int, style: str, total_capital: float = 1000000.0, risk_tolerance_pct: float = 2.0, shared_ledger: dict = None, save_db: bool = True, genre: str = "", daily_2y: dict = None, macro_10y: dict = None, active_boosts: tuple = ("core_inst", "core_mom", "core_vol")) -> dict:
     is_jp = ".T" in full_code; now_dt = datetime.now(); today_str = now_dt.strftime("%Y-%m-%d"); today_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%d"); is_market_open = _is_market_open_now(is_jp)
     combat_prof = get_ticker_combat_profile(full_code, genre)
@@ -3768,7 +4073,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
         daily_2y_serializable = {k: v for k, v in daily_2y.items() if k not in ("df_daily_clean", "daily_rs_alpha_map")}
         return {"full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, "combat_tier": combat_prof["tier_class"], "combat_cost_pct": round(combat_prof["cost_rate"] * 100, 2), "exec_grade": exec_grade, "exec_score": exec_score, "exec_detail": exec_detail, "earnings_days_left": earnings_days_left, "rs_alpha": rs_alpha, "intraday_rs_30m": intraday_rs_30m, "or15_low": or15_low_today, "or15_high": or15_high_today, "pdh": pdh_val, "pdl": pdl_val, "ob_support_px": ob_support_px, "ob_high_px": ob_high_px, "limit_up_px": limit_up_px, "limit_down_px": limit_down_px, "limit_up_tight": limit_up_tight, "vwap_p1": vwap_p1, "vwap_p2": vwap_p2, "vwap_m1": vwap_m1, "vwap_m2": vwap_m2, "vwap_over_2sigma": vwap_over_2sigma, "style_fit_bonus": round(style_fit_bonus, 1), "macro_10y": macro_10y_serializable, "daily_2y": daily_2y_serializable, "price": fmt_px(cv, is_jp, code), "raw_close": cv, "raw_tp": tpv, "raw_sl": slv, "raw_vwap": vwap_rounded, "tp_price": fmt_px(tpv, is_jp, code), "tp_pct": tp_pct_disp, "sl_price": fmt_px(slv, is_jp, code), "sl_pct": sl_pct_disp, "vwap_price": fmt_px(vwap_rounded, is_jp, code), "inst_score": int(np.clip(round((ms["ms_score"] + inst_flow_score) * 0.5), 10, 99)), "vpin": q_adv["vpin"], "ofi_z": round(ofi_z, 2), "yz_vol": q_adv["yz_vol"], "cvar95": q_adv["cvar95"], "eff_pct": q_adv["eff_pct"], "kelly_pct": kelly_pct, "bb_exp_ratio": q_adv["bb_exp_ratio"], "vol_spike_bull_pct": q_adv["vol_spike_bull_pct"], "upper_wick_pressure": u_wick_now, "lower_wick_support": l_wick_now, "bull_edge": bull_edge, "bear_edge": bear_edge, "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"], "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_lambda": ms["kyle_lambda"], "kyle_stealth": ms["kyle_stealth"], "ms_regime": ms["ms_regime"], "expect_pct": round(expect_pct, 1), "surge_attention_score": q_adv["surge_attention_score"], "rvol": q_adv["rvol"], "news_hits": news_hits, "pts_est_price": fmt_px(pest, is_jp, code), "pts_gap_pct": pgap, "pts_label_title": pts_label_title, "diff": round(day_ret, 2), "prob": gu_prob_pct, "intraday_win_rate": intraday_bull_pct, "total_win_rate": round(tot_win, 1), "rsi": q_adv["rsi"], "payoff": q_adv["payoff"], "edge": edge, "ai_score": int(np.clip(round(expect_pct * 0.92 + 4), 10, 99)), "tier_num": t_num, "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg, "lot_info": lot_info, "strat": strat, "forward_test": forward_test}
     except Exception as e: record_system_error("analyze_df", e, f"Code: {code}"); return None
-
 def _download_5m_pool(codes: list):
     for p_str in ("60d", "1mo", "15d"):
         try:
@@ -4016,7 +4320,7 @@ def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True,
     scaled_map = {}
     scaled_all = []
     for item in core_all:
-        sc_item = _scale_stock_item_for_user(item, style, float(total_cap), float(risk_pct))
+        sc_item = _merge_dd_intel_into_lab_item(_scale_stock_item_for_user(item, style, float(total_cap), float(risk_pct)))
         scaled_map[sc_item["full_code"]] = sc_item
         scaled_all.append(sc_item)
     scaled_gmap = {g: [scaled_map[x["full_code"]] for x in items if x["full_code"] in scaled_map] for g, items in core_gmap.items()}
@@ -4038,6 +4342,8 @@ def fetch_one_with_df(code, macro, style, core_vol=True, core_inst=True, core_mo
             if hist_df is not None and not hist_df.empty: break
         norm_df = normalize_ohlcv_df(hist_df, min_rows=25)
         res = analyze_df(hist_df, code, inf["name"], inf["theme"], inf["genre"], macro, local_buzz, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_capital=total_cap, risk_tolerance_pct=risk_pct, macro_10y_map=macro_10y_map, daily_2y_map=daily_2y_map, bench_30m_ret=None, earnings_days_left=e_days)
+        if res:
+            res = _merge_dd_intel_into_lab_item(res)
         return res, norm_df
     except Exception as e:
         record_system_error("fetch_one_with_df", e, f"Code: {code}")
@@ -4046,6 +4352,7 @@ def fetch_one_with_df(code, macro, style, core_vol=True, core_inst=True, core_mo
 def fetch_one(code, macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
     res, _ = fetch_one_with_df(code, macro, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_cap=total_cap, risk_pct=risk_pct)
     return res
+
 def compute_sector_rotation_stats(all_stocks: list) -> list:
     out = []
     for g in DYNAMIC_GENRES:
@@ -4120,31 +4427,37 @@ def evaluate_journal_trade_audit(entry: dict, all_stocks: list) -> str:
     tp_comment = "🎯 計画通りの利確執行で期待値通りのトレードです。+1.0Rでの半分利確習慣を継続しましょう。" if pnl_pct >= 1.0 else ("⚖️ 微損・微益での撤退です。方向感が崩れた際の早期撤退は資金防衛として有効です。" if pnl_pct > -1.0 else "🛡️ 損切り後のドテンやリベンジ売買を控え、次のGrade-A銘柄を待ちましょう。")
     return f"【AEGIS＆SENTINEL 規律監査スコア: {score}点】\n・損益結果: {pnl_pct:+.2f}%（{pnl_yen:+,.0f}円）｜執行グレード: {exec_g}\n・リスク監査(SENTINEL): {sl_comment}\n・資金管理講評(AEGIS): {tp_comment}"
 
+# =========================================================================
+# メイン画面レイアウト（スリム1行リボン・視認性優先・全機能100%保持）
+# =========================================================================
 macro_info = fetch_macro()
-mpills = "".join([
-    f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:3px 8px;border-radius:6px;font-size:10.5px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;">'
-    f'<span style="color:#94a3b8;white-space:nowrap;">{m["label"]}</span>'
-    f'<span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:700;white-space:nowrap;">{"+" if m["diff"]>=0 else ""}{m["diff"]}%</span>'
+ribbon_chips = "".join([
+    f'<div class="lab-ribbon-chip">'
+    f'<span style="color:#94a3b8;">{html.escape(str(m["label"]))}</span>'
+    f'<span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:800;">{m["diff"]:+.2f}%</span>'
     f'</div>'
     for m in macro_info.values()
 ])
 st.markdown(
     f'<div class="glass-header">'
-    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
-    f'<div class="brand-luxury">YAMASHISHI LAB</div>'
-    f'<div style="font-size:10px;color:#94a3b8;">週足10年 × 日足2年 × 5分足60日 3階層MTF融合 × Gemini クオンツ監査合議</div>'
+    f'<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;">'
+    f'<div class="brand-luxury">YAMASHISHI LAB v28.0</div>'
+    f'<div style="font-size:10px;color:#94a3b8;font-family:\'JetBrains Mono\',monospace;">3-TIER MTF × DEEP DIVE FUSION × 5-AUDITOR COUNCIL</div>'
     f'</div>'
-    f'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:8px;">{mpills}</div>'
+    f'<div class="lab-thin-ribbon" style="margin-top:6px;margin-bottom:0;">{ribbon_chips}</div>'
     f'</div>',
     unsafe_allow_html=True
 )
 
-_cache_pool_key = f"pool_v27_full_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
+_cache_pool_key = f"pool_v28_full_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
 if _cache_pool_key not in st.session_state:
     with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】週足10年×日足2年×5分足60日 3階層MTFスコアリングを実行中..."):
         g_res, all_res = fetch_pool_batch(macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
         st.session_state[_cache_pool_key] = (g_res, all_res)
-else: g_res, all_res = st.session_state[_cache_pool_key]
+else:
+    raw_g_res, raw_all_res = st.session_state[_cache_pool_key]
+    all_res = [_merge_dd_intel_into_lab_item(x) for x in raw_all_res]
+    g_res = {gk: [_merge_dd_intel_into_lab_item(x) for x in gl] for gk, gl in raw_g_res.items()}
 
 if st.session_state.get("last_synced_style") != investment_style:
     st.session_state["last_synced_style"] = investment_style
@@ -4153,21 +4466,22 @@ if st.session_state.get("last_synced_style") != investment_style:
     if isinstance(foc_cur, dict) and foc_cur.get("full_code"):
         fc_f = foc_cur["full_code"]
         refreshed_f = res_by_fc.get(fc_f) or fetch_one(fc_f, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-        if refreshed_f: st.session_state["focused_stock_item"] = refreshed_f
+        if refreshed_f: st.session_state["focused_stock_item"] = _merge_dd_intel_into_lab_item(refreshed_f)
     wl_cur = st.session_state.get("watchlist", {})
     if isinstance(wl_cur, dict) and wl_cur:
         updated_wl, changed_wl = {}, False
         for w_k, w_v in wl_cur.items():
             fc_w = w_v.get("full_code") or (f"{w_k}.T" if re.match(r"^[0-9]{3}[0-9A-Z]$", str(w_k)) else str(w_k))
             refreshed_w = res_by_fc.get(fc_w) or fetch_one(fc_w, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-            if refreshed_w: updated_wl[w_k] = refreshed_w; changed_wl = True
-            else: updated_wl[w_k] = w_v
+            if refreshed_w: updated_wl[w_k] = _merge_dd_intel_into_lab_item(refreshed_w); changed_wl = True
+            else: updated_wl[w_k] = _merge_dd_intel_into_lab_item(w_v)
         if changed_wl:
             st.session_state["watchlist"] = updated_wl
             if cu: save_watchlist(cu, updated_wl)
 
 focused_item = st.session_state.get("focused_stock_item")
 if focused_item:
+    focused_item = _merge_dd_intel_into_lab_item(focused_item)
     st.markdown("### 🔵 銘柄詳細・売買合議フォーカスモード")
     foc_fc = str(focused_item.get("full_code", "")).strip().upper()
     foc_df = None
@@ -4212,17 +4526,17 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
             if len(out_items) >= limit: break
             if rc in seen_fc: continue
             found = next((r_it for r_it in all_res if r_it["full_code"] == rc or r_it["code"] == rc.replace(".T", "")), None) or fetch_one(rc, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-            if found and found["full_code"] not in seen_fc: out_items.append(found); seen_fc.add(found["full_code"])
+            if found and found["full_code"] not in seen_fc: out_items.append(_merge_dd_intel_into_lab_item(found)); seen_fc.add(found["full_code"])
         return out_items
 
-    extracted_items = sorted(_resolve_stock_items(extracted_codes_list, 3), key=lambda x: x["expect_pct"], reverse=True)
+    extracted_items = sorted(_resolve_stock_items(extracted_codes_list, 3), key=lambda x: x["fusion_expect_pct"], reverse=True)
     needed_ref = max(0, 3 - len(extracted_items))
-    ref_items = sorted(_resolve_stock_items([c for c in sector_ref_codes_list if c not in {it["full_code"] for it in extracted_items}], needed_ref), key=lambda x: x["expect_pct"], reverse=True) if needed_ref > 0 else []
-    combined_news_stocks = (extracted_items + ref_items) or sorted(all_res, key=lambda x: x["expect_pct"], reverse=True)[:3]
+    ref_items = sorted(_resolve_stock_items([c for c in sector_ref_codes_list if c not in {it["full_code"] for it in extracted_items}], needed_ref), key=lambda x: x["fusion_expect_pct"], reverse=True) if needed_ref > 0 else []
+    combined_news_stocks = (extracted_items + ref_items) or sorted(all_res, key=lambda x: x["fusion_expect_pct"], reverse=True)[:3]
 
     for idx, r_item in enumerate(combined_news_stocks, 1):
         is_direct_mention = (r_item["full_code"] in extracted_codes_set) or (r_item["code"] in {c.replace(".T", "") for c in extracted_codes_set})
-        origin_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.28);border-color:#10b981;color:#6ee7b7;font-weight:900;">🎯 記事内直接言及・抽出銘柄</span>' if is_direct_mention else '<span class="pill-badge" style="background:rgba(148,163,184,0.22);border-color:#94a3b8;color:#e2e8f0;font-weight:800;">📂 同セクター代表・波及監視銘柄（参考）</span>'
+        origin_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.28);border-color:#10b981;color:#6ee7b7;font-weight:900;">🎯 記事内直接言及</span>' if is_direct_mention else '<span class="pill-badge" style="background:rgba(148,163,184,0.22);border-color:#94a3b8;color:#e2e8f0;font-weight:800;">📂 セクター代表</span>'
         render_card(r_item, rank=idx, kp=f"nr_{tn['id']}", extra_origin_badge=origin_badge)
 
     if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
@@ -4245,26 +4559,45 @@ if st.session_state.get("custom_search_code"):
         st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
     st.stop()
 
+# サバイバル戦況バー（1行横スクロール極薄リボン ＋ 詳細折りたたみ）
 surv_logs_top = db_get("market_survival_logs", [])
 if isinstance(surv_logs_top, list) and surv_logs_top:
     prom_items = [x for x in surv_logs_top if "[新規昇格]" in x.get("msg", "")][:5]
     purg_items = [x for x in surv_logs_top if "[圏外追放]" in x.get("msg", "")][:5]
-    recent_5 = surv_logs_top[:5]
-    bar_pills = "".join([f'<span style="display:inline-block;background:{"rgba(16,185,129,0.16)" if "[新規昇格]" in it.get("msg","") else "rgba(239,68,68,0.16)"};border:1px solid {"rgba(16,185,129,0.4)" if "[新規昇格]" in it.get("msg","") else "rgba(239,68,68,0.4)"};color:{"#6ee7b7" if "[新規昇格]" in it.get("msg","") else "#fca5a5"};padding:2px 7px;border-radius:5px;font-size:10.5px;margin:2px 4px 2px 0;">{html.escape(it.get("msg","").split(" が")[0])}</span>' for it in recent_5])
-    st.markdown(f'<div style="background:rgba(15,23,42,0.82);border:1px solid rgba(56,189,248,0.28);border-radius:10px;padding:7px 11px;margin-bottom:8px;"><div style="font-size:10.5px;font-weight:800;color:#fde047;margin-bottom:3px;">⚔️ 弱肉強食サバイバル戦況バー（直近入れ替え速報：昇格 {len(prom_items)}件 / 追放 {len(purg_items)}件）</div><div>{bar_pills}</div></div>', unsafe_allow_html=True)
+    bar_pills = "".join([
+        f'<span class="lab-ribbon-chip" style="background:{"rgba(16,185,129,0.16)" if "[新規昇格]" in it.get("msg","") else "rgba(239,68,68,0.16)"};border-color:{"rgba(16,185,129,0.42)" if "[新規昇格]" in it.get("msg","") else "rgba(239,68,68,0.42)"};color:{"#6ee7b7" if "[新規昇格]" in it.get("msg","") else "#fca5a5"};">'
+        f'{html.escape(it.get("msg","").split(" が")[0])}</span>'
+        for it in surv_logs_top[:6]
+    ])
+    st.markdown(
+        f'<div class="lab-thin-ribbon">'
+        f'<span class="lab-ribbon-chip" style="border-color:rgba(250,204,21,0.4);color:#fde047;font-weight:800;">⚔️ 入替戦 昇格{len(prom_items)}/追放{len(purg_items)}</span>'
+        f'{bar_pills}</div>',
+        unsafe_allow_html=True
+    )
+    with st.expander("⚔️ サバイバル入れ替え戦・詳細ログ", expanded=False):
+        for sl in surv_logs_top[:12]:
+            st.markdown(f'<div style="font-size:11px;color:#cbd5e1;padding:3px 0;border-bottom:1px solid rgba(148,163,184,0.12);"><span style="color:#94a3b8;font-family:JetBrains Mono,monospace;">{html.escape(sl.get("time",""))}</span> {html.escape(sl.get("msg",""))}</div>', unsafe_allow_html=True)
 
+# 5大セクター資金ローテーションバー（1行横スクロール極薄リボン ＋ 詳細折りたたみ）
 sec_rot_stats = compute_sector_rotation_stats(all_res)
 if sec_rot_stats:
-    sec_cards = ""
-    for sr in sec_rot_stats:
-        fs = float(sr["flow_score"])
-        if fs >= 12.0: bg_c, bd_c, tx_c = "rgba(16,185,129,0.26)", "#10b981", "#6ee7b7"
-        elif fs >= 0.0: bg_c, bd_c, tx_c = "rgba(16,185,129,0.12)", "rgba(16,185,129,0.45)", "#a7f3d0"
-        elif fs >= -12.0: bg_c, bd_c, tx_c = "rgba(239,68,68,0.12)", "rgba(239,68,68,0.45)", "#fecdd3"
-        else: bg_c, bd_c, tx_c = "rgba(239,68,68,0.26)", "#ef4444", "#fca5a5"
-        g_short = sr["genre"].split("・")[0]
-        sec_cards += f'<div style="background:{bg_c};border:1px solid {bd_c};border-radius:7px;padding:5px 7px;text-align:center;"><div style="font-size:10px;font-weight:800;color:#f8fafc;white-space:nowrap;">{html.escape(g_short)}</div><div style="font-size:11px;font-weight:900;color:{tx_c};">30mRS {sr["avg_rs30"]:+.2f}%</div><div style="font-size:9px;color:#cbd5e1;">RVOL {sr["avg_rvol"]}x / CLV {sr["avg_ofi"]:+.2f}</div></div>'
-    st.markdown(f'<div style="background:rgba(15,23,42,0.82);border:1px solid rgba(168,85,247,0.3);border-radius:10px;padding:7px 11px;margin-bottom:10px;"><div style="font-size:10.5px;font-weight:800;color:#e9d5ff;margin-bottom:5px;">🧭 5大セクター・リアルタイム資金ローテーション・ヒートマップ（資金流入順）</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:5px;">{sec_cards}</div></div>', unsafe_allow_html=True)
+    sec_ribbon = "".join([
+        f'<div class="lab-ribbon-chip" style="background:{"rgba(16,185,129,0.16)" if float(sr["flow_score"])>=0 else "rgba(239,68,68,0.16)"};border-color:{"rgba(16,185,129,0.42)" if float(sr["flow_score"])>=0 else "rgba(239,68,68,0.42)"};">'
+        f'<span style="color:#f8fafc;font-weight:800;">{html.escape(sr["genre"].split("・")[0])}</span>'
+        f'<span style="color:{"#6ee7b7" if float(sr["flow_score"])>=0 else "#fca5a5"};font-weight:800;">{sr["avg_rs30"]:+.2f}%</span>'
+        f'<span style="color:#94a3b8;">({sr["avg_rvol"]}x)</span></div>'
+        for sr in sec_rot_stats
+    ])
+    st.markdown(
+        f'<div class="lab-thin-ribbon">'
+        f'<span class="lab-ribbon-chip" style="border-color:rgba(168,85,247,0.45);color:#e9d5ff;font-weight:800;">🧭 セクター資金流</span>'
+        f'{sec_ribbon}</div>',
+        unsafe_allow_html=True
+    )
+    with st.expander("🧭 5大セクター資金ローテーション・詳細指標", expanded=False):
+        for sr in sec_rot_stats:
+            st.markdown(f'<div style="font-size:11px;color:#cbd5e1;padding:3px 0;border-bottom:1px solid rgba(148,163,184,0.12);"><b>{html.escape(sr["genre"])}</b>（{sr["count"]}銘柄）: 30mRS <b>{sr["avg_rs30"]:+.2f}%</b> ｜ RVOL <b>{sr["avg_rvol"]}x</b> ｜ CLV <b>{sr["avg_ofi"]:+.2f}</b> ｜ FlowScore <b>{sr["flow_score"]:+.1f}</b></div>', unsafe_allow_html=True)
 
 def cut_stocks(slist, pct): return slist[:max(3, int(round(len(slist) * (pct / 100.0))))] if slist else []
 
@@ -4273,7 +4606,8 @@ def _top5_eligibility_key(item: dict) -> tuple:
     t_days = int(ft_d.get("total_days", 0))
     pf_v = float(ft_d.get("profit_factor", 0.0))
     eligible = 1 if (int(item.get("exec_score", 0)) >= 4 and (t_days < 3 or pf_v >= 1.0)) else 0
-    return (eligible, float(item.get("expect_pct", 0.0)))
+    exp_val = float(item.get("fusion_expect_pct", item.get("expect_pct", 0.0)))
+    return (eligible, exp_val)
 
 cats = ["🏆 総合TOP5", "⚛️ ボラティリティ突破TOP10", "🏛️ 5分足需給ミクロTOP10", "🚨 重大ニュース＆連動株", "🎟️ 直近IPO・グロース実測分析", "🏦 BVC-VPIN・CLV資金フロー", "🔥 出来高サージ＆市場注目度", "📋 監視シート", "📓 トレード日誌＆AI監査"] + [f"📂 {g}" for g in DYNAMIC_GENRES]
 st.markdown(f'<div class="compact-bar-label"><span>📂 QUANTITATIVE STRATEGY ({investment_style.split(" ")[1]})</span></div>', unsafe_allow_html=True)
@@ -4386,7 +4720,7 @@ elif sel_cat == "📋 監視シート":
                     unsafe_allow_html=True
                 )
     if st.button("⚡ 総合TOP3を一括登録", use_container_width=True):
-        for it in surv[:3]: wl[it["code"]] = it
+        for it in surv[:3]: wl[it["code"]] = _merge_dd_intel_into_lab_item(it)
         cu = st.session_state.get("authenticated_user", "")
         if cu: save_watchlist(cu, wl)
         st.rerun()
@@ -4396,7 +4730,7 @@ elif sel_cat == "📓 トレード日誌＆AI監査":
     cu_j = st.session_state.get("authenticated_user", "")
     j_entries = load_trade_journal(cu_j)
     if not j_entries:
-        st.info("まだトレード日誌に記録がありません。各銘柄カードの『🎯 このプランでエントリー記録』ボタンから登録してください。")
+        st.info("まだトレード日誌に記録がありません。各銘柄カードの『🎯 日誌記録』ボタンから登録してください。")
     else:
         closed_j = [x for x in j_entries if x.get("status") == "CLOSED"]
         tot_j_pnl = sum(float(x.get("pnl_yen", 0.0)) for x in closed_j)
@@ -4463,4 +4797,4 @@ elif sel_cat == "📓 トレード日誌＆AI監査":
 elif sel_cat.startswith("📂 "):
     for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), survival_cut_pct), 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
 
-st.markdown('<div class="disclaimer-banner"><b>⚖️ 重要免責事項・法的表示</b><br>本システム「YAMASHISHI LAB」が提供するすべての指標（ボラティリティ突破指数・WKB統計近似モデル、5分足60日OHLCV需給ミクロ構造近似、日足2年中期トレンド・MAパーフェクトオーダー・MACD・52週位置・日足ATR14・価格帯別出来高Volume Profile(LVN上値真空/HVNしこり壁)・対ベンチマークRSα・30分イントラデイRS先行度、過去10年週足大局アルゴリズム・10年POC価格帯別出来高解析、BVC-VPIN・Kyle-λ統計近似、WRVヒゲ拒絶ベクトル、OR15分初動レンジ判定・時間帯補正RVOL・3階層MTF5条件執行品質ゲート、VWAP±1σ/2σ動的バンド過熱判定・PDH/PDL前日高値安値・機関オーダーブロック(OB)支持帯検出・東証値幅制限(ストップ高/ストップ安)自動キャップ、決算跨ぎリスク遮断ゲート、監視ポートフォリオ相関＆セクター集中リスク診断、5大セクター資金ローテーション・ヒートマップ、当日実測寄付きギャップ／理論寄付き試算値、期待度パーセンテージ、リークフリー検証統計(勝率/PF/SQN/平均R/最大DD/エクイティカーブ/時間帯別勝率)、スマホ即発注用OCOオーダーチケットBOX、Geminiクオンツ監査合議ログ、トレード日誌AI監査、および買い・空売り双方の売買プラン）は、過去の5分足・日足・週足四本値および出来高(OHLCV)データと数理アルゴリズムに基づく研究シミュレーション・情報提供を目的としたものであり、実際の板情報（Tick）やPTS実勢値に基づくものではなく、特定の有価証券の売買推奨や投資助言（投資助言・代理業等）を行うものではありません。株式投資（特に信用取引・空売り）には元本割れや元本超過損・市場変動のリスクが伴います。最終的な投資判断および資金配分は、必ず利用者ご自身の自己責任にて行っていただけますようお願い申し上げます。</div>', unsafe_allow_html=True)
+st.markdown('<div class="disclaimer-banner"><b>⚖️ 重要免責事項・法的表示</b><br>本システム「YAMASHISHI LAB」が提供するすべての指標（ボラティリティ突破指数・WKB統計近似モデル、5分足60日OHLCV需給ミクロ構造近似、日足2年中期トレンド・MAパーフェクトオーダー・MACD・52週位置・日足ATR14・価格帯別出来高Volume Profile(LVN上値真空/HVNしこり壁)・対ベンチマークRSα・30分イントラデイRS先行度、過去10年週足大局アルゴリズム・10年POC価格帯別出来高解析、BVC-VPIN・Kyle-λ統計近似、WRVヒゲ拒絶ベクトル、OR15分初動レンジ判定・時間帯補正RVOL・3階層MTF5条件執行品質ゲート、VWAP±1σ/2σ動的バンド過熱判定・PDH/PDL前日高値安値・機関オーダーブロック(OB)支持帯検出・東証値幅制限(ストップ高/ストップ安)自動キャップ、決算跨ぎリスク遮断ゲート、監視ポートフォリオ相関＆セクター集中リスク診断、5大セクター資金ローテーション・ヒートマップ、当日実測寄付きギャップ／理論寄付き試算値、期待度パーセンテージ、LAB×DEEP DIVE双方向統合予測・同期判定、リークフリー検証統計(勝率/PF/SQN/平均R/最大DD/エクイティカーブ/時間帯別勝率)、スマホ即発注用OCOオーダーチケットBOX、Geminiクオンツ監査合議ログ、トレード日誌AI監査、および買い・空売り双方の売買プラン）は、過去の5分足・日足・週足四本値および出来高(OHLCV)データと数理アルゴリズムに基づく研究シミュレーション・情報提供を目的としたものであり、実際の板情報（Tick）やPTS実勢値に基づくものではなく、特定の有価証券の売買推奨や投資助言（投資助言・代理業等）を行うものではありません。株式投資（特に信用取引・空売り）には元本割れや元本超過損・市場変動のリスクが伴います。最終的な投資判断および資金配分は、必ず利用者ご自身の自己責任にて行っていただけますようお願い申し上げます。</div>', unsafe_allow_html=True)
