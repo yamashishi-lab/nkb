@@ -2231,11 +2231,19 @@ def _fetch_gov_and_whales(corp_name: str, short_code: str, is_jp: bool = True) -
 # 5. プロ基準価格・MTF同調LED・価格帯ラダー・1分足ズームデータ構築
 # =========================================================================
 def _compute_round_number_level(curr_px: float, is_jp: bool) -> float:
+    if curr_px is None:
+        return 0.0
+    try:
+        px = float(curr_px)
+    except Exception:
+        return 0.0
+    if not math.isfinite(px) or px <= 0:
+        return 0.0
     if is_jp:
-        step = 5000 if curr_px >= 20000 else (1000 if curr_px >= 5000 else (500 if curr_px >= 2000 else 100))
+        step = 5000 if px >= 20000 else (1000 if px >= 5000 else (500 if px >= 2000 else 100))
     else:
-        step = 50 if curr_px >= 400 else (25 if curr_px >= 150 else (10 if curr_px >= 50 else 5))
-    return float(round(curr_px / step) * step)
+        step = 50 if px >= 400 else (25 if px >= 150 else (10 if px >= 50 else 5))
+    return float(round(px / step) * step)
 
 
 def _compute_pro_ref_levels(df_1d: pd.DataFrame, df_5m: pd.DataFrame, is_jp: bool, market_today_str: str) -> dict:
@@ -5252,6 +5260,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             st.markdown(f'<div class="dd-macro-strip">{"".join(chip_parts)}</div>', unsafe_allow_html=True)
 
         df_1d, df_5m, df_1m, info = data["df_1d"], data["df_5m"], data.get("df_1m", pd.DataFrame()), data["info"]
+        if df_1d is not None and not df_1d.empty and "Close" in df_1d.columns:
+            df_1d = df_1d.dropna(subset=["Close"])
         if df_1d is None or df_1d.empty:
             st.error(f"❌ 銘柄コード `{fc}` の市場データを取得できませんでした。")
             return
@@ -5276,7 +5286,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             sub_now_today = tmp_now_5m[tmp_now_5m["_d"] == market_today_str]
             if not sub_now_today.empty:
                 last_5m_c = float(sub_now_today["Close"].iloc[-1])
-                if last_5m_c > 0:
+                if math.isfinite(last_5m_c) and last_5m_c > 0:
                     curr_px_rt = round(last_5m_c, 2)
 
         mkt_regime = _detect_market_regime(df_1d)
@@ -5297,7 +5307,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         )
 
         if traj["has_actual"] and traj["last_act_idx"] >= 0 and traj["actual"][traj["last_act_idx"]] is not None:
-            curr_px = float(traj["actual"][traj["last_act_idx"]])
+            cand_px = float(traj["actual"][traj["last_act_idx"]])
+            curr_px = cand_px if (math.isfinite(cand_px) and cand_px > 0) else curr_px_rt
         else:
             curr_px = curr_px_rt
 
@@ -5603,7 +5614,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
             _render_mtf_and_ladder(mtf_res, curr_px, is_jp, ref_levels, traj, vp, round_level, active_lab)
 
-            # スリムKPIリボン（横スクロール1行集約・縦幅圧縮）
             rvol_v = traj["rvol"]
             rvol_txt, rvol_c = (f"{rvol_v:.2f}x (機関)", "#10b981") if (rvol_v and rvol_v >= 1.8) else ((f"{rvol_v:.2f}x (閑散)", "#f59e0b") if (rvol_v and rvol_v < 0.75) else ((f"{rvol_v:.2f}x (通常)", "#38bdf8") if rvol_v else ("場前待機", "#94a3b8")))
             gf = traj["gap_fill"]
@@ -5741,7 +5751,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             if use_1m_zoom:
                 z1 = zoom_1m_payload
                 ml_1m = _build_pro_ref_marklines(ref_levels, curr_px)
-                if "心理的キリ番節目" in opt_lines and curr_px > 0 and abs(round_level - curr_px) / curr_px <= 0.05:
+                if "心理的キリ番節目" in opt_lines and round_level > 0 and curr_px > 0 and abs(round_level - curr_px) / curr_px <= 0.05:
                     ml_1m.append({"yAxis": round_level, "lineStyle": {"color": "rgba(250,204,21,0.52)", "type": "dotted", "width": 1.1}, "label": _h_badge(f"節目 {_fmt_cur(round_level, is_jp)}", "#fde047", "insideEndTop")})
                 if active_lab and "LAB TP/SL" in opt_lines:
                     l_tp_1m = float(active_lab.get("tp", active_lab.get("raw_tp", 0.0)) or 0.0)
@@ -5941,7 +5951,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
                 if g15.get("show_gap_target") and prev_px > 0:
                     ml_data.append({"yAxis": round(prev_px, 2), "lineStyle": {"color": "#f97316", "type": "dashed", "width": 1.4}, "label": _h_badge(f"窓埋目標 {_fmt_cur(prev_px, is_jp)}", "#fdba74", "insideStartTop")})
-                if "心理的キリ番節目" in opt_lines:
+                if "心理的キリ番節目" in opt_lines and round_level > 0:
                     ml_data.append({"yAxis": round_level, "lineStyle": {"color": "rgba(250,204,21,0.52)", "type": "dotted", "width": 1.1}, "label": _h_badge(f"節目 {_fmt_cur(round_level, is_jp)}", "#fde047", "insideEndTop")})
                 if "寄り30分高安（ORB）" in opt_lines and traj["orb_high"] and traj["orb_low"]:
                     ml_data.append({"yAxis": traj["orb_high"], "lineStyle": {"color": "rgba(56,189,248,0.42)", "type": "dashed", "width": 1.0}, "label": _h_badge("ORB高", "#7dd3fc", "insideEndTop")})
