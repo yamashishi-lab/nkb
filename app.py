@@ -2022,7 +2022,7 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
             ig_msg = f"【統計ルール推論】{r['name']}（{r['code']}・{exec_g}）は日足『{d2y_lbl}』×10年大局『{m10_lbl}』に対しSHORT優勢度{s_edge:+.1f}（上ヒゲ圧力{u_wick:.1f} / 30分RS={rs_30m:+.2f}%）で売りシグナル点灯。{dd_time_note} VWAP（{r['vwap_price']}）割れの陰線確定後、次バー始値で空売り（SHORT）を執行します。"
             ig_tone = "rage"
             sn_msg = f"【統計ルール推論】価格帯別出来高（{vp_lbl}）、日足MA25（{d2y.get('ma25_str','-')}）、10年POC（{m10_poc}）と上ヒゲ圧力{u_wick:.1f}を厳格監視。{dd_cvd_note} 踏み上げ逆指値（{r['sl_price']}）を必ず設定します。"
-            ae_msg = f"【統計ルール推論】リークフリー検証（実質勝率{ft_win:.1f}% / PF={ft_pf:.2f} / SQN={ft_sqn:.2f} / 平均{avg_r_v:+.2f}R / 最大DD={ft_dd:.1f}%）に基づき推奨{r['lot_info']['shares']:,}株を算出。+1.0R到達で50%買い戻し利確＋建値ロックを適用します。"
+            ae_msg = f"【統計ルール推論】リークフリー検証（実質勝率{ft_win:.1f}% / PF={ft_pf:.2f} / SQN={ft_sqn:.2f} / 平均{ft_avgr:+.2f}R / 最大DD={ft_dd:.1f}%）に基づき推奨{r['lot_info']['shares']:,}株を算出。+1.0R到達で50%買い戻し利確＋建値ロックを適用します。"
             nx_msg = f"【統計ルール推論・統括】{dd_fusion_note}『{r['name']}（{exec_g}）』は週足10年×日足2年×5分足SHORT優勢度({s_edge:+.1f})の合致により空売り（SHORT）を採択。推奨{r['lot_info']['shares']:,}株を目標{r['tp_price']}・逆指値{r['sl_price']}で執行します。"
         else:
             mode_note = f"（※{spec['pfx']}モードのため買い専念）" if not spec["allow_short"] else f"（LONG優勢度{b_edge:+.1f} / 日次RSα={rs_al:+.2f}% / 30分RS={rs_30m:+.2f}%）"
@@ -2031,7 +2031,7 @@ def _build_natural_fallback_dialogue(uq: str, r: dict, st_style: str, web_hits: 
                 ig_msg = f"【統計ルール推論】{r['name']}（{exec_g}）は{spec['pfx']}基準で{ref_ma}の支持帯と出来高構造（{vp_lbl}）を確認中。{dd_time_note} 押し目陽線確定の翌営業日始値で執行します。{mode_note}"
                 ig_tone = "agree"
                 sn_msg = f"【統計ルール推論】セクター（{genre_s}）の変動幅と価格帯別出来高（{vp_lbl}）の抵抗帯を警戒。{dd_cvd_note} 逆指値（{r['sl_price']}）を厳守します。"
-                ae_msg = f"【統計ルール推論】リークフリー検証（実質勝率{ft_win:.1f}% / PF={ft_pf:.2f} / SQN={ft_sqn:.2f} / 平均{avg_r_v:+.2f}R / 最大DD={ft_dd:.1f}%）に基づき、推奨{r['lot_info']['shares']:,}株・+1.0R半分利確＋建値ロックで資本を防衛します。"
+                ae_msg = f"【統計ルール推論】リークフリー検証（実質勝率{ft_win:.1f}% / PF={ft_pf:.2f} / SQN={ft_sqn:.2f} / 平均{ft_avgr:+.2f}R / 最大DD={ft_dd:.1f}%）に基づき、推奨{r['lot_info']['shares']:,}株・+1.0R半分利確＋建値ロックで資本を防衛します。"
                 nx_msg = f"【統計ルール推論・統括】{dd_fusion_note}『{r['name']}（{exec_g}）』は週足10年『{m10_lbl}』×日足2年『{d2y_lbl}({d2y_sc}点)』が合致し【{r['strat']['tactic_type']}】を採択。推奨{r['lot_info']['shares']:,}株を目標{r['tp_price']}・逆指値{r['sl_price']}（最大{spec['max_hold_days']}営業日）で執行します。"
             else:
                 if diff_v >= 2.5 and rvol_v >= 1.3:
