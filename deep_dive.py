@@ -1072,6 +1072,7 @@ def _declutter_marklines(ml_list: list, curr_px: float, min_gap_pct: float = 0.4
     ref_base = curr_px if (curr_px and curr_px > 0) else float(np.mean([h[0] for h in horiz]))
     ref_base = max(ref_base, 1e-4)
 
+    # 1) 0.20%未満でほぼ同一価格のラインは1本へ統合（例: "PDH / ORB高"）
     merged = []
     for y_val, prio, obj in horiz:
         if merged:
@@ -1091,6 +1092,8 @@ def _declutter_marklines(ml_list: list, curr_px: float, min_gap_pct: float = 0.4
                 continue
         merged.append((y_val, prio, obj))
 
+    # 2) 右側の3分岐（▲/▶/▼）との衝突を完全に防ぐため、ラベルは原則左側（insideStartTop / insideStartBottom）のみを使用
+    #    さらに4本以上密集する場合は優先度上位3本のみラベル表示（ライン自体はすべて描画）
     cluster_gap_pct = max(min_gap_pct * 2.2, 0.95)
     clusters = []
     for entry in merged:
@@ -1146,6 +1149,7 @@ def _declutter_pulse_points(pulse_pts: list, slots: list) -> list:
         _get_sidx(pt) for pt in pulse_pts if str(pt.get("name", "")) != "NOW"
     ]
 
+    # X座標（スロット番号）順にソートして近接ラベルの衝突判定を行う
     indexed_pts = [(idx_orig, _get_sidx(pt), json.loads(json.dumps(pt))) for idx_orig, pt in enumerate(pulse_pts)]
     indexed_pts.sort(key=lambda x: (x[1], 0 if str(x[2].get("name", "")) != "NOW" else 1))
 
@@ -1162,6 +1166,7 @@ def _declutter_pulse_points(pulse_pts: list, slots: list) -> list:
         lbl["padding"] = [1, 3]
         lbl["borderRadius"] = 3
 
+        # NOW が他の重要点（押目・高値・買い支え等）と同じ/極近接スロットにある場合は NOW 文字を非表示にし白点のみ残す
         if pt_name == "NOW" and any(abs(s_idx - oi) <= 2 for oi in non_now_indices):
             lbl["show"] = False
             pt["label"] = lbl
@@ -1274,28 +1279,14 @@ def _render_echarts(
         height:100%;
         background:#070b14;
         overflow:hidden;
-        box-sizing:border-box;
       }}
-      #wrap:fullscreen, #wrap:-webkit-full-screen, #wrap.is-fs{{
-        width:100vw!important;
-        height:100vh!important;
-        max-width:100vw!important;
-        max-height:100vh!important;
-        background:#070b14!important;
-      }}
-      @media (orientation: portrait) {{
-        #wrap:fullscreen.rot-active, #wrap:-webkit-full-screen.rot-active, #wrap.is-fs.rot-active, #wrap.force-landscape{{
-          position:fixed!important;
-          top:0!important;
-          left:100vw!important;
-          width:100vh!important;
-          height:100vw!important;
-          max-width:none!important;
-          max-height:none!important;
-          transform:rotate(90deg)!important;
-          transform-origin:top left!important;
-          z-index:2147483647!important;
-        }}
+      #wrap.force-landscape{{
+        position:fixed;
+        top:0;
+        left:100vw;
+        transform:rotate(90deg);
+        transform-origin:top left;
+        z-index:999999;
       }}
       #top-bar{{
         height:28px;
@@ -1337,7 +1328,7 @@ def _render_echarts(
         padding:1px 5px;font-size:8.8px;font-weight:700;
         font-family:'JetBrains Mono',sans-serif;white-space:nowrap;
       }}
-      #wrap.is-fs #fs-hint, #wrap:fullscreen #fs-hint, #wrap:-webkit-full-screen #fs-hint{{display:inline-block;}}
+      #wrap.is-fs #fs-hint{{display:inline-block;}}
       #rst-btn, #fs-btn{{
         background:rgba(15,23,42,0.92);color:#7dd3fc;
         border:1px solid rgba(56,189,248,0.42);border-radius:5px;
@@ -1386,6 +1377,7 @@ def _render_echarts(
           opt.legend.pageTextStyle = {{ color: '#94a3b8', fontSize: 9 }};
         }}
 
+        // 下段CVD軸（yAxisIndex: 2）の数値見切れ防止フォーマッタ（億 / 万 短縮表記）
         if (IS_DUAL && Array.isArray(opt.yAxis) && opt.yAxis.length >= 3) {{
           opt.yAxis[2].axisLabel = Object.assign({{}}, opt.yAxis[2].axisLabel || {{}}, {{
             formatter: function(val) {{
@@ -1471,11 +1463,7 @@ def _render_echarts(
           chart.dispatchAction({{ type: 'dataZoom', start: 0, end: 100 }});
         }}
 
-        var manualFsFallback = false;
-
-        function isFullscreenNow() {{
-          return !!(document.fullscreenElement || document.webkitFullscreenElement || manualFsFallback);
-        }}
+        var orientationLocked = false;
 
         function getCurZoomRange() {{
           try {{
@@ -1492,9 +1480,8 @@ def _render_echarts(
           if (!isFS) {{
             if (wrap) {{
               wrap.classList.remove('is-fs');
-              wrap.classList.remove('rot-active');
               wrap.classList.remove('force-landscape');
-              wrap.style.cssText = 'display:flex;flex-direction:column;width:100%;height:100%;background:#070b14;overflow:hidden;box-sizing:border-box;';
+              wrap.style.cssText = 'display:flex;flex-direction:column;width:100%;height:100%;background:#070b14;overflow:hidden;';
             }}
             var wN = wrap ? wrap.clientWidth : el.clientWidth;
             var hN = wrap ? Math.max(wrap.clientHeight - topH, 80) : el.clientHeight;
@@ -1506,37 +1493,22 @@ def _render_echarts(
             return;
           }}
           if (wrap) wrap.classList.add('is-fs');
-          var vw = window.innerWidth || document.documentElement.clientWidth || 390;
-          var vh = window.innerHeight || document.documentElement.clientHeight || 844;
-          var isPortraitNow = (vh > vw) || (window.matchMedia && window.matchMedia('(orientation: portrait)').matches && vh >= vw);
-          if (isPortraitNow) {{
-            var rotW = Math.max(vw, vh);
-            var rotH = Math.min(vw, vh);
+          var w = window.innerWidth;
+          var h = window.innerHeight;
+          if (!orientationLocked && h > w) {{
             if (wrap) {{
-              wrap.classList.add('rot-active');
               wrap.classList.add('force-landscape');
-              wrap.style.position = 'fixed';
-              wrap.style.top = '0px';
-              wrap.style.left = vw + 'px';
-              wrap.style.width = rotW + 'px';
-              wrap.style.height = rotH + 'px';
-              wrap.style.transform = 'rotate(90deg)';
-              wrap.style.transformOrigin = 'top left';
-              wrap.style.zIndex = '2147483647';
+              wrap.style.width = h + 'px';
+              wrap.style.height = w + 'px';
             }}
-            chart.resize({{ width: rotW, height: Math.max(rotH - topH, 100) }});
+            chart.resize({{ width: h, height: Math.max(w - topH, 100) }});
           }} else {{
             if (wrap) {{
-              wrap.classList.remove('rot-active');
               wrap.classList.remove('force-landscape');
-              wrap.style.position = 'relative';
-              wrap.style.top = '0px';
-              wrap.style.left = '0px';
-              wrap.style.width = vw + 'px';
-              wrap.style.height = vh + 'px';
-              wrap.style.transform = 'none';
+              wrap.style.width = '100%';
+              wrap.style.height = '100%';
             }}
-            chart.resize({{ width: vw, height: Math.max(vh - topH, 100) }});
+            chart.resize({{ width: w, height: Math.max(h - topH, 100) }});
           }}
         }}
 
@@ -1566,39 +1538,37 @@ def _render_echarts(
 
         function toggleFS() {{
           if (!ENABLE_FS) return;
-          var isFS = isFullscreenNow();
+          var doc = document;
+          var isFS = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
           if (!isFS) {{
-            if (screen.orientation && screen.orientation.lock) {{
-              try {{ screen.orientation.lock('landscape').catch(function(){{}}); }} catch(e) {{}}
-            }}
             var req = wrap.requestFullscreen || wrap.webkitRequestFullscreen;
             if (req) {{
               Promise.resolve(req.call(wrap)).then(function() {{
-                manualFsFallback = false;
-                onFSChange();
-              }}).catch(function() {{
-                manualFsFallback = true;
-                onFSChange();
-              }});
-            }} else {{
-              manualFsFallback = true;
-              onFSChange();
+                if (screen.orientation && screen.orientation.lock) {{
+                  screen.orientation.lock('landscape').then(function() {{
+                    orientationLocked = true;
+                  }}).catch(function() {{
+                    orientationLocked = false;
+                  }});
+                }} else {{
+                  orientationLocked = false;
+                }}
+                setTimeout(function() {{ applyLayout(true); }}, 220);
+              }}).catch(function(){{}});
             }}
           }} else {{
-            manualFsFallback = false;
-            var ex = document.exitFullscreen || document.webkitExitFullscreen;
-            if (ex && (document.fullscreenElement || document.webkitFullscreenElement)) {{
-              try {{ ex.call(document); }} catch(e) {{}}
-            }}
+            var ex = doc.exitFullscreen || doc.webkitExitFullscreen;
+            if (ex) ex.call(doc);
             if (screen.orientation && screen.orientation.unlock) {{
               try {{ screen.orientation.unlock(); }} catch(e) {{}}
             }}
-            onFSChange();
+            orientationLocked = false;
           }}
         }}
 
         function onFSChange() {{
-          var isFS = isFullscreenNow();
+          var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+          if (!isFS) orientationLocked = false;
           if (btn) btn.textContent = isFS ? '✕ 戻す' : '⛶ 横拡大';
           updateZoomMode(isFS);
           if (!isFS) {{
@@ -1608,9 +1578,8 @@ def _render_echarts(
             setTimeout(function() {{ applyLayout(false); }}, 650);
           }} else {{
             requestAnimationFrame(function() {{ applyLayout(true); }});
-            setTimeout(function() {{ applyLayout(true); }}, 120);
-            setTimeout(function() {{ applyLayout(true); }}, 280);
-            setTimeout(function() {{ applyLayout(true); }}, 520);
+            setTimeout(function() {{ applyLayout(true); }}, 180);
+            setTimeout(function() {{ applyLayout(true); }}, 420);
           }}
         }}
 
@@ -1618,8 +1587,9 @@ def _render_echarts(
         function scheduleResize() {{
           if (resizeTimer) clearTimeout(resizeTimer);
           resizeTimer = setTimeout(function() {{
-            applyLayout(isFullscreenNow());
-          }}, 60);
+            var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            applyLayout(isFS);
+          }}, 80);
         }}
 
         window.addEventListener('resize', scheduleResize);
@@ -1631,8 +1601,9 @@ def _render_echarts(
           document.addEventListener('webkitfullscreenchange', onFSChange);
           window.addEventListener('orientationchange', function() {{
             setTimeout(function() {{
-              applyLayout(isFullscreenNow());
-            }}, 180);
+              var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+              applyLayout(isFS);
+            }}, 240);
           }});
         }}
         setTimeout(scheduleResize, 90);
@@ -1817,7 +1788,7 @@ def _render_chart_legend_panel(
             cards.append((_swatch_band("rgba(245,158,11,0.16)", "rgba(251,191,36,0.45)"), "高ボラ狩り場帯", "値幅が出やすく仕掛けが入りやすい時間"))
 
         if "前日/当日高安（PDH/PDL/HOD/LOD）" in opt_lines:
-            cards.append((_swatch_line("#34d399", "dashed", 1), "PDH/PDL/HOD/LOD", "前日・当日の高値安値（ブレイク基準）"))
+            cards.append((_swatch_line("#34d399", "dashed", 1), "PDH/PDL/HOD/LOD", "前日・当日の高値安値（注文集中帯）"))
 
         if "心理的キリ番節目" in opt_lines:
             cards.append((_swatch_line("#fde047", "dotted", 2), "キリ番節目", "注文が集中しやすいキリの良い価格"))
