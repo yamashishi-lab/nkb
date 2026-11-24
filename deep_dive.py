@@ -6648,7 +6648,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "lunch_jump_std_pct": traj.get("lunch_jump_std_pct", 0.0),
             "lunch_gap_adj_pct": traj.get("lunch_gap_adj_pct", 0.0),
             "lab_mods": traj.get("lab_mods", {}),
-    　　　　 "medoid_analog": {
+            "medoid_analog": {
                 "date": traj.get("medoid_analog").get("date") if isinstance(traj.get("medoid_analog"), dict) else None,
                 "gap_pct": traj.get("medoid_analog").get("gap_pct") if isinstance(traj.get("medoid_analog"), dict) else None,
                 "amp_scale": traj.get("medoid_analog").get("amp_scale", 1.0) if isinstance(traj.get("medoid_analog"), dict) else None,
