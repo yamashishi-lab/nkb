@@ -1498,7 +1498,7 @@ def _load_stock_intraday(code: str) -> pd.DataFrame:
 
 @st.cache_data(ttl=15)
 def _load_stock_1m(code: str) -> pd.DataFrame:
-    """要件1: 1分足マイクロ・ズーム用（2日分・15秒キャッシュ）"""
+    """1分足マイクロ・ズーム用（2日分・15秒キャッシュ）"""
     try:
         tkr = yf.Ticker(code)
         df_1m = tkr.history(period="2d", interval="1m", auto_adjust=True)
@@ -1859,7 +1859,7 @@ def _compute_round_number_level(curr_px: float, is_jp: bool) -> float:
 
 
 def _compute_pro_ref_levels(df_1d: pd.DataFrame, df_5m: pd.DataFrame, is_jp: bool, market_today_str: str) -> dict:
-    """要件3: PDH / PDL / PDC / HOD / LOD の算出"""
+    """PDH / PDL / PDC / HOD / LOD の算出"""
     out = {"pdh": None, "pdl": None, "pdc": None, "hod": None, "lod": None}
     if df_1d is not None and not df_1d.empty:
         last_1d_s = df_1d.index[-1].strftime("%Y-%m-%d") if hasattr(df_1d.index[-1], "strftime") else str(df_1d.index[-1])[:10]
@@ -1886,7 +1886,7 @@ def _build_1m_zoom_payload(
     df_1m: pd.DataFrame, is_jp: bool, market_today_str: str,
     exp_dir: str = "NONE", hvn_wall_px: float = 0.0, ob_sup_px: float = 0.0, vp: dict = None
 ) -> dict:
-    """要件1: 1分足ローソク足(直近90本) ＋ 9/20EMA ＋ 当日VWAP ＋ 10分先3分岐点線 ＋ 出来高&CVD"""
+    """1分足ローソク足(直近90本) ＋ 9/20EMA ＋ 当日VWAP ＋ 10分先3分岐点線 ＋ 出来高&CVD"""
     invalid_res = {"valid": False}
     if df_1m is None or df_1m.empty or len(df_1m) < 10:
         return invalid_res
@@ -1902,7 +1902,6 @@ def _build_1m_zoom_payload(
         if len(sub_day) < 8:
             return invalid_res
 
-        # 当日最初から累積VWAPと疑似CVDを正確に計算した上で直近90本を切り出す
         closes_all = sub_day["Close"].values.astype(float)
         opens_all = sub_day["Open"].values.astype(float)
         highs_all = sub_day["High"].values.astype(float)
@@ -1941,14 +1940,18 @@ def _build_1m_zoom_payload(
         e20_w = ema20_all[-n_w:]
         hms_w = sub_w["_hm"].tolist()
 
-        # 右側10分先（10スロット）の時刻軸生成
-        last_ts = idx_dt[tmp["_d"] == target_d][-1]
+        last_ts = pd.Timestamp(idx_dt[tmp["_d"] == target_d][-1])
         fut_hms = [(last_ts + datetime.timedelta(minutes=k)).strftime("%H:%M") for k in range(1, 11)]
         all_times = hms_w + fut_hms
         n_tot = len(all_times)
 
         # ECharts candlestick フォーマット: [open, close, lowest, highest]
-        ohlc_list = [[round(float(o_w[i]), 2), round(float(c_w[i]), 2), round(float(l_w[i]), 2), round(float(h_w[i]), 2)] for i in range(n_w)] + [None] * 10
+        # ※ EChartsのcandlestickは null を渡すと描画フリーズするため '-' 配列でパディングする
+        ohlc_list = [
+            [round(float(o_w[i]), 2), round(float(c_w[i]), 2), round(float(l_w[i]), 2), round(float(h_w[i]), 2)]
+            for i in range(n_w)
+        ] + [["-", "-", "-", "-"] for _ in range(10)]
+
         ema9_list = [round(float(x), 2) for x in e9_w] + [None] * 10
         ema20_list = [round(float(x), 2) for x in e20_w] + [None] * 10
         vwap_list = [round(float(x), 2) for x in vw_w] + [None] * 10
@@ -1961,10 +1964,10 @@ def _build_1m_zoom_payload(
                 "value": round(float(v_w[i]), 1),
                 "itemStyle": {"color": "rgba(16, 185, 129, 0.58)" if is_up_b else "rgba(239, 68, 68, 0.58)"},
             })
-        vol_bars.extend([None] * 10)
+        for _ in range(10):
+            vol_bars.append({"value": 0, "itemStyle": {"color": "transparent"}})
         avg_vol_1m = round(float(np.mean(v_w)), 1) if len(v_w) > 0 else 0.0
 
-        # 10分先・簡易3分岐点線（直近1分足実現ボラ基準）
         anchor_px = float(c_w[-1])
         rets_1m = np.diff(c_w[-25:]) / np.maximum(c_w[-25:-1], 1e-4) if len(c_w) >= 5 else np.array([0.001])
         sig_1m = float(np.clip(np.std(rets_1m), 0.0005, 0.0065))
@@ -2028,7 +2031,7 @@ def _build_1m_zoom_payload(
 
 
 def _compute_mtf_alignment(df_1m: pd.DataFrame, df_5m: pd.DataFrame, df_1d: pd.DataFrame, is_jp: bool) -> dict:
-    """要件4-1: 1m / 5m / 15m / 60m / 1D の5時間軸同調LEDスコア算出"""
+    """1m / 5m / 15m / 60m / 1D の5時間軸同調LEDスコア算出"""
     def _eval_series(s: pd.Series) -> tuple:
         if s is None or len(s) < 12:
             return "NEU", "▶", "#38bdf8"
@@ -2044,11 +2047,9 @@ def _compute_mtf_alignment(df_1m: pd.DataFrame, df_5m: pd.DataFrame, df_1d: pd.D
         return "NEU", "▶", "#38bdf8"
 
     tfs = []
-    # 1m
     s_1m = df_1m["Close"].dropna() if (df_1m is not None and not df_1m.empty) else None
     tfs.append(("1m", *_eval_series(s_1m)))
 
-    # 5m / 15m / 60m
     if df_5m is not None and not df_5m.empty:
         tmp = df_5m.copy()
         idx_dt = _convert_5m_index_to_market_tz(tmp, is_jp)
@@ -2068,7 +2069,6 @@ def _compute_mtf_alignment(df_1m: pd.DataFrame, df_5m: pd.DataFrame, df_1d: pd.D
     else:
         tfs.extend([("5m", "NEU", "▶", "#38bdf8"), ("15m", "NEU", "▶", "#38bdf8"), ("60m", "NEU", "▶", "#38bdf8")])
 
-    # 1D
     s_1d = df_1d["Close"].dropna() if (df_1d is not None and not df_1d.empty) else None
     tfs.append(("1D", *_eval_series(s_1d)))
 
@@ -2092,7 +2092,7 @@ def _render_mtf_and_ladder(
     mtf_res: dict, curr_px: float, is_jp: bool, ref_lv: dict, traj: dict,
     vp: dict, round_level: float, active_lab
 ):
-    """要件4: MTF同調LEDバー ＋ 壁・節目 Price Ladder の描画"""
+    """MTF同調LEDバー ＋ 壁・節目 Price Ladder の描画"""
     led_parts = []
     for tf_lbl, _, arrow, col in mtf_res["items"]:
         led_parts.append(
@@ -2106,7 +2106,6 @@ def _render_mtf_and_ladder(
     </div>
     """, unsafe_allow_html=True)
 
-    # 価格帯ラダー（上下の抵抗・支持候補を現在値に近い順に最大5つずつ抽出）
     if curr_px <= 0:
         return
     cands = []
@@ -2179,8 +2178,8 @@ def _render_mtf_and_ladder(
         else:
             sup_list.append((dist_pct, lbl, px, col))
 
-    res_top5 = sorted(res_list, key=lambda x: x[0])[:5][::-1]  # 遠い順→近い順で上から並べる
-    sup_top5 = sorted(sup_list, key=lambda x: abs(x[0]))[:5]   # 近い順→遠い順で下へ並べる
+    res_top5 = sorted(res_list, key=lambda x: x[0])[:5][::-1]
+    sup_top5 = sorted(sup_list, key=lambda x: abs(x[0]))[:5]
 
     if res_top5 or sup_top5:
         with st.expander("🪜 価格帯ラダー：上下の壁・支持帯までの距離", expanded=False):
@@ -2214,7 +2213,6 @@ def _render_mtf_and_ladder(
 
 
 def _detect_whale_anomaly(insider_tx: list, whale_news: list, ref_today_str: str) -> dict:
-    """直近30日以内のインサイダー取引および日英大口保有報道から異常検知"""
     bull_sigs, bear_sigs = [], []
     try:
         ref_date = datetime.datetime.strptime(ref_today_str, "%Y-%m-%d").date()
@@ -2262,7 +2260,6 @@ def _detect_expansion_regime(
     act_vol_map: dict, act_dir_map: dict, slot_vols: np.ndarray,
     rvol: float, catalyst_alert: dict = None
 ) -> dict:
-    """急騰・急落ブレイク（EXPANSIONモード）の自動検知"""
     default_exp = {
         "active": False,
         "dir": "NONE",
@@ -2344,7 +2341,6 @@ def _detect_expansion_regime(
 
 
 def _detect_cvd_divergence(slots: list, actual_arr: list, cvd_arr: list, act_vol_map: dict) -> dict:
-    """前後2本スイング極値＋平均出来高フィルタによる疑似CVD乖離（OHLCV準拠）"""
     pts = [
         (i, slots[i], actual_arr[i], cvd_arr[i], float(act_vol_map.get(slots[i], 0.0)))
         for i in range(len(slots))
@@ -4792,7 +4788,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     unsafe_allow_html=True
                 )
 
-            # 要件4: MTF同調LEDバー ＆ 壁・節目 Price Ladder
             _render_mtf_and_ladder(mtf_res, curr_px, is_jp, ref_levels, traj, vp, round_level, active_lab)
 
             rvol_v = traj["rvol"]
@@ -4820,7 +4815,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             </div>
             """, unsafe_allow_html=True)
 
-            # 要件1: 表示足切替（5分足(1日全体) / 1分足(直近90分ズーム)）の配置
             zoom_1m_payload = _build_1m_zoom_payload(
                 df_1m, is_jp, market_today_str, exp_dir=exp_dir,
                 hvn_wall_px=f_map.get("hvn_wall_px", 0.0), ob_sup_px=f_map.get("ob_sup_px", 0.0), vp=vp
@@ -4910,7 +4904,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     "distance": 4,
                 }
 
-            # 要件3: PDH / PDL / PDC / HOD / LOD の基準価格ライン生成（現在値±6%以内のみ描画）
             def _build_pro_ref_marklines(ref_dict: dict, cur_p: float) -> list:
                 if "前日/当日高安（PDH/PDL/HOD/LOD）" not in opt_lines or cur_p <= 0:
                     return []
@@ -4932,7 +4925,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 return out_ml
 
             # =============================================================
-            # 描画分岐A：1分足マイクロ・ズーム（ローソク足＋9/20EMA＋VWAP＋10分3分岐＋2段CVD）
+            # 描画分岐A：1分足マイクロ・ズーム（markLineをVWAPへ配置し描画衝突を回避）
             # =============================================================
             if use_1m_zoom:
                 z1 = zoom_1m_payload
@@ -4961,7 +4954,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                             "borderColor": "#10b981",
                             "borderColor0": "#ef4444",
                         },
-                        "markLine": {"symbol": ["none", "none"], "data": ml_1m} if ml_1m else {},
                         "z": 4,
                     },
                     {
@@ -4995,6 +4987,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "itemStyle": {"color": "#fbbf24"},
                         "lineStyle": {"color": "#fbbf24", "width": 1.6, "type": "dotted"},
                         "showSymbol": False,
+                        "markLine": {"symbol": ["none", "none"], "data": ml_1m} if ml_1m else {},
                         "z": 5,
                     },
                     {
@@ -5418,7 +5411,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     "label": {"show": True, "position": "top", "formatter": "{b}", "color": "#f8fafc", "fontSize": 9, "fontWeight": "bold"}
                 })
 
-                # 要件2: 下段グリッド（陽陰色分け当日出来高バー ＋ 過去平均出来高破線 ＋ 累積疑似CVD線）
                 s_list.append({
                     "name": "平均出来高",
                     "type": "line",
@@ -5434,7 +5426,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     colored_act_vols = []
                     for v_i, d_i in zip(traj["actual_vols"], traj["actual_dirs"]):
                         if v_i is None:
-                            colored_act_vols.append(None)
+                            colored_act_vols.append({"value": 0, "itemStyle": {"color": "transparent"}})
                         else:
                             colored_act_vols.append({
                                 "value": v_i,
