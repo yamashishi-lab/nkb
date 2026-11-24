@@ -932,7 +932,7 @@ def _update_weights_two_stage(
 
 
 # =========================================================================
-# 3. ヘルパー ＆ 描画コンポーネント（衝突ゼロMarkLine / Pulse回避 / 分離ツールバーECharts）
+# 3. ヘルパー ＆ 描画コンポーネント（衝突ゼロMarkLine / Pulse回避 / スマホ横向きFS完全修正）
 # =========================================================================
 def _fmt_cur(val, is_jp: bool) -> str:
     if val is None or (isinstance(val, float) and np.isnan(val)):
@@ -1028,8 +1028,8 @@ def _calc_two_barrier_tp_prob(curr_px: float, tp_px: float, sl_px: float, is_lon
     return round(joint_prob, 1)
 
 
-def _declutter_marklines(ml_list: list, curr_px: float, min_gap_pct: float = 0.45) -> list:
-    """水平MarkLineを左寄せ専用にし、密集ラベルの自動統合・交互上下配置・最大3本表示を行う"""
+def _declutter_marklines(ml_list: list, curr_px: float, min_gap_pct: float = 0.45, avoid_left: bool = False) -> list:
+    """水平MarkLineの密集ラベル自動統合・交互配置・左端重要点との衝突回避"""
     if not ml_list:
         return []
     horiz = []
@@ -1072,13 +1072,12 @@ def _declutter_marklines(ml_list: list, curr_px: float, min_gap_pct: float = 0.4
     ref_base = curr_px if (curr_px and curr_px > 0) else float(np.mean([h[0] for h in horiz]))
     ref_base = max(ref_base, 1e-4)
 
-    # 1) 0.20%未満でほぼ同一価格のラインは1本へ統合（例: "PDH / ORB高"）
     merged = []
     for y_val, prio, obj in horiz:
         if merged:
             prev_y, prev_prio, prev_obj = merged[-1]
             diff_pct = abs(y_val - prev_y) / ref_base * 100.0
-            if diff_pct < 0.20:
+            if diff_pct < 0.22:
                 lbl_prev = prev_obj.get("label", {}) if isinstance(prev_obj.get("label"), dict) else {}
                 lbl_cur = obj.get("label", {}) if isinstance(obj.get("label"), dict) else {}
                 t_prev = str(lbl_prev.get("formatter", "")).strip()
@@ -1092,8 +1091,6 @@ def _declutter_marklines(ml_list: list, curr_px: float, min_gap_pct: float = 0.4
                 continue
         merged.append((y_val, prio, obj))
 
-    # 2) 右側の3分岐（▲/▶/▼）との衝突を完全に防ぐため、ラベルは原則左側（insideStartTop / insideStartBottom）のみを使用
-    #    さらに4本以上密集する場合は優先度上位3本のみラベル表示（ライン自体はすべて描画）
     cluster_gap_pct = max(min_gap_pct * 2.2, 0.95)
     clusters = []
     for entry in merged:
@@ -1106,7 +1103,8 @@ def _declutter_marklines(ml_list: list, curr_px: float, min_gap_pct: float = 0.4
             else:
                 clusters.append([entry])
 
-    left_pos_cycle = ["insideStartTop", "insideStartBottom"]
+    # 左端に押目/高値がある場合は中央（insideMiddleTop / insideMiddleBottom）へ逃がして衝突ゼロ化
+    pos_cycle = ["insideMiddleTop", "insideMiddleBottom"] if avoid_left else ["insideStartTop", "insideStartBottom"]
     out_horiz = []
     for cl in clusters:
         if len(cl) >= 4:
@@ -1123,7 +1121,7 @@ def _declutter_marklines(ml_list: list, curr_px: float, min_gap_pct: float = 0.4
                 lbl["show"] = False
             else:
                 lbl["show"] = True
-                lbl["position"] = left_pos_cycle[vis_counter % 2]
+                lbl["position"] = pos_cycle[vis_counter % 2]
                 vis_counter += 1
             obj["label"] = lbl
             out_horiz.append(obj)
@@ -1149,7 +1147,6 @@ def _declutter_pulse_points(pulse_pts: list, slots: list) -> list:
         _get_sidx(pt) for pt in pulse_pts if str(pt.get("name", "")) != "NOW"
     ]
 
-    # X座標（スロット番号）順にソートして近接ラベルの衝突判定を行う
     indexed_pts = [(idx_orig, _get_sidx(pt), json.loads(json.dumps(pt))) for idx_orig, pt in enumerate(pulse_pts)]
     indexed_pts.sort(key=lambda x: (x[1], 0 if str(x[2].get("name", "")) != "NOW" else 1))
 
@@ -1162,11 +1159,11 @@ def _declutter_pulse_points(pulse_pts: list, slots: list) -> list:
         lbl = pt.get("label") if isinstance(pt.get("label"), dict) else {}
         al = "left" if s_idx <= 4 else ("right" if s_idx >= n_tot_s - 5 else "center")
         lbl["align"] = al
-        lbl["backgroundColor"] = "rgba(7, 11, 20, 0.86)"
-        lbl["padding"] = [1, 3]
+        lbl["distance"] = 6
+        lbl["backgroundColor"] = "rgba(7, 11, 20, 0.88)"
+        lbl["padding"] = [1, 4]
         lbl["borderRadius"] = 3
 
-        # NOW が他の重要点（押目・高値・買い支え等）と同じ/極近接スロットにある場合は NOW 文字を非表示にし白点のみ残す
         if pt_name == "NOW" and any(abs(s_idx - oi) <= 2 for oi in non_now_indices):
             lbl["show"] = False
             pt["label"] = lbl
@@ -1174,7 +1171,13 @@ def _declutter_pulse_points(pulse_pts: list, slots: list) -> list:
             continue
 
         lbl["show"] = True
-        if last_shown_sidx is not None and abs(s_idx - last_shown_sidx) <= 8:
+        if pt_name == "押目":
+            lbl["position"] = "bottom"
+            last_pos_top = False
+        elif pt_name == "高値":
+            lbl["position"] = "top"
+            last_pos_top = True
+        elif last_shown_sidx is not None and abs(s_idx - last_shown_sidx) <= 8:
             last_pos_top = not last_pos_top
             lbl["position"] = "top" if last_pos_top else "bottom"
         else:
@@ -1255,7 +1258,7 @@ def _render_echarts(
         '<div id="top-bar">'
         '<div id="hud-line">👆 タップ / ホバーで精密数値表示</div>'
         '<div id="ctrl-bar">'
-        '<span id="fs-hint">FS中（60s更新で解除時は上部トグルOFF）</span>'
+        '<span id="fs-hint">FS中（60s更新OFF推奨）</span>'
         '<button id="rst-btn" onclick="resetZoom()" title="拡大ズームを初期状態へリセット">↺</button>'
         '<button id="fs-btn" onclick="toggleFS()" title="スマホ横向きフル大画面">⛶ 横拡大</button>'
         '</div>'
@@ -1281,12 +1284,12 @@ def _render_echarts(
         overflow:hidden;
       }}
       #wrap.force-landscape{{
-        position:fixed;
-        top:0;
-        left:100vw;
-        transform:rotate(90deg);
-        transform-origin:top left;
-        z-index:999999;
+        position:fixed !important;
+        top:0 !important;
+        left:100vw !important;
+        transform:rotate(90deg) !important;
+        transform-origin:top left !important;
+        z-index:999999 !important;
       }}
       #top-bar{{
         height:28px;
@@ -1377,7 +1380,6 @@ def _render_echarts(
           opt.legend.pageTextStyle = {{ color: '#94a3b8', fontSize: 9 }};
         }}
 
-        // 下段CVD軸（yAxisIndex: 2）の数値見切れ防止フォーマッタ（億 / 万 短縮表記）
         if (IS_DUAL && Array.isArray(opt.yAxis) && opt.yAxis.length >= 3) {{
           opt.yAxis[2].axisLabel = Object.assign({{}}, opt.yAxis[2].axisLabel || {{}}, {{
             formatter: function(val) {{
@@ -1463,8 +1465,6 @@ def _render_echarts(
           chart.dispatchAction({{ type: 'dataZoom', start: 0, end: 100 }});
         }}
 
-        var orientationLocked = false;
-
         function getCurZoomRange() {{
           try {{
             var curOpt = chart.getOption();
@@ -1495,7 +1495,8 @@ def _render_echarts(
           if (wrap) wrap.classList.add('is-fs');
           var w = window.innerWidth;
           var h = window.innerHeight;
-          if (!orientationLocked && h > w) {{
+          // 実測の画面比率が縦長ならOS回転の有無に関わらず強制90度横向き大画面化
+          if (h > w) {{
             if (wrap) {{
               wrap.classList.add('force-landscape');
               wrap.style.width = h + 'px';
@@ -1520,11 +1521,11 @@ def _render_echarts(
           if (isFS) {{
             if (IS_DUAL && Array.isArray(origGridNormal) && origGridNormal.length >= 2) {{
               nextGrid = [
-                {{ top: 28, height: '57%', left: 6, right: origGridNormal[0].right, containLabel: false }},
+                {{ top: 40, height: '53%', left: 6, right: origGridNormal[0].right, containLabel: false }},
                 {{ top: '70%', height: '15%', left: 6, right: origGridNormal[1].right, containLabel: false }}
               ];
             }} else if (origGridNormal && !Array.isArray(origGridNormal)) {{
-              nextGrid = Object.assign({{}}, origGridNormal, {{ bottom: 44, top: 34 }});
+              nextGrid = Object.assign({{}}, origGridNormal, {{ bottom: 44, top: 40 }});
             }}
           }}
           chart.setOption({{
@@ -1541,19 +1542,15 @@ def _render_echarts(
           var doc = document;
           var isFS = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
           if (!isFS) {{
-            var req = wrap.requestFullscreen || wrap.webkitRequestFullscreen;
+            var targetEl = doc.documentElement;
+            var req = targetEl.requestFullscreen || targetEl.webkitRequestFullscreen;
             if (req) {{
-              Promise.resolve(req.call(wrap)).then(function() {{
+              Promise.resolve(req.call(targetEl)).then(function() {{
                 if (screen.orientation && screen.orientation.lock) {{
-                  screen.orientation.lock('landscape').then(function() {{
-                    orientationLocked = true;
-                  }}).catch(function() {{
-                    orientationLocked = false;
-                  }});
-                }} else {{
-                  orientationLocked = false;
+                  screen.orientation.lock('landscape').catch(function() {{}});
                 }}
-                setTimeout(function() {{ applyLayout(true); }}, 220);
+                setTimeout(function() {{ applyLayout(true); }}, 180);
+                setTimeout(function() {{ applyLayout(true); }}, 420);
               }}).catch(function(){{}});
             }}
           }} else {{
@@ -1562,13 +1559,11 @@ def _render_echarts(
             if (screen.orientation && screen.orientation.unlock) {{
               try {{ screen.orientation.unlock(); }} catch(e) {{}}
             }}
-            orientationLocked = false;
           }}
         }}
 
         function onFSChange() {{
           var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-          if (!isFS) orientationLocked = false;
           if (btn) btn.textContent = isFS ? '✕ 戻す' : '⛶ 横拡大';
           updateZoomMode(isFS);
           if (!isFS) {{
@@ -1749,7 +1744,7 @@ def _render_chart_legend_panel(
             cards.append((_swatch_line("#ffffff", "solid", 2), "当日実測", "実際の株価の動き（主役）"))
 
         if chart_mode in ("🔴 ライブ修正", "⚡ 両方重ね"):
-            cards.append((_swatch_line("#38bdf8", "solid", 2), "ライブ修正", "今の勢いを反映した最新着地予測"))
+            cards.append((_swatch_line("#38bdf8", "solid", 2), "ライブ修正", "今の勢い＋固有波動を反映した最新着地予測"))
 
         if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
             if exp_active:
@@ -2783,7 +2778,6 @@ def _render_mtf_and_ladder(
 # 5B. Phase 3 プロ仕様高度分析エンジン（タブ2・タブ3・タブ4魔改造用）
 # =========================================================================
 def _compute_dow_intraday_heatmap(df_5m: pd.DataFrame, is_jp: bool) -> dict:
-    """要件1-1: 曜日 × 30分時間帯 期待値ヒートマップデータ生成"""
     empty_hm = {"valid": False}
     if df_5m is None or df_5m.empty or len(df_5m) < 40:
         return empty_hm
@@ -2857,7 +2851,6 @@ def _compute_dow_intraday_heatmap(df_5m: pd.DataFrame, is_jp: bool) -> dict:
 
 
 def _compute_rolling_macro_corr(stock_close: pd.Series, macro_item: dict) -> dict:
-    """要件1-2: ローリング相関（20日 vs 60日）＆ 20日ダイナミックβ推移"""
     empty_rc = {"valid": False}
     if stock_close is None or not isinstance(macro_item, dict) or "series" not in macro_item:
         return empty_rc
@@ -2901,7 +2894,6 @@ def _compute_rolling_macro_corr(stock_close: pd.Series, macro_item: dict) -> dic
 
 
 def _compute_earnings_pead(df_1d: pd.DataFrame, earnings_hist: list) -> dict:
-    """要件1-3: 決算PEAD（決算翌日ギャップ％ ＋ 決算後5営業日累計リターン％）"""
     empty_p = {"valid": False}
     if df_1d is None or df_1d.empty or not earnings_hist:
         return empty_p
@@ -2949,7 +2941,6 @@ def _compute_earnings_pead(df_1d: pd.DataFrame, earnings_hist: list) -> dict:
 
 
 def _compute_hires_vp_28(df_1d: pd.DataFrame, curr_px: float, is_jp: bool) -> dict:
-    """要件2-1: 高解像度28分割 Volume Profile（VA70% / POC / 短期20日 vs 中期60日減衰積み上げ）"""
     empty_vp = {"valid": False}
     if df_1d is None or len(df_1d) < 25:
         return empty_vp
@@ -3048,7 +3039,6 @@ def _compute_hires_vp_28(df_1d: pd.DataFrame, curr_px: float, is_jp: bool) -> di
 
 
 def _compute_bbw_squeeze(df_1d: pd.DataFrame) -> dict:
-    """要件2-2: 過去6ヶ月日足ボリンジャーバンド ＋ BBWパーセンタイル推移（スクイーズ検知）"""
     empty_sq = {"valid": False}
     if df_1d is None or len(df_1d) < 40:
         return empty_sq
@@ -3089,7 +3079,6 @@ def _compute_bbw_squeeze(df_1d: pd.DataFrame) -> dict:
 
 
 def _build_news_72h_timeline(all_72h_items: list) -> dict:
-    """要件3-1: 72時間ニュース・センチメント密度タイムライン（12時間刻み6ビン）"""
     empty_tl = {"valid": False}
     if not all_72h_items:
         return empty_tl
@@ -3116,7 +3105,6 @@ def _build_news_72h_timeline(all_72h_items: list) -> dict:
 
 
 def _extract_ledger_verify_history(ledger: dict, is_jp: bool) -> list:
-    """要件3-3: 大引け確定済みロック検証の直近15件履歴"""
     if not isinstance(ledger, dict):
         return []
     recs = []
@@ -3971,19 +3959,19 @@ def _compute_short_horizon_3way(
 
         mean_delta = float(slot_means[idx]) - anchor_mean
         knn_delta = float(knn_moves[idx]) if (isinstance(knn_moves, dict) and idx in knn_moves) else mean_delta
-        local_shape = 0.60 * mean_delta + 0.40 * knn_delta
+        local_shape = 0.45 * mean_delta + 0.55 * knn_delta
 
         up_shock_add = max(0.0, shock_ratio) * 0.45 * step_frac
-        up_raw = anchor_px * (1.0 + local_shape * 0.65 + cum_sig * 1.05 + up_shock_add)
+        up_raw = anchor_px * (1.0 + local_shape * 0.72 + cum_sig * 1.05 + up_shock_add)
         up_raw = _apply_hvn_ob_bounce(up_raw, anchor_px, hvn_wall_px, ob_sup_px, vp, exp_dir=exp_dir)
         up_raw = max(up_raw, anchor_px * (1.0 + 0.0005 * k))
 
         flat_center = anchor_px + (vwap_mid_target - anchor_px) * (0.45 * step_frac)
-        flat_wave = anchor_px * (local_shape * 0.35 + shock_ratio * 0.15 * step_frac)
+        flat_wave = anchor_px * (local_shape * 0.40 + shock_ratio * 0.15 * step_frac)
         flat_raw = _apply_hvn_ob_bounce(flat_center + flat_wave, anchor_px, hvn_wall_px, ob_sup_px, vp, exp_dir=exp_dir)
 
         dn_shock_sub = max(0.0, -shock_ratio) * 0.45 * step_frac
-        dn_raw = anchor_px * (1.0 + local_shape * 0.65 - cum_sig * 1.05 - dn_shock_sub)
+        dn_raw = anchor_px * (1.0 + local_shape * 0.72 - cum_sig * 1.05 - dn_shock_sub)
         dn_raw = _apply_hvn_ob_bounce(dn_raw, anchor_px, hvn_wall_px, ob_sup_px, vp, exp_dir=exp_dir)
         dn_raw = min(dn_raw, anchor_px * (1.0 - 0.0005 * k))
         dn_raw = max(dn_raw, anchor_px * 0.5)
@@ -4181,7 +4169,6 @@ def _compute_lab_dd_fusion(
     active_bull_trig: float, active_bear_trig: float,
     active_close_chg: float, exp_reg: dict, cvd_div: dict
 ) -> dict:
-    """LAB上位足・買い方プランとDEEP DIVE 5分足軌道の完全双方向統合エンジン"""
     if not isinstance(active_lab, dict) or not active_lab or curr_px <= 0:
         return {"has_lab": False}
 
@@ -4196,7 +4183,6 @@ def _compute_lab_dd_fusion(
     l_shares = int((active_lab.get("lot_info") or {}).get("shares", 100) if isinstance(active_lab.get("lot_info"), dict) else 100)
     l_entry_mode = str((active_lab.get("strat") or {}).get("entry_mode", "押し目・ブレイク確認") if isinstance(active_lab.get("strat"), dict) else "押し目・ブレイク確認")
 
-    # DD側方向スコア（0〜100）
     dd_dir_score = 50.0
     if is_long:
         dd_dir_score += float(np.clip(active_close_chg * 6.5, -18.0, 18.0))
@@ -4239,7 +4225,6 @@ def _compute_lab_dd_fusion(
         sync_state = "🟡 乖離警戒（時間・反転待ち）"
         sync_col = "#f59e0b"
 
-    # 統合エントリー価格・+1.0R・最終TP・厳格SL算出
     if is_long:
         entry_cands = [px for px in (l_vwap, l_ob, active_dip_px) if 0 < px <= curr_px * 1.005]
         fusion_entry = round(float(np.mean(entry_cands)), 2) if entry_cands else round(min(curr_px, active_dip_px), 2)
@@ -4288,7 +4273,7 @@ def _compute_lab_dd_fusion(
 
 
 # =========================================================================
-# 6. デュアル5分足軌道エンジン
+# 6. デュアル5分足軌道エンジン（魔改造：振幅保存型・固有波形合成エンジン搭載）
 # =========================================================================
 def _build_dual_5m_trajectory(
     fc_code: str, curr_px: float, prev_px: float, df_1d: pd.DataFrame, df_5m: pd.DataFrame,
@@ -4740,11 +4725,94 @@ def _build_dual_5m_trajectory(
         hvn_wall_px = float(d2_ctx.get("hvn_wall_price", 0.0) or 0.0)
         ob_sup_px = float(active_lab.get("ob_support_px", 0.0) or 0.0)
 
+    # =========================================================================
+    # 【極秘魔改造】振幅保存型・固有波形合成（Amplitude-Preserving Eigen-Wave）
+    # 全日平均による山・谷の打ち消し（なだらか化）を防ぎ、最類似日のリアル波動から
+    # 高周波のスイング構造を抽出・ATR比で振幅復元して予測軌道へ注入する
+    # =========================================================================
+    target_atr = max(float(vol_cls["atr_pct"]), 0.8)
+    max_r_cap_pre = (target_atr * 1.45) / 100.0
+    premarket_medoid = None
+    pre_medoid_rel = np.zeros(n_slots, dtype=float)
+    has_pre_eigen = False
+
+    if use_maps and rdates:
+        n_r = len(use_maps)
+        max_normal_rng = max(float(vol_cls["atr_pct"]) * 2.2, 5.0)
+        valid_med_indices = []
+        for idx_r in range(n_r):
+            d_gap_i = float(day_gaps_hist[idx_r]) if idx_r < len(day_gaps_hist) else 0.0
+            d_rng_i = float(day_ranges_hist[idx_r]) if idx_r < len(day_ranges_hist) else float(vol_cls["atr_pct"])
+            if abs(d_gap_i - tot_gap) <= 3.0 and d_rng_i <= max_normal_rng:
+                valid_med_indices.append(idx_r)
+        cand_indices = valid_med_indices if valid_med_indices else list(range(n_r))
+
+        scored_cands = []
+        for idx_r in cand_indices:
+            d_gap_i = float(day_gaps_hist[idx_r]) if idx_r < len(day_gaps_hist) else 0.0
+            d_rng_i = float(day_ranges_hist[idx_r]) if idx_r < len(day_ranges_hist) else float(vol_cls["atr_pct"])
+            gap_dist = abs(d_gap_i - tot_gap)
+            range_dist = abs(d_rng_i - float(vol_cls["atr_pct"])) * 0.6
+            recency_pen = 0.25 * (1.0 - (idx_r / max(n_r - 1, 1)))
+            scored_cands.append((gap_dist + range_dist + recency_pen, idx_r))
+        scored_cands.sort(key=lambda x: x[0])
+
+        best_idx = scored_cands[0][1]
+        best_rm = use_maps[best_idx]
+        best_ds = rdates[best_idx]
+        best_gap = round(float(day_gaps_hist[best_idx]), 2) if best_idx < len(day_gaps_hist) else 0.0
+        best_rng = float(day_ranges_hist[best_idx]) if best_idx < len(day_ranges_hist) else target_atr
+        amp_scale = float(np.clip(target_atr / max(best_rng, 0.5), 0.40, 1.35))
+
+        med_path = []
+        last_valid_r = 0.0
+        for i, sl in enumerate(slots):
+            if sl in best_rm:
+                last_valid_r = float(best_rm[sl])
+                r_scaled = float(np.clip(last_valid_r * amp_scale, -max_r_cap_pre, max_r_cap_pre))
+                pre_medoid_rel[i] = r_scaled
+                med_path.append(round(float(est_open * (1.0 + r_scaled)), 2))
+            else:
+                r_scaled = float(np.clip(last_valid_r * amp_scale, -max_r_cap_pre, max_r_cap_pre))
+                pre_medoid_rel[i] = r_scaled
+                med_path.append(round(float(est_open * (1.0 + r_scaled)), 2) if med_path else None)
+
+        # 最類似日の「高周波スイング成分（トレンド除去後の山・谷）」を抽出し、平均線のなだらかさを打破
+        if n_slots >= 6:
+            t_lin = np.linspace(0.0, 1.0, n_slots)
+            med_trend = pre_medoid_rel[0] + (pre_medoid_rel[-1] - pre_medoid_rel[0]) * t_lin
+            med_hf_wave = pre_medoid_rel - med_trend
+            # 振幅復元係数：平均化で痩せたボラティリティを期待ATRの55%水準まで復元
+            mean_span = float(np.ptp(slot_means)) if n_slots > 1 else 0.0
+            hf_span = float(np.ptp(med_hf_wave)) if n_slots > 1 else 0.0
+            target_swing = (target_atr / 100.0) * 0.55
+            if hf_span > 1e-5:
+                restore_gain = float(np.clip(target_swing / max(hf_span, 0.003), 0.35, 0.85))
+                pre_eigen_wave = med_hf_wave * restore_gain
+                has_pre_eigen = True
+            else:
+                pre_eigen_wave = np.zeros(n_slots, dtype=float)
+        else:
+            pre_eigen_wave = np.zeros(n_slots, dtype=float)
+
+        premarket_medoid = {
+            "date": best_ds,
+            "gap_pct": best_gap,
+            "amp_scale": round(amp_scale, 2),
+            "data": med_path,
+            "mode": "PREMARKET",
+        }
+    else:
+        pre_eigen_wave = np.zeros(n_slots, dtype=float)
+
     p50, p85, p15, bdiff = [], [], [], []
     p68, p32, bdiff_inner = [], [], []
     for i, sl in enumerate(slots):
         v_prog = float(vol_frac[i])
-        mid = est_open * (1.0 + slot_means[i] + drift * v_prog)
+        # 平均軌道(slot_means) + 固有波動(pre_eigen_wave) + ファンダ/マクロドリフト
+        wave_rel = (0.58 * slot_means[i] + 0.42 * pre_medoid_rel[i]) if has_pre_eigen else slot_means[i]
+        # 終値方向はドリフトを尊重しつつ、日中の山谷は固有波動でリアルに刻む
+        mid = est_open * (1.0 + wave_rel + (pre_eigen_wave[i] * 0.35 if has_pre_eigen else 0.0) + drift * v_prog)
         mid = _apply_hvn_ob_bounce(mid, est_open, hvn_wall_px, ob_sup_px, vp, exp_dir="NONE")
 
         up_out_spread = max((slot_q90[i] - slot_means[i]) * vboost, slot_stds[i] * vboost * 0.65)
@@ -4837,61 +4905,9 @@ def _build_dual_5m_trajectory(
         if start_rem_idx < n_slots:
             rem_sigma_pct = max(float(np.sqrt(np.sum(eff_slot_inc_stds[start_rem_idx:] ** 2))), 0.002) * vboost
 
-    target_atr = max(float(vol_cls["atr_pct"]), 0.8)
-    max_r_cap = ((target_atr * 2.8) / 100.0) if expansion_reg["active"] else ((target_atr * 1.4) / 100.0)
-    premarket_medoid = None
-    if use_maps and rdates:
-        n_r = len(use_maps)
-        max_normal_rng = max(float(vol_cls["atr_pct"]) * 2.2, 5.0)
-        valid_med_indices = []
-        for idx_r in range(n_r):
-            d_gap_i = float(day_gaps_hist[idx_r]) if idx_r < len(day_gaps_hist) else 0.0
-            d_rng_i = float(day_ranges_hist[idx_r]) if idx_r < len(day_ranges_hist) else float(vol_cls["atr_pct"])
-            if abs(d_gap_i - tot_gap) <= 3.0 and d_rng_i <= max_normal_rng:
-                valid_med_indices.append(idx_r)
-        cand_indices = valid_med_indices if valid_med_indices else list(range(n_r))
+    max_r_cap = ((target_atr * 2.8) / 100.0) if expansion_reg["active"] else ((target_atr * 1.45) / 100.0)
 
-        best_score = 1e9
-        best_idx = cand_indices[0]
-        for idx_r in cand_indices:
-            d_gap_i = float(day_gaps_hist[idx_r]) if idx_r < len(day_gaps_hist) else 0.0
-            d_rng_i = float(day_ranges_hist[idx_r]) if idx_r < len(day_ranges_hist) else float(vol_cls["atr_pct"])
-            gap_dist = abs(d_gap_i - tot_gap)
-            range_dist = abs(d_rng_i - float(vol_cls["atr_pct"])) * 0.6
-            recency_pen = 0.25 * (1.0 - (idx_r / max(n_r - 1, 1)))
-            comp_score_m = gap_dist + range_dist + recency_pen
-            if comp_score_m < best_score:
-                best_score = comp_score_m
-                best_idx = idx_r
-
-        best_rm = use_maps[best_idx]
-        best_ds = rdates[best_idx]
-        best_gap = round(float(day_gaps_hist[best_idx]), 2) if best_idx < len(day_gaps_hist) else 0.0
-        best_rng = float(day_ranges_hist[best_idx]) if best_idx < len(day_ranges_hist) else target_atr
-        amp_scale = float(np.clip(target_atr / max(best_rng, 0.5), 0.35, 1.35))
-
-        med_path = []
-        last_valid_r = 0.0
-        for sl in slots:
-            if sl in best_rm:
-                last_valid_r = float(best_rm[sl])
-                r_scaled = float(np.clip(last_valid_r * amp_scale, -max_r_cap, max_r_cap))
-                med_path.append(round(float(est_open * (1.0 + r_scaled)), 2))
-            else:
-                if med_path:
-                    r_scaled = float(np.clip(last_valid_r * amp_scale, -max_r_cap, max_r_cap))
-                    med_path.append(round(float(est_open * (1.0 + r_scaled)), 2))
-                else:
-                    med_path.append(None)
-        premarket_medoid = {
-            "date": best_ds,
-            "gap_pct": best_gap,
-            "amp_scale": round(amp_scale, 2),
-            "data": med_path,
-            "mode": "PREMARKET",
-        }
-
-    knn_match = {"matched_dates": [], "mean_dist": None, "knn_rel_moves": {}, "knn_q10": {}, "knn_q90": {}, "analog_paths": []}
+    knn_match = {"matched_dates": [], "mean_dist": None, "knn_rel_moves": {}, "knn_top1_moves": {}, "knn_q10": {}, "knn_q90": {}, "analog_paths": []}
     atr_norm_pct = max(vol_cls["atr_pct"] / 100.0, 0.005)
     if has_actual and last_act_idx >= 2 and use_maps:
         valid_slots = [slots[i] for i in range(last_act_idx + 1) if actual_arr[i] is not None]
@@ -4939,21 +4955,28 @@ def _build_dual_5m_trajectory(
                 cands.sort(key=lambda x: x[0])
                 top_k = cands[:5]
                 dists = np.array([c[0] for c in top_k], dtype=float)
-                w_knn = 1.0 / (dists + 0.02)
+                w_knn = 1.0 / (dists + 0.015)
                 w_knn /= w_knn.sum()
                 anchor_sl = slots[last_act_idx]
                 anchor_px_now = actual_arr[last_act_idx]
-                knn_rel, knn_q10_m, knn_q90_m = {}, {}, {}
+                knn_rel, knn_top1_rel, knn_q10_m, knn_q90_m = {}, {}, {}, {}
+
+                # 当日の実測ボラ比（実現ボラ / 通常ボラ）で類似日の未来振幅をリアルタイム補正
+                today_realized_rng = float(np.ptp(today_raw_rets)) if len(today_raw_rets) >= 3 else 0.0
+                expected_so_far = max(float(np.sqrt(np.sum(slot_inc_stds[:last_act_idx + 1] ** 2))), 0.003)
+                live_vol_ratio = float(np.clip(today_realized_rng / max(expected_so_far * 1.4, 0.003), 0.70, 1.55))
 
                 for i in range(last_act_idx, n_slots):
                     sl = slots[i]
                     vals_i, ws_i = [], []
-                    for (_, _, rm_k, _, d_rng_k), wk in zip(top_k, w_knn):
+                    for r_rank, (_, _, rm_k, _, d_rng_k) in enumerate(top_k):
                         if sl in rm_k and anchor_sl in rm_k:
-                            amp_k = float(np.clip(target_atr / max(float(d_rng_k), 0.5), 0.35, 1.35))
+                            amp_k = float(np.clip((target_atr / max(float(d_rng_k), 0.5)) * live_vol_ratio, 0.45, 1.55))
                             rel_s = float(np.clip((rm_k[sl] - rm_k[anchor_sl]) * amp_k, -max_r_cap, max_r_cap))
                             vals_i.append(rel_s)
-                            ws_i.append(wk)
+                            ws_i.append(w_knn[r_rank])
+                            if r_rank == 0:
+                                knn_top1_rel[i] = rel_s
                     if vals_i:
                         ws_arr = np.array(ws_i) / np.sum(ws_i)
                         va_arr = np.array(vals_i)
@@ -4965,7 +4988,7 @@ def _build_dual_5m_trajectory(
                 for rank_idx, (_, ds_k, rm_k, dg_k, d_rng_k) in enumerate(top_k):
                     if anchor_sl not in rm_k:
                         continue
-                    amp_scale_k = float(np.clip(target_atr / max(float(d_rng_k), 0.5), 0.35, 1.35))
+                    amp_scale_k = float(np.clip((target_atr / max(float(d_rng_k), 0.5)) * live_vol_ratio, 0.45, 1.55))
                     path_arr = [None] * n_slots
                     for i in range(last_act_idx, n_slots):
                         sl = slots[i]
@@ -4983,6 +5006,7 @@ def _build_dual_5m_trajectory(
                     "matched_dates": [c[1] for c in top_k],
                     "mean_dist": round(float(np.mean(dists)), 4),
                     "knn_rel_moves": knn_rel,
+                    "knn_top1_moves": knn_top1_rel,
                     "knn_q10": knn_q10_m,
                     "knn_q90": knn_q90_m,
                     "analog_paths": analog_paths,
@@ -5036,12 +5060,13 @@ def _build_dual_5m_trajectory(
             lunch_gap_adj_pct = round(lunch_gap_pct, 2)
             lunch_gap_ratio = lunch_gap_pct / 100.0
 
-        bias_cap = 0.045 if expansion_reg["active"] else 0.020
+        bias_cap = 0.045 if expansion_reg["active"] else 0.022
         drift_eff = float(np.clip(drift, -0.055, 0.055)) if expansion_reg["active"] else float(np.clip(drift, -0.032, 0.032))
         unconf_boost = (0.008 if exp_dir == "UP" else (-0.008 if exp_dir == "DOWN" else 0.0)) if expansion_reg.get("unconfirmed_catalyst") else 0.0
 
-        live_vwap_bias = float(np.clip(vwap_gap * 0.45 + mom_30m * 0.35 + gap15_bias + bench_live_alpha_adj + unconf_boost, -bias_cap, bias_cap))
+        live_vwap_bias = float(np.clip(vwap_gap * 0.45 + mom_30m * 0.38 + gap15_bias + bench_live_alpha_adj + unconf_boost, -bias_cap, bias_cap))
         knn_moves = knn_match["knn_rel_moves"]
+        knn_top1 = knn_match["knn_top1_moves"]
         knn_q10_m = knn_match["knn_q10"]
         knn_q90_m = knn_match["knn_q90"]
 
@@ -5051,9 +5076,16 @@ def _build_dual_5m_trajectory(
         for i in range(last_act_idx, n_slots):
             rem_v_frac = float(np.clip((vol_frac[i] - v_anchor) / v_rem_denom, 0.0, 1.0)) if i > last_act_idx else 0.0
             pm_shift = lunch_gap_ratio if (pm_open_idx is not None and i >= pm_open_idx) else 0.0
-            base_rel = (slot_means[i] - anchor_mean) + (drift_eff * 0.6 + live_vwap_bias) * rem_v_frac + pm_shift
-            knn_wt = 0.15 if expansion_reg["active"] else 0.30
-            rel_move = ((1.0 - knn_wt) * base_rel + knn_wt * (knn_moves[i] + pm_shift)) if (i in knn_moves) else base_rel
+            base_rel = (slot_means[i] - anchor_mean) + (drift_eff * 0.55 + live_vwap_bias) * rem_v_frac + pm_shift
+
+            # 【魔改造】場中はk-NN類似波動(Top-K + Top-1高周波スイング)の比重を大幅引き上げ、リアルな押し目・戻りを再現
+            if i in knn_moves:
+                knn_wt = 0.35 if expansion_reg["active"] else 0.62
+                knn_wave_i = (0.55 * knn_moves[i] + 0.45 * knn_top1[i]) if (i in knn_top1) else knn_moves[i]
+                rel_move = (1.0 - knn_wt) * base_rel + knn_wt * (knn_wave_i + pm_shift)
+            else:
+                rel_move = base_rel + (pre_eigen_wave[i] - pre_eigen_wave[last_act_idx]) * 0.55
+
             mid = anchor_px * (1.0 + rel_move)
             mid = _apply_hvn_ob_bounce(mid, anchor_px, hvn_wall_px, ob_sup_px, vp, exp_dir=exp_dir)
 
@@ -6044,20 +6076,21 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     "fontSize": 8.2,
                     "fontWeight": "bold",
                     "position": pos,
-                    "backgroundColor": "rgba(7, 11, 20, 0.86)",
+                    "backgroundColor": "rgba(7, 11, 20, 0.88)",
                     "padding": [1, 4],
                     "borderRadius": 3,
-                    "distance": 3,
+                    "distance": 4,
                 }
 
             def _v_badge(txt: str, col: str) -> dict:
+                # 凡例（上部）との衝突を防ぐため垂直線ラベルは下端側（insideStartBottom）へ配置
                 return {
                     "formatter": txt,
                     "color": col,
                     "fontSize": 8,
                     "rotate": 0,
-                    "position": "insideEndTop",
-                    "backgroundColor": "rgba(7, 11, 20, 0.82)",
+                    "position": "insideStartBottom",
+                    "backgroundColor": "rgba(7, 11, 20, 0.86)",
                     "padding": [1, 3],
                     "borderRadius": 3,
                     "distance": 4,
@@ -6100,7 +6133,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     if l_sl_1m > 0 and curr_px > 0 and abs(l_sl_1m - curr_px) / curr_px <= 0.08:
                         ml_1m.append({"yAxis": round(l_sl_1m, 2), "lineStyle": {"color": "#ef4444", "type": "dashed", "width": 1.3}, "label": _h_badge(f"SL {_fmt_cur(l_sl_1m, is_jp)}", "#fca5a5", "insideStartBottom")})
 
-                ml_1m_clean = _declutter_marklines(ml_1m, curr_px, min_gap_pct=0.45)
+                ml_1m_clean = _declutter_marklines(ml_1m, curr_px, min_gap_pct=0.45, avoid_left=False)
                 right_pad_1m = 56 if is_jp else 50
                 s_1m = [
                     {
@@ -6225,7 +6258,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     "legend": {"type": "scroll", "data": ["1分足", "9EMA", "20EMA", "VWAP", "疑似CVD"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2, "left": 6, "right": 8, "itemWidth": 12, "itemHeight": 8},
                     "axisPointer": {"link": [{"xAxisIndex": "all"}]},
                     "grid": [
-                        {"top": 30, "height": "61%", "left": 6, "right": right_pad_1m, "containLabel": False},
+                        {"top": 42, "height": "57%", "left": 6, "right": right_pad_1m, "containLabel": False},
                         {"top": "74%", "height": "18%", "left": 6, "right": right_pad_1m, "containLabel": False},
                     ],
                     "dataZoom": [{"type": "inside", "xAxisIndex": [0, 1], "filterMode": "none"}],
@@ -6345,11 +6378,15 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         except Exception:
                             pass
 
-                ml_data_clean = _declutter_marklines(ml_data, curr_px, min_gap_pct=0.45)
+                cur_dip_i = traj["live_dip_idx"] if use_live_basis else traj["locked_dip_idx"]
+                cur_peak_i = traj["live_peak_idx"] if use_live_basis else traj["locked_peak_idx"]
+                # 左端付近に押目・高値がある場合は水平MarkLineラベルを中央へ自動退避して文字被りを完全防止
+                avoid_left_ml = bool(cur_dip_i <= 6 or cur_peak_i <= 6)
+                ml_data_clean = _declutter_marklines(ml_data, curr_px, min_gap_pct=0.45, avoid_left=avoid_left_ml)
                 ml_cfg = {"symbol": ["none", "none"], "data": ml_data_clean} if ml_data_clean else {}
 
                 preset_desc = {
-                    "📈 今の予測": "ライブ修正軌道 ＋ 分位点ファン ＋ 場中30分3分岐 ＋ 下段CVD同期",
+                    "📈 今の予測": "ライブ修正軌道（固有波動合成）＋ 分位点ファン ＋ 場中30分3分岐 ＋ 下段CVD同期",
                     "🔍 朝の答え合わせ": "寄り前ロック予測 vs 当日実測 ＋ 寄り30分高安 ＋ 下段CVD同期",
                     "🏦 大口・節目": "VWAP±σ ＋ PDH/PDL/HOD/LOD ＋ キリ番 ＋ 大口約定 ＋ 下段CVD",
                 }
@@ -6367,8 +6404,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 if fusion.get("has_lab") and "LAB×DD 統合エントリー帯/+1.0R" in opt_lines:
                     ez_lo, ez_hi = fusion["entry_zone_lo"], fusion["entry_zone_hi"]
                     if ez_lo > 0 and ez_hi > ez_lo and curr_px > 0 and abs(ez_lo - curr_px) / curr_px <= 0.12:
+                        # 統合Entry帯ラベルは右側（insideRight）へ配置して左端の押目/高値との衝突を解消
                         ma_data.append([
-                            {"name": "統合Entry帯", "yAxis": ez_lo, "itemStyle": {"color": "rgba(16, 185, 129, 0.08)"}, "label": {"position": "insideLeft", "color": "#6ee7b7", "fontSize": 8.0, "backgroundColor": "rgba(7, 11, 20, 0.78)", "padding": [1, 3], "borderRadius": 2}},
+                            {"name": "統合Entry帯", "yAxis": ez_lo, "itemStyle": {"color": "rgba(16, 185, 129, 0.08)"}, "label": {"position": "insideRight", "color": "#6ee7b7", "fontSize": 8.0, "backgroundColor": "rgba(7, 11, 20, 0.82)", "padding": [1, 4], "borderRadius": 2}},
                             {"yAxis": ez_hi},
                         ])
                 if "高ボラ狩り場帯" in opt_lines and traj.get("high_vol_zones"):
@@ -6393,14 +6431,14 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         ])
                 if "押目・利確ゾーン" in opt_lines:
                     n_sl = len(traj["slots"])
-                    cur_dip_i = traj["live_dip_idx"] if use_live_basis else traj["locked_dip_idx"]
-                    cur_peak_i = traj["live_peak_idx"] if use_live_basis else traj["locked_peak_idx"]
                     d_s, d_e = max(0, cur_dip_i - 2), min(n_sl - 1, cur_dip_i + 2)
                     p_s, p_e = max(0, cur_peak_i - 2), min(n_sl - 1, cur_peak_i + 2)
-                    ma_data.append([{"name": "押目帯", "xAxis": traj["slots"][d_s], "itemStyle": {"color": "rgba(16, 185, 129, 0.07)"}, "label": {"position": "insideTop", "color": "#6ee7b7", "fontSize": 8.2, "backgroundColor": "rgba(7, 11, 20, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][d_e]}])
-                    ma_data.append([{"name": "利確帯", "xAxis": traj["slots"][p_s], "itemStyle": {"color": "rgba(239, 68, 68, 0.07)"}, "label": {"position": "insideTop", "color": "#fca5a5", "fontSize": 8.2, "backgroundColor": "rgba(7, 11, 20, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][p_e]}])
+                    # 押目帯と利確帯が近接する場合は上下に分離してラベル重複を防止
+                    dip_zone_pos = "insideBottom" if abs(cur_dip_i - cur_peak_i) <= 8 else "insideTop"
+                    ma_data.append([{"name": "押目帯", "xAxis": traj["slots"][d_s], "itemStyle": {"color": "rgba(16, 185, 129, 0.07)"}, "label": {"position": dip_zone_pos, "color": "#6ee7b7", "fontSize": 8.2, "backgroundColor": "rgba(7, 11, 20, 0.82)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][d_e]}])
+                    ma_data.append([{"name": "利確帯", "xAxis": traj["slots"][p_s], "itemStyle": {"color": "rgba(239, 68, 68, 0.07)"}, "label": {"position": "insideTop", "color": "#fca5a5", "fontSize": 8.2, "backgroundColor": "rgba(7, 11, 20, 0.82)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][p_e]}])
                     if vp["overhead_pct"] >= 25.0 and not exp_active:
-                        ma_data.append([{"name": "売り壁", "yAxis": round(vp["res_px"] * 0.996, 2), "itemStyle": {"color": "rgba(168, 85, 247, 0.10)"}, "label": {"position": "insideLeft", "color": "#d8b4fe", "fontSize": 8.2, "backgroundColor": "rgba(7, 11, 20, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"yAxis": round(vp["res_px"] * 1.004, 2)}])
+                        ma_data.append([{"name": "売り壁", "yAxis": round(vp["res_px"] * 0.996, 2), "itemStyle": {"color": "rgba(168, 85, 247, 0.10)"}, "label": {"position": "insideRight", "color": "#d8b4fe", "fontSize": 8.2, "backgroundColor": "rgba(7, 11, 20, 0.82)", "padding": [1, 3], "borderRadius": 2}}, {"yAxis": round(vp["res_px"] * 1.004, 2)}])
                 ma_cfg = {"silent": True, "data": ma_data} if ma_data else {}
 
                 s_list, l_names = [], []
@@ -6488,7 +6526,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "name": lk_name, "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": disp_locked_p50,
                         "itemStyle": {"color": lk_col},
                         "lineStyle": lk_style,
-                        "smooth": 0.15,
+                        "smooth": 0.12,
                         "showSymbol": False, "markLine": ml_cfg, "markArea": ma_cfg,
                         "z": 8,
                     })
@@ -6499,7 +6537,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "name": "ライブ修正", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": disp_live_p50,
                         "itemStyle": {"color": "#38bdf8"},
                         "lineStyle": {"color": "#38bdf8", "width": 2.0, "shadowBlur": 10, "shadowColor": "rgba(56,189,248,0.55)"},
-                        "smooth": 0.15,
+                        "smooth": 0.12,
                         "showSymbol": False,
                         "markLine": ml_cfg if chart_mode == "🔴 ライブ修正" else {},
                         "markArea": ma_cfg if chart_mode == "🔴 ライブ修正" else {},
@@ -6638,7 +6676,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     "legend": {"type": "scroll", "data": l_names, "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2, "left": 6, "right": 8, "itemWidth": 12, "itemHeight": 8},
                     "axisPointer": {"link": [{"xAxisIndex": "all"}]},
                     "grid": [
-                        {"top": 30, "height": "61%", "left": 6, "right": right_pad, "containLabel": False},
+                        {"top": 42, "height": "57%", "left": 6, "right": right_pad, "containLabel": False},
                         {"top": "74%", "height": "18%", "left": 6, "right": right_pad, "containLabel": False},
                     ],
                     "dataZoom": [{"type": "inside", "xAxisIndex": [0, 1], "filterMode": "none"}],
