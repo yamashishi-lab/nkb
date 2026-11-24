@@ -121,64 +121,133 @@ DEFAULT_WEIGHTS_EVOLUTION = {
 
 
 # =========================================================================
-# 1. DEEP DIVE v17.0 専用CSS
+# 1. DEEP DIVE v18.0 専用CSS（プロ向けクオンツ端末・ガラス調・高視認性設計）
 # =========================================================================
 def _inject_dd_css():
     css = """
     [data-stale="true"] { opacity: 1 !important; transition: none !important; }
+    .dd-cmd-header {
+        background: linear-gradient(135deg, rgba(11, 17, 32, 0.88) 0%, rgba(7, 11, 20, 0.94) 100%);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(56, 189, 248, 0.22);
+        border-radius: 10px;
+        padding: 7px 12px;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .dd-cmd-title {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13.5px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        background: linear-gradient(90deg, #f8fafc 0%, #7dd3fc 55%, #c084fc 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.2;
+    }
+    .dd-cmd-sub {
+        font-size: 9.5px;
+        color: #64748b;
+        margin-top: 1px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     .dd-macro-strip {
-        display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px;
-        padding: 3px 0 5px 0; margin-bottom: 4px; scrollbar-width: none;
+        display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 5px;
+        padding: 2px 0 4px 0; margin-bottom: 4px; scrollbar-width: none;
     }
     .dd-macro-strip::-webkit-scrollbar { display: none; }
     .dd-macro-chip {
-        flex-shrink: 0; background: rgba(15, 23, 42, 0.9);
-        border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 6px;
-        padding: 3px 8px; font-family: 'JetBrains Mono', monospace;
-        font-size: 10.5px; display: inline-flex; align-items: center; gap: 5px;
+        flex-shrink: 0;
+        background: rgba(15, 23, 42, 0.72);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 6px;
+        padding: 2.5px 7px;
+        font-family: 'JetBrains Mono', monospace;
+        font-variant-numeric: tabular-nums;
+        font-size: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
     }
     .dd-status-strip {
-        display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px;
-        padding: 2px 0 6px 0; scrollbar-width: none;
+        display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 5px;
+        padding: 1px 0 5px 0; scrollbar-width: none;
     }
     .dd-status-strip::-webkit-scrollbar { display: none; }
     .dd-st-pill {
-        flex-shrink: 0; font-size: 10.5px; font-weight: 700;
-        padding: 3px 9px; border-radius: 99px; border: 1px solid;
+        flex-shrink: 0; font-size: 10px; font-weight: 700;
+        padding: 2.5px 8px; border-radius: 99px; border: 1px solid;
         display: inline-flex; align-items: center; gap: 4px;
+        font-variant-numeric: tabular-nums;
+    }
+    .dd-hero-card {
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.78) 0%, rgba(7, 11, 20, 0.90) 100%);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-left: 4px solid #38bdf8;
+        border-radius: 12px;
+        padding: 11px 13px;
+        margin: 4px 0 10px 0;
     }
     .dd-mtf-bar {
         display: flex; align-items: center; justify-content: space-between;
         flex-wrap: nowrap; overflow-x: auto; gap: 5px;
-        background: rgba(11, 17, 32, 0.94); border: 1px solid rgba(56, 189, 248, 0.28);
-        border-radius: 8px; padding: 5px 8px; margin-bottom: 6px; scrollbar-width: none;
+        background: rgba(11, 17, 32, 0.78);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(56, 189, 248, 0.22);
+        border-radius: 8px; padding: 4px 8px; margin-bottom: 6px; scrollbar-width: none;
     }
     .dd-mtf-bar::-webkit-scrollbar { display: none; }
     .dd-mtf-pills { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
     .dd-mtf-led {
-        font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 800;
-        padding: 2px 6px; border-radius: 5px; border: 1px solid;
+        font-family: 'JetBrains Mono', monospace;
+        font-variant-numeric: tabular-nums;
+        font-size: 9.8px; font-weight: 800;
+        padding: 1.5px 6px; border-radius: 5px; border: 1px solid;
         display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
     }
     .dd-mtf-sum {
-        font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 800;
-        padding: 2px 7px; border-radius: 99px; background: rgba(15, 23, 42, 0.95);
-        border: 1px solid rgba(148, 163, 184, 0.28); flex-shrink: 0;
+        font-family: 'JetBrains Mono', monospace; font-size: 9.8px; font-weight: 800;
+        padding: 2px 7px; border-radius: 99px; background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.22); flex-shrink: 0;
+    }
+    .dd-inst-ribbon {
+        display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px;
+        padding: 2px 0 6px 0; margin-bottom: 6px; scrollbar-width: none;
+    }
+    .dd-inst-ribbon::-webkit-scrollbar { display: none; }
+    .dd-inst-pill-card {
+        flex: 1 0 124px;
+        background: rgba(15, 23, 42, 0.72);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 8px;
+        padding: 5px 8px;
+        text-align: left;
     }
     .dd-ladder-wrap {
-        background: rgba(9, 13, 22, 0.92); border: 1px solid rgba(148, 163, 184, 0.2);
-        border-radius: 8px; padding: 7px 9px; font-family: 'JetBrains Mono', monospace;
+        background: rgba(7, 11, 20, 0.85); border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 8px; padding: 7px 9px;
+        font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
     }
     .dd-lad-row {
         display: flex; align-items: center; justify-content: space-between; gap: 8px;
         padding: 3.5px 6px; border-radius: 5px; font-size: 10.5px; margin-bottom: 3px;
-        background: rgba(15, 23, 42, 0.78);
+        background: rgba(15, 23, 42, 0.75);
     }
     .dd-lad-now {
         display: flex; align-items: center; justify-content: space-between;
         padding: 5px 8px; margin: 5px 0; border-radius: 6px;
-        background: linear-gradient(90deg, rgba(56, 189, 248, 0.18) 0%, rgba(15, 23, 42, 0.95) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.55); font-size: 11px; font-weight: 800; color: #ffffff;
+        background: linear-gradient(90deg, rgba(56, 189, 248, 0.18) 0%, rgba(15, 23, 42, 0.92) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.5); font-size: 11px; font-weight: 800; color: #ffffff;
     }
     .dd-lad-bar-bg {
         width: 54px; height: 5px; background: rgba(148, 163, 184, 0.18);
@@ -186,101 +255,189 @@ def _inject_dd_css():
     }
     .dd-breaking-ticker {
         display: flex; align-items: center; gap: 8px;
-        background: linear-gradient(90deg, rgba(239, 68, 68, 0.16) 0%, rgba(15, 23, 42, 0.95) 100%);
-        border: 1px solid rgba(239, 68, 68, 0.45); border-left: 4px solid #ef4444;
-        border-radius: 7px; padding: 5px 10px; margin-bottom: 6px;
-        font-size: 11px; color: #fecaca; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        background: linear-gradient(90deg, rgba(239, 68, 68, 0.16) 0%, rgba(15, 23, 42, 0.90) 100%);
+        border: 1px solid rgba(239, 68, 68, 0.42); border-left: 3.5px solid #ef4444;
+        border-radius: 7px; padding: 4px 10px; margin-bottom: 6px;
+        font-size: 10.8px; color: #fecaca; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .dd-breaking-ticker.bull {
-        background: linear-gradient(90deg, rgba(16, 185, 129, 0.16) 0%, rgba(15, 23, 42, 0.95) 100%);
-        border-color: rgba(16, 185, 129, 0.45); border-left-color: #10b981; color: #d1fae5;
+        background: linear-gradient(90deg, rgba(16, 185, 129, 0.16) 0%, rgba(15, 23, 42, 0.90) 100%);
+        border-color: rgba(16, 185, 129, 0.42); border-left-color: #10b981; color: #d1fae5;
     }
     .dd-winrate-bar {
         display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
-        background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.18);
-        border-radius: 8px; padding: 8px 6px; margin-top: 8px; text-align: center;
+        background: rgba(7, 11, 20, 0.65); border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 8px; padding: 7px 6px; margin-top: 8px; text-align: center;
     }
     @media (max-width: 640px) { .dd-winrate-bar { grid-template-columns: repeat(2, 1fr); } }
-    .dd-metric-val { font-family: 'JetBrains Mono', monospace; font-size: 13.5px; font-weight: 800; color: #38bdf8; margin-top: 2px; }
-    .dd-metric-lbl { font-size: 10px; color: #94a3b8; font-weight: 600; }
-    .dd-range-track { width: 100%; height: 6px; background: rgba(148, 163, 184, 0.2); border-radius: 99px; position: relative; margin: 6px 0 3px 0; }
-    .dd-range-dot { width: 11px; height: 11px; background: #38bdf8; border: 2px solid #fff; border-radius: 50%; position: absolute; top: -2.5px; transform: translateX(-50%); box-shadow: 0 0 8px rgba(56, 189, 248, 0.9); }
-    .dd-sc-stack { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px 0; }
-    .dd-sc-card { background: linear-gradient(135deg, rgba(15, 23, 42, 0.96) 0%, rgba(9, 13, 22, 0.96) 100%); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: 10px 12px; }
-    .dd-sc-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-    .dd-sc-price { font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 800; color: #fff; line-height: 1.15; }
-    .dd-sc-pct { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; margin-top: 2px; }
-    .dd-sc-bar-bg { width: 100%; height: 5px; background: rgba(148, 163, 184, 0.16); border-radius: 99px; margin-top: 8px; overflow: hidden; }
+    .dd-metric-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-variant-numeric: tabular-nums;
+        font-size: 13px; font-weight: 800; color: #38bdf8; margin-top: 2px;
+    }
+    .dd-metric-lbl { font-size: 9.5px; color: #64748b; font-weight: 700; letter-spacing: 0.02em; }
+    .dd-range-track { width: 100%; height: 5px; background: rgba(148, 163, 184, 0.18); border-radius: 99px; position: relative; margin: 5px 0 3px 0; }
+    .dd-range-dot { width: 10px; height: 10px; background: #38bdf8; border: 2px solid #fff; border-radius: 50%; position: absolute; top: -2.5px; transform: translateX(-50%); box-shadow: 0 0 8px rgba(56, 189, 248, 0.9); }
+    .dd-sc-stack {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        margin: 8px 0 12px 0;
+    }
+    @media (min-width: 768px) {
+        .dd-sc-stack { grid-template-columns: repeat(3, 1fr); }
+    }
+    .dd-sc-card {
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.78) 0%, rgba(7, 11, 20, 0.92) 100%);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 10px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .dd-sc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .dd-sc-price {
+        font-family: 'JetBrains Mono', monospace;
+        font-variant-numeric: tabular-nums;
+        font-size: 16px; font-weight: 800; color: #f8fafc; line-height: 1.15;
+    }
+    .dd-sc-pct {
+        font-family: 'JetBrains Mono', monospace;
+        font-variant-numeric: tabular-nums;
+        font-size: 10.8px; font-weight: 700; margin-top: 2px;
+    }
+    .dd-sc-bar-bg { width: 100%; height: 4px; background: rgba(148, 163, 184, 0.14); border-radius: 99px; margin-top: 8px; overflow: hidden; }
     .dd-sc-bar-fill { height: 100%; border-radius: 99px; transition: width 0.3s ease; }
     .dd-3way-strip {
         display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;
-        background: linear-gradient(90deg, rgba(15, 23, 42, 0.95) 0%, rgba(17, 24, 39, 0.95) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px;
-        padding: 6px 10px; margin: 5px 0 6px 0;
-        font-family: 'JetBrains Mono', monospace; font-size: 11px;
+        background: rgba(15, 23, 42, 0.78);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(56, 189, 248, 0.28); border-radius: 8px;
+        padding: 5px 10px; margin: 5px 0 6px 0;
+        font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; font-size: 10.8px;
     }
     .dd-legend-panel {
-        background: rgba(11, 17, 32, 0.94); border: 1px solid rgba(148, 163, 184, 0.22);
-        border-radius: 10px; padding: 8px 10px; margin: 5px 0 7px 0;
+        background: rgba(11, 17, 32, 0.74);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 9px; padding: 7px 10px; margin: 4px 0 8px 0;
     }
     .dd-trans-banner {
-        font-size: 11.2px; font-weight: 700; line-height: 1.45;
-        padding: 6px 9px; border-radius: 7px; margin-bottom: 7px;
-        border-left: 3.5px solid #38bdf8; background: rgba(56, 189, 248, 0.10); color: #e0f2fe;
+        font-size: 11px; font-weight: 700; line-height: 1.45;
+        padding: 5px 9px; border-radius: 6px; margin-bottom: 6px;
+        border-left: 3.5px solid #38bdf8; background: rgba(56, 189, 248, 0.09); color: #e0f2fe;
     }
     .dd-trans-banner.exp-up {
-        border-left-color: #10b981; background: rgba(16, 185, 129, 0.14); color: #d1fae5;
+        border-left-color: #10b981; background: rgba(16, 185, 129, 0.13); color: #d1fae5;
     }
     .dd-trans-banner.exp-down {
-        border-left-color: #ef4444; background: rgba(239, 68, 68, 0.14); color: #fecaca;
+        border-left-color: #ef4444; background: rgba(239, 68, 68, 0.13); color: #fecaca;
+    }
+    .dd-chip-ribbon {
+        display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px;
+        padding: 1px 0; scrollbar-width: none;
+    }
+    .dd-chip-ribbon::-webkit-scrollbar { display: none; }
+    .dd-leg-pill {
+        flex-shrink: 0;
+        display: inline-flex; align-items: center; gap: 5px;
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 99px;
+        padding: 2px 8px;
+        font-size: 9.8px; font-weight: 700; color: #cbd5e1;
     }
     .dd-legend-grid {
         display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
     }
     @media (max-width: 640px) { .dd-legend-grid { grid-template-columns: repeat(2, 1fr); } }
     .dd-leg-card {
-        background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.14);
         border-radius: 6px; padding: 5px 7px; display: flex; flex-direction: column; gap: 2px;
     }
     .dd-leg-head {
-        display: flex; align-items: center; gap: 6px; font-size: 10.2px; font-weight: 800; color: #f8fafc;
+        display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; color: #f8fafc;
     }
     .dd-leg-desc {
-        font-size: 9.5px; color: #94a3b8; line-height: 1.3;
+        font-size: 9.3px; color: #94a3b8; line-height: 1.3;
     }
     .dd-prob-meter {
-        background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(56, 189, 248, 0.25);
-        border-radius: 10px; padding: 9px 11px; margin: 6px 0 8px 0;
+        background: rgba(15, 23, 42, 0.74);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(56, 189, 248, 0.20);
+        border-radius: 10px; padding: 8px 11px; margin: 6px 0 8px 0;
     }
     .dd-prob-stack {
-        display: flex; width: 100%; height: 10px; border-radius: 99px;
-        overflow: hidden; background: rgba(15, 23, 42, 0.95); margin: 6px 0 7px 0;
-        border: 1px solid rgba(148, 163, 184, 0.22);
+        display: flex; width: 100%; height: 9px; border-radius: 99px;
+        overflow: hidden; background: rgba(7, 11, 20, 0.92); margin: 6px 0 7px 0;
+        border: 1px solid rgba(148, 163, 184, 0.18);
     }
     .dd-prob-legend {
         display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
-        font-family: 'JetBrains Mono', monospace; font-size: 10px; text-align: center;
+        font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
+        font-size: 9.8px; text-align: center;
     }
     @media (max-width: 640px) { .dd-prob-legend { grid-template-columns: repeat(2, 1fr); } }
     .dd-dow-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 6px; }
-    .dd-dow-cell { background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 7px; padding: 6px 4px; text-align: center; }
-    .dd-dark-box { background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(148, 163, 184, 0.18); padding: 11px 12px; border-radius: 10px; margin-bottom: 8px; font-size: 12px; line-height: 1.65; color: #cbd5e1; }
-    .dd-warn-box { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); border-left: 4px solid #ef4444; padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; font-size: 12px; line-height: 1.6; color: #fecaca; }
-    .dd-quant-box { background: rgba(16, 185, 129, 0.10); border: 1px solid rgba(16, 185, 129, 0.35); border-left: 4px solid #10b981; padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; font-size: 12px; line-height: 1.6; color: #d1fae5; }
-    .dd-sync-warn { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.42); border-left: 4px solid #f59e0b; padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; font-size: 12px; line-height: 1.6; color: #fef3c7; }
-    .dd-guide-box { background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.28); border-left: 3px solid #38bdf8; padding: 10px 12px; border-radius: 8px; font-size: 11.5px; line-height: 1.65; color: #e0f2fe; }
-    .dd-memo-box { background: linear-gradient(180deg, #0b192c 0%, #090d16 100%); border: 1px solid rgba(168, 85, 247, 0.45); border-left: 4px solid #a855f7; padding: 13px 15px; border-radius: 10px; margin-bottom: 10px; font-size: 12.2px; line-height: 1.78; color: #f1f5f9; }
-    .dd-factor-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.12); font-size: 11.5px; }
+    .dd-dow-cell {
+        background: rgba(15, 23, 42, 0.76); border: 1px solid rgba(148, 163, 184, 0.15);
+        border-radius: 7px; padding: 6px 4px; text-align: center;
+        font-variant-numeric: tabular-nums;
+    }
+    .dd-dark-box {
+        background: rgba(15, 23, 42, 0.74);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        padding: 11px 13px; border-radius: 10px; margin-bottom: 10px;
+        font-size: 11.8px; line-height: 1.65; color: #cbd5e1;
+    }
+    .dd-warn-box {
+        background: rgba(239, 68, 68, 0.10); border: 1px solid rgba(239, 68, 68, 0.36);
+        border-left: 3.5px solid #ef4444; padding: 9px 12px; border-radius: 9px;
+        margin-bottom: 8px; font-size: 11.8px; line-height: 1.6; color: #fecaca;
+    }
+    .dd-quant-box {
+        background: rgba(16, 185, 129, 0.09); border: 1px solid rgba(16, 185, 129, 0.32);
+        border-left: 3.5px solid #10b981; padding: 9px 12px; border-radius: 9px;
+        margin-bottom: 8px; font-size: 11.8px; line-height: 1.6; color: #d1fae5;
+    }
+    .dd-sync-warn {
+        background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.38);
+        border-left: 3.5px solid #f59e0b; padding: 9px 12px; border-radius: 9px;
+        margin-bottom: 8px; font-size: 11.8px; line-height: 1.6; color: #fef3c7;
+    }
+    .dd-guide-box {
+        background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25);
+        border-left: 3px solid #38bdf8; padding: 10px 12px; border-radius: 8px;
+        font-size: 11.3px; line-height: 1.65; color: #e0f2fe;
+    }
+    .dd-memo-box {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(7, 11, 20, 0.95) 100%);
+        border: 1px solid rgba(168, 85, 247, 0.38); border-left: 4px solid #a855f7;
+        padding: 13px 15px; border-radius: 10px; margin-bottom: 10px;
+        font-size: 12px; line-height: 1.78; color: #f1f5f9;
+    }
+    .dd-factor-row {
+        display: flex; justify-content: space-between; align-items: center; gap: 8px;
+        padding: 5px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        font-size: 11.3px; font-variant-numeric: tabular-nums;
+    }
     .dd-factor-row:last-child { border-bottom: none; padding-top: 7px; font-weight: 800; }
-    .dd-inst-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
-    @media (max-width: 640px) { .dd-inst-strip { grid-template-columns: repeat(2, 1fr); } }
-    .dd-inst-card { background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; padding: 6px 7px; text-align: center; }
     .dd-ev-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
-    .dd-ev-cell { background: rgba(9, 13, 22, 0.85); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 7px; padding: 7px 5px; text-align: center; }
+    .dd-ev-cell {
+        background: rgba(7, 11, 20, 0.78); border: 1px solid rgba(56, 189, 248, 0.20);
+        border-radius: 7px; padding: 7px 5px; text-align: center;
+        font-variant-numeric: tabular-nums;
+    }
     .dd-val-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 8px 0; }
     @media (max-width: 640px) { .dd-val-grid { grid-template-columns: 1fr; } }
-    .dd-val-card { background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 8px; padding: 7px 9px; }
-    .dd-val-track { width: 100%; height: 6px; background: rgba(148, 163, 184, 0.18); border-radius: 99px; position: relative; margin-top: 5px; }
+    .dd-val-card {
+        background: rgba(15, 23, 42, 0.76); border: 1px solid rgba(148, 163, 184, 0.15);
+        border-radius: 8px; padding: 7px 9px; font-variant-numeric: tabular-nums;
+    }
+    .dd-val-track { width: 100%; height: 5px; background: rgba(148, 163, 184, 0.16); border-radius: 99px; position: relative; margin-top: 5px; }
     .dd-val-fill { height: 100%; border-radius: 99px; }
     """
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
@@ -752,7 +909,7 @@ def _update_weights_two_stage(
 
 
 # =========================================================================
-# 3. ヘルパー ＆ 描画コンポーネント（2段同期ECharts / Live Clock / 凡例UI）
+# 3. ヘルパー ＆ 描画コンポーネント（衝突回避MarkLine / 高DPI ECharts / スリム凡例）
 # =========================================================================
 def _fmt_cur(val, is_jp: bool) -> str:
     if val is None or (isinstance(val, float) and np.isnan(val)):
@@ -848,6 +1005,73 @@ def _calc_two_barrier_tp_prob(curr_px: float, tp_px: float, sl_px: float, is_lon
     return round(joint_prob, 1)
 
 
+def _declutter_marklines(ml_list: list, curr_px: float, min_gap_pct: float = 0.38) -> list:
+    """水平MarkLineの密集ラベル衝突を自動検出・統合＆4隅交互配置するヘルパー"""
+    if not ml_list:
+        return []
+    horiz = []
+    others = []
+    for item in ml_list:
+        if isinstance(item, dict) and "yAxis" in item and item["yAxis"] is not None:
+            try:
+                y_val = float(item["yAxis"])
+                if y_val > 0:
+                    horiz.append((y_val, json.loads(json.dumps(item))))
+                    continue
+            except Exception:
+                pass
+        others.append(item)
+
+    if not horiz:
+        return others
+
+    horiz.sort(key=lambda x: x[0])
+    ref_base = curr_px if curr_px > 0 else float(np.mean([h[0] for h in horiz]))
+    ref_base = max(ref_base, 1e-4)
+
+    # 0.12%未満でほぼ同一価格のラインは統合（例: "PDH / ORB高"）
+    merged = []
+    for y_val, obj in horiz:
+        if merged:
+            prev_y, prev_obj = merged[-1]
+            diff_pct = abs(y_val - prev_y) / ref_base * 100.0
+            if diff_pct < 0.12:
+                lbl_prev = prev_obj.get("label", {}) if isinstance(prev_obj.get("label"), dict) else {}
+                lbl_cur = obj.get("label", {}) if isinstance(obj.get("label"), dict) else {}
+                t_prev = str(lbl_prev.get("formatter", "")).strip()
+                t_cur = str(lbl_cur.get("formatter", "")).strip()
+                if t_cur and t_cur not in t_prev:
+                    short_cur = t_cur.split(" ")[0]
+                    lbl_prev["formatter"] = f"{t_prev} / {short_cur}" if t_prev else t_cur
+                    prev_obj["label"] = lbl_prev
+                continue
+        merged.append((y_val, obj))
+
+    # 0.38%未満で近接しているラインは4ポジションへ交互振り分け
+    pos_cycle = ["insideStartTop", "insideEndTop", "insideStartBottom", "insideEndBottom"]
+    pos_idx = 0
+    last_placed_y = None
+    out_horiz = []
+    for y_val, obj in merged:
+        lbl = obj.get("label") if isinstance(obj.get("label"), dict) else {}
+        if last_placed_y is not None:
+            gap_pct = abs(y_val - last_placed_y) / ref_base * 100.0
+            if gap_pct < min_gap_pct:
+                pos_idx = (pos_idx + 1) % len(pos_cycle)
+                lbl["position"] = pos_cycle[pos_idx]
+            else:
+                cur_p = lbl.get("position", "insideStartTop")
+                pos_idx = pos_cycle.index(cur_p) if cur_p in pos_cycle else 0
+        else:
+            cur_p = lbl.get("position", "insideStartTop")
+            pos_idx = pos_cycle.index(cur_p) if cur_p in pos_cycle else 0
+        obj["label"] = lbl
+        out_horiz.append(obj)
+        last_placed_y = y_val
+
+    return others + out_horiz
+
+
 def _render_echarts(
     option_dict: dict,
     height: int = 300,
@@ -855,23 +1079,27 @@ def _render_echarts(
     is_jp: bool = False,
     enable_fullscreen: bool = False,
     is_dual_grid: bool = False,
+    chart_key: str = "dd_chart_default",
 ):
     opt_json = json.dumps(option_dict, ensure_ascii=False)
+    safe_ck = re.sub(r"[^A-Za-z0-9_\-]", "_", str(chart_key or "dd_chart_default"))
+
     hud_js = f"""
     if ({'true' if use_hud_tooltip else 'false'}) {{
         opt.tooltip = {{
             trigger: 'axis',
-            backgroundColor: 'rgba(9, 13, 22, 0.92)',
-            borderColor: 'rgba(56, 189, 248, 0.45)',
+            confine: true,
+            backgroundColor: 'rgba(7, 11, 20, 0.90)',
+            borderColor: 'rgba(56, 189, 248, 0.38)',
             borderWidth: 1,
             padding: [4, 8],
-            extraCssText: 'white-space: normal; max-width: 92%; line-height: 1.35;',
+            extraCssText: 'pointer-events: none; white-space: normal; max-width: 84%; line-height: 1.35; backdrop-filter: blur(6px);',
             textStyle: {{ color: '#f8fafc', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }},
             position: function() {{ return [6, 26]; }},
             axisPointer: {{
                 type: 'cross',
-                lineStyle: {{ color: 'rgba(56, 189, 248, 0.55)', type: 'dashed', width: 1 }},
-                crossStyle: {{ color: 'rgba(56, 189, 248, 0.35)' }},
+                lineStyle: {{ color: 'rgba(56, 189, 248, 0.5)', type: 'dashed', width: 1 }},
+                crossStyle: {{ color: 'rgba(56, 189, 248, 0.32)' }},
                 label: {{ backgroundColor: '#0f172a', borderColor: '#38bdf8', borderWidth: 1, fontSize: 9 }}
             }},
             formatter: function(params) {{
@@ -906,103 +1134,25 @@ def _render_echarts(
         }};
     }}
     """
-    fs_btn_html = '<button id="fs-btn" onclick="toggleFS()" title="スマホ横向きフル大画面">⛶ 横拡大</button>' if enable_fullscreen else ""
-    dual_grid_js = """
-        if (opt.dataZoom) {
-          chart.setOption({
-            grid: isFS
-              ? [{ top: 44, height: '56%', left: 6, right: opt.grid[0].right }, { top: '69%', height: '16%', left: 6, right: opt.grid[1].right }]
-              : [{ top: 62, height: '57%', left: 6, right: opt.grid[0].right }, { top: '76%', height: '17%', left: 6, right: opt.grid[1].right }],
-            dataZoom: isFS
-              ? [{ type: 'inside', xAxisIndex: [0, 1], filterMode: 'none' }, { type: 'slider', xAxisIndex: [0, 1], height: 16, bottom: 5, borderColor: 'rgba(56,189,248,0.35)', fillerColor: 'rgba(56,189,248,0.18)', textStyle: { color: '#94a3b8', fontSize: 9 } }]
-              : [{ type: 'inside', xAxisIndex: [0, 1], filterMode: 'none' }]
-          });
-        }
-    """ if is_dual_grid else """
-        if (opt.dataZoom) {
-          chart.setOption({
-            grid: { bottom: isFS ? 44 : 24, top: isFS ? 52 : 66 },
-            dataZoom: isFS
-              ? [{ type: 'inside', xAxisIndex: 0, filterMode: 'none' }, { type: 'slider', xAxisIndex: 0, height: 18, bottom: 6, borderColor: 'rgba(56,189,248,0.35)', fillerColor: 'rgba(56,189,248,0.18)', textStyle: { color: '#94a3b8', fontSize: 9 } }]
-              : [{ type: 'inside', xAxisIndex: 0, filterMode: 'none' }]
-          });
-        }
-    """
-    fs_js = f"""
-      var wrap = document.getElementById('wrap');
-      var btn = document.getElementById('fs-btn');
 
-      function applyLayout(isFS) {{
-        if (!isFS) {{
-          el.classList.remove('force-landscape');
-          if (btn) btn.classList.remove('btn-rotated');
-          el.style.width = '100%';
-          el.style.height = '100%';
-          chart.resize();
-          return;
-        }}
-        var w = window.innerWidth;
-        var h = window.innerHeight;
-        if (h > w) {{
-          el.classList.add('force-landscape');
-          if (btn) btn.classList.add('btn-rotated');
-          el.style.width = h + 'px';
-          el.style.height = w + 'px';
-          chart.resize({{ width: h, height: w }});
-        }} else {{
-          el.classList.remove('force-landscape');
-          if (btn) btn.classList.remove('btn-rotated');
-          el.style.width = '100%';
-          el.style.height = '100%';
-          chart.resize({{ width: w, height: h }});
-        }}
-      }}
+    ctrl_bar_html = (
+        '<div id="ctrl-bar">'
+        '<span id="fs-hint">FS中（60s自動更新で解除時は上部トグルOFF）</span>'
+        '<button id="rst-btn" onclick="resetZoom()" title="拡大ズームを初期状態へリセット">↺</button>'
+        '<button id="fs-btn" onclick="toggleFS()" title="スマホ横向きフル大画面">⛶ 横拡大</button>'
+        '</div>'
+    ) if enable_fullscreen else ""
 
-      function toggleFS() {{
-        var doc = document;
-        var isFS = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
-        if (!isFS) {{
-          var req = wrap.requestFullscreen || wrap.webkitRequestFullscreen;
-          if (req) {{
-            Promise.resolve(req.call(wrap)).then(function() {{
-              if (screen.orientation && screen.orientation.lock) {{
-                screen.orientation.lock('landscape').catch(function(){{}});
-              }}
-              setTimeout(function() {{ applyLayout(true); }}, 250);
-            }}).catch(function(){{}});
-          }}
-        }} else {{
-          var ex = doc.exitFullscreen || doc.webkitExitFullscreen;
-          if (ex) ex.call(doc);
-          if (screen.orientation && screen.orientation.unlock) {{
-            try {{ screen.orientation.unlock(); }} catch(e) {{}}
-          }}
-        }}
-      }}
-
-      function onFSChange() {{
-        var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-        if (btn) btn.textContent = isFS ? '✕ 戻す' : '⛶ 横拡大';
-        {dual_grid_js}
-        setTimeout(function() {{ applyLayout(isFS); }}, 150);
-        setTimeout(function() {{ applyLayout(isFS); }}, 400);
-      }}
-
-      document.addEventListener('fullscreenchange', onFSChange);
-      document.addEventListener('webkitfullscreenchange', onFSChange);
-      window.addEventListener('orientationchange', function() {{
-        var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-        setTimeout(function() {{ applyLayout(isFS); }}, 250);
-      }});
-    """ if enable_fullscreen else ""
+    is_dual_js = "true" if is_dual_grid else "false"
+    enable_fs_js = "true" if enable_fullscreen else "false"
 
     html_code = f"""
     <!DOCTYPE html><html><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
-      html,body{{width:100%;height:100%;margin:0;padding:0;background:#0b1120;overflow:hidden;}}
-      #wrap{{position:relative;width:100%;height:100%;background:#0b1120;}}
+      html,body{{width:100%;height:100%;margin:0;padding:0;background:#070b14;overflow:hidden;}}
+      #wrap{{position:relative;width:100%;height:100%;background:#070b14;}}
       #c{{width:100%;height:100%;}}
       #c.force-landscape{{
         position:fixed;
@@ -1011,46 +1161,271 @@ def _render_echarts(
         transform:rotate(90deg);
         transform-origin:top left;
       }}
-      #fs-btn{{
+      #ctrl-bar{{
         position:absolute;top:4px;right:6px;z-index:99;
-        background:rgba(15,23,42,0.85);color:#7dd3fc;
-        border:1px solid rgba(56,189,248,0.45);border-radius:6px;
-        padding:2px 7px;font-size:10.5px;font-weight:700;cursor:pointer;
-        font-family:'JetBrains Mono',sans-serif;
+        display:inline-flex;align-items:center;gap:4px;
       }}
-      #fs-btn.btn-rotated{{
+      #ctrl-bar.bar-rotated{{
         position:fixed;
         top:auto;
-        bottom:16px;
-        right:8px;
+        bottom:22px;
+        right:4px;
         transform:rotate(90deg);
         transform-origin:center center;
       }}
-      #fs-btn:active{{background:rgba(56,189,248,0.25);}}
+      #fs-hint{{
+        display:none;
+        background:rgba(15,23,42,0.86);color:#fde047;
+        border:1px solid rgba(250,204,21,0.4);border-radius:5px;
+        padding:2px 6px;font-size:9px;font-weight:700;
+        font-family:'JetBrains Mono',sans-serif;white-space:nowrap;
+      }}
+      #wrap.is-fs #fs-hint{{display:inline-block;}}
+      #rst-btn, #fs-btn{{
+        background:rgba(15,23,42,0.88);color:#7dd3fc;
+        border:1px solid rgba(56,189,248,0.42);border-radius:6px;
+        padding:2px 7px;font-size:10px;font-weight:700;cursor:pointer;
+        font-family:'JetBrains Mono',sans-serif;
+      }}
+      #rst-btn{{padding:2px 6px;color:#cbd5e1;}}
+      #rst-btn:active, #fs-btn:active{{background:rgba(56,189,248,0.25);}}
     </style>
     </head><body>
       <div id="wrap">
-        {fs_btn_html}
+        {ctrl_bar_html}
         <div id="c"></div>
       </div>
       <script>
+        var CHART_KEY = {json.dumps(safe_ck)};
+        var STORAGE_KEY = 'dd_dz_' + CHART_KEY;
+        var IS_DUAL = {is_dual_js};
+        var ENABLE_FS = {enable_fs_js};
+
         var el = document.getElementById('c');
-        var chart = echarts.init(el, 'dark');
+        var wrap = document.getElementById('wrap');
+        var btn = document.getElementById('fs-btn');
+        var ctrlBar = document.getElementById('ctrl-bar');
+
+        var dpr = Math.min(window.devicePixelRatio || 2, 3);
+        var chart = echarts.init(el, 'dark', {{ renderer: 'canvas', devicePixelRatio: dpr }});
         var opt = {opt_json};
+
+        opt.animationDuration = 280;
+        opt.animationDurationUpdate = 220;
+        opt.animationEasing = 'cubicOut';
+
+        if (opt.legend) {{
+          opt.legend.type = 'scroll';
+          opt.legend.pageIconColor = '#7dd3fc';
+          opt.legend.pageIconInactiveColor = '#475569';
+          opt.legend.pageTextStyle = {{ color: '#94a3b8', fontSize: 9 }};
+        }}
+
         {hud_js}
+
+        var savedZoom = null;
+        try {{
+          var rawZ = sessionStorage.getItem(STORAGE_KEY);
+          if (rawZ) {{
+            var parsedZ = JSON.parse(rawZ);
+            if (parsedZ && typeof parsedZ.start === 'number' && typeof parsedZ.end === 'number') {{
+              savedZoom = parsedZ;
+            }}
+          }}
+        }} catch(e) {{}}
+
+        var origGridNormal = opt.grid ? JSON.parse(JSON.stringify(opt.grid)) : null;
+
+        if (opt.dataZoom && Array.isArray(opt.dataZoom) && opt.dataZoom.length > 0) {{
+          var xIdxTarget = IS_DUAL ? [0, 1] : 0;
+          var zStart = savedZoom ? savedZoom.start : 0;
+          var zEnd = savedZoom ? savedZoom.end : 100;
+          opt.dataZoom = [
+            {{
+              type: 'inside',
+              xAxisIndex: xIdxTarget,
+              filterMode: 'none',
+              throttle: 16,
+              start: zStart,
+              end: zEnd
+            }},
+            {{
+              type: 'slider',
+              show: false,
+              xAxisIndex: xIdxTarget,
+              filterMode: 'none',
+              throttle: 16,
+              height: IS_DUAL ? 16 : 18,
+              bottom: IS_DUAL ? 5 : 6,
+              borderColor: 'rgba(56,189,248,0.35)',
+              fillerColor: 'rgba(56,189,248,0.18)',
+              textStyle: {{ color: '#94a3b8', fontSize: 9 }},
+              start: zStart,
+              end: zEnd
+            }}
+          ];
+        }}
+
         chart.setOption(opt);
-        function doResize() {{
-          var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-          if (typeof applyLayout === 'function' && isFS) {{
-            applyLayout(true);
+
+        chart.on('datazoom', function(params) {{
+          try {{
+            var curOpt = chart.getOption();
+            if (curOpt && curOpt.dataZoom && curOpt.dataZoom.length > 0) {{
+              var dz0 = curOpt.dataZoom[0];
+              if (typeof dz0.start === 'number' && typeof dz0.end === 'number') {{
+                sessionStorage.setItem(STORAGE_KEY, JSON.stringify({{ start: dz0.start, end: dz0.end }}));
+              }}
+            }}
+          }} catch(e) {{}}
+        }});
+
+        function resetZoom() {{
+          try {{ sessionStorage.removeItem(STORAGE_KEY); }} catch(e) {{}}
+          chart.dispatchAction({{ type: 'dataZoom', start: 0, end: 100 }});
+        }}
+
+        var orientationLocked = false;
+
+        function getCurZoomRange() {{
+          try {{
+            var curOpt = chart.getOption();
+            if (curOpt && curOpt.dataZoom && curOpt.dataZoom.length > 0) {{
+              return {{ start: curOpt.dataZoom[0].start || 0, end: curOpt.dataZoom[0].end || 100 }};
+            }}
+          }} catch(e) {{}}
+          return {{ start: 0, end: 100 }};
+        }}
+
+        function applyLayout(isFS) {{
+          if (!isFS) {{
+            if (wrap) wrap.classList.remove('is-fs');
+            el.classList.remove('force-landscape');
+            if (ctrlBar) ctrlBar.classList.remove('bar-rotated');
+            el.style.cssText = 'width:100%;height:100%;';
+            var wN = wrap ? wrap.clientWidth : el.clientWidth;
+            var hN = wrap ? wrap.clientHeight : el.clientHeight;
+            if (wN > 0 && hN > 0) {{
+              chart.resize({{ width: wN, height: hN }});
+            }} else {{
+              chart.resize();
+            }}
+            return;
+          }}
+          if (wrap) wrap.classList.add('is-fs');
+          var w = window.innerWidth;
+          var h = window.innerHeight;
+          if (!orientationLocked && h > w) {{
+            el.classList.add('force-landscape');
+            if (ctrlBar) ctrlBar.classList.add('bar-rotated');
+            el.style.width = h + 'px';
+            el.style.height = w + 'px';
+            chart.resize({{ width: h, height: w }});
           }} else {{
-            chart.resize();
+            el.classList.remove('force-landscape');
+            if (ctrlBar) ctrlBar.classList.remove('bar-rotated');
+            el.style.width = '100%';
+            el.style.height = '100%';
+            chart.resize({{ width: w, height: h }});
           }}
         }}
-        window.addEventListener('resize', doResize);
-        if (typeof ResizeObserver !== 'undefined') {{ new ResizeObserver(doResize).observe(el); }}
-        {fs_js}
-        setTimeout(doResize, 80); setTimeout(doResize, 300);
+
+        function updateZoomMode(isFS) {{
+          if (!opt.dataZoom) return;
+          var zr = getCurZoomRange();
+          var xIdxTarget = IS_DUAL ? [0, 1] : 0;
+          var nextGrid = origGridNormal;
+          if (isFS) {{
+            if (IS_DUAL && Array.isArray(origGridNormal) && origGridNormal.length >= 2) {{
+              nextGrid = [
+                {{ top: 44, height: '55%', left: 6, right: origGridNormal[0].right, containLabel: false }},
+                {{ top: '68%', height: '16%', left: 6, right: origGridNormal[1].right, containLabel: false }}
+              ];
+            }} else if (origGridNormal && !Array.isArray(origGridNormal)) {{
+              nextGrid = Object.assign({{}}, origGridNormal, {{ bottom: 44, top: 52 }});
+            }}
+          }}
+          chart.setOption({{
+            grid: nextGrid,
+            dataZoom: [
+              {{ type: 'inside', xAxisIndex: xIdxTarget, filterMode: 'none', throttle: 16, start: zr.start, end: zr.end }},
+              {{ type: 'slider', show: isFS, xAxisIndex: xIdxTarget, filterMode: 'none', throttle: 16, start: zr.start, end: zr.end }}
+            ]
+          }});
+        }}
+
+        function toggleFS() {{
+          if (!ENABLE_FS) return;
+          var doc = document;
+          var isFS = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+          if (!isFS) {{
+            var req = wrap.requestFullscreen || wrap.webkitRequestFullscreen;
+            if (req) {{
+              Promise.resolve(req.call(wrap)).then(function() {{
+                if (screen.orientation && screen.orientation.lock) {{
+                  screen.orientation.lock('landscape').then(function() {{
+                    orientationLocked = true;
+                  }}).catch(function() {{
+                    orientationLocked = false;
+                  }});
+                }} else {{
+                  orientationLocked = false;
+                }}
+                setTimeout(function() {{ applyLayout(true); }}, 220);
+              }}).catch(function(){{}});
+            }}
+          }} else {{
+            var ex = doc.exitFullscreen || doc.webkitExitFullscreen;
+            if (ex) ex.call(doc);
+            if (screen.orientation && screen.orientation.unlock) {{
+              try {{ screen.orientation.unlock(); }} catch(e) {{}}
+            }}
+            orientationLocked = false;
+          }}
+        }}
+
+        function onFSChange() {{
+          var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+          if (!isFS) orientationLocked = false;
+          if (btn) btn.textContent = isFS ? '✕ 戻す' : '⛶ 横拡大';
+          updateZoomMode(isFS);
+          if (!isFS) {{
+            requestAnimationFrame(function() {{ applyLayout(false); }});
+            setTimeout(function() {{ applyLayout(false); }}, 120);
+            setTimeout(function() {{ applyLayout(false); }}, 350);
+            setTimeout(function() {{ applyLayout(false); }}, 650);
+          }} else {{
+            requestAnimationFrame(function() {{ applyLayout(true); }});
+            setTimeout(function() {{ applyLayout(true); }}, 180);
+            setTimeout(function() {{ applyLayout(true); }}, 420);
+          }}
+        }}
+
+        var resizeTimer = null;
+        function scheduleResize() {{
+          if (resizeTimer) clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(function() {{
+            var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            applyLayout(isFS);
+          }}, 80);
+        }}
+
+        window.addEventListener('resize', scheduleResize);
+        if (typeof ResizeObserver !== 'undefined') {{
+          new ResizeObserver(scheduleResize).observe(wrap || el);
+        }}
+        if (ENABLE_FS) {{
+          document.addEventListener('fullscreenchange', onFSChange);
+          document.addEventListener('webkitfullscreenchange', onFSChange);
+          window.addEventListener('orientationchange', function() {{
+            setTimeout(function() {{
+              var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+              applyLayout(isFS);
+            }}, 240);
+          }});
+        }}
+        setTimeout(scheduleResize, 90);
+        setTimeout(scheduleResize, 320);
       </script>
     </body></html>
     """
@@ -1060,20 +1435,20 @@ def _render_echarts(
 def _render_live_clock(sync_interval: int = 60, active: bool = True):
     dot_col = "#10b981" if active else "#f59e0b"
     status_lbl = "LIVE FEED" if active else "PAUSED"
-    right_html = f'SILENT SYNC <span id="cd" class="cnt">{sync_interval}s</span>' if active else '<span style="color:#f59e0b;font-weight:700;">自動更新 停止中</span>'
-    bar_border = "rgba(16,185,129,0.35)" if active else "rgba(245,158,11,0.4)"
+    right_html = f'SILENT SYNC <span id="cd" class="cnt">{sync_interval}s</span>' if active else '<span style="color:#f59e0b;font-weight:700;">自動更新 停止中（拡大・精査保護）</span>'
+    bar_border = "rgba(16,185,129,0.28)" if active else "rgba(245,158,11,0.38)"
     left_col = "#6ee7b7" if active else "#fde047"
     active_js = "true" if active else "false"
     html_code = f"""
     <!DOCTYPE html><html><head><meta charset="UTF-8">
     <style>
-      html,body{{width:100%;margin:0;padding:0;background:transparent;font-family:'JetBrains Mono',monospace;}}
-      .bar{{display:flex;justify-content:space-between;align-items:center;background:rgba(15,23,42,0.85);border:1px solid {bar_border};border-radius:8px;padding:4px 10px;font-size:10.5px;color:#e2e8f0;}}
-      .dot{{width:7px;height:7px;background:{dot_col};border-radius:50%;display:inline-block;margin-right:6px;box-shadow:0 0 8px {dot_col};}}
+      html,body{{width:100%;margin:0;padding:0;background:transparent;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}}
+      .bar{{display:flex;justify-content:space-between;align-items:center;background:rgba(15,23,42,0.75);border:1px solid {bar_border};border-radius:7px;padding:3px 9px;font-size:10px;color:#e2e8f0;}}
+      .dot{{width:6px;height:6px;background:{dot_col};border-radius:50%;display:inline-block;margin-right:5px;box-shadow:0 0 7px {dot_col};}}
       .left{{display:flex;align-items:center;color:{left_col};font-weight:700;}}
-      .right{{color:#94a3b8;font-size:10px;}} .cnt{{color:#38bdf8;font-weight:700;}}
+      .right{{color:#94a3b8;font-size:9.5px;}} .cnt{{color:#38bdf8;font-weight:700;}}
     </style></head><body>
-    <div class="bar"><div class="left"><span class="dot"></span>{status_lbl} <span id="clk" style="margin-left:8px;color:#fff;">--:--:--</span> JST</div><div class="right">{right_html}</div></div>
+    <div class="bar"><div class="left"><span class="dot"></span>{status_lbl} <span id="clk" style="margin-left:7px;color:#fff;">--:--:--</span> JST</div><div class="right">{right_html}</div></div>
     <script>
       var rem = {sync_interval};
       var active = {active_js};
@@ -1089,7 +1464,7 @@ def _render_live_clock(sync_interval: int = 60, active: bool = True):
       tick(); setInterval(tick, 1000);
     </script></body></html>
     """
-    components.html(html_code, height=30)
+    components.html(html_code, height=26)
 
 
 def _build_spark_svg(prices: np.ndarray) -> str:
@@ -1097,10 +1472,10 @@ def _build_spark_svg(prices: np.ndarray) -> str:
         return ""
     p_min, p_max = float(np.min(prices)), float(np.max(prices))
     span = max(p_max - p_min, 1e-4)
-    w, h = 92.0, 26.0
+    w, h = 88.0, 24.0
     pts = [f"{round((i/max(len(prices)-1,1))*w,1)},{round(h-2.0-((float(p)-p_min)/span)*(h-4.0),1)}" for i, p in enumerate(prices)]
     col = "#10b981" if prices[-1] >= prices[0] else "#ef4444"
-    return f'<svg width="92" height="26" viewBox="0 0 92 26" style="display:block;margin-left:auto;"><polyline fill="none" stroke="{col}" stroke-width="1.8" points="{" ".join(pts)}"/></svg>'
+    return f'<svg width="88" height="24" viewBox="0 0 88 24" style="display:block;margin-left:auto;"><polyline fill="none" stroke="{col}" stroke-width="1.6" points="{" ".join(pts)}"/></svg>'
 
 
 def _render_chart_legend_panel(
@@ -1109,15 +1484,15 @@ def _render_chart_legend_panel(
     cur_vwap_now, curr_px: float, is_jp: bool, active_lab,
     is_1m_zoom: bool = False, zoom_1m_data: dict = None
 ):
-    """チャート外の1行ステータス翻訳バナー ＋ アクティブ・レイヤー限定視覚凡例カード（1分足ズーム対応）"""
+    """常時表示1行ステータス翻訳バナー ＋ スリム1行カラーチップ帯 ＋ 詳細説明折りたたみ版"""
     exp_active = bool(exp_reg.get("active"))
     exp_dir = exp_reg.get("dir", "NONE")
 
     def _swatch_line(color: str, style: str = "solid", width: int = 2) -> str:
-        return f'<span style="display:inline-block;width:18px;height:0;border-top:{width}px {style} {color};flex-shrink:0;"></span>'
+        return f'<span style="display:inline-block;width:14px;height:0;border-top:{width}px {style} {color};flex-shrink:0;"></span>'
 
     def _swatch_band(bg: str, border: str) -> str:
-        return f'<span style="display:inline-block;width:18px;height:10px;background:{bg};border:1px solid {border};border-radius:2px;flex-shrink:0;"></span>'
+        return f'<span style="display:inline-block;width:14px;height:9px;background:{bg};border:1px solid {border};border-radius:2px;flex-shrink:0;"></span>'
 
     if is_1m_zoom and isinstance(zoom_1m_data, dict) and zoom_1m_data.get("valid"):
         e9_now = zoom_1m_data.get("last_ema9", curr_px)
@@ -1133,23 +1508,23 @@ def _render_chart_legend_panel(
             banner_txt = "⚡ 1分足ズーム(直近90分)：9EMAと20EMAが交錯する揉み合い局面 → 下段CVDとVWAPの方向確定待ち"
 
         candle_sw = (
-            '<span style="display:inline-flex;align-items:center;gap:2px;width:18px;flex-shrink:0;">'
-            '<span style="display:inline-block;width:6px;height:10px;background:#10b981;border-radius:1px;"></span>'
-            '<span style="display:inline-block;width:6px;height:10px;background:#ef4444;border-radius:1px;"></span>'
+            '<span style="display:inline-flex;align-items:center;gap:2px;width:14px;flex-shrink:0;">'
+            '<span style="display:inline-block;width:5px;height:9px;background:#10b981;border-radius:1px;"></span>'
+            '<span style="display:inline-block;width:5px;height:9px;background:#ef4444;border-radius:1px;"></span>'
             '</span>'
         )
         tri_sw = (
-            '<span style="display:inline-flex;flex-direction:column;gap:2px;width:18px;flex-shrink:0;">'
+            '<span style="display:inline-flex;flex-direction:column;gap:2px;width:14px;flex-shrink:0;">'
             '<span style="border-top:1.5px dashed #10b981;"></span>'
             '<span style="border-top:1.5px dotted #94a3b8;"></span>'
             '<span style="border-top:1.5px dashed #ef4444;"></span>'
             '</span>'
         )
-        cvd_sw = '<span style="display:inline-block;width:18px;height:0;border-top:2px solid #22d3ee;flex-shrink:0;"></span>'
+        cvd_sw = '<span style="display:inline-block;width:14px;height:0;border-top:2px solid #22d3ee;flex-shrink:0;"></span>'
         cards = [
             (candle_sw, "1分足ローソク", "緑=陽線 / 赤=陰線（ヒゲ先端で反発・失速判定）"),
-            (_swatch_line("#38bdf8", "solid", 2), "9EMA (超短期)", "スキャルピングの勢い基準線（割れたら一旦利確）"),
-            (_swatch_line("#c084fc", "solid", 2), "20EMA (短期軸)", "押し目買い・戻り売りの防波堤ライン"),
+            (_swatch_line("#38bdf8", "solid", 2), "9EMA", "スキャルピングの勢い基準線（割れたら一旦利確）"),
+            (_swatch_line("#c084fc", "solid", 2), "20EMA", "押し目買い・戻り売りの防波堤ライン"),
             (_swatch_line("#fbbf24", "dotted", 2), "当日VWAP", "機関の平均約定値（上なら買い優勢）"),
             (tri_sw, "10分先3分岐", "直近1分足ボラから算出した10分後ルート"),
             (cvd_sw, "下段 出来高&CVD", "陽線/陰線出来高バーと買い売り累積デルタ"),
@@ -1189,10 +1564,10 @@ def _render_chart_legend_panel(
 
         cards = []
         if traj.get("has_actual"):
-            cards.append((_swatch_line("#ffffff", "solid", 3), "当日実測", "実際の株価の動き（主役）"))
+            cards.append((_swatch_line("#ffffff", "solid", 2), "当日実測", "実際の株価の動き（主役）"))
 
         if chart_mode in ("🔴 ライブ修正", "⚡ 両方重ね"):
-            cards.append((_swatch_line("#38bdf8", "solid", 3), "ライブ修正", "今の勢いを反映した最新着地予測"))
+            cards.append((_swatch_line("#38bdf8", "solid", 2), "ライブ修正", "今の勢いを反映した最新着地予測"))
 
         if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
             if exp_active:
@@ -1204,7 +1579,7 @@ def _render_chart_legend_panel(
 
         if "場中30分・3分岐点線（スコア比%）" in opt_lines and short_3way.get("active"):
             tri_sw = (
-                '<span style="display:inline-flex;flex-direction:column;gap:2px;width:18px;flex-shrink:0;">'
+                '<span style="display:inline-flex;flex-direction:column;gap:2px;width:14px;flex-shrink:0;">'
                 '<span style="border-top:1.5px dashed #10b981;"></span>'
                 '<span style="border-top:1.5px dotted #94a3b8;"></span>'
                 '<span style="border-top:1.5px dashed #ef4444;"></span>'
@@ -1222,10 +1597,10 @@ def _render_chart_legend_panel(
             cards.append((_swatch_line("#f59e0b", "solid", 2), "類似実測Top-1", "過去に最も似た日のリアル波形"))
 
         if "予測レンジ帯（ファン）" in opt_lines:
-            cards.append((_swatch_band("rgba(56,189,248,0.25)", "rgba(99,102,241,0.55)"), "予測レンジ帯", "値動きが収まりやすい確率ゾーン"))
+            cards.append((_swatch_band("rgba(56,189,248,0.22)", "rgba(99,102,241,0.48)"), "予測レンジ帯", "値動きが収まりやすい確率ゾーン"))
 
         if "高ボラ狩り場帯" in opt_lines and traj.get("high_vol_zones"):
-            cards.append((_swatch_band("rgba(245,158,11,0.18)", "rgba(251,191,36,0.5)"), "高ボラ狩り場帯", "値幅が出やすく仕掛けが入りやすい時間"))
+            cards.append((_swatch_band("rgba(245,158,11,0.16)", "rgba(251,191,36,0.45)"), "高ボラ狩り場帯", "値幅が出やすく仕掛けが入りやすい時間"))
 
         if "前日/当日高安（PDH/PDL/HOD/LOD）" in opt_lines:
             cards.append((_swatch_line("#34d399", "dashed", 1), "PDH/PDL/HOD/LOD", "前日・当日の高値安値（注文集中帯）"))
@@ -1237,7 +1612,7 @@ def _render_chart_legend_panel(
             cards.append((_swatch_line("#7dd3fc", "dashed", 1), "寄り30分ORB", "寄り30分の高安レンジ（ブレイク基準）"))
 
         if "大口約定（◆）" in opt_lines and traj.get("vol_spikes"):
-            dm_sw = '<span style="display:inline-block;width:18px;text-align:center;color:#10b981;font-size:11px;line-height:1;flex-shrink:0;">◆</span>'
+            dm_sw = '<span style="display:inline-block;width:14px;text-align:center;color:#10b981;font-size:10px;line-height:1;flex-shrink:0;">◆</span>'
             cards.append((dm_sw, "大口約定◆", "通常2.5倍以上の出来高スパイク発生点"))
 
         if active_lab and "LAB TP/SL" in opt_lines:
@@ -1245,6 +1620,10 @@ def _render_chart_legend_panel(
 
         cards.append((_swatch_line("#22d3ee", "solid", 2), "下段 出来高&CVD", "陽線/陰線出来高と買い売り累積差"))
 
+    pills_html = "".join(
+        f'<span class="dd-leg-pill">{sw}<span>{html.escape(nm)}</span></span>'
+        for sw, nm, _ in cards
+    )
     cards_html = "".join(
         f'<div class="dd-leg-card"><div class="dd-leg-head">{sw}<span>{html.escape(nm)}</span></div>'
         f'<div class="dd-leg-desc">{html.escape(desc)}</div></div>'
@@ -1254,13 +1633,14 @@ def _render_chart_legend_panel(
     st.markdown(f"""
     <div class="dd-legend-panel">
       <div class="{banner_cls}">{html.escape(banner_txt)}</div>
-      <div class="dd-legend-grid">{cards_html}</div>
+      <div class="dd-chip-ribbon">{pills_html}</div>
     </div>
     """, unsafe_allow_html=True)
 
-    with st.expander("❓ 専門指標とチャートの読み方（用語クイック辞典）", expanded=False):
+    with st.expander("📖 アクティブ凡例の詳細 ＆ 専門指標クイック辞典", expanded=False):
+        st.markdown(f'<div class="dd-legend-grid" style="margin-bottom:8px;">{cards_html}</div>', unsafe_allow_html=True)
         st.markdown("""
-        <div style="font-size:11.5px;line-height:1.65;color:#cbd5e1;">
+        <div style="font-size:11px;line-height:1.65;color:#cbd5e1;">
         ・<b>1分足マイクロ・ズーム：</b> 直近90分の1分足ローソク足＋9EMA/20EMA＋10分先3分岐。スキャルピングの押し目・ブレイク執行に最適です。<br>
         ・<b>下段 出来高＆疑似CVD同期パネル：</b> 上段の価格と完全連動。価格が高値更新しているのに下段のシアン線(CVD)が下がる場合は上ヒゲ売り圧力（天井失速）のサインです。<br>
         ・<b>PDH / PDL / PDC / HOD / LOD：</b> 前日高値(PDH)・前日安値(PDL)・前日終値(PDC)・当日高値(HOD)・当日安値(LOD)。機関の逆指値と利確注文が集中する重要節目です。<br>
@@ -2223,7 +2603,6 @@ def _compute_dow_intraday_heatmap(df_5m: pd.DataFrame, is_jp: bool) -> dict:
         if tmp.empty:
             return empty_hm
 
-        # 30分足へリサンプリング（同日内30分枠のリターン集計）
         tmp["_date"] = tmp.index.strftime("%Y-%m-%d")
         slot_labels = (
             ["09:00", "09:30", "10:00", "10:30", "11:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00"]
@@ -2242,7 +2621,6 @@ def _compute_dow_intraday_heatmap(df_5m: pd.DataFrame, is_jp: bool) -> dict:
                     ret_pct = (float(r_b["Close"]) - float(r_b["Open"])) / float(r_b["Open"]) * 100.0
                     buckets[(int(d_val), hm_s)].append(ret_pct)
 
-        # ECharts heatmap: y軸は下から上（金→月）にして上が月曜になるよう配置
         y_labels = ["金", "木", "水", "火", "月"]
         y_dow_map = {"月": 4, "火": 3, "水": 2, "木": 1, "金": 0}
         hm_data = []
@@ -2344,7 +2722,6 @@ def _compute_earnings_pead(df_1d: pd.DataFrame, earnings_hist: list) -> dict:
         for e in reversed(earnings_hist):
             ed_s = str(e.get("date", ""))[:10]
             if ed_s not in date_to_pos:
-                # 営業日ズレ（引け後決算など）を+1日まで探索
                 try:
                     dt_e = datetime.datetime.strptime(ed_s, "%Y-%m-%d")
                     nxt_s = (dt_e + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
@@ -2398,8 +2775,8 @@ def _compute_hires_vp_28(df_1d: pd.DataFrame, curr_px: float, is_jp: bool) -> di
         n_bins = 28
         bins = np.linspace(p_min, p_max, n_bins + 1)
         bin_w = (p_max - p_min) / n_bins
-        hist_short = np.zeros(n_bins, dtype=float)  # 直近20営業日
-        hist_mid = np.zeros(n_bins, dtype=float)    # 21〜250営業日（60日半減期減衰）
+        hist_short = np.zeros(n_bins, dtype=float)
+        hist_mid = np.zeros(n_bins, dtype=float)
 
         for idx_r in range(n_rows):
             age = n_rows - 1 - idx_r
@@ -2428,7 +2805,6 @@ def _compute_hires_vp_28(df_1d: pd.DataFrame, curr_px: float, is_jp: bool) -> di
         poc_idx = int(np.argmax(tot_h))
         poc_px = float(centers[poc_idx])
 
-        # Value Area 70% 探索（POCから上下へ出来高の大きい方へ拡張）
         va_indices = {poc_idx}
         acc_v = float(tot_h[poc_idx])
         lo_ptr, hi_ptr = poc_idx - 1, poc_idx + 1
@@ -2531,7 +2907,6 @@ def _build_news_72h_timeline(all_72h_items: list) -> dict:
         ah = float(it.get("age_h", 999.0))
         if ah < 0 or ah > 72.0:
             continue
-        # 0-12h -> idx 5, 12-24h -> idx 4, ..., 60-72h -> idx 0
         b_idx = int(np.clip(5 - int(ah // 12.0), 0, 5))
         counts[b_idx] += 1
         s_sign = 1.0 if it.get("sent") == "POS" else (-1.0 if it.get("sent") == "NEG" else 0.0)
@@ -4627,7 +5002,7 @@ def _compute_real_5axis(info: dict, ovh_pct: float, gov_cnt: int) -> tuple:
 
 
 def _render_valuation_gauges(info: dict, is_jp: bool):
-    """要件2-4: 取得可能なバリュエーション・ポジション指標を横型ミニゲージで表示"""
+    """取得可能なバリュエーション・ポジション指標を横型ミニゲージで表示"""
     gauges = []
 
     pe = info.get("trailingPE")
@@ -4792,8 +5167,8 @@ def _format_lab_deep_context(lab_full: dict, lab_council: dict) -> str:
 def _render_unified_guide():
     st.markdown("""
     <div class="dd-guide-box">
-    <b>🔰 v17.0 クオンツ＆プロ端末ガイド</b><br>
-    1. <b>メイン軌道＆1分足ズーム:</b> 5分足1日軌道と1分足90分ズームを切替可能。上段の価格と下段の出来高・疑似CVDが完全同期し、急騰時はEXPANSIONモードが自動発動します。<br>
+    <b>🔰 v18.0 クオンツ＆プロ端末ガイド</b><br>
+    1. <b>メイン軌道＆1分足ズーム:</b> 5分足1日軌道と1分足90分ズームを切替可能。拡大範囲は自動保持され、右上「↺」で初期表示へ戻せます。拡大精査中は「自動更新」をOFFにするとフルスクリーンが維持されます。<br>
     2. <b>タブ2（マクロβ・曜日）:</b> 曜日×30分時間帯の期待値ヒートマップ、20日/60日ローリング相関＆ダイナミックβ、決算翌日のPEADドリフトを表示。<br>
     3. <b>タブ3（財務・大口株主）:</b> 28分割のVA70%/POC出来高プロファイル（短期20日vs中期60日減衰）、BBWボラティリティ・スクイーズ、インサイダー売買プロット、バリュエーション横型ゲージを表示。<br>
     4. <b>タブ4（リスク・AIメモ）:</b> スタイル別If-Then執行プレイブック内蔵AIメモ、72時間ニュース密度タイムライン、クラスタSGD重み比較＆直近15日検証精度推移を表示。
@@ -4802,22 +5177,24 @@ def _render_unified_guide():
 
 
 # =========================================================================
-# 8. メインエントリ関数（YAMASHISHI DEEP DIVE v17.0）
+# 8. メインエントリ関数（YAMASHISHI DEEP DIVE v18.0）
 # =========================================================================
 def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイトレード", gemini_api_key: str = "", lab_ctx: dict = None):
     _inject_dd_css()
 
-    h1, h2, h3 = st.columns([2.4, 1.0, 1.2])
+    # 上部コマンドドック（スリム＆高視認性統合ヘッダー）
+    h1, h2, h3 = st.columns([2.6, 0.9, 1.1])
     with h1:
         st.markdown(
-            '<div class="glass-header" style="margin-bottom:4px;padding:8px 12px;">'
-            '<div class="brand-luxury" style="font-size:15px;">YAMASHISHI DEEP DIVE v17.0</div>'
-            '<div style="font-size:10px;color:#94a3b8;">1分足ズーム・2段CVD・ヒートマップ・28分割VAプロファイル・SGD自己進化監査</div>'
+            '<div class="dd-cmd-header">'
+            '<div style="min-width:0;">'
+            '<div class="dd-cmd-title">YAMASHISHI DEEP DIVE v18.0</div>'
+            '<div class="dd-cmd-sub">Retina 60fps軌道・衝突回避MarkLine・2段CVD・28分割VA・SGD自己進化</div>'
+            '</div>'
             '</div>',
             unsafe_allow_html=True
         )
     with h2:
-        st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
         if hasattr(st, "popover"):
             with st.popover("📖 見方", use_container_width=True):
                 _render_unified_guide()
@@ -4825,7 +5202,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             with st.expander("📖 見方"):
                 _render_unified_guide()
     with h3:
-        st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
         if st.button("⬅️ LAB", key="dd_back_to_lab_btn", use_container_width=True, type="primary"):
             st.session_state["navigation_page"] = "TOP"
             st.session_state["scroll_top_trig"] = int(time.time() * 1000)
@@ -4835,7 +5211,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     c1, c2, c3 = st.columns([1.8, 1.5, 1.0])
     in_code = c1.text_input("銘柄コード", value=init_code, placeholder="例: NVDA / 6920", label_visibility="collapsed", key="dd_code_in")
     in_style = c2.selectbox("スタイル", STYLES, index=STYLES.index(init_style) if init_style in STYLES else 0, label_visibility="collapsed", key="dd_style_in")
-    auto_sync = c3.toggle("自動更新", value=True, key="dd_auto_sync", help="ONで60秒ごとに最新データへ自動同期します")
+    auto_sync = c3.toggle("自動更新", value=True, key="dd_auto_sync", help="ONで60秒ごとに最新データへ自動同期（拡大精査時はOFF推奨）")
 
     fc = in_code.strip().upper()
     if not fc:
@@ -4870,7 +5246,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     rt_mark = "⚡" if m_item.get("is_rt") else ""
                     m_col = "#10b981" if m_item["diff_pct"] >= 0 else "#ef4444"
                     chip_parts.append(
-                        f'<div class="dd-macro-chip"><span style="color:#94a3b8;">{m_item["label"]}{rt_mark}</span>'
+                        f'<div class="dd-macro-chip"><span style="color:#64748b;">{m_item["label"]}{rt_mark}</span>'
                         f'<span style="color:{m_col};font-weight:700;">{m_item["diff_pct"]:+.2f}%</span></div>'
                     )
             st.markdown(f'<div class="dd-macro-strip">{"".join(chip_parts)}</div>', unsafe_allow_html=True)
@@ -5060,14 +5436,14 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
         if exp_active:
             if exp_dir == "UP":
-                status_pills.append('<span class="dd-st-pill" style="border-color:#10b981;background:rgba(16,185,129,0.22);color:#6ee7b7;">🚀 急騰ブレイク稼働中</span>')
+                status_pills.append('<span class="dd-st-pill" style="border-color:#10b981;background:rgba(16,185,129,0.20);color:#6ee7b7;">🚀 急騰ブレイク稼働中</span>')
                 alert_blocks.append(
                     '<div class="dd-quant-box"><b>🚀 急騰ブレイクモード稼働中（朝想定を自動解除・トレンド追従へ切替）</b><br>'
                     + "<br>".join([f"・{html.escape(r)}" for r in exp_reg["reasons"]])
                     + "</div>"
                 )
             else:
-                status_pills.append('<span class="dd-st-pill" style="border-color:#ef4444;background:rgba(239,68,68,0.22);color:#fecaca;">🔻 急落ブレイク稼働中</span>')
+                status_pills.append('<span class="dd-st-pill" style="border-color:#ef4444;background:rgba(239,68,68,0.20);color:#fecaca;">🔻 急落ブレイク稼働中</span>')
                 alert_blocks.append(
                     '<div class="dd-warn-box"><b>🔻 急落ブレイクモード稼働中（朝想定を自動解除・下落追従へ切替）</b><br>'
                     + "<br>".join([f"・{html.escape(r)}" for r in exp_reg["reasons"]])
@@ -5078,7 +5454,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         if isinstance(cat_al, dict) and cat_al.get("active"):
             c_col = "#10b981" if cat_al["dir"] == "POS" else "#ef4444"
             c_cls = "dd-quant-box" if cat_al["dir"] == "POS" else "dd-warn-box"
-            status_pills.append(f'<span class="dd-st-pill" style="border-color:{c_col};background:rgba(15,23,42,0.9);color:{c_col};">📰 速報材料: {html.escape(cat_al["kw"])}</span>')
+            status_pills.append(f'<span class="dd-st-pill" style="border-color:{c_col};background:rgba(15,23,42,0.88);color:{c_col};">📰 速報材料: {html.escape(cat_al["kw"])}</span>')
             alert_blocks.append(
                 f'<div class="{c_cls}"><b>📰 60分以内・特大カタリスト速報検知（{cat_al["age_min"]}分前 / キーワード: {html.escape(cat_al["kw"])}）</b><br>'
                 f'{html.escape(cat_al["title"])}（ライブ軌道へ {cat_al["boost_drift_pct"]:+.2f}% 即時反映済）</div>'
@@ -5087,7 +5463,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         meta_a = traj["meta_audit"]
         meta_hit_str = f" ({meta_a['hit_rate']:.0f}%)" if meta_a["n"] >= 3 else ""
         status_pills.append(
-            f'<span class="dd-st-pill" style="border-color:{meta_a["color"]};background:rgba(15,23,42,0.88);color:{meta_a["color"]};">'
+            f'<span class="dd-st-pill" style="border-color:{meta_a["color"]};background:rgba(15,23,42,0.86);color:{meta_a["color"]};">'
             f'🛡️ モデル信頼度: {html.escape(meta_a["rank"])}{meta_hit_str}</span>'
         )
         alert_blocks.append(f'<div class="dd-quant-box"><b>🛡️ Meta-Labeling モデル信頼度監査（ランク: {html.escape(meta_a["rank"])}）</b><br>{html.escape(meta_a["detail"])}</div>')
@@ -5176,28 +5552,28 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         pos_52 = float(np.clip((curr_px - lo_52) / max(hi_52 - lo_52, 1e-4) * 100.0, 2.0, 98.0))
         spark_svg = _build_spark_svg(df_1d["Close"].tail(20).values)
         aura_col = "#10b981" if active_close_chg >= 0 else "#ef4444"
-        aura_glow = "rgba(16,185,129,0.22)" if active_close_chg >= 0 else "rgba(239,68,68,0.22)"
+        aura_glow = "rgba(16,185,129,0.18)" if active_close_chg >= 0 else "rgba(239,68,68,0.18)"
         target_mean = info.get("targetMeanPrice")
         upside_str = f"{((target_mean - curr_px)/curr_px*100):+.1f}%" if (target_mean and curr_px > 0) else "-"
         risk_status, risk_col = (f"⚠️ {len(gov_risks)}件", "#f87171") if gov_risks else ("🟢 クリーン", "#10b981")
 
         top_close_lbl = "大引け予測(ライブ)" if use_live_basis else "大引け予測(ロック)"
         st.markdown(f"""
-        <div class="rank-card" style="border-left-color:{aura_col};box-shadow:0 8px 26px {aura_glow};margin-top:2px;margin-bottom:8px;">
+        <div class="dd-hero-card" style="border-left-color:{aura_col};box-shadow:0 8px 24px {aura_glow};">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
             <div style="min-width:0;flex:1;">
               <div><span class="pill-badge">{html.escape(fc)}</span><span class="pill-badge" style="border-color:rgba(168,85,247,0.45);background:rgba(168,85,247,0.16);color:#e9d5ff;">{html.escape(in_style)}</span><span class="pill-badge" style="border-color:{mkt_regime['color']};background:rgba(15,23,42,0.8);color:{mkt_regime['color']};">{mkt_regime['label']}・{traj['weights_evolution']['active_cluster']}</span>{earn_badge}</div>
-              <div style="font-size:17px;font-weight:800;color:#fff;margin-top:4px;word-break:break-word;">{html.escape(corp_name)}</div>
-              <div style="font-size:11px;color:#94a3b8;margin-top:2px;">{html.escape(sector)} / {html.escape(industry)}</div>
+              <div style="font-size:16.5px;font-weight:800;color:#f8fafc;margin-top:4px;word-break:break-word;">{html.escape(corp_name)}</div>
+              <div style="font-size:10.5px;color:#64748b;margin-top:1px;">{html.escape(sector)} / {html.escape(industry)}</div>
             </div>
             <div style="text-align:right;flex-shrink:0;">
-              <div style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:800;color:#fff;">{_fmt_cur(curr_px, is_jp)}</div>
-              <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:{chg_col};margin-bottom:3px;">{chg_pct:+.2f}%</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:19px;font-weight:800;color:#ffffff;">{_fmt_cur(curr_px, is_jp)}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11.5px;font-weight:700;color:{chg_col};margin-bottom:2px;">{chg_pct:+.2f}%</div>
               {spark_svg}
             </div>
           </div>
           <div style="margin-top:6px;">
-            <div style="display:flex;justify-content:space-between;font-size:9.5px;color:#94a3b8;font-family:'JetBrains Mono',monospace;"><span>52W安 {_fmt_cur(lo_52, is_jp)}</span><span style="color:#7dd3fc;">52W位置 {pos_52:.0f}%</span><span>52W高 {_fmt_cur(hi_52, is_jp)}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:9.3px;color:#64748b;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;"><span>52W安 {_fmt_cur(lo_52, is_jp)}</span><span style="color:#7dd3fc;">52W位置 {pos_52:.0f}%</span><span>52W高 {_fmt_cur(hi_52, is_jp)}</span></div>
             <div class="dd-range-track"><div class="dd-range-dot" style="left:{pos_52:.1f}%;"></div></div>
           </div>
           <div class="dd-winrate-bar">
@@ -5227,6 +5603,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
             _render_mtf_and_ladder(mtf_res, curr_px, is_jp, ref_levels, traj, vp, round_level, active_lab)
 
+            # スリムKPIリボン（横スクロール1行集約・縦幅圧縮）
             rvol_v = traj["rvol"]
             rvol_txt, rvol_c = (f"{rvol_v:.2f}x (機関)", "#10b981") if (rvol_v and rvol_v >= 1.8) else ((f"{rvol_v:.2f}x (閑散)", "#f59e0b") if (rvol_v and rvol_v < 0.75) else ((f"{rvol_v:.2f}x (通常)", "#38bdf8") if rvol_v else ("場前待機", "#94a3b8")))
             gf = traj["gap_fill"]
@@ -5242,13 +5619,13 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             sp_col = "#c084fc" if n_sp > 0 else "#94a3b8"
 
             st.markdown(f"""
-            <div class="dd-inst-strip">
-              <div class="dd-inst-card"><div class="dd-metric-lbl">RVOL 相対出来高</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:{rvol_c};margin-top:2px;">{rvol_txt}</div></div>
-              <div class="dd-inst-card"><div class="dd-metric-lbl">窓埋め率 (1ヶ月標本)</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:{gf_c};margin-top:2px;">{gf_txt}</div></div>
-              <div class="dd-inst-card"><div class="dd-metric-lbl">心理的キリ番節目</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:#fde047;margin-top:2px;">{_fmt_cur(round_level, is_jp)}</div></div>
-              <div class="dd-inst-card"><div class="dd-metric-lbl">大口約定スパイク</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:{sp_col};margin-top:2px;">{sp_txt}</div></div>
-              <div class="dd-inst-card"><div class="dd-metric-lbl">OHLCV疑似CVD</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:{cvd_div['color']};margin-top:2px;">{html.escape(cvd_div['label'])}</div></div>
-              <div class="dd-inst-card"><div class="dd-metric-lbl">寄り15分 Gap判定</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;color:{g15['color']};margin-top:2px;">{html.escape(g15['label'])}</div></div>
+            <div class="dd-inst-ribbon">
+              <div class="dd-inst-pill-card"><div class="dd-metric-lbl">RVOL 相対出来高</div><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11px;font-weight:800;color:{rvol_c};margin-top:1px;">{rvol_txt}</div></div>
+              <div class="dd-inst-pill-card"><div class="dd-metric-lbl">窓埋め率 (1M標本)</div><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11px;font-weight:800;color:{gf_c};margin-top:1px;">{gf_txt}</div></div>
+              <div class="dd-inst-pill-card"><div class="dd-metric-lbl">心理的キリ番節目</div><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11px;font-weight:800;color:#fde047;margin-top:1px;">{_fmt_cur(round_level, is_jp)}</div></div>
+              <div class="dd-inst-pill-card"><div class="dd-metric-lbl">大口約定スパイク</div><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11px;font-weight:800;color:{sp_col};margin-top:1px;">{sp_txt}</div></div>
+              <div class="dd-inst-pill-card"><div class="dd-metric-lbl">OHLCV疑似CVD</div><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11px;font-weight:800;color:{cvd_div['color']};margin-top:1px;">{html.escape(cvd_div['label'])}</div></div>
+              <div class="dd-inst-pill-card"><div class="dd-metric-lbl">寄り15分 Gap判定</div><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11px;font-weight:800;color:{g15['color']};margin-top:1px;">{html.escape(g15['label'])}</div></div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -5319,10 +5696,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 return {
                     "formatter": txt,
                     "color": col,
-                    "fontSize": 8.5,
+                    "fontSize": 8.2,
                     "fontWeight": "bold",
                     "position": pos,
-                    "backgroundColor": "rgba(11, 17, 32, 0.84)",
+                    "backgroundColor": "rgba(7, 11, 20, 0.86)",
                     "padding": [1, 4],
                     "borderRadius": 3,
                     "distance": 3,
@@ -5335,7 +5712,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     "fontSize": 8,
                     "rotate": 0,
                     "position": "insideEndTop",
-                    "backgroundColor": "rgba(11, 17, 32, 0.82)",
+                    "backgroundColor": "rgba(7, 11, 20, 0.82)",
                     "padding": [1, 3],
                     "borderRadius": 3,
                     "distance": 4,
@@ -5356,7 +5733,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     if px_r and px_r > 0 and abs(float(px_r) - cur_p) / cur_p <= 0.06:
                         out_ml.append({
                             "yAxis": round(float(px_r), 2),
-                            "lineStyle": {"color": col_r, "type": "dashed", "width": 1.1, "opacity": 0.75},
+                            "lineStyle": {"color": col_r, "type": "dashed", "width": 1.0, "opacity": 0.72},
                             "label": _h_badge(f"{lbl_r} {_fmt_cur(px_r, is_jp)}", col_r, pos_r),
                         })
                 return out_ml
@@ -5365,15 +5742,16 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 z1 = zoom_1m_payload
                 ml_1m = _build_pro_ref_marklines(ref_levels, curr_px)
                 if "心理的キリ番節目" in opt_lines and curr_px > 0 and abs(round_level - curr_px) / curr_px <= 0.05:
-                    ml_1m.append({"yAxis": round_level, "lineStyle": {"color": "rgba(250,204,21,0.55)", "type": "dotted", "width": 1.3}, "label": _h_badge(f"節目 {_fmt_cur(round_level, is_jp)}", "#fde047", "insideEndTop")})
+                    ml_1m.append({"yAxis": round_level, "lineStyle": {"color": "rgba(250,204,21,0.52)", "type": "dotted", "width": 1.1}, "label": _h_badge(f"節目 {_fmt_cur(round_level, is_jp)}", "#fde047", "insideEndTop")})
                 if active_lab and "LAB TP/SL" in opt_lines:
                     l_tp_1m = float(active_lab.get("tp", active_lab.get("raw_tp", 0.0)) or 0.0)
                     l_sl_1m = float(active_lab.get("sl", active_lab.get("raw_sl", 0.0)) or 0.0)
                     if l_tp_1m > 0 and curr_px > 0 and abs(l_tp_1m - curr_px) / curr_px <= 0.08:
-                        ml_1m.append({"yAxis": round(l_tp_1m, 2), "lineStyle": {"color": "#10b981", "type": "dashed", "width": 1.5}, "label": _h_badge(f"TP {_fmt_cur(l_tp_1m, is_jp)}", "#6ee7b7", "insideStartTop")})
+                        ml_1m.append({"yAxis": round(l_tp_1m, 2), "lineStyle": {"color": "#10b981", "type": "dashed", "width": 1.3}, "label": _h_badge(f"TP {_fmt_cur(l_tp_1m, is_jp)}", "#6ee7b7", "insideStartTop")})
                     if l_sl_1m > 0 and curr_px > 0 and abs(l_sl_1m - curr_px) / curr_px <= 0.08:
-                        ml_1m.append({"yAxis": round(l_sl_1m, 2), "lineStyle": {"color": "#ef4444", "type": "dashed", "width": 1.5}, "label": _h_badge(f"SL {_fmt_cur(l_sl_1m, is_jp)}", "#fca5a5", "insideStartBottom")})
+                        ml_1m.append({"yAxis": round(l_sl_1m, 2), "lineStyle": {"color": "#ef4444", "type": "dashed", "width": 1.3}, "label": _h_badge(f"SL {_fmt_cur(l_sl_1m, is_jp)}", "#fca5a5", "insideStartBottom")})
 
+                ml_1m_clean = _declutter_marklines(ml_1m, curr_px, min_gap_pct=0.38)
                 right_pad_1m = 56 if is_jp else 50
                 s_1m = [
                     {
@@ -5383,12 +5761,13 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "yAxisIndex": 0,
                         "data": z1["ohlc"],
                         "itemStyle": {
-                            "color": "#10b981",
-                            "color0": "#ef4444",
+                            "color": "rgba(16, 185, 129, 0.78)",
+                            "color0": "rgba(239, 68, 68, 0.78)",
                             "borderColor": "#10b981",
                             "borderColor0": "#ef4444",
+                            "borderWidth": 1,
                         },
-                        "z": 4,
+                        "z": 14,
                     },
                     {
                         "name": "9EMA",
@@ -5397,9 +5776,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "yAxisIndex": 0,
                         "data": z1["ema9"],
                         "itemStyle": {"color": "#38bdf8"},
-                        "lineStyle": {"color": "#38bdf8", "width": 1.8},
+                        "lineStyle": {"color": "#38bdf8", "width": 1.4},
+                        "smooth": 0.12,
                         "showSymbol": False,
-                        "z": 5,
+                        "z": 7,
                     },
                     {
                         "name": "20EMA",
@@ -5408,9 +5788,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "yAxisIndex": 0,
                         "data": z1["ema20"],
                         "itemStyle": {"color": "#c084fc"},
-                        "lineStyle": {"color": "#c084fc", "width": 1.8},
+                        "lineStyle": {"color": "#c084fc", "width": 1.4},
+                        "smooth": 0.12,
                         "showSymbol": False,
-                        "z": 5,
+                        "z": 6,
                     },
                     {
                         "name": "VWAP",
@@ -5419,10 +5800,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "yAxisIndex": 0,
                         "data": z1["vwap"],
                         "itemStyle": {"color": "#fbbf24"},
-                        "lineStyle": {"color": "#fbbf24", "width": 1.6, "type": "dotted"},
+                        "lineStyle": {"color": "#fbbf24", "width": 1.3, "type": "dotted"},
                         "showSymbol": False,
-                        "markLine": {"symbol": ["none", "none"], "data": ml_1m} if ml_1m else {},
-                        "z": 5,
+                        "markLine": {"symbol": ["none", "none"], "data": ml_1m_clean} if ml_1m_clean else {},
+                        "z": 6,
                     },
                     {
                         "name": "上昇分岐",
@@ -5431,10 +5812,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "yAxisIndex": 0,
                         "data": z1["up_path"],
                         "itemStyle": {"color": "#10b981"},
-                        "lineStyle": {"color": "#10b981", "width": 1.9, "type": "dashed"},
+                        "lineStyle": {"color": "#10b981", "width": 1.8, "type": "dashed"},
+                        "smooth": 0.15,
                         "showSymbol": False,
                         "endLabel": {"show": True, "distance": 4, "formatter": f"▲ {z1['p_up']}%", "color": "#6ee7b7", "fontSize": 9.5, "fontWeight": "bold", "fontFamily": "JetBrains Mono"},
-                        "z": 8,
+                        "z": 10,
                     },
                     {
                         "name": "横ばい分岐",
@@ -5444,9 +5826,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "data": z1["flat_path"],
                         "itemStyle": {"color": "#94a3b8"},
                         "lineStyle": {"color": "#94a3b8", "width": 1.6, "type": "dotted"},
+                        "smooth": 0.15,
                         "showSymbol": False,
                         "endLabel": {"show": True, "distance": 4, "formatter": f"▶ {z1['p_flat']}%", "color": "#cbd5e1", "fontSize": 9.5, "fontWeight": "bold", "fontFamily": "JetBrains Mono"},
-                        "z": 7,
+                        "z": 9,
                     },
                     {
                         "name": "下落分岐",
@@ -5455,10 +5838,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "yAxisIndex": 0,
                         "data": z1["down_path"],
                         "itemStyle": {"color": "#ef4444"},
-                        "lineStyle": {"color": "#ef4444", "width": 1.9, "type": "dashed"},
+                        "lineStyle": {"color": "#ef4444", "width": 1.8, "type": "dashed"},
+                        "smooth": 0.15,
                         "showSymbol": False,
                         "endLabel": {"show": True, "distance": 4, "formatter": f"▼ {z1['p_down']}%", "color": "#fca5a5", "fontSize": 9.5, "fontWeight": "bold", "fontFamily": "JetBrains Mono"},
-                        "z": 8,
+                        "z": 10,
                     },
                     {
                         "name": "1分出来高",
@@ -5470,7 +5854,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "markLine": {
                             "symbol": ["none", "none"],
                             "silent": True,
-                            "data": [{"yAxis": z1["avg_vol_1m"], "lineStyle": {"color": "rgba(148,163,184,0.4)", "type": "dashed", "width": 1}, "label": {"show": False}}],
+                            "data": [{"yAxis": z1["avg_vol_1m"], "lineStyle": {"color": "rgba(148,163,184,0.35)", "type": "dashed", "width": 1}, "label": {"show": False}}],
                         } if z1["avg_vol_1m"] > 0 else {},
                     },
                     {
@@ -5480,33 +5864,33 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "yAxisIndex": 2,
                         "data": z1["cvd"],
                         "itemStyle": {"color": "#22d3ee"},
-                        "lineStyle": {"color": "#22d3ee", "width": 1.8},
-                        "areaStyle": {"color": "rgba(34, 211, 238, 0.12)"},
+                        "lineStyle": {"color": "#22d3ee", "width": 1.6},
+                        "areaStyle": {"color": "rgba(34, 211, 238, 0.10)"},
                         "showSymbol": False,
                     },
                 ]
 
-                st.caption(f"表示中: 1分足マイクロ・ズーム（対象日 {z1['target_date']} 直近90本 ＋ 9/20EMA ＋ VWAP ＋ 10分3分岐 ＋ 下段CVD）")
+                st.caption(f"表示中: 1分足マイクロ・ズーム（{z1['target_date']} 直近90本 ＋ 9/20EMA ＋ VWAP ＋ 10分3分岐 ＋ 下段CVD）｜ 拡大精査時は「自動更新」OFF推奨")
                 _render_echarts({
-                    "backgroundColor": "#0b1120",
-                    "legend": {"data": ["1分足", "9EMA", "20EMA", "VWAP", "疑似CVD"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2, "left": 4, "right": 72, "itemWidth": 12, "itemHeight": 8},
+                    "backgroundColor": "#070b14",
+                    "legend": {"type": "scroll", "data": ["1分足", "9EMA", "20EMA", "VWAP", "疑似CVD"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2, "left": 4, "right": 94, "itemWidth": 12, "itemHeight": 8},
                     "axisPointer": {"link": [{"xAxisIndex": "all"}]},
                     "grid": [
-                        {"top": 62, "height": "57%", "left": 6, "right": right_pad_1m, "containLabel": False},
+                        {"top": 58, "height": "57%", "left": 6, "right": right_pad_1m, "containLabel": False},
                         {"top": "76%", "height": "17%", "left": 6, "right": right_pad_1m, "containLabel": False},
                     ],
                     "dataZoom": [{"type": "inside", "xAxisIndex": [0, 1], "filterMode": "none"}],
                     "xAxis": [
-                        {"type": "category", "gridIndex": 0, "boundaryGap": True, "data": z1["times"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,0.2)"}}, "axisLabel": {"show": False}},
-                        {"type": "category", "gridIndex": 1, "boundaryGap": True, "data": z1["times"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,0.2)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9, "interval": "auto", "hideOverlap": True}},
+                        {"type": "category", "gridIndex": 0, "boundaryGap": True, "data": z1["times"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,0.18)"}}, "axisLabel": {"show": False}},
+                        {"type": "category", "gridIndex": 1, "boundaryGap": True, "data": z1["times"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,0.18)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9, "interval": "auto", "hideOverlap": True}},
                     ],
                     "yAxis": [
-                        {"type": "value", "gridIndex": 0, "position": "right", "scale": True, "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.05)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9}},
+                        {"type": "value", "gridIndex": 0, "position": "right", "scale": True, "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.04)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9}},
                         {"type": "value", "gridIndex": 1, "show": False, "axisPointer": {"show": False}},
                         {"type": "value", "gridIndex": 1, "position": "right", "scale": True, "splitLine": {"show": False}, "axisLabel": {"color": "#22d3ee", "fontSize": 8}},
                     ],
                     "series": s_1m,
-                }, height=410, use_hud_tooltip=True, is_jp=is_jp, enable_fullscreen=True, is_dual_grid=True)
+                }, height=410, use_hud_tooltip=True, is_jp=is_jp, enable_fullscreen=True, is_dual_grid=True, chart_key=f"dd_1m_{fc}")
 
                 st.markdown(f"""
                 <div class="dd-3way-strip">
@@ -5537,7 +5921,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 if traj["lunch_idx"] is not None:
                     ml_data.append({
                         "xAxis": traj["slots"][traj["lunch_idx"]],
-                        "lineStyle": {"color": "rgba(148,163,184,0.35)", "type": "dashed"},
+                        "lineStyle": {"color": "rgba(148,163,184,0.32)", "type": "dashed", "width": 1.0},
                         "label": _v_badge("昼休", "#94a3b8"),
                     })
 
@@ -5551,17 +5935,17 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         if mt_slot in traj["slots"]:
                             ml_data.append({
                                 "xAxis": mt_slot,
-                                "lineStyle": {"color": "rgba(125, 211, 252, 0.25)", "type": "dotted", "width": 1.0},
+                                "lineStyle": {"color": "rgba(125, 211, 252, 0.22)", "type": "dotted", "width": 1.0},
                                 "label": _v_badge(mt_lbl, "rgba(148, 163, 184, 0.85)"),
                             })
 
                 if g15.get("show_gap_target") and prev_px > 0:
-                    ml_data.append({"yAxis": round(prev_px, 2), "lineStyle": {"color": "#f97316", "type": "dashed", "width": 1.6}, "label": _h_badge(f"窓埋目標 {_fmt_cur(prev_px, is_jp)}", "#fdba74", "insideStartTop")})
+                    ml_data.append({"yAxis": round(prev_px, 2), "lineStyle": {"color": "#f97316", "type": "dashed", "width": 1.4}, "label": _h_badge(f"窓埋目標 {_fmt_cur(prev_px, is_jp)}", "#fdba74", "insideStartTop")})
                 if "心理的キリ番節目" in opt_lines:
-                    ml_data.append({"yAxis": round_level, "lineStyle": {"color": "rgba(250,204,21,0.55)", "type": "dotted", "width": 1.3}, "label": _h_badge(f"節目 {_fmt_cur(round_level, is_jp)}", "#fde047", "insideEndTop")})
+                    ml_data.append({"yAxis": round_level, "lineStyle": {"color": "rgba(250,204,21,0.52)", "type": "dotted", "width": 1.1}, "label": _h_badge(f"節目 {_fmt_cur(round_level, is_jp)}", "#fde047", "insideEndTop")})
                 if "寄り30分高安（ORB）" in opt_lines and traj["orb_high"] and traj["orb_low"]:
-                    ml_data.append({"yAxis": traj["orb_high"], "lineStyle": {"color": "rgba(56,189,248,0.45)", "type": "dashed", "width": 1.0}, "label": _h_badge("ORB高", "#7dd3fc", "insideEndTop")})
-                    ml_data.append({"yAxis": traj["orb_low"], "lineStyle": {"color": "rgba(244,63,94,0.45)", "type": "dashed", "width": 1.0}, "label": _h_badge("ORB安", "#fda4af", "insideEndBottom")})
+                    ml_data.append({"yAxis": traj["orb_high"], "lineStyle": {"color": "rgba(56,189,248,0.42)", "type": "dashed", "width": 1.0}, "label": _h_badge("ORB高", "#7dd3fc", "insideEndTop")})
+                    ml_data.append({"yAxis": traj["orb_low"], "lineStyle": {"color": "rgba(244,63,94,0.42)", "type": "dashed", "width": 1.0}, "label": _h_badge("ORB安", "#fda4af", "insideEndBottom")})
 
                 if exp_active and traj["orb_high"] and traj["orb_low"]:
                     orb_rng = max(float(traj["orb_high"]) - float(traj["orb_low"]), 0.0)
@@ -5569,11 +5953,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         if exp_dir == "UP":
                             orb_ext_up = round(float(traj["orb_low"]) + orb_rng * 1.618, 2)
                             if curr_px > 0 and abs(orb_ext_up - curr_px) / curr_px <= 0.14:
-                                ml_data.append({"yAxis": orb_ext_up, "lineStyle": {"color": "rgba(34,211,238,0.65)", "type": "dotted", "width": 1.4}, "label": _h_badge(f"ORB拡張1.618 {_fmt_cur(orb_ext_up, is_jp)}", "#67e8f9", "insideEndTop")})
+                                ml_data.append({"yAxis": orb_ext_up, "lineStyle": {"color": "rgba(34,211,238,0.62)", "type": "dotted", "width": 1.2}, "label": _h_badge(f"ORB拡張1.618 {_fmt_cur(orb_ext_up, is_jp)}", "#67e8f9", "insideEndTop")})
                         elif exp_dir == "DOWN":
                             orb_ext_dn = round(max(float(traj["orb_high"]) - orb_rng * 1.618, curr_px * 0.5), 2)
                             if curr_px > 0 and abs(orb_ext_dn - curr_px) / curr_px <= 0.14:
-                                ml_data.append({"yAxis": orb_ext_dn, "lineStyle": {"color": "rgba(251,113,133,0.65)", "type": "dotted", "width": 1.4}, "label": _h_badge(f"ORB拡張1.618 {_fmt_cur(orb_ext_dn, is_jp)}", "#fda4af", "insideEndBottom")})
+                                ml_data.append({"yAxis": orb_ext_dn, "lineStyle": {"color": "rgba(251,113,133,0.62)", "type": "dotted", "width": 1.2}, "label": _h_badge(f"ORB拡張1.618 {_fmt_cur(orb_ext_dn, is_jp)}", "#fda4af", "insideEndBottom")})
 
                 lab_tpsl_hidden = False
                 if active_lab and "LAB TP/SL" in opt_lines:
@@ -5581,12 +5965,12 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     l_sl_line = float(active_lab.get("sl", active_lab.get("raw_sl", 0.0)) or 0.0)
                     if l_tp_line > 0 and curr_px > 0:
                         if abs(l_tp_line - curr_px) / curr_px <= 0.12:
-                            ml_data.append({"yAxis": round(l_tp_line, 2), "lineStyle": {"color": "#10b981", "type": "dashed", "width": 1.5}, "label": _h_badge(f"TP {_fmt_cur(l_tp_line, is_jp)}", "#6ee7b7", "insideStartTop")})
+                            ml_data.append({"yAxis": round(l_tp_line, 2), "lineStyle": {"color": "#10b981", "type": "dashed", "width": 1.3}, "label": _h_badge(f"TP {_fmt_cur(l_tp_line, is_jp)}", "#6ee7b7", "insideStartTop")})
                         else:
                             lab_tpsl_hidden = True
                     if l_sl_line > 0 and curr_px > 0:
                         if abs(l_sl_line - curr_px) / curr_px <= 0.12:
-                            ml_data.append({"yAxis": round(l_sl_line, 2), "lineStyle": {"color": "#ef4444", "type": "dashed", "width": 1.5}, "label": _h_badge(f"SL {_fmt_cur(l_sl_line, is_jp)}", "#fca5a5", "insideStartBottom")})
+                            ml_data.append({"yAxis": round(l_sl_line, 2), "lineStyle": {"color": "#ef4444", "type": "dashed", "width": 1.3}, "label": _h_badge(f"SL {_fmt_cur(l_sl_line, is_jp)}", "#fca5a5", "insideStartBottom")})
                         else:
                             lab_tpsl_hidden = True
                     aux_cands = []
@@ -5603,10 +5987,12 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         try:
                             px_a = float(raw_px_a)
                             if px_a > 0 and curr_px > 0 and abs(px_a - curr_px) / curr_px <= 0.12:
-                                ml_data.append({"yAxis": round(px_a, 2), "lineStyle": {"color": col_a, "type": "dotted", "width": 1.2}, "label": _h_badge(f"{lbl_a} {_fmt_cur(px_a, is_jp)}", col_a, "insideEndTop")})
+                                ml_data.append({"yAxis": round(px_a, 2), "lineStyle": {"color": col_a, "type": "dotted", "width": 1.1}, "label": _h_badge(f"{lbl_a} {_fmt_cur(px_a, is_jp)}", col_a, "insideEndTop")})
                         except Exception:
                             pass
-                ml_cfg = {"symbol": ["none", "none"], "data": ml_data} if ml_data else {}
+
+                ml_data_clean = _declutter_marklines(ml_data, curr_px, min_gap_pct=0.38)
+                ml_cfg = {"symbol": ["none", "none"], "data": ml_data_clean} if ml_data_clean else {}
 
                 preset_desc = {
                     "📈 今の予測": "ライブ修正軌道 ＋ 分位点ファン ＋ 場中30分3分岐 ＋ 下段CVD同期",
@@ -5631,13 +6017,13 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                             {
                                 "name": f"±{hvz['avg_move_pct']:.1f}%",
                                 "xAxis": hvz["start_slot"],
-                                "itemStyle": {"color": "rgba(245, 158, 11, 0.08)"},
+                                "itemStyle": {"color": "rgba(245, 158, 11, 0.06)"},
                                 "label": {
                                     "show": show_hv_lbl,
                                     "position": "insideBottom",
                                     "color": "#fbbf24",
                                     "fontSize": 8,
-                                    "backgroundColor": "rgba(11, 17, 32, 0.78)",
+                                    "backgroundColor": "rgba(7, 11, 20, 0.78)",
                                     "padding": [1, 3],
                                     "borderRadius": 2,
                                 },
@@ -5650,10 +6036,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     cur_peak_i = traj["live_peak_idx"] if use_live_basis else traj["locked_peak_idx"]
                     d_s, d_e = max(0, cur_dip_i - 2), min(n_sl - 1, cur_dip_i + 2)
                     p_s, p_e = max(0, cur_peak_i - 2), min(n_sl - 1, cur_peak_i + 2)
-                    ma_data.append([{"name": "押目帯", "xAxis": traj["slots"][d_s], "itemStyle": {"color": "rgba(16, 185, 129, 0.09)"}, "label": {"position": "insideTop", "color": "#6ee7b7", "fontSize": 8.5, "backgroundColor": "rgba(11, 17, 32, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][d_e]}])
-                    ma_data.append([{"name": "利確帯", "xAxis": traj["slots"][p_s], "itemStyle": {"color": "rgba(239, 68, 68, 0.09)"}, "label": {"position": "insideTop", "color": "#fca5a5", "fontSize": 8.5, "backgroundColor": "rgba(11, 17, 32, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][p_e]}])
+                    ma_data.append([{"name": "押目帯", "xAxis": traj["slots"][d_s], "itemStyle": {"color": "rgba(16, 185, 129, 0.07)"}, "label": {"position": "insideTop", "color": "#6ee7b7", "fontSize": 8.2, "backgroundColor": "rgba(7, 11, 20, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][d_e]}])
+                    ma_data.append([{"name": "利確帯", "xAxis": traj["slots"][p_s], "itemStyle": {"color": "rgba(239, 68, 68, 0.07)"}, "label": {"position": "insideTop", "color": "#fca5a5", "fontSize": 8.2, "backgroundColor": "rgba(7, 11, 20, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"xAxis": traj["slots"][p_e]}])
                     if vp["overhead_pct"] >= 25.0 and not exp_active:
-                        ma_data.append([{"name": "売り壁", "yAxis": round(vp["res_px"] * 0.996, 2), "itemStyle": {"color": "rgba(168, 85, 247, 0.13)"}, "label": {"position": "insideRight", "color": "#d8b4fe", "fontSize": 8.5, "backgroundColor": "rgba(11, 17, 32, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"yAxis": round(vp["res_px"] * 1.004, 2)}])
+                        ma_data.append([{"name": "売り壁", "yAxis": round(vp["res_px"] * 0.996, 2), "itemStyle": {"color": "rgba(168, 85, 247, 0.10)"}, "label": {"position": "insideRight", "color": "#d8b4fe", "fontSize": 8.2, "backgroundColor": "rgba(7, 11, 20, 0.78)", "padding": [1, 3], "borderRadius": 2}}, {"yAxis": round(vp["res_px"] * 1.004, 2)}])
                 ma_cfg = {"silent": True, "data": ma_data} if ma_data else {}
 
                 s_list, l_names = [], []
@@ -5665,10 +6051,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     c_p32 = disp_live_p32 if is_lv else disp_locked_p32
                     c_bd_in = disp_live_bdiff_in if is_lv else disp_locked_bdiff_in
                     s_list.extend([
-                        {"name": "outer_base", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": c_p15, "stack": "fan_out", "itemStyle": {"color": "rgba(99, 102, 241, 0.25)"}, "lineStyle": {"opacity": 0}, "showSymbol": False, "silent": True},
-                        {"name": "10-90%分位帯", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": c_bd, "stack": "fan_out", "itemStyle": {"color": "rgba(99, 102, 241, 0.25)"}, "lineStyle": {"opacity": 0}, "areaStyle": {"color": "rgba(99, 102, 241, 0.12)"}, "showSymbol": False, "silent": True},
-                        {"name": "inner_base", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": c_p32, "stack": "fan_in", "itemStyle": {"color": "#38bdf8"}, "lineStyle": {"opacity": 0}, "showSymbol": False, "silent": True},
-                        {"name": "コア帯", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": c_bd_in, "stack": "fan_in", "itemStyle": {"color": "#38bdf8"}, "lineStyle": {"color": "#38bdf8", "opacity": 0}, "areaStyle": {"color": "rgba(56, 189, 248, 0.22)"}, "showSymbol": False, "silent": True},
+                        {"name": "outer_base", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": c_p15, "stack": "fan_out", "itemStyle": {"color": "rgba(99, 102, 241, 0.18)"}, "lineStyle": {"opacity": 0}, "smooth": 0.15, "showSymbol": False, "silent": True, "z": 1},
+                        {"name": "10-90%分位帯", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": c_bd, "stack": "fan_out", "itemStyle": {"color": "rgba(99, 102, 241, 0.18)"}, "lineStyle": {"opacity": 0}, "areaStyle": {"color": "rgba(99, 102, 241, 0.08)"}, "smooth": 0.15, "showSymbol": False, "silent": True, "z": 1},
+                        {"name": "inner_base", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": c_p32, "stack": "fan_in", "itemStyle": {"color": "#38bdf8"}, "lineStyle": {"opacity": 0}, "smooth": 0.15, "showSymbol": False, "silent": True, "z": 2},
+                        {"name": "コア帯", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": c_bd_in, "stack": "fan_in", "itemStyle": {"color": "#38bdf8"}, "lineStyle": {"color": "#38bdf8", "opacity": 0}, "areaStyle": {"color": "rgba(56, 189, 248, 0.14)"}, "smooth": 0.15, "showSymbol": False, "silent": True, "z": 2},
                     ])
                     l_names.append("コア帯")
 
@@ -5682,7 +6068,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                             "yAxisIndex": 0,
                             "data": ap_scaled,
                             "itemStyle": {"color": "#94a3b8"},
-                            "lineStyle": {"color": "#94a3b8", "width": 1.1, "opacity": 0.18},
+                            "lineStyle": {"color": "#94a3b8", "width": 0.9, "opacity": 0.14},
+                            "smooth": 0.15,
                             "showSymbol": False,
                             "silent": True,
                             "z": 2,
@@ -5697,9 +6084,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "yAxisIndex": 0,
                         "data": med_scaled,
                         "itemStyle": {"color": "#f59e0b"},
-                        "lineStyle": {"color": "#f59e0b", "width": 1.5, "opacity": 0.72, "type": "solid"},
+                        "lineStyle": {"color": "#f59e0b", "width": 1.3, "opacity": 0.68, "type": "solid"},
+                        "smooth": 0.12,
                         "showSymbol": False,
-                        "z": 4,
+                        "z": 6,
                     })
                     l_names.append("類似実測(Top-1)")
 
@@ -5711,34 +6099,37 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "yAxisIndex": 0,
                         "data": traj["vwap"],
                         "itemStyle": {"color": "#fbbf24"},
-                        "lineStyle": {"color": "#fbbf24", "width": 1.6, "type": "dotted"},
+                        "lineStyle": {"color": "#fbbf24", "width": 1.3, "type": "dotted"},
                         "showSymbol": False,
+                        "z": 6,
                     })
                     l_names.append("VWAP")
 
                 if "VWAP±σ" in opt_lines and traj["has_actual"]:
                     s_list.extend([
-                        {"name": "VWAP+1σ", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": traj["vwap_p1"], "itemStyle": {"color": "rgba(251,191,36,0.55)"}, "lineStyle": {"color": "rgba(251,191,36,0.55)", "width": 1.0, "type": "dashed"}, "showSymbol": False, "silent": True},
-                        {"name": "VWAP-1σ", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": traj["vwap_m1"], "itemStyle": {"color": "rgba(251,191,36,0.55)"}, "lineStyle": {"color": "rgba(251,191,36,0.55)", "width": 1.0, "type": "dashed"}, "showSymbol": False, "silent": True},
-                        {"name": "VWAP+2σ", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": traj["vwap_p2"], "itemStyle": {"color": "rgba(239,68,68,0.45)"}, "lineStyle": {"color": "rgba(239,68,68,0.45)", "width": 1.0, "type": "dotted"}, "showSymbol": False, "silent": True},
-                        {"name": "VWAP-2σ", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": traj["vwap_m2"], "itemStyle": {"color": "rgba(16,185,129,0.45)"}, "lineStyle": {"color": "rgba(16,185,129,0.45)", "width": 1.0, "type": "dotted"}, "showSymbol": False, "silent": True},
+                        {"name": "VWAP+1σ", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": traj["vwap_p1"], "itemStyle": {"color": "rgba(251,191,36,0.48)"}, "lineStyle": {"color": "rgba(251,191,36,0.48)", "width": 0.9, "type": "dashed"}, "showSymbol": False, "silent": True, "z": 5},
+                        {"name": "VWAP-1σ", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": traj["vwap_m1"], "itemStyle": {"color": "rgba(251,191,36,0.48)"}, "lineStyle": {"color": "rgba(251,191,36,0.48)", "width": 0.9, "type": "dashed"}, "showSymbol": False, "silent": True, "z": 5},
+                        {"name": "VWAP+2σ", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": traj["vwap_p2"], "itemStyle": {"color": "rgba(239,68,68,0.40)"}, "lineStyle": {"color": "rgba(239,68,68,0.40)", "width": 0.9, "type": "dotted"}, "showSymbol": False, "silent": True, "z": 5},
+                        {"name": "VWAP-2σ", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": traj["vwap_m2"], "itemStyle": {"color": "rgba(16,185,129,0.40)"}, "lineStyle": {"color": "rgba(16,185,129,0.40)", "width": 0.9, "type": "dotted"}, "showSymbol": False, "silent": True, "z": 5},
                     ])
 
                 if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
                     is_both = (chart_mode == "⚡ 両方重ね")
                     if exp_active:
                         lk_name = "朝ロック(無効化済)"
-                        lk_col = "rgba(148, 163, 184, 0.32)"
-                        lk_style = {"color": "rgba(148,163,184,0.32)", "width": 1.3, "type": "dotted"}
+                        lk_col = "rgba(148, 163, 184, 0.30)"
+                        lk_style = {"color": "rgba(148,163,184,0.30)", "width": 1.2, "type": "dotted"}
                     else:
                         lk_name = "朝ロック"
                         lk_col = "#c084fc" if is_both else "#38bdf8"
-                        lk_style = {"color": lk_col, "width": 2.0 if is_both else 2.6, "type": "dashed" if is_both else "solid", "shadowBlur": 8, "shadowColor": "rgba(192,132,252,0.45)"}
+                        lk_style = {"color": lk_col, "width": 1.6 if is_both else 2.0, "type": "dashed" if is_both else "solid", "shadowBlur": 6, "shadowColor": "rgba(192,132,252,0.35)"}
                     s_list.append({
                         "name": lk_name, "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": disp_locked_p50,
                         "itemStyle": {"color": lk_col},
                         "lineStyle": lk_style,
-                        "showSymbol": False, "markLine": ml_cfg, "markArea": ma_cfg
+                        "smooth": 0.15,
+                        "showSymbol": False, "markLine": ml_cfg, "markArea": ma_cfg,
+                        "z": 8,
                     })
                     l_names.append(lk_name)
 
@@ -5746,10 +6137,12 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     s_list.append({
                         "name": "ライブ修正", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": disp_live_p50,
                         "itemStyle": {"color": "#38bdf8"},
-                        "lineStyle": {"color": "#38bdf8", "width": 2.6, "shadowBlur": 12, "shadowColor": "rgba(56,189,248,0.65)"},
+                        "lineStyle": {"color": "#38bdf8", "width": 2.0, "shadowBlur": 10, "shadowColor": "rgba(56,189,248,0.55)"},
+                        "smooth": 0.15,
                         "showSymbol": False,
                         "markLine": ml_cfg if chart_mode == "🔴 ライブ修正" else {},
-                        "markArea": ma_cfg if chart_mode == "🔴 ライブ修正" else {}
+                        "markArea": ma_cfg if chart_mode == "🔴 ライブ修正" else {},
+                        "z": 10,
                     })
                     l_names.append("ライブ修正")
 
@@ -5757,8 +6150,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     s_list.append({
                         "name": "当日実測", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": traj["actual"],
                         "itemStyle": {"color": "#ffffff"},
-                        "lineStyle": {"color": "#ffffff", "width": 2.8, "shadowBlur": 10, "shadowColor": "rgba(255,255,255,0.65)"},
-                        "showSymbol": False
+                        "lineStyle": {"color": "#ffffff", "width": 2.4, "shadowBlur": 8, "shadowColor": "rgba(255,255,255,0.55)"},
+                        "smooth": False,
+                        "showSymbol": False,
+                        "z": 14,
                     })
                     l_names.insert(0, "当日実測")
 
@@ -5772,10 +6167,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                             "yAxisIndex": 0,
                             "data": short_3way["up_path"],
                             "itemStyle": {"color": "#10b981"},
-                            "lineStyle": {"color": "#10b981", "width": 2.0, "type": "dashed"},
+                            "lineStyle": {"color": "#10b981", "width": 1.8, "type": "dashed"},
+                            "smooth": 0.15,
                             "showSymbol": False,
-                            "endLabel": {"show": True, "distance": 4, "formatter": f"▲ {short_3way['p_up']}%", "color": "#6ee7b7", "fontSize": 10, "fontWeight": "bold", "fontFamily": "JetBrains Mono"},
-                            "z": 9,
+                            "endLabel": {"show": True, "distance": 4, "formatter": f"▲ {short_3way['p_up']}%", "color": "#6ee7b7", "fontSize": 9.5, "fontWeight": "bold", "fontFamily": "JetBrains Mono"},
+                            "z": 11,
                         },
                         {
                             "name": "横ばい分岐",
@@ -5784,10 +6180,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                             "yAxisIndex": 0,
                             "data": short_3way["flat_path"],
                             "itemStyle": {"color": "#94a3b8"},
-                            "lineStyle": {"color": "#94a3b8", "width": 1.8, "type": "dotted"},
+                            "lineStyle": {"color": "#94a3b8", "width": 1.6, "type": "dotted"},
+                            "smooth": 0.15,
                             "showSymbol": False,
-                            "endLabel": {"show": True, "distance": 4, "formatter": f"▶ {short_3way['p_flat']}%", "color": "#cbd5e1", "fontSize": 10, "fontWeight": "bold", "fontFamily": "JetBrains Mono"},
-                            "z": 8,
+                            "endLabel": {"show": True, "distance": 4, "formatter": f"▶ {short_3way['p_flat']}%", "color": "#cbd5e1", "fontSize": 9.5, "fontWeight": "bold", "fontFamily": "JetBrains Mono"},
+                            "z": 10,
                         },
                         {
                             "name": "下落分岐",
@@ -5796,16 +6193,17 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                             "yAxisIndex": 0,
                             "data": short_3way["down_path"],
                             "itemStyle": {"color": "#ef4444"},
-                            "lineStyle": {"color": "#ef4444", "width": 2.0, "type": "dashed"},
+                            "lineStyle": {"color": "#ef4444", "width": 1.8, "type": "dashed"},
+                            "smooth": 0.15,
                             "showSymbol": False,
-                            "endLabel": {"show": True, "distance": 4, "formatter": f"▼ {short_3way['p_down']}%", "color": "#fca5a5", "fontSize": 10, "fontWeight": "bold", "fontFamily": "JetBrains Mono"},
-                            "z": 9,
+                            "endLabel": {"show": True, "distance": 4, "formatter": f"▼ {short_3way['p_down']}%", "color": "#fca5a5", "fontSize": 9.5, "fontWeight": "bold", "fontFamily": "JetBrains Mono"},
+                            "z": 11,
                         },
                     ])
 
                 if "大口約定（◆）" in opt_lines and traj["vol_spikes"]:
                     sp_pts = [{"value": [sp["time"], sp["price"]], "itemStyle": {"color": "#10b981" if sp["dir"] > 0 else "#ef4444", "borderColor": "#ffffff", "borderWidth": 1}} for sp in traj["vol_spikes"]]
-                    s_list.append({"name": "大口約定", "type": "scatter", "xAxisIndex": 0, "yAxisIndex": 0, "symbol": "diamond", "symbolSize": 9, "data": sp_pts, "z": 10})
+                    s_list.append({"name": "大口約定", "type": "scatter", "xAxisIndex": 0, "yAxisIndex": 0, "symbol": "diamond", "symbolSize": 8, "data": sp_pts, "z": 12})
 
                 def _edge_aware_pulse(pt_name: str, pt_time: str, pt_px: float, pt_col: str) -> dict:
                     try:
@@ -5820,7 +6218,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "itemStyle": {"color": pt_col},
                         "label": {
                             "align": al,
-                            "backgroundColor": "rgba(11, 17, 32, 0.82)",
+                            "backgroundColor": "rgba(7, 11, 20, 0.84)",
                             "padding": [1, 3],
                             "borderRadius": 3,
                         },
@@ -5838,8 +6236,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     pulse_pts.append(_edge_aware_pulse(mk_d["name"], mk_d["time"], mk_d["price"], mk_d["color"]))
                 s_list.append({
                     "name": "重要点", "type": "effectScatter", "xAxisIndex": 0, "yAxisIndex": 0, "data": pulse_pts,
-                    "symbolSize": 8, "rippleEffect": {"brushType": "stroke", "scale": 3.2},
-                    "label": {"show": True, "position": "top", "formatter": "{b}", "color": "#f8fafc", "fontSize": 9, "fontWeight": "bold"}
+                    "symbolSize": 7, "rippleEffect": {"brushType": "stroke", "scale": 3.0},
+                    "label": {"show": True, "position": "top", "formatter": "{b}", "color": "#f8fafc", "fontSize": 8.8, "fontWeight": "bold"},
+                    "z": 15,
                 })
 
                 s_list.append({
@@ -5848,8 +6247,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     "xAxisIndex": 1,
                     "yAxisIndex": 1,
                     "data": traj["vols"],
-                    "itemStyle": {"color": "rgba(148,163,184,0.45)"},
-                    "lineStyle": {"color": "rgba(148,163,184,0.45)", "width": 1.1, "type": "dashed"},
+                    "itemStyle": {"color": "rgba(148,163,184,0.38)"},
+                    "lineStyle": {"color": "rgba(148,163,184,0.38)", "width": 1.0, "type": "dashed"},
                     "showSymbol": False,
                     "silent": True,
                 })
@@ -5861,7 +6260,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         else:
                             colored_act_vols.append({
                                 "value": v_i,
-                                "itemStyle": {"color": "rgba(16, 185, 129, 0.55)" if d_i > 0 else "rgba(239, 68, 68, 0.55)"},
+                                "itemStyle": {"color": "rgba(16, 185, 129, 0.52)" if d_i > 0 else "rgba(239, 68, 68, 0.52)"},
                             })
                     s_list.append({
                         "name": "当日出来高",
@@ -5878,38 +6277,38 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "yAxisIndex": 2,
                         "data": traj["cvd_arr"],
                         "itemStyle": {"color": "#22d3ee"},
-                        "lineStyle": {"color": "#22d3ee", "width": 1.8},
-                        "areaStyle": {"color": "rgba(34, 211, 238, 0.12)"},
+                        "lineStyle": {"color": "#22d3ee", "width": 1.6},
+                        "areaStyle": {"color": "rgba(34, 211, 238, 0.10)"},
                         "showSymbol": False,
                         "markLine": {
                             "symbol": ["none", "none"],
                             "silent": True,
-                            "data": [{"yAxis": 0, "lineStyle": {"color": "rgba(148,163,184,0.28)", "type": "dotted", "width": 1}, "label": {"show": False}}],
+                            "data": [{"yAxis": 0, "lineStyle": {"color": "rgba(148,163,184,0.25)", "type": "dotted", "width": 1}, "label": {"show": False}}],
                         },
                     })
                     l_names.append("疑似CVD")
 
                 right_pad = (58 if is_jp else 52) if show_3way_now else (50 if is_jp else 44)
                 _render_echarts({
-                    "backgroundColor": "#0b1120",
-                    "legend": {"data": l_names, "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2, "left": 4, "right": 72, "itemWidth": 12, "itemHeight": 8},
+                    "backgroundColor": "#070b14",
+                    "legend": {"type": "scroll", "data": l_names, "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2, "left": 4, "right": 94, "itemWidth": 12, "itemHeight": 8},
                     "axisPointer": {"link": [{"xAxisIndex": "all"}]},
                     "grid": [
-                        {"top": 62, "height": "57%", "left": 6, "right": right_pad, "containLabel": False},
+                        {"top": 58, "height": "57%", "left": 6, "right": right_pad, "containLabel": False},
                         {"top": "76%", "height": "17%", "left": 6, "right": right_pad, "containLabel": False},
                     ],
                     "dataZoom": [{"type": "inside", "xAxisIndex": [0, 1], "filterMode": "none"}],
                     "xAxis": [
-                        {"type": "category", "gridIndex": 0, "boundaryGap": False, "data": traj["slots"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,0.2)"}}, "axisLabel": {"show": False}},
-                        {"type": "category", "gridIndex": 1, "boundaryGap": False, "data": traj["slots"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,0.2)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9, "interval": "auto", "hideOverlap": True}},
+                        {"type": "category", "gridIndex": 0, "boundaryGap": False, "data": traj["slots"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,0.18)"}}, "axisLabel": {"show": False}},
+                        {"type": "category", "gridIndex": 1, "boundaryGap": False, "data": traj["slots"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,0.18)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9, "interval": "auto", "hideOverlap": True}},
                     ],
                     "yAxis": [
-                        {"type": "value", "gridIndex": 0, "position": "right", "scale": True, "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.05)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9}},
+                        {"type": "value", "gridIndex": 0, "position": "right", "scale": True, "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.04)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9}},
                         {"type": "value", "gridIndex": 1, "show": False, "axisPointer": {"show": False}},
                         {"type": "value", "gridIndex": 1, "position": "right", "scale": True, "splitLine": {"show": False}, "axisLabel": {"color": "#22d3ee", "fontSize": 8}},
                     ],
                     "series": s_list
-                }, height=410, use_hud_tooltip=True, is_jp=is_jp, enable_fullscreen=True, is_dual_grid=True)
+                }, height=410, use_hud_tooltip=True, is_jp=is_jp, enable_fullscreen=True, is_dual_grid=True, chart_key=f"dd_5m_{fc}")
 
                 if show_3way_now:
                     mins_ahead = short_3way["horizon"] * 5
@@ -5939,9 +6338,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             shock_badge_txt = f" / 衝撃波{shock_ext_pct:+.2f}%" if abs(shock_ext_pct) > 0.01 else ""
             st.markdown(f"""
             <div class="dd-prob-meter">
-              <div style="display:flex;justify-content:space-between;align-items:center;font-size:10.5px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;">
                 <span style="font-weight:800;color:#7dd3fc;">SCENARIO ALLOCATION // リアルタイム・シナリオ配分（スコア比）</span>
-                <span style="font-family:'JetBrains Mono',monospace;color:#94a3b8;font-size:9.5px;">{basis_txt}{shock_badge_txt}</span>
+                <span style="font-family:'JetBrains Mono',monospace;color:#64748b;font-size:9.3px;">{basis_txt}{shock_badge_txt}</span>
               </div>
               <div class="dd-prob-stack">
                 <div style="width:{scen_probs['bull']}%;background:#10b981;" title="上振れ突破 {scen_probs['bull']}%"></div>
@@ -6075,10 +6474,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
               <div class="dd-sc-card" style="border-left:4px solid #10b981;">
                 <div class="dd-sc-top">
                   <div>
-                    <div style="font-weight:800;color:#6ee7b7;font-size:12.5px;">上振れ突破シナリオ（配分比 {scen_probs['bull']:.1f}%）</div>
-                    <div style="font-size:11px;color:#cbd5e1;margin-top:2px;">トリガー: <b>{_fmt_cur(active_bull_trig, is_jp)}</b> 超え（FPT到達率 {scen_probs['fpt_bull_pct']:.1f}%）</div>
+                    <div style="font-weight:800;color:#6ee7b7;font-size:12px;">上振れ突破（配分 {scen_probs['bull']:.1f}%）</div>
+                    <div style="font-size:10.5px;color:#cbd5e1;margin-top:2px;">トリガー: <b>{_fmt_cur(active_bull_trig, is_jp)}</b> 超え（FPT {scen_probs['fpt_bull_pct']:.1f}%）</div>
                   </div>
-                  <div style="text-align:right;">
+                  <div style="text-align:right;flex-shrink:0;">
                     <div class="dd-sc-price" style="color:#6ee7b7;">{_fmt_cur(active_bull_tgt, is_jp)}</div>
                     <div class="dd-sc-pct" style="color:#10b981;">{bp:+.2f}%</div>
                   </div>
@@ -6088,10 +6487,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
               <div class="dd-sc-card" style="border-left:4px solid #38bdf8;">
                 <div class="dd-sc-top">
                   <div>
-                    <div style="font-weight:800;color:#7dd3fc;font-size:12.5px;">標準レンジ・窓埋めシナリオ（配分比 {mid_sc_prob:.1f}%）</div>
-                    <div style="font-size:11px;color:#cbd5e1;margin-top:2px;">押し目: <b>{active_dip_time}</b> ({_fmt_cur(active_dip_px, is_jp)}) → 高値 <b>{active_peak_time}</b>（窓埋 {scen_probs['fade']:.1f}%）</div>
+                    <div style="font-weight:800;color:#7dd3fc;font-size:12px;">標準レンジ・窓埋（配分 {mid_sc_prob:.1f}%）</div>
+                    <div style="font-size:10.5px;color:#cbd5e1;margin-top:2px;">押目 <b>{active_dip_time}</b> ({_fmt_cur(active_dip_px, is_jp)}) → 高値 <b>{active_peak_time}</b></div>
                   </div>
-                  <div style="text-align:right;">
+                  <div style="text-align:right;flex-shrink:0;">
                     <div class="dd-sc-price" style="color:#7dd3fc;">{_fmt_cur(active_close_px, is_jp)}</div>
                     <div class="dd-sc-pct" style="color:#38bdf8;">{active_close_chg:+.2f}%</div>
                   </div>
@@ -6101,10 +6500,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
               <div class="dd-sc-card" style="border-left:4px solid #ef4444;">
                 <div class="dd-sc-top">
                   <div>
-                    <div style="font-weight:800;color:#fca5a5;font-size:12.5px;">下振れ崩壊シナリオ（配分比 {scen_probs['bear']:.1f}%）</div>
-                    <div style="font-size:11px;color:#cbd5e1;margin-top:2px;">トリガー: <b>{_fmt_cur(active_bear_trig, is_jp)}</b> 割れ（FPTタッチ率 {scen_probs['fpt_bear_pct']:.1f}%）</div>
+                    <div style="font-weight:800;color:#fca5a5;font-size:12px;">下振れ崩壊（配分 {scen_probs['bear']:.1f}%）</div>
+                    <div style="font-size:10.5px;color:#cbd5e1;margin-top:2px;">トリガー: <b>{_fmt_cur(active_bear_trig, is_jp)}</b> 割れ（FPT {scen_probs['fpt_bear_pct']:.1f}%）</div>
                   </div>
-                  <div style="text-align:right;">
+                  <div style="text-align:right;flex-shrink:0;">
                     <div class="dd-sc-price" style="color:#fca5a5;">{_fmt_cur(active_bear_tgt, is_jp)}</div>
                     <div class="dd-sc-pct" style="color:#ef4444;">{sp:+.2f}%</div>
                   </div>
@@ -6145,7 +6544,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             close_chg_col = "#10b981" if active_close_chg >= 0 else "#ef4444"
             st.markdown(f"""
             <div class="dd-dark-box">
-              <div style="font-size:11px;font-weight:800;color:#38bdf8;margin-bottom:4px;">KEY DRIVERS // 主要寄与 Top3（{html.escape(we['active_cluster'])}・{we['active_regime']}脳 N={we['cluster_n']} / 累計{we['updates_count']}回）</div>
+              <div style="font-size:10.5px;font-weight:800;color:#38bdf8;margin-bottom:4px;">KEY DRIVERS // 主要寄与 Top3（{html.escape(we['active_cluster'])}・{we['active_regime']}脳 N={we['cluster_n']} / 累計{we['updates_count']}回）</div>
               {top3_html}
               <div class="dd-factor-row"><span>合成・寄付き予測 → 大引け予測</span><span style="font-family:'JetBrains Mono',monospace;color:{close_chg_col};">{active_open_gap_pct:+.2f}% → {active_close_chg:+.2f}%</span></div>
             </div>
@@ -6220,7 +6619,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     st.rerun()
 
         # =====================================================================
-        # タブ2（マクロβ・曜日）プロ仕様魔改造
+        # タブ2（マクロβ・曜日）
         # =====================================================================
         with t2:
             d_cells_parts = []
@@ -6239,7 +6638,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             d_cells = "".join(d_cells_parts)
             st.markdown(f'<div class="dd-dark-box"><b>DAY-OF-WEEK EDGE // 曜日別アノマリー（過去1年実測・対象日={traj["target_date"]}）</b><div class="dd-dow-grid">{d_cells}</div></div>', unsafe_allow_html=True)
 
-            # 要件1-1: 「曜日 × 30分時間帯」期待値ヒートマップ
             hm_res = _compute_dow_intraday_heatmap(df_5m, is_jp)
             if hm_res.get("valid"):
                 best_b = hm_res.get("best")
@@ -6250,10 +6648,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 if b_txt or w_txt:
                     st.markdown(f'<div class="dd-dark-box" style="padding:7px 10px;margin-bottom:6px;font-size:11px;">{b_txt}　｜　{w_txt}</div>', unsafe_allow_html=True)
                 _render_echarts({
-                    "backgroundColor": "#0b1120",
+                    "backgroundColor": "#070b14",
                     "tooltip": {
                         "position": "top",
-                        "backgroundColor": "rgba(9,13,22,0.92)",
+                        "backgroundColor": "rgba(7,11,20,0.92)",
                         "borderColor": "#38bdf8",
                         "textStyle": {"color": "#f8fafc", "fontSize": 10.5, "fontFamily": "JetBrains Mono, monospace"},
                     },
@@ -6289,9 +6687,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         "label": {"show": False},
                         "emphasis": {"itemStyle": {"borderColor": "#ffffff", "borderWidth": 1}},
                     }],
-                }, height=230)
+                }, height=230, chart_key=f"dd_hm_{fc}")
 
-            # 要件1-2: ローリング相関（20日 vs 60日）＆ ダイナミックβ推移チャート
             if macro_sens:
                 top_mk_key = macro_sens[0]["key"]
                 rc_res = _compute_rolling_macro_corr(df_1d["Close"], macro_data.get(top_mk_key, {}))
@@ -6299,9 +6696,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     dec_badge = ' <span style="background:rgba(245,158,11,0.22);border:1px solid #f59e0b;color:#fde047;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:800;">⚡ デカップリング検知（個別材料主導相場）</span>' if rc_res.get("decoupled") else ""
                     st.markdown(f"##### 📈 ローリング相関（20日 vs 60日）＆ 20日β推移 — {html.escape(rc_res['label'])}{dec_badge}", unsafe_allow_html=True)
                     _render_echarts({
-                        "backgroundColor": "#0b1120",
-                        "tooltip": {"trigger": "axis", "backgroundColor": "rgba(9,13,22,0.92)", "borderColor": "rgba(56,189,248,0.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
-                        "legend": {"data": ["20日相関", "60日相関", "20日β"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
+                        "backgroundColor": "#070b14",
+                        "tooltip": {"trigger": "axis", "backgroundColor": "rgba(7,11,20,0.92)", "borderColor": "rgba(56,189,248,0.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
+                        "legend": {"type": "scroll", "data": ["20日相関", "60日相関", "20日β"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
                         "grid": {"top": 30, "bottom": 22, "left": 8, "right": 34, "containLabel": True},
                         "xAxis": {"type": "category", "boundaryGap": False, "data": rc_res["dates"], "axisLabel": {"color": "#94a3b8", "fontSize": 9, "interval": "auto", "hideOverlap": True}},
                         "yAxis": [
@@ -6313,25 +6710,24 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                             {"name": "60日相関", "type": "line", "yAxisIndex": 0, "data": rc_res["c60"], "itemStyle": {"color": "#c084fc"}, "lineStyle": {"color": "#c084fc", "width": 1.6, "type": "dashed"}, "showSymbol": False},
                             {"name": "20日β", "type": "line", "yAxisIndex": 1, "data": rc_res["b20"], "itemStyle": {"color": "#fbbf24"}, "lineStyle": {"color": "rgba(251,191,36,0.55)", "width": 1.2}, "areaStyle": {"color": "rgba(251,191,36,0.10)"}, "showSymbol": False},
                         ],
-                    }, height=225)
+                    }, height=225, chart_key=f"dd_rc_{fc}")
 
                 st.markdown("##### マクロ感応度マトリクス（過去90営業日の相関係数）")
-                _render_echarts({"backgroundColor": "#0b1120", "tooltip": {"trigger": "axis"}, "grid": {"top": 12, "bottom": 20, "left": 6, "right": 14, "containLabel": True}, "xAxis": {"type": "value", "min": -1, "max": 1, "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9.5}}, "yAxis": {"type": "category", "data": [x["label"] for x in macro_sens][::-1], "axisLabel": {"color": "#e2e8f0", "fontSize": 10.5}}, "series": [{"type": "bar", "data": [{"value": x["corr"], "itemStyle": {"color": "#10b981" if x["corr"] >= 0 else "#ef4444"}} for x in macro_sens[::-1]]}]}, height=215)
+                _render_echarts({"backgroundColor": "#070b14", "tooltip": {"trigger": "axis"}, "grid": {"top": 12, "bottom": 20, "left": 6, "right": 14, "containLabel": True}, "xAxis": {"type": "value", "min": -1, "max": 1, "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9.5}}, "yAxis": {"type": "category", "data": [x["label"] for x in macro_sens][::-1], "axisLabel": {"color": "#e2e8f0", "fontSize": 10.5}}, "series": [{"type": "bar", "data": [{"value": x["corr"], "itemStyle": {"color": "#10b981" if x["corr"] >= 0 else "#ef4444"}} for x in macro_sens[::-1]]}]}, height=215, chart_key=f"dd_ms_{fc}")
 
             eh = [e for e in data["earnings_hist"] if e["est"] is not None or e["rep"] is not None]
             if eh:
                 st.markdown("##### 決算サプライズ（予想EPS vs 実績EPS）")
                 eh_r = eh[::-1]
-                _render_echarts({"backgroundColor": "#0b1120", "tooltip": {"trigger": "axis"}, "legend": {"data": ["予想EPS", "実績EPS"], "textStyle": {"color": "#cbd5e1", "fontSize": 10}, "top": 2}, "grid": {"top": 30, "bottom": 20, "left": 6, "right": 10, "containLabel": True}, "xAxis": {"type": "category", "data": [e["date"][2:7] for e in eh_r], "axisLabel": {"color": "#94a3b8", "fontSize": 9.5}}, "yAxis": {"type": "value", "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9.5}}, "series": [{"name": "予想EPS", "type": "bar", "data": [e["est"] for e in eh_r], "itemStyle": {"color": "#64748b"}}, {"name": "実績EPS", "type": "bar", "data": [{"value": e["rep"], "itemStyle": {"color": "#10b981" if (e["surp"] or 0) >= 0 else "#ef4444"}} for e in eh_r]}]}, height=205)
+                _render_echarts({"backgroundColor": "#070b14", "tooltip": {"trigger": "axis"}, "legend": {"type": "scroll", "data": ["予想EPS", "実績EPS"], "textStyle": {"color": "#cbd5e1", "fontSize": 10}, "top": 2}, "grid": {"top": 30, "bottom": 20, "left": 6, "right": 10, "containLabel": True}, "xAxis": {"type": "category", "data": [e["date"][2:7] for e in eh_r], "axisLabel": {"color": "#94a3b8", "fontSize": 9.5}}, "yAxis": {"type": "value", "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9.5}}, "series": [{"name": "予想EPS", "type": "bar", "data": [e["est"] for e in eh_r], "itemStyle": {"color": "#64748b"}}, {"name": "実績EPS", "type": "bar", "data": [{"value": e["rep"], "itemStyle": {"color": "#10b981" if (e["surp"] or 0) >= 0 else "#ef4444"}} for e in eh_r]}]}, height=205, chart_key=f"dd_eh_{fc}")
 
-                # 要件1-3: 決算PEAD（翌日ギャップ％ ＋ 5日累計ドリフト％）
                 pead_res = _compute_earnings_pead(df_1d, data["earnings_hist"])
                 if pead_res.get("valid"):
                     st.markdown("##### ⚡ 決算PEAD（翌日ギャップ％ vs 決算後5日累計リターン％）")
                     _render_echarts({
-                        "backgroundColor": "#0b1120",
-                        "tooltip": {"trigger": "axis", "backgroundColor": "rgba(9,13,22,0.92)", "borderColor": "rgba(56,189,248,0.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
-                        "legend": {"data": ["翌日ギャップ%", "5日累計%"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
+                        "backgroundColor": "#070b14",
+                        "tooltip": {"trigger": "axis", "backgroundColor": "rgba(7,11,20,0.92)", "borderColor": "rgba(56,189,248,0.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
+                        "legend": {"type": "scroll", "data": ["翌日ギャップ%", "5日累計%"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
                         "grid": {"top": 30, "bottom": 20, "left": 6, "right": 14, "containLabel": True},
                         "xAxis": {"type": "category", "data": pead_res["dates"], "axisLabel": {"color": "#94a3b8", "fontSize": 9.5, "hideOverlap": True}},
                         "yAxis": {"type": "value", "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9, "formatter": "{value}%"}},
@@ -6339,10 +6735,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                             {"name": "翌日ギャップ%", "type": "bar", "data": [{"value": g, "itemStyle": {"color": "rgba(16,185,129,0.75)" if g >= 0 else "rgba(239,68,68,0.75)"}} for g in pead_res["gaps"]], "barMaxWidth": 20},
                             {"name": "5日累計%", "type": "line", "data": pead_res["drifts5"], "itemStyle": {"color": "#38bdf8"}, "lineStyle": {"color": "#38bdf8", "width": 2.2}, "symbol": "circle", "symbolSize": 7},
                         ],
-                    }, height=205)
+                    }, height=205, chart_key=f"dd_pead_{fc}")
 
         # =====================================================================
-        # タブ3（財務・大口株主）プロ仕様魔改造
+        # タブ3（財務・大口株主）
         # =====================================================================
         with t3:
             st.markdown("##### 大口投資家・大株主 Top 10 ランキング")
@@ -6356,20 +6752,18 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     ri = len(rev_h) - 1 - i
                     sh_l = _fmt_sh(x["shares"])
                     b_data.append({"value": round(x["pct"], 2), "itemStyle": {"color": r_cols[ri] if ri < 3 else "#6366f1", "borderRadius": [0, 4, 4, 0]}, "label": {"show": True, "position": "right", "color": "#e2e8f0", "fontSize": 9.5, "formatter": f"{x['pct']:.1f}% ({sh_l})" if sh_l != "-" else f"{x['pct']:.1f}%"}})
-                _render_echarts({"backgroundColor": "#0b1120", "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}}, "grid": {"top": 10, "bottom": 18, "left": 4, "right": 96, "containLabel": True}, "xAxis": {"type": "value", "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9, "formatter": "{value}%"}}, "yAxis": {"type": "category", "data": [f"#{len(rev_h)-i} {x['holder'][:14]}" for i, x in enumerate(rev_h)], "axisLabel": {"color": "#f8fafc", "fontSize": 9.5}}, "series": [{"name": "保有比率", "type": "bar", "data": b_data, "barMaxWidth": 15}]}, height=max(210, len(rev_h) * 28))
+                _render_echarts({"backgroundColor": "#070b14", "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}}, "grid": {"top": 10, "bottom": 18, "left": 4, "right": 96, "containLabel": True}, "xAxis": {"type": "value", "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9, "formatter": "{value}%"}}, "yAxis": {"type": "category", "data": [f"#{len(rev_h)-i} {x['holder'][:14]}" for i, x in enumerate(rev_h)], "axisLabel": {"color": "#f8fafc", "fontSize": 9.5}}, "series": [{"name": "保有比率", "type": "bar", "data": b_data, "barMaxWidth": 15}]}, height=max(210, len(rev_h) * 28), chart_key=f"dd_inst_{fc}")
             elif is_jp:
                 st.link_button(f"🏛️ 株探で {short_code} の大株主一覧を見る", f"https://kabutan.jp/stock/holder?code={short_code}", use_container_width=True)
 
             axes_r, vals_r, miss_r = _compute_real_5axis(info, vp["overhead_pct"], len(gov_risks))
             if len(axes_r) >= 3:
-                _render_echarts({"backgroundColor": "#0b1120", "radar": {"radius": "62%", "indicator": axes_r, "axisName": {"color": "#cbd5e1", "fontSize": 10.5}}, "series": [{"type": "radar", "data": [{"value": vals_r, "name": "実測体力", "itemStyle": {"color": "#38bdf8"}, "areaStyle": {"color": "rgba(56,189,248,0.28)"}}]}]}, height=215)
+                _render_echarts({"backgroundColor": "#070b14", "radar": {"radius": "62%", "indicator": axes_r, "axisName": {"color": "#cbd5e1", "fontSize": 10.5}}, "series": [{"type": "radar", "data": [{"value": vals_r, "name": "実測体力", "itemStyle": {"color": "#38bdf8"}, "areaStyle": {"color": "rgba(56,189,248,0.28)"}}]}]}, height=215, chart_key=f"dd_rad_{fc}")
             if miss_r:
                 st.caption(f"※ APIデータ未提供のため除外した項目（嘘なし評価）: {', '.join(miss_r)}")
 
-            # 要件2-4: バリュエーション・ポジション横型レンジバー
             _render_valuation_gauges(info, is_jp)
 
-            # 要件2-1: 高解像度28分割 Volume Profile（VA70% / POC / 短期20日 vs 中期60日減衰積み上げ）
             vp28 = _compute_hires_vp_28(df_1d, curr_px, is_jp)
             if vp28.get("valid"):
                 st.markdown("##### 📊 高解像度 Volume Profile（28分割・VA70% / POC / 短期20日vs中期60日減衰）")
@@ -6381,9 +6775,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 </div>
                 """, unsafe_allow_html=True)
                 _render_echarts({
-                    "backgroundColor": "#0b1120",
-                    "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}, "backgroundColor": "rgba(9,13,22,0.92)", "borderColor": "rgba(56,189,248,0.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
-                    "legend": {"data": ["直近20日出来高", "中期60日減衰"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
+                    "backgroundColor": "#070b14",
+                    "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}, "backgroundColor": "rgba(7,11,20,0.92)", "borderColor": "rgba(56,189,248,0.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
+                    "legend": {"type": "scroll", "data": ["直近20日出来高", "中期60日減衰"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
                     "grid": {"top": 28, "bottom": 20, "left": 6, "right": 14, "containLabel": True},
                     "xAxis": {"type": "value", "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9}},
                     "yAxis": {"type": "category", "data": vp28["labels"], "axisLabel": {"color": "#cbd5e1", "fontSize": 8.5, "interval": 1, "hideOverlap": True}},
@@ -6408,9 +6802,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                             "barMaxWidth": 9,
                         },
                     ],
-                }, height=310)
+                }, height=310, chart_key=f"dd_vp28_{fc}")
 
-            # 要件2-2: ボラティリティ・スクイーズ ＆ BBWパーセンタイル複合チャート（日足6ヶ月）
             sq_res = _compute_bbw_squeeze(df_1d)
             if sq_res.get("valid"):
                 sq_badge = (
@@ -6421,9 +6814,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 )
                 st.markdown(f"##### 📉 ボラティリティ・スクイーズ ＆ BBW推移（日足6ヶ月）{sq_badge}", unsafe_allow_html=True)
                 _render_echarts({
-                    "backgroundColor": "#0b1120",
-                    "tooltip": {"trigger": "axis", "backgroundColor": "rgba(9,13,22,0.92)", "borderColor": "rgba(56,189,248,0.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
-                    "legend": {"data": ["日足終値", "20MA", "BBW順位%"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
+                    "backgroundColor": "#070b14",
+                    "tooltip": {"trigger": "axis", "backgroundColor": "rgba(7,11,20,0.92)", "borderColor": "rgba(56,189,248,0.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
+                    "legend": {"type": "scroll", "data": ["日足終値", "20MA", "BBW順位%"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
                     "axisPointer": {"link": [{"xAxisIndex": "all"}]},
                     "grid": [
                         {"top": 28, "height": "52%", "left": 6, "right": 14, "containLabel": True},
@@ -6444,9 +6837,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         {"name": "日足終値", "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": sq_res["closes"], "itemStyle": {"color": "#38bdf8"}, "lineStyle": {"color": "#38bdf8", "width": 2.0}, "showSymbol": False},
                         {"name": "BBW順位%", "type": "bar", "xAxisIndex": 1, "yAxisIndex": 1, "data": [{"value": v, "itemStyle": {"color": "#ef4444" if v <= 20 else ("#f59e0b" if v <= 45 else "rgba(56,189,248,0.5)")}} for v in sq_res["bbw_pct_series"]], "barMaxWidth": 4},
                     ],
-                }, height=280, is_dual_grid=True)
+                }, height=280, is_dual_grid=True, chart_key=f"dd_sq_{fc}")
 
-            # 要件2-3: インサイダー売買プロット（該当取引がある場合のみ描画）
             ins_tx = data.get("insider_tx") or []
             if ins_tx and df_1d is not None and not df_1d.empty:
                 d1_dates = [idx.strftime("%Y-%m-%d") for idx in df_1d.index]
@@ -6472,20 +6864,20 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     if sell_pts:
                         ins_series.append({"name": "役員売却▼", "type": "scatter", "symbol": "diamond", "symbolSize": 9, "itemStyle": {"color": "#ef4444"}, "data": sell_pts})
                     _render_echarts({
-                        "backgroundColor": "#0b1120",
-                        "tooltip": {"trigger": "item", "backgroundColor": "rgba(9,13,22,0.92)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
-                        "legend": {"data": [s["name"] for s in ins_series], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
+                        "backgroundColor": "#070b14",
+                        "tooltip": {"trigger": "item", "backgroundColor": "rgba(7,11,20,0.92)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
+                        "legend": {"type": "scroll", "data": [s["name"] for s in ins_series], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
                         "grid": {"top": 28, "bottom": 20, "left": 6, "right": 14, "containLabel": True},
                         "xAxis": {"type": "category", "data": [d[5:] for d in d1_dates], "axisLabel": {"color": "#94a3b8", "fontSize": 9, "interval": "auto", "hideOverlap": True}},
                         "yAxis": {"type": "value", "position": "right", "scale": True, "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.05)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9}},
                         "series": ins_series,
-                    }, height=205)
+                    }, height=205, chart_key=f"dd_ins_{fc}")
 
         # =====================================================================
-        # タブ4（リスク・AIメモ）プロ仕様魔改造
+        # タブ4（リスク・AIメモ）
         # =====================================================================
         with t4:
-            _render_echarts({"backgroundColor": "#0b1120", "series": [{"type": "gauge", "startAngle": 180, "endAngle": 0, "min": 0, "max": 100, "splitNumber": 5, "center": ["50%", "74%"], "radius": "112%", "axisLine": {"lineStyle": {"width": 16, "color": [[0.2, "#dc2626"], [0.4, "#f97316"], [0.6, "#38bdf8"], [0.8, "#10b981"], [1.0, "#059669"]]}}, "pointer": {"icon": "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z", "length": "52%", "width": 10, "offsetCenter": [0, "-12%"], "itemStyle": {"color": "#f8fafc", "shadowBlur": 8, "shadowColor": "rgba(56,189,248,0.8)"}}, "anchor": {"show": True, "showAbove": True, "size": 14, "itemStyle": {"color": "#38bdf8", "borderWidth": 2, "borderColor": "#fff"}}, "axisTick": {"length": 6, "lineStyle": {"color": "auto", "width": 1.5}}, "splitLine": {"length": 12, "lineStyle": {"color": "auto", "width": 2.5}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9.5, "distance": -36}, "title": {"offsetCenter": [0, "18%"], "fontSize": 10.5, "color": "#7dd3fc", "fontWeight": "bold"}, "detail": {"fontSize": 26, "fontWeight": "bold", "offsetCenter": [0, "-3%"], "valueAnimation": True, "color": "#ffffff", "formatter": "{value}"}, "data": [{"value": comp_score, "name": meter_lbl}]}]}, height=225)
+            _render_echarts({"backgroundColor": "#070b14", "series": [{"type": "gauge", "startAngle": 180, "endAngle": 0, "min": 0, "max": 100, "splitNumber": 5, "center": ["50%", "74%"], "radius": "112%", "axisLine": {"lineStyle": {"width": 16, "color": [[0.2, "#dc2626"], [0.4, "#f97316"], [0.6, "#38bdf8"], [0.8, "#10b981"], [1.0, "#059669"]]}}, "pointer": {"icon": "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z", "length": "52%", "width": 10, "offsetCenter": [0, "-12%"], "itemStyle": {"color": "#f8fafc", "shadowBlur": 8, "shadowColor": "rgba(56,189,248,0.8)"}}, "anchor": {"show": True, "showAbove": True, "size": 14, "itemStyle": {"color": "#38bdf8", "borderWidth": 2, "borderColor": "#fff"}}, "axisTick": {"length": 6, "lineStyle": {"color": "auto", "width": 1.5}}, "splitLine": {"length": 12, "lineStyle": {"color": "auto", "width": 2.5}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9.5, "distance": -36}, "title": {"offsetCenter": [0, "18%"], "fontSize": 10.5, "color": "#7dd3fc", "fontWeight": "bold"}, "detail": {"fontSize": 26, "fontWeight": "bold", "offsetCenter": [0, "-3%"], "valueAnimation": True, "color": "#ffffff", "formatter": "{value}"}, "data": [{"value": comp_score, "name": meter_lbl}]}]}, height=225, chart_key=f"dd_gg_{fc}")
 
             memo_nonce = st.session_state.get("dd_memo_nonce", 0)
             top_m = macro_sens[0] if macro_sens else {"label": "市場指数", "corr": 0.0, "beta": 1.0}
@@ -6506,14 +6898,13 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 st.session_state["dd_memo_nonce"] = memo_nonce + 1
                 st.rerun()
 
-            # 要件3-1: 72時間ニュース・センチメント密度タイムライン
             tl_72h = _build_news_72h_timeline(news_res.get("all_72h") or news_res.get("items") or [])
             if tl_72h.get("valid"):
                 st.markdown("##### 🕒 72時間ニュース密度＆センチメント推移（12時間刻み）")
                 _render_echarts({
-                    "backgroundColor": "#0b1120",
-                    "tooltip": {"trigger": "axis", "backgroundColor": "rgba(9,13,22,0.92)", "borderColor": "rgba(56,189,248,0.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
-                    "legend": {"data": ["報道本数", "ネット強弱スコア"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
+                    "backgroundColor": "#070b14",
+                    "tooltip": {"trigger": "axis", "backgroundColor": "rgba(7,11,20,0.92)", "borderColor": "rgba(56,189,248,0.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
+                    "legend": {"type": "scroll", "data": ["報道本数", "ネット強弱スコア"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
                     "grid": {"top": 28, "bottom": 20, "left": 6, "right": 28, "containLabel": True},
                     "xAxis": {"type": "category", "data": tl_72h["labels"], "axisLabel": {"color": "#94a3b8", "fontSize": 9, "hideOverlap": True}},
                     "yAxis": [
@@ -6524,7 +6915,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         {"name": "報道本数", "type": "bar", "yAxisIndex": 0, "data": tl_72h["counts"], "itemStyle": {"color": "rgba(168,85,247,0.55)", "borderRadius": [3, 3, 0, 0]}, "barMaxWidth": 22},
                         {"name": "ネット強弱スコア", "type": "line", "yAxisIndex": 1, "data": tl_72h["scores"], "itemStyle": {"color": "#10b981"}, "lineStyle": {"color": "#10b981", "width": 2.0}, "symbol": "circle", "symbolSize": 6},
                     ],
-                }, height=195)
+                }, height=195, chart_key=f"dd_tl72_{fc}")
 
             if gov_risks:
                 st.markdown(f'<div class="dd-warn-box"><b>ガバナンス・不祥事・訴訟関連ヒット ({len(gov_risks)}件)</b><br>' + "<br>".join([f"・{html.escape(x)}" for x in gov_risks]) + '</div>', unsafe_allow_html=True)
@@ -6553,7 +6944,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 n_html = "".join(n_parts)
                 st.markdown(f'<div class="dd-dark-box"><b>GLOBAL INTELLIGENCE FEED // 日英高信頼ニュース（有効報道 {news_res["fresh_cnt"]}件 / 一次 {news_res["tier1_cnt"]}件）</b><br><br>{n_html}</div>', unsafe_allow_html=True)
 
-            # 要件3-3: クオンツ自己進化ダッシュボード（SGD重み推移 ＆ 直近15日検証スコア推移）
             we_d = traj["weights_evolution"]
             def_br = _make_default_brain(we_d["active_regime"])
             og_keys_lbl = ["始値:マクロ", "始値:為替", "始値:ニュース", "始値:大口", "始値:LAB"]
@@ -6568,9 +6958,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
             st.markdown(f"##### 🧠 クオンツ自己進化監査（{html.escape(we_d['active_cluster'])}・{we_d['active_regime']}脳 / 累計更新 {we_d['updates_count']}回）")
             _render_echarts({
-                "backgroundColor": "#0b1120",
-                "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}, "backgroundColor": "rgba(9,13,22,0.92)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
-                "legend": {"data": ["初期事前重み", "現在学習重み"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
+                "backgroundColor": "#070b14",
+                "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}, "backgroundColor": "rgba(7,11,20,0.92)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
+                "legend": {"type": "scroll", "data": ["初期事前重み", "現在学習重み"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
                 "grid": {"top": 28, "bottom": 22, "left": 6, "right": 14, "containLabel": True},
                 "xAxis": {"type": "category", "data": og_keys_lbl + idr_keys_lbl, "axisLabel": {"color": "#94a3b8", "fontSize": 8.5, "interval": 0, "rotate": 30, "hideOverlap": True}},
                 "yAxis": {"type": "value", "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.05)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9}},
@@ -6578,15 +6968,15 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     {"name": "初期事前重み", "type": "bar", "data": def_og_vals + def_idr_vals, "itemStyle": {"color": "rgba(148,163,184,0.45)"}, "barMaxWidth": 12},
                     {"name": "現在学習重み", "type": "bar", "data": cur_og_vals + cur_idr_vals, "itemStyle": {"color": "#38bdf8"}, "barMaxWidth": 12},
                 ],
-            }, height=225)
+            }, height=225, chart_key=f"dd_sgd_{fc}")
 
             v_hist = traj.get("verify_hist_15") or []
             if len(v_hist) >= 3:
                 st.markdown("##### 📊 直近15日・大引け確定ロック検証推移（収束率% vs 平均誤差%）")
                 _render_echarts({
-                    "backgroundColor": "#0b1120",
-                    "tooltip": {"trigger": "axis", "backgroundColor": "rgba(9,13,22,0.92)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
-                    "legend": {"data": ["帯内収束率%", "平均誤差%"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
+                    "backgroundColor": "#070b14",
+                    "tooltip": {"trigger": "axis", "backgroundColor": "rgba(7,11,20,0.92)", "textStyle": {"color": "#f8fafc", "fontSize": 10}},
+                    "legend": {"type": "scroll", "data": ["帯内収束率%", "平均誤差%"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2},
                     "grid": {"top": 28, "bottom": 20, "left": 6, "right": 28, "containLabel": True},
                     "xAxis": {"type": "category", "data": [f"{r['date'][5:]}({r['code']})" for r in v_hist], "axisLabel": {"color": "#94a3b8", "fontSize": 8.5, "interval": "auto", "hideOverlap": True}},
                     "yAxis": [
@@ -6597,7 +6987,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         {"name": "帯内収束率%", "type": "bar", "yAxisIndex": 0, "data": [r["cone"] for r in v_hist], "itemStyle": {"color": "rgba(16,185,129,0.55)", "borderRadius": [3, 3, 0, 0]}, "barMaxWidth": 16},
                         {"name": "平均誤差%", "type": "line", "yAxisIndex": 1, "data": [r["err"] for r in v_hist], "itemStyle": {"color": "#f59e0b"}, "lineStyle": {"color": "#f59e0b", "width": 2.0}, "symbol": "circle", "symbolSize": 6},
                     ],
-                }, height=205)
+                }, height=205, chart_key=f"dd_vh_{fc}")
             else:
                 st.markdown(f'<div class="dd-dark-box" style="padding:8px 10px;font-size:11px;"><b>📊 日次検証推移:</b> 大引け確定済みロック検証データ蓄積中（現在 {len(v_hist)}件 / 3件以上で推移グラフを表示）</div>', unsafe_allow_html=True)
 
@@ -6654,7 +7044,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 "amp_scale": traj.get("medoid_analog").get("amp_scale", 1.0) if isinstance(traj.get("medoid_analog"), dict) else None,
                 "mode": traj.get("medoid_analog").get("mode") if isinstance(traj.get("medoid_analog"), dict) else None,
             },
-
             "vol_profile_meta": traj["vol_profile_meta"],
             "knn_match": {
                 "matched_dates": traj["knn_match"]["matched_dates"],
