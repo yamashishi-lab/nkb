@@ -2087,7 +2087,7 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
     lunch_jump_std_pct = 0.0
     pm_open_idx = (lunch_idx + 1) if (is_jp and lunch_idx is not None and (lunch_idx + 1) < n_slots) else None
     if pm_open_idx is not None:
-        ljv, ljw = [(rmr[slots[pm_open_idx]] - rmr[slots[lunch_idx]], w) for rmr, w in zip(rmaps, weights) if slots[lunch_idx] in rmr and slots[pm_open_idx] in rmr], []
+        ljv = [(rmr[slots[pm_open_idx]] - rmr[slots[lunch_idx]], w) for rmr, w in zip(rmaps, weights) if slots[lunch_idx] in rmr and slots[pm_open_idx] in rmr]
         if len(ljv) >= 3:
             wal = np.array([x[1] for x in ljv]); wal /= np.sum(wal); lja = np.array([x[0] for x in ljv])
             ljs = max(float(np.sqrt(np.sum(wal * ((lja - float(np.sum(wal * lja))) ** 2)))), float(np.mean(slot_inc_stds)) * 1.4)
@@ -2388,9 +2388,11 @@ def _render_valuation_gauges(info: dict, is_jp: bool):
 
 @st.cache_data(ttl=900, show_spinner=False)
 def _generate_detailed_memo_cached(fc: str, corp_name: str, px_s: str, traj_open: str, traj_close: str, bull_trig: str, bull_tgt: str, bear_trig: str, bear_tgt: str, dip_t: str, peak_t: str, ovh: float, res_s: str, sup_s: str, ml: str, mc: float, mb: float, pos_pct: int, t1: int, gov_cnt: int, whale_sum: str, up: str, lab_note: str, api_key: str, lab_deep_ctx: str = "", trade_style: str = "デイトレード", memo_nonce: int = 0) -> tuple:
+    lab_block = f"\n・LAB本体統合データ: {lab_deep_ctx}" if lab_deep_ctx else ""
+    lab_extra = f"\n・LAB連携情報: {lab_deep_ctx}" if lab_deep_ctx else ""
     prompt = f"""あなたはヘッジファンドのシニア・エクイティアナリストです。以下の実測データに基づき「超詳細インベストメントメモ」を日本語で作成してください。
 ・銘柄: {corp_name} ({fc}) / 現在値: {px_s} / 取引スタイル: {trade_style} / アナリスト目標乖離: {up}
-・LAB本体判定: {lab_note}{f"{chr(10)}・LAB本体統合データ: {lab_deep_ctx}" if lab_deep_ctx else ""}
+・LAB本体判定: {lab_note}{lab_block}
 ・予測軌道: 想定始値 {traj_open} → 大引け予測 {traj_close}（押し目候補 {dip_t} / ピーク想定 {peak_t}）
 ・分岐トリガー: 強気突破 {bull_trig}→上値メド {bull_tgt} / 急落警戒 {bear_trig}→下値メド {bear_tgt}
 ・需給構造: 上値しこり玉 {ovh}% / 大口売り壁 {res_s} / 大口買い支え {sup_s} / 大口異変: {whale_sum}
@@ -2423,7 +2425,7 @@ def _generate_detailed_memo_cached(fc: str, corp_name: str, px_s: str, traj_open
         "バイ＆ホールド": (f"・【攻め】IF 調整局面({dip_t}前後・{sup_s}付近)や業績拡大確認 → THEN 段階的な買い増しで中長期成長を取り込む", f"・【守り】IF ガバナンス悪化({gov_cnt}件)やファンダメンタルズ毀損・{bear_trig} 大幅割れ → THEN 保有方針を再点検し一部撤退", f"・【警戒】IF {ml}(β={mb})のトレンド反転や金利・為替急変 → THEN 過熱銘柄の利確リバランスを実施"),
     }
     atk, dfn, alt = pb_map.get(trade_style, (f"・【攻め】IF {bull_trig} 突破または {dip_t} 付近でのVWAP反発 → THEN 当日トレンドに乗せて {bull_tgt} を目指す", f"・【守り】IF {bear_trig} 割れまたは大引け接近時の停滞 → THEN 翌日持ち越しを避け {bear_tgt} 警戒で即損切り・手仕舞い", f"・【警戒】IF 想定外ブレイクや {ml}({mc})急変 → THEN 逆張り停止・ブレイク追従モードへ切替"))
-    full = f"🎯 If-Then 執行プレイブック（{trade_style}）\n{atk}\n{dfn}\n{alt}\n\n🟢 Bull Case（強気シナリオ）\n・LAB本体判定: {lab_note}{f'{chr(10)}・LAB連携情報: {lab_deep_ctx}' if lab_deep_ctx else ''}。現在値 {px_s} に対しアナリスト目標乖離は {up}、高信頼ニュース強気度 {pos_pct}%（一次報道{t1}件）。\n・{bull_trig} を明確に上抜ければ強気突破が発動し、上値メド {bull_tgt} を目指す展開。\n・下値は大口買い支え帯 {sup_s} をサポートとして機能しやすい構造。\n\n🔴 Bear Case（弱気・死角リスク）\n・{ml} との相関係数が {mc}（β={mb}）で、夜間先物や米市場の急変時に連れ安リスクあり。\n・上値しこり玉は {ovh}%、直上の大口売り壁 {res_s} 付近では戻り売りに要注意。\n・{bear_trig} 割れで下値メド {bear_tgt} までの下振れを警戒し早期撤退。ガバナンス報道は {gov_cnt}件検知。\n\n⚡ Next Catalyst（注目トリガー）\n・大口・インサイダー動向: {whale_sum}。\n・勝負時間帯は押し目候補の {dip_t} 前後での反発確認と、ピーク想定の {peak_t} 前後での分割利確。\n・寄付直後に想定始値 {traj_open} を維持できるかが最初の分岐点。"
+    full = f"🎯 If-Then 執行プレイブック（{trade_style}）\n{atk}\n{dfn}\n{alt}\n\n🟢 Bull Case（強気シナリオ）\n・LAB本体判定: {lab_note}{lab_extra}。現在値 {px_s} に対しアナリスト目標乖離は {up}、高信頼ニュース強気度 {pos_pct}%（一次報道{t1}件）。\n・{bull_trig} を明確に上抜ければ強気突破が発動し、上値メド {bull_tgt} を目指す展開。\n・下値は大口買い支え帯 {sup_s} をサポートとして機能しやすい構造。\n\n🔴 Bear Case（弱気・死角リスク）\n・{ml} との相関係数が {mc}（β={mb}）で、夜間先物や米市場の急変時に連れ安リスクあり。\n・上値しこり玉は {ovh}%、直上の大口売り壁 {res_s} 付近では戻り売りに要注意。\n・{bear_trig} 割れで下値メド {bear_tgt} までの下振れを警戒し早期撤退。ガバナンス報道は {gov_cnt}件検知。\n\n⚡ Next Catalyst（注目トリガー）\n・大口・インサイダー動向: {whale_sum}。\n・勝負時間帯は押し目候補の {dip_t} 前後での反発確認と、ピーク想定の {peak_t} 前後での分割利確。\n・寄付直後に想定始値 {traj_open} を維持できるかが最初の分岐点。"
     return full, f"⚙️ AUTO QUANT MEMO（{trade_style} / 一次報道{t1}件・実測詳細生成）"
 
 
@@ -2580,7 +2582,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             alert_blocks.append(f'<div class="{"dd-quant-box" if cat_al["dir"]=="POS" else "dd-warn-box"}"><b>📰 60分以内・特大カタリスト速報検知（{cat_al["age_min"]}分前 / キーワード: {html.escape(cat_al["kw"])}）</b><br>{html.escape(cat_al["title"])}（ライブ軌道へ {cat_al["boost_drift_pct"]:+.2f}% 即時反映済）</div>')
 
         meta_a = traj["meta_audit"]
-        status_pills.append(f'<span class="dd-st-pill" style="border-color:{meta_a["color"]};background:rgba(15,23,42,.86);color:{meta_a["color"]};">🛡️ モデル信頼度: {html.escape(meta_a["rank"])}{f" ({meta_a[\"hit_rate\"]:.0f}%)" if meta_a["n"]>=3 else ""}</span>')
+        meta_hit_s = f" ({meta_a['hit_rate']:.0f}%)" if meta_a["n"] >= 3 else ""
+        status_pills.append(f'<span class="dd-st-pill" style="border-color:{meta_a["color"]};background:rgba(15,23,42,.86);color:{meta_a["color"]};">🛡️ モデル信頼度: {html.escape(meta_a["rank"])}{meta_hit_s}</span>')
         alert_blocks.append(f'<div class="dd-quant-box"><b>🛡️ Meta-Labeling モデル信頼度監査（ランク: {html.escape(meta_a["rank"])}）</b><br>{html.escape(meta_a["detail"])}</div>')
 
         ne_days, earn_badge = data.get("next_earnings_days"), ""
@@ -2641,8 +2644,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         tmean = info.get("targetMeanPrice")
         upside_str = f"{((tmean - curr_px)/curr_px*100):+.1f}%" if (tmean and curr_px > 0) else "-"
         r_stat, r_col = (f"⚠️ {len(gov_risks)}件", "#f87171") if gov_risks else ("🟢 クリーン", "#10b981")
+        top_close_lbl = "大引け予測(ライブ)" if use_live_basis else "大引け予測(ロック)"
 
-        st.markdown(f"""<div class="dd-hero-card" style="border-left-color:{aura_col};box-shadow:0 8px 24px {aura_glow};"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;"><div style="min-width:0;flex:1;"><div><span class="pill-badge">{html.escape(fc)}</span><span class="pill-badge" style="border-color:rgba(168,85,247,.45);background:rgba(168,85,247,.16);color:#e9d5ff;">{html.escape(in_style)}</span><span class="pill-badge" style="border-color:{mkt_regime['color']};background:rgba(15,23,42,.8);color:{mkt_regime['color']};">{mkt_regime['label']}・{traj['weights_evolution']['active_cluster']}</span>{earn_badge}</div><div style="font-size:16.5px;font-weight:800;color:#f8fafc;margin-top:4px;word-break:break-word;">{html.escape(corp_name)}</div><div style="font-size:10.5px;color:#64748b;margin-top:1px;">{html.escape(sector)} / {html.escape(industry)}</div></div><div style="text-align:right;flex-shrink:0;"><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:19px;font-weight:800;color:#fff;">{_fmt_cur(curr_px, is_jp)}</div><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11.5px;font-weight:700;color:{chg_col};margin-bottom:2px;">{chg_pct:+.2f}%</div>{_build_spark_svg(df_1d["Close"].tail(20).values)}</div></div><div style="margin-top:6px;"><div style="display:flex;justify-content:space-between;font-size:9.3px;color:#64748b;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;"><span>52W安 {_fmt_cur(lo_52, is_jp)}</span><span style="color:#7dd3fc;">52W位置 {pos_52:.0f}%</span><span>52W高 {_fmt_cur(hi_52, is_jp)}</span></div><div class="dd-range-track"><div class="dd-range-dot" style="left:{pos_52:.1f}%;"></div></div></div><div class="dd-winrate-bar"><div><div class="dd-metric-lbl">{"大引け予測(ライブ)" if use_live_basis else "大引け予測(ロック)"}</div><div class="dd-metric-val" style="color:{aura_col};">{_fmt_cur(active_close_px, is_jp)} ({active_close_chg:+.2f}%)</div></div><div><div class="dd-metric-lbl">アナリスト乖離</div><div class="dd-metric-val" style="color:#fde047;">{upside_str}</div></div><div><div class="dd-metric-lbl">上値しこり玉</div><div class="dd-metric-val" style="color:#c084fc;">{vp['overhead_pct']}%</div></div><div><div class="dd-metric-lbl">ガバナンス</div><div class="dd-metric-val" style="color:{r_col};">{r_stat}</div></div></div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="dd-hero-card" style="border-left-color:{aura_col};box-shadow:0 8px 24px {aura_glow};"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;"><div style="min-width:0;flex:1;"><div><span class="pill-badge">{html.escape(fc)}</span><span class="pill-badge" style="border-color:rgba(168,85,247,.45);background:rgba(168,85,247,.16);color:#e9d5ff;">{html.escape(in_style)}</span><span class="pill-badge" style="border-color:{mkt_regime['color']};background:rgba(15,23,42,.8);color:{mkt_regime['color']};">{mkt_regime['label']}・{traj['weights_evolution']['active_cluster']}</span>{earn_badge}</div><div style="font-size:16.5px;font-weight:800;color:#f8fafc;margin-top:4px;word-break:break-word;">{html.escape(corp_name)}</div><div style="font-size:10.5px;color:#64748b;margin-top:1px;">{html.escape(sector)} / {html.escape(industry)}</div></div><div style="text-align:right;flex-shrink:0;"><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:19px;font-weight:800;color:#fff;">{_fmt_cur(curr_px, is_jp)}</div><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11.5px;font-weight:700;color:{chg_col};margin-bottom:2px;">{chg_pct:+.2f}%</div>{_build_spark_svg(df_1d["Close"].tail(20).values)}</div></div><div style="margin-top:6px;"><div style="display:flex;justify-content:space-between;font-size:9.3px;color:#64748b;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;"><span>52W安 {_fmt_cur(lo_52, is_jp)}</span><span style="color:#7dd3fc;">52W位置 {pos_52:.0f}%</span><span>52W高 {_fmt_cur(hi_52, is_jp)}</span></div><div class="dd-range-track"><div class="dd-range-dot" style="left:{pos_52:.1f}%;"></div></div></div><div class="dd-winrate-bar"><div><div class="dd-metric-lbl">{top_close_lbl}</div><div class="dd-metric-val" style="color:{aura_col};">{_fmt_cur(active_close_px, is_jp)} ({active_close_chg:+.2f}%)</div></div><div><div class="dd-metric-lbl">アナリスト乖離</div><div class="dd-metric-val" style="color:#fde047;">{upside_str}</div></div><div><div class="dd-metric-lbl">上値しこり玉</div><div class="dd-metric-val" style="color:#c084fc;">{vp['overhead_pct']}%</div></div><div><div class="dd-metric-lbl">ガバナンス</div><div class="dd-metric-val" style="color:{r_col};">{r_stat}</div></div></div></div>""", unsafe_allow_html=True)
 
         t1, t2, t3, t4 = st.tabs(["翌営業日 1日軌道", "マクロβ・曜日", "財務・大口株主", "リスク・AIメモ"])
 
@@ -2660,7 +2664,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             gf = traj["gap_fill"]
             if gf["prob"] is not None:
                 ngf = int(gf.get("n_samples", 0))
-                gf_t = f"{'参考 ' if ngf<5 else ''}{int(gf['prob'])}% ({f'{gf[\"avg_min\"]}分/' if gf['avg_min'] else ''}N={ngf})"
+                am_s = f"{gf['avg_min']}分/" if gf["avg_min"] else ""
+                gf_t = f"{'参考 ' if ngf<5 else ''}{int(gf['prob'])}% ({am_s}N={ngf})"
                 gf_c = "#94a3b8" if ngf < 5 else ("#10b981" if gf["prob"] >= 60 else ("#f59e0b" if gf["prob"] >= 35 else "#38bdf8"))
             else:
                 gf_t, gf_c = "データ不足", "#94a3b8"
@@ -2747,7 +2752,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 if fusion.get("has_lab") and "LAB×DD 統合エントリー帯/+1.0R" in opt_lines and curr_px > 0 and abs(fusion["fusion_half_r_px"] - curr_px) / curr_px <= 0.12:
                     ml_data.append({"yAxis": fusion["fusion_half_r_px"], "lineStyle": {"color": "#facc15", "type": "dashed", "width": 1.2}, "label": _hb(f"+1.0R半分 {_fmt_cur(fusion['fusion_half_r_px'], is_jp)}", "#fde047")})
 
-                # 【修正4】補助線（OB支持・HVN壁・10Y POC）も active_lab 参照へ完全統一
                 lab_tpsl_hidden = False
                 if active_lab and "LAB TP/SL" in opt_lines and curr_px > 0:
                     for lbl, ks, col, pos in (("TP", ("tp", "raw_tp"), "#10b981", "insideStartTop"), ("SL", ("sl", "raw_sl"), "#ef4444", "insideStartBottom")):
@@ -2841,7 +2845,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     st.markdown(f'<div class="dd-3way-strip"><span style="color:#7dd3fc;font-weight:800;">⚡ 短期{short_3way["horizon"]*5}分3分岐:{mlb}</span><span><span style="color:#6ee7b7;font-weight:800;">▲上昇 {short_3way["p_up"]}%</span> / <span style="color:#cbd5e1;font-weight:800;">▶横ばい {short_3way["p_flat"]}%</span> / <span style="color:#fca5a5;font-weight:800;">▼下落 {short_3way["p_down"]}%</span></span></div>', unsafe_allow_html=True)
                 _render_chart_legend_panel(traj, chart_mode, opt_lines, short_3way, exp_reg, active_dip_time, active_peak_time, cur_vwap_now, curr_px, is_jp, active_lab, False)
 
-            st.markdown(f'<div class="dd-prob-meter"><div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;"><span style="font-weight:800;color:#7dd3fc;">SCENARIO ALLOCATION // リアルタイム・シナリオ配分（スコア比）</span><span style="font-family:JetBrains Mono,monospace;color:#64748b;font-size:9.3px;">{"ライブ連動" if use_live_basis else "朝ロック基準"}{f" / 衝撃波{shock_ext_pct:+.2f}%" if abs(shock_ext_pct)>0.01 else ""}</span></div><div class="dd-prob-stack"><div style="width:{scen_probs["bull"]}%;background:#10b981;"></div><div style="width:{scen_probs["range"]}%;background:#38bdf8;"></div><div style="width:{scen_probs["fade"]}%;background:#f59e0b;"></div><div style="width:{scen_probs["bear"]}%;background:#ef4444;"></div></div><div class="dd-prob-legend"><div style="color:#6ee7b7;">🟢 上振れ突破 <b>{scen_probs["bull"]:.1f}%</b></div><div style="color:#7dd3fc;">🔵 標準レンジ <b>{scen_probs["range"]:.1f}%</b></div><div style="color:#fde047;">🟠 窓埋め反転 <b>{scen_probs["fade"]:.1f}%</b></div><div style="color:#fca5a5;">🔴 下振れ崩壊 <b>{scen_probs["bear"]:.1f}%</b></div></div></div>', unsafe_allow_html=True)
+            basis_txt = "ライブ連動" if use_live_basis else "朝ロック基準"
+            shk_txt = f" / 衝撃波{shock_ext_pct:+.2f}%" if abs(shock_ext_pct) > 0.01 else ""
+            st.markdown(f'<div class="dd-prob-meter"><div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;"><span style="font-weight:800;color:#7dd3fc;">SCENARIO ALLOCATION // リアルタイム・シナリオ配分（スコア比）</span><span style="font-family:JetBrains Mono,monospace;color:#64748b;font-size:9.3px;">{basis_txt}{shk_txt}</span></div><div class="dd-prob-stack"><div style="width:{scen_probs["bull"]}%;background:#10b981;"></div><div style="width:{scen_probs["range"]}%;background:#38bdf8;"></div><div style="width:{scen_probs["fade"]}%;background:#f59e0b;"></div><div style="width:{scen_probs["bear"]}%;background:#ef4444;"></div></div><div class="dd-prob-legend"><div style="color:#6ee7b7;">🟢 上振れ突破 <b>{scen_probs["bull"]:.1f}%</b></div><div style="color:#7dd3fc;">🔵 標準レンジ <b>{scen_probs["range"]:.1f}%</b></div><div style="color:#fde047;">🟠 窓埋め反転 <b>{scen_probs["fade"]:.1f}%</b></div><div style="color:#fca5a5;">🔴 下振れ崩壊 <b>{scen_probs["bear"]:.1f}%</b></div></div></div>', unsafe_allow_html=True)
 
             with st.expander("⚡ What-If 衝撃波シミュレーター（指数・為替 追加変動テスト）", expanded=False):
                 w1, w2 = st.columns(2)
@@ -2925,9 +2931,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             st.markdown(f'<div class="dd-dark-box"><b>DAY-OF-WEEK EDGE // 曜日別アノマリー（過去1年実測・対象日={traj["target_date"]}）</b><div class="dd-dow-grid">{d_cells}</div></div>', unsafe_allow_html=True)
             if (hm := _compute_dow_intraday_heatmap(df_5m, is_jp)).get("valid"):
                 st.markdown("##### 🔥 曜日 × 30分時間帯 期待値ヒートマップ（過去1ヶ月5分足集計）")
-                if hm.get("best") or hm.get("worst"):
-                    bb, wb = hm.get("best"), hm.get("worst")
-                    st.markdown(f'<div class="dd-dark-box" style="padding:7px 10px;margin-bottom:6px;font-size:11px;">{f"🏆 ベスト: <b>{html.escape(bb[1])}</b> ({bb[0]:+.2f}% / 勝率{bb[2]}% / N={bb[3]})" if bb else ""}　｜　{f"📉 ワースト: <b>{html.escape(wb[1])}</b> ({wb[0]:+.2f}% / 勝率{wb[2]}% / N={wb[3]})" if wb else ""}</div>', unsafe_allow_html=True)
+                bb, wb = hm.get("best"), hm.get("worst")
+                if bb or wb:
+                    b_txt = f"🏆 ベスト: <b>{html.escape(bb[1])}</b> ({bb[0]:+.2f}% / 勝率{bb[2]}% / N={bb[3]})" if bb else ""
+                    w_txt = f"📉 ワースト: <b>{html.escape(wb[1])}</b> ({wb[0]:+.2f}% / 勝率{wb[2]}% / N={wb[3]})" if wb else ""
+                    st.markdown(f'<div class="dd-dark-box" style="padding:7px 10px;margin-bottom:6px;font-size:11px;">{b_txt}　｜　{w_txt}</div>', unsafe_allow_html=True)
                 _render_echarts({"backgroundColor": "#070b14", "tooltip": {"position": "top", "backgroundColor": "rgba(7,11,20,.92)", "borderColor": "#38bdf8", "textStyle": {"color": "#f8fafc", "fontSize": 10.5, "fontFamily": "JetBrains Mono, monospace"}}, "grid": {"top": 10, "bottom": 52, "left": 8, "right": 14, "containLabel": True}, "xAxis": {"type": "category", "data": hm["x_labels"], "axisLabel": {"color": "#94a3b8", "fontSize": 9, "interval": 0, "rotate": 35, "hideOverlap": True}, "splitArea": {"show": True}}, "yAxis": {"type": "category", "data": hm["y_labels"], "axisLabel": {"color": "#e2e8f0", "fontSize": 10, "fontWeight": "bold"}, "splitArea": {"show": True}}, "visualMap": {"min": -hm["vmax"], "max": hm["vmax"], "calculable": False, "orient": "horizontal", "left": "center", "bottom": 0, "itemWidth": 10, "itemHeight": 90, "textStyle": {"color": "#94a3b8", "fontSize": 9}, "inRange": {"color": ["#dc2626", "#1e293b", "#10b981"]}}, "series": [{"name": "30分期待値", "type": "heatmap", "data": hm["data"], "label": {"show": False}, "emphasis": {"itemStyle": {"borderColor": "#ffffff", "borderWidth": 1}}}]}, 230, chart_key=f"dd_hm_{fc}")
             if macro_sens:
                 if (rc := _compute_rolling_macro_corr(df_1d["Close"], macro_data.get(macro_sens[0]["key"], {}))).get("valid"):
@@ -2996,8 +3004,14 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             else: st.markdown(f'<div class="dd-quant-box"><b>ガバナンス・不祥事監査: クリーン（{"日英" if not is_jp else "国内"}72h報道）</b><br>直近72時間以内のニュースにおいて不祥事・不正・訴訟などの特異リスクシグナルは検知されていません。</div>', unsafe_allow_html=True)
 
             if news_res["items"]:
-                nhtml = "".join(f'<div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(148,163,184,.12);">{"<span style=background:rgba(239,68,68,.25);color:#fecaca;font-weight:800;font-size:9px;padding:0 4px;border-radius:3px;margin-right:4px;>速報</span>" if it.get("is_breaking") else ""}{f"<span style=background:rgba(250,204,21,.2);color:#fde047;font-weight:800;font-size:9px;padding:0 4px;border-radius:3px;margin-right:4px;>材料:{html.escape(it[\"catalyst_kw\"])}</span>" if it.get("catalyst_kw") else ""}<span style="color:{"#fde047" if it["trust"]=="S" else ("#38bdf8" if it["trust"]=="A" else "#64748b")};font-weight:800;font-size:10px;border:1px solid;padding:0 4px;border-radius:3px;margin-right:4px;">信頼度{it["trust"]}/{it["lang"]}</span><span style="color:{"#10b981" if it["sent"]=="POS" else ("#ef4444" if it["sent"]=="NEG" else "#94a3b8")};font-weight:800;font-size:10px;margin-right:4px;">[{it["sent"]}]</span><span style="color:#94a3b8;font-size:9.5px;margin-right:4px;">(鮮度重み {it["decay_w"]:.1f})</span><a href="{html.escape(it["link"])}" target="_blank" style="color:#e2e8f0;text-decoration:none;font-weight:600;">{html.escape(it["title"])}</a> <span style="color:#64748b;font-size:10px;">({html.escape(it["source"] or "Wire")} / {html.escape(it["pub"])})</span></div>' for it in news_res["items"])
-                st.markdown(f'<div class="dd-dark-box"><b>GLOBAL INTELLIGENCE FEED // 日英高信頼ニュース（有効報道 {news_res["fresh_cnt"]}件 / 一次 {news_res["tier1_cnt"]}件）</b><br><br>{nhtml}</div>', unsafe_allow_html=True)
+                n_parts = []
+                for it in news_res["items"]:
+                    b_tag = '<span style="background:rgba(239,68,68,.25);color:#fecaca;font-weight:800;font-size:9px;padding:0 4px;border-radius:3px;margin-right:4px;">速報</span>' if it.get("is_breaking") else ""
+                    c_tag = f'<span style="background:rgba(250,204,21,.2);color:#fde047;font-weight:800;font-size:9px;padding:0 4px;border-radius:3px;margin-right:4px;">材料:{html.escape(it["catalyst_kw"])}</span>' if it.get("catalyst_kw") else ""
+                    tc = "#fde047" if it["trust"] == "S" else ("#38bdf8" if it["trust"] == "A" else "#64748b")
+                    sc = "#10b981" if it["sent"] == "POS" else ("#ef4444" if it["sent"] == "NEG" else "#94a3b8")
+                    n_parts.append(f'<div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(148,163,184,.12);">{b_tag}{c_tag}<span style="color:{tc};font-weight:800;font-size:10px;border:1px solid;padding:0 4px;border-radius:3px;margin-right:4px;">信頼度{it["trust"]}/{it["lang"]}</span><span style="color:{sc};font-weight:800;font-size:10px;margin-right:4px;">[{it["sent"]}]</span><span style="color:#94a3b8;font-size:9.5px;margin-right:4px;">(鮮度重み {it["decay_w"]:.1f})</span><a href="{html.escape(it["link"])}" target="_blank" style="color:#e2e8f0;text-decoration:none;font-weight:600;">{html.escape(it["title"])}</a> <span style="color:#64748b;font-size:10px;">({html.escape(it["source"] or "Wire")} / {html.escape(it["pub"])})</span></div>')
+                st.markdown(f'<div class="dd-dark-box"><b>GLOBAL INTELLIGENCE FEED // 日英高信頼ニュース（有効報道 {news_res["fresh_cnt"]}件 / 一次 {news_res["tier1_cnt"]}件）</b><br><br>{"".join(n_parts)}</div>', unsafe_allow_html=True)
 
             wed = traj["weights_evolution"]; dbr = _make_default_brain(wed["active_regime"])
             og_k, idr_k = ["macro", "fx", "news", "whale", "lab_bias"], ["news", "dow", "wick", "calib", "lab_bias"]
@@ -3031,7 +3045,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "summary": m_txt[:450], "dd_score": int(comp_score), "updated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
 
-        # 【修正1】DB側の他銘柄データを保持したまま安全マージして書き戻し
         st.session_state["dd_latest_result"] = dd_result
         db_shared = _dd_db_get("shared_ticker_intel", {})
         if not isinstance(db_shared, dict): db_shared = {}
