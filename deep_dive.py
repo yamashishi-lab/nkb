@@ -1,3 +1,4 @@
+# === PART 1 / 4 ===
 import streamlit as st
 import streamlit.components.v1 as components
 import yfinance as yf
@@ -45,7 +46,7 @@ DEFAULT_WEIGHTS_EVOLUTION = {
 
 
 # =========================================================================
-# 1. DEEP DIVE v20.0 専用CSS（ディープスレート・プロ端末統一デザイン）
+# 1. DEEP DIVE v20.1 専用CSS（ディープスレート・プロ端末統一デザイン）
 # =========================================================================
 def _inject_dd_css():
     css = (
@@ -132,7 +133,7 @@ def _inject_dd_css():
         '.dd-val-card{background:#0f172a;border:1px solid rgba(148,163,184,.15);border-radius:7px;padding:6.5px 8.5px;font-variant-numeric:tabular-nums;}'
         '.dd-val-track{width:100%;height:4.5px;background:rgba(148,163,184,.16);border-radius:99px;position:relative;margin-top:4px;}'
         '.dd-val-fill{height:100%;border-radius:99px;}'
-        '.dd-ws-badge{display:flex;align-items:center;justify-content:space-between;background:#0b1120;border:1px solid rgba(16,185,129,.35);border-left:3px solid #10b981;border-radius:6px;padding:3px 9px;margin:2px 0 4px 0;font-family:"JetBrains Mono",monospace;font-size:9.8px;color:#6ee7b7;}'
+        '.dd-ws-badge{display:flex;align-items:center;justify-content:space-between;background:#0b1120;border:1px solid rgba(56,189,248,.35);border-left:3px solid #38bdf8;border-radius:6px;padding:3px 9px;margin:2px 0 4px 0;font-family:"JetBrains Mono",monospace;font-size:9.8px;color:#7dd3fc;}'
         '@media (min-width:768px){.dd-sc-stack{grid-template-columns:repeat(3,1fr);}}'
         '@media (max-width:640px){.dd-fusion-grid,.dd-pos-grid,.dd-ev-pulse-grid,.dd-winrate-bar,.dd-legend-grid,.dd-prob-legend{grid-template-columns:repeat(2,1fr);}.dd-val-grid{grid-template-columns:1fr;}}'
     )
@@ -412,6 +413,19 @@ def _update_weights_two_stage(w_evo: dict, fc_code: str, df_1d: pd.DataFrame, st
         if snap.get("locked_premarket") is not True or not p50_arr:
             continue
 
+        act_open, act_close = day_map[dt_k]
+        prev_close = prev_close_map[dt_k]
+        pred_open = float(snap.get("pred_open_px") or p50_arr[0] or act_open)
+        pred_close = float(p50_arr[-1] or act_close)
+        if pred_open <= 0 or pred_close <= 0:
+            continue
+
+        # 株式分割・併合・異常ギャップによるSGD学習汚染を防止
+        if abs(act_open - pred_open) / max(pred_open, 1e-4) > 0.25:
+            learned_set.add(learn_id)
+            changed = True
+            continue
+
         r_code = str(snap.get("regime_code") or "").upper()
         if r_code not in ("TREND", "RANGE", "NEUTRAL"):
             pos = idx_pos_map.get(dt_k, 0)
@@ -422,12 +436,6 @@ def _update_weights_two_stage(w_evo: dict, fc_code: str, df_1d: pd.DataFrame, st
 
         def_brain = _make_default_brain(r_code)
         target_brains = [updated["clusters"][snap_cluster][r_code], updated["clusters"][fallback_key][r_code], updated["regimes"][r_code]]
-        act_open, act_close = day_map[dt_k]
-        prev_close = prev_close_map[dt_k]
-        pred_open = float(snap.get("pred_open_px") or p50_arr[0] or act_open)
-        pred_close = float(p50_arr[-1] or act_close)
-        if pred_open <= 0 or pred_close <= 0:
-            continue
 
         act_gap_pct = ((act_open - prev_close) / max(prev_close, 1e-4)) * 100.0
         pred_gap_pct = float(snap["pred_open_gap_pct"]) if snap.get("pred_open_gap_pct") is not None else (((pred_open - prev_close) / max(prev_close, 1e-4)) * 100.0)
@@ -491,6 +499,17 @@ def _backfill_unverified_locks(ledger: dict, fc_code: str, df_5m: pd.DataFrame, 
     tmp_5m["_d"] = idx_dt.strftime("%Y-%m-%d")
     tmp_5m["_hm"] = idx_dt.strftime("%H:%M")
 
+    # 過去平均スロット別出来高を算出（rvol_hi実計算用）
+    avg_slot_vol_map = {}
+    if "Volume" in tmp_5m.columns:
+        try:
+            past_only = tmp_5m[tmp_5m["_d"] < market_today_str]
+            if not past_only.empty:
+                grp_v = past_only.groupby("_hm")["Volume"].mean()
+                avg_slot_vol_map = {str(k): float(v) for k, v in grp_v.items() if float(v) > 0}
+        except Exception:
+            avg_slot_vol_map = {}
+
     changed = False
     for dt_k in sorted(pending_dates):
         sub_day = tmp_5m[tmp_5m["_d"] == dt_k]
@@ -505,6 +524,8 @@ def _backfill_unverified_locks(ledger: dict, fc_code: str, df_5m: pd.DataFrame, 
 
         errs = []
         in_cone = 0
+        day_vol_sum = 0.0
+        base_vol_sum = 0.0
         for _, row in sub_day.iterrows():
             hm = row["_hm"]
             si = slot_to_idx.get(hm, -1)
@@ -519,15 +540,20 @@ def _backfill_unverified_locks(ledger: dict, fc_code: str, df_5m: pd.DataFrame, 
                     errs.append(abs(act_c - m_px) / max(m_px, 1e-4) * 100.0)
                     if lo_px <= act_c <= hi_px:
                         in_cone += 1
+                    if "Volume" in row and hm in avg_slot_vol_map:
+                        vv = max(float(row["Volume"]), 0.0)
+                        day_vol_sum += vv
+                        base_vol_sum += avg_slot_vol_map[hm]
             except Exception:
                 continue
 
         if len(errs) >= max(10, int(n_slots * 0.40)):
+            rvol_hi_calc = bool((day_vol_sum / base_vol_sum) >= 1.3) if base_vol_sum > 0 else False
             snap["verify_result"] = {
                 "in_cone_pct": round(in_cone / len(errs) * 100.0, 1),
                 "err_pct": round(float(np.mean(errs)), 2),
                 "n_pts": len(errs),
-                "rvol_hi": bool(snap.get("verify_result", {}).get("rvol_hi", False)) if isinstance(snap.get("verify_result"), dict) else False,
+                "rvol_hi": rvol_hi_calc,
                 "finalized": True,
                 "backfilled": True,
             }
@@ -538,6 +564,7 @@ def _backfill_unverified_locks(ledger: dict, fc_code: str, df_5m: pd.DataFrame, 
         ledger[fc_code] = stock_hist
         _dd_db_set("dd_forecast_ledger_v9", ledger)
     return ledger, changed
+# === PART 2 / 4 ===
 # =========================================================================
 # 3. ヘルパー・1クリックコピー・保有ポジションHUD・音声監視＆Finnhub WS描画
 # =========================================================================
@@ -677,7 +704,7 @@ def _compute_position_metrics(curr_px: float, entry_px: float, shares: int, init
     }
 
 
-def _render_position_hud(fc: str, curr_px: float, is_jp: bool, default_side: str, default_sl: float, cur_vwap=None, last_ema9=None, key_suffix: str = "main") -> dict:
+def _render_position_hud(fc: str, curr_px: float, is_jp: bool, default_side: str, default_sl: float, cur_vwap=None, last_ema9=None, key_suffix: str = "main", trigger_rerun_on_change: bool = False) -> dict:
     active_key = f"dd_pos_active_{fc}"
     side_key = f"dd_pos_side_{fc}"
     entry_key = f"dd_pos_entry_{fc}"
@@ -693,8 +720,13 @@ def _render_position_hud(fc: str, curr_px: float, is_jp: bool, default_side: str
     if sl_key not in st.session_state or float(st.session_state[sl_key] or 0) <= 0:
         st.session_state[sl_key] = float(round(default_sl)) if (is_jp and default_sl > 0) else (float(round(default_sl, 2)) if default_sl > 0 else float(round(curr_px * 0.985, 2)))
 
-    is_active = st.toggle("💼 保有ポジション管理HUD", key=f"{active_key}_{key_suffix}", value=bool(st.session_state.get(active_key, False)))
-    st.session_state[active_key] = is_active
+    prev_active = bool(st.session_state.get(active_key, False))
+    is_active = st.toggle("💼 保有ポジション管理HUD", key=f"{active_key}_{key_suffix}", value=prev_active)
+    if is_active != prev_active:
+        st.session_state[active_key] = is_active
+        if trigger_rerun_on_change:
+            st.rerun()
+
     if not is_active:
         return {"active": False}
 
@@ -704,10 +736,19 @@ def _render_position_hud(fc: str, curr_px: float, is_jp: bool, default_side: str
     pos_shares = ic3.number_input("株数", min_value=1, value=int(st.session_state[shares_key]), step=100 if is_jp else 1, key=f"{shares_key}_{key_suffix}", label_visibility="collapsed")
     pos_sl = ic4.number_input("初期SL", min_value=0.01, value=float(st.session_state[sl_key]), step=1.0 if is_jp else 0.1, key=f"{sl_key}_{key_suffix}", label_visibility="collapsed")
 
+    changed_vals = (
+        str(st.session_state.get(side_key)) != str(pos_side)
+        or abs(float(st.session_state.get(entry_key, 0.0)) - float(pos_entry)) > 1e-6
+        or int(st.session_state.get(shares_key, 0)) != int(pos_shares)
+        or abs(float(st.session_state.get(sl_key, 0.0)) - float(pos_sl)) > 1e-6
+    )
     st.session_state[side_key] = pos_side
     st.session_state[entry_key] = float(pos_entry)
     st.session_state[shares_key] = int(pos_shares)
     st.session_state[sl_key] = float(pos_sl)
+
+    if changed_vals and trigger_rerun_on_change:
+        st.rerun()
 
     pm = _compute_position_metrics(curr_px, pos_entry, int(pos_shares), pos_sl, pos_side, cur_vwap, last_ema9)
     pnl_col = "#10b981" if pm["pnl"] >= 0 else "#ef4444"
@@ -937,20 +978,36 @@ def _render_echarts(
     var POS_CTX = {pos_ctx_js};
     var ALERT_CTX = {alert_ctx_js};
     var HAS_WS_CONN = Boolean(FH_KEY && FH_SYM && !IS_JP_CHART);
+    var SOUND_KEY = 'dd_sound_enabled';
 
     var soundEnabled = false;
+    try {{
+      soundEnabled = (sessionStorage.getItem(SOUND_KEY) === '1');
+    }} catch (e) {{}}
     var audioCtx = null;
     var lastAlertTs = {{}};
 
-    function playBeep(freq, durMs, oscType) {{
-      if (!soundEnabled) return;
+    function ensureAudioCtx() {{
       try {{
         if (!audioCtx) {{
           var AC = window.AudioContext || window.webkitAudioContext;
           if (AC) audioCtx = new AC();
         }}
+        if (audioCtx && audioCtx.state === 'suspended') {{
+          audioCtx.resume();
+        }}
+      }} catch (e) {{}}
+    }}
+
+    document.addEventListener('pointerdown', function() {{
+      if (soundEnabled) ensureAudioCtx();
+    }}, {{ passive: true }});
+
+    function playBeep(freq, durMs, oscType) {{
+      if (!soundEnabled) return;
+      try {{
+        ensureAudioCtx();
         if (!audioCtx) return;
-        if (audioCtx.state === 'suspended') audioCtx.resume();
         var osc = audioCtx.createOscillator();
         var gain = audioCtx.createGain();
         osc.type = oscType || 'sine';
@@ -1009,43 +1066,53 @@ def _render_echarts(
       }}
     }}
 
-    function toggleSound() {{
-      soundEnabled = !soundEnabled;
+    function applySoundBtnVisual() {{
       var sb = document.getElementById('snd-btn');
-      if (sb) {{
-        if (soundEnabled) {{
-          sb.textContent = HAS_WS_CONN ? '🔊 音声ON(WS)' : '🔊 音声ON(更新時)';
-          sb.title = HAS_WS_CONN ? 'リアルタイムWS価格到達で音声通知中' : '更新時判定モード：手動/自動更新ごとに価格到達を判定します';
-          sb.style.borderColor = '#10b981';
-          sb.style.color = '#6ee7b7';
-          sb.style.background = 'rgba(16,185,129,0.20)';
-          playBeep(880, 90, 'sine');
-          if (ALERT_CTX && (ALERT_CTX.exp_dir === 'UP' || ALERT_CTX.exp_dir === 'DOWN')) {{
-            fireCooldownedAlert('EXP_INIT', 740, 140, 'triangle', 'ブレイクモード稼働中');
-          }} else if (ALERT_CTX && (ALERT_CTX.cvd_state === 'DISTRIBUTION' || ALERT_CTX.cvd_state === 'ABSORPTION')) {{
-            fireCooldownedAlert('CVD_INIT', 620, 140, 'triangle', 'CVDダイバージェンス検知');
-          }}
-          var initPx = (typeof latestPx !== 'undefined' && latestPx !== null) ? latestPx : Number(ALERT_CTX && ALERT_CTX.curr_px ? ALERT_CTX.curr_px : 0);
-          if (initPx > 0) {{
-            checkPriceAlerts(initPx);
-          }}
-        }} else {{
-          sb.textContent = '🔇 音声OFF';
-          sb.title = HAS_WS_CONN ? '価格到達・ブレイク音声アラート切替' : '価格到達・ブレイク音声アラート切替（更新時判定）';
-          sb.style.borderColor = 'rgba(148,163,184,0.35)';
-          sb.style.color = '#94a3b8';
-          sb.style.background = '#0f172a';
-        }}
+      if (!sb) return;
+      if (soundEnabled) {{
+        sb.textContent = HAS_WS_CONN ? '🔊 音声ON(WS)' : '🔊 音声ON(更新時)';
+        sb.title = HAS_WS_CONN ? 'リアルタイムWS価格到達で音声通知中' : '更新時判定（画面操作後に有効）：手動/自動更新ごとに価格到達を判定します';
+        sb.style.borderColor = '#10b981';
+        sb.style.color = '#6ee7b7';
+        sb.style.background = 'rgba(16,185,129,0.20)';
+      }} else {{
+        sb.textContent = '🔇 音声OFF';
+        sb.title = HAS_WS_CONN ? '価格到達・ブレイク音声アラート切替' : '価格到達・ブレイク音声アラート切替（更新時判定・画面操作後に有効）';
+        sb.style.borderColor = 'rgba(148,163,184,0.35)';
+        sb.style.color = '#94a3b8';
+        sb.style.background = '#0f172a';
       }}
     }}
 
-    (function initSoundBtnHint() {{
-      var sb = document.getElementById('snd-btn');
-      if (sb && !HAS_WS_CONN) {{
-        sb.title = '価格到達・ブレイク音声アラート切替（更新時判定モード）';
+    function triggerInitialAlertChecks() {{
+      if (!soundEnabled) return;
+      if (ALERT_CTX && (ALERT_CTX.exp_dir === 'UP' || ALERT_CTX.exp_dir === 'DOWN')) {{
+        fireCooldownedAlert('EXP_INIT', 740, 140, 'triangle', 'ブレイクモード稼働中');
+      }} else if (ALERT_CTX && (ALERT_CTX.cvd_state === 'DISTRIBUTION' || ALERT_CTX.cvd_state === 'ABSORPTION')) {{
+        fireCooldownedAlert('CVD_INIT', 620, 140, 'triangle', 'CVDダイバージェンス検知');
       }}
-      if (ALERT_CTX && Number(ALERT_CTX.curr_px || 0) > 0) {{
-        checkPriceAlerts(Number(ALERT_CTX.curr_px));
+      var initPx = (typeof latestPx !== 'undefined' && latestPx !== null) ? latestPx : Number(ALERT_CTX && ALERT_CTX.curr_px ? ALERT_CTX.curr_px : 0);
+      if (initPx > 0) {{
+        checkPriceAlerts(initPx);
+      }}
+    }}
+
+    function toggleSound() {{
+      soundEnabled = !soundEnabled;
+      try {{
+        sessionStorage.setItem(SOUND_KEY, soundEnabled ? '1' : '0');
+      }} catch (e) {{}}
+      applySoundBtnVisual();
+      if (soundEnabled) {{
+        playBeep(880, 90, 'sine');
+        triggerInitialAlertChecks();
+      }}
+    }}
+
+    (function initSoundState() {{
+      applySoundBtnVisual();
+      if (soundEnabled) {{
+        triggerInitialAlertChecks();
       }}
     }})();
 
@@ -1072,26 +1139,31 @@ def _render_echarts(
       var latestPx = null;
       var prevTickPx = null;
       var dirty = false;
+      var wsHadError = false;
 
-      function setWsStatusBadge(htmlStr) {{
+      function setWsStatusBadge(htmlStr, borderCol) {{
         var wsEl = document.getElementById('ws-live-badge');
         if (wsEl) {{
           wsEl.style.display = 'inline-flex';
+          if (borderCol) wsEl.style.borderColor = borderCol;
           wsEl.innerHTML = htmlStr;
         }}
       }}
 
+      setWsStatusBadge('<span style="color:#38bdf8;font-weight:800;">🔵 WS接続中...</span>', 'rgba(56,189,248,0.40)');
+
       function connectFinnhubWS() {{
+        wsHadError = false;
         try {{
           ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(FH_KEY));
         }} catch (err) {{
-          setWsStatusBadge('<span style="color:#f59e0b;">🟡 RECONNECTING...</span>');
-          setTimeout(connectFinnhubWS, 3000);
+          setWsStatusBadge('<span style="color:#ef4444;font-weight:800;">🔴 WSエラー</span>', 'rgba(239,68,68,0.45)');
+          setTimeout(connectFinnhubWS, 4000);
           return;
         }}
 
         ws.onopen = function() {{
-          setWsStatusBadge('<span style="color:#10b981;font-weight:800;">🟢 LIVE WS</span>&nbsp;<span style="color:#94a3b8;">' + FH_SYM + '</span>');
+          setWsStatusBadge('<span style="color:#10b981;font-weight:800;">🟢 LIVE WS</span>&nbsp;<span style="color:#94a3b8;">' + FH_SYM + '</span>', 'rgba(16,185,129,0.40)');
           try {{
             ws.send(JSON.stringify({{ type: 'subscribe', symbol: FH_SYM }}));
           }} catch (e) {{}}
@@ -1100,6 +1172,11 @@ def _render_echarts(
         ws.onmessage = function(evt) {{
           try {{
             var msg = JSON.parse(evt.data);
+            if (msg && msg.type === 'error') {{
+              wsHadError = true;
+              setWsStatusBadge('<span style="color:#ef4444;font-weight:800;">🔴 WS認証/制限エラー</span>', 'rgba(239,68,68,0.45)');
+              return;
+            }}
             if (msg && msg.type === 'trade' && Array.isArray(msg.data) && msg.data.length > 0) {{
               var lastTr = msg.data[msg.data.length - 1];
               var px = Number(lastTr.p);
@@ -1112,9 +1189,16 @@ def _render_echarts(
           }} catch (e) {{}}
         }};
 
+        ws.onerror = function() {{
+          wsHadError = true;
+          setWsStatusBadge('<span style="color:#ef4444;font-weight:800;">🔴 WSエラー</span>', 'rgba(239,68,68,0.45)');
+        }};
+
         ws.onclose = function() {{
-          setWsStatusBadge('<span style="color:#f59e0b;font-weight:800;">🟡 RECONNECTING...</span>');
-          setTimeout(connectFinnhubWS, 3000);
+          if (!wsHadError) {{
+            setWsStatusBadge('<span style="color:#f59e0b;font-weight:800;">🟡 再接続中...</span>', 'rgba(245,158,11,0.45)');
+          }}
+          setTimeout(connectFinnhubWS, 3500);
         }};
       }}
 
@@ -1139,7 +1223,8 @@ def _render_echarts(
 
         setWsStatusBadge(
           '<span style="color:#10b981;font-weight:800;">🟢 LIVE WS</span>&nbsp;' +
-          '<b style="color:' + tickCol + ';font-size:10.5px;">$' + pxRounded.toFixed(2) + tickArrow + '</b>'
+          '<b style="color:' + tickCol + ';font-size:10.5px;">$' + pxRounded.toFixed(2) + tickArrow + '</b>',
+          'rgba(16,185,129,0.40)'
         );
 
         var hudEl = document.getElementById('hud-line');
@@ -1211,7 +1296,7 @@ def _render_echarts(
 
     top_bar = (
         '<div id="top-bar">'
-        '<div id="ws-live-badge" style="display:none;align-items:center;background:#0f172a;border:1px solid rgba(16,185,129,.40);border-radius:4px;padding:1px 6px;font-family:\'JetBrains Mono\',monospace;font-variant-numeric:tabular-nums;font-size:9.5px;flex-shrink:0;"></div>'
+        '<div id="ws-live-badge" style="display:none;align-items:center;background:#0f172a;border:1px solid rgba(56,189,248,.40);border-radius:4px;padding:1px 6px;font-family:\'JetBrains Mono\',monospace;font-variant-numeric:tabular-nums;font-size:9.5px;flex-shrink:0;"></div>'
         '<div id="hud-line">👆 タップ / ホバーで精密数値表示</div>'
         '<div id="ctrl-bar"><span id="fs-hint">自動更新OFF中のみ安定</span>'
         '<button id="snd-btn" onclick="toggleSound()" title="価格到達・ブレイク音声アラート切替">🔇 音声OFF</button>'
@@ -1403,7 +1488,7 @@ def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, sho
         if "前日/当日高安（PDH/PDL/HOD/LOD）" in opt_lines: cards.append((sw_l("#34d399", "dashed", 1), "PDH/PDL/HOD/LOD", "前日・当日の高値安値（注文集中帯）"))
         if "心理的キリ番節目" in opt_lines: cards.append((sw_l("#fde047", "dotted"), "キリ番節目", "注文が集中しやすいキリの良い価格"))
         if "寄り30分高安（ORB）" in opt_lines and traj.get("orb_high") and traj.get("orb_low"): cards.append((sw_l("#7dd3fc", "dashed", 1), "寄り30分ORB", "寄り30分の高安レンジ（ブレイク基準）"))
-        if "大口約定（◆）" in opt_lines and traj.get("vol_spikes"): cards.append(('<span style="display:inline-block;width:13px;text-align:center;color:#10b981;font-size:10px;line-height:1;flex-shrink:0;">◆</span>', "大口約定◆", "通常2.5倍以上の出来高スパイク発生点"))
+        if "出来高急増（◆ 2.5x+）" in opt_lines and traj.get("vol_spikes"): cards.append(('<span style="display:inline-block;width:13px;text-align:center;color:#10b981;font-size:10px;line-height:1;flex-shrink:0;">◆</span>', "出来高急増◆", "同時間帯平均の2.5倍以上の出来高スパイク発生点"))
         if active_lab and "LAB TP/SL" in opt_lines: cards.append((sw_l("#10b981", "dashed"), "LAB TP/SL", "LAB上位足が算出した利確・損切り線"))
         cards.append((sw_l("#22d3ee"), "下段 出来高&CVD", "陽線/陰線出来高と買い売り累積差"))
 
@@ -1412,7 +1497,942 @@ def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, sho
     st.markdown(f'<div class="dd-legend-panel"><div class="{b_cls}">{html.escape(b_txt)}</div><div class="dd-chip-ribbon">{pills_html}</div></div>', unsafe_allow_html=True)
     with st.expander("📖 アクティブ凡例の詳細 ＆ 専門指標クイック辞典", expanded=False):
         st.markdown(f'<div class="dd-legend-grid" style="margin-bottom:8px;">{cards_html}</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:10.8px;line-height:1.62;color:#cbd5e1;">・<b>音声＆電子音トリガー監視官：</b> チャート右上「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と音声で即時通知します（米国株WS接続時はリアルタイム、日本株・WS未接続時は更新ごとに判定）。<br>・<b>LVN真空帯（流動性真空地帯）：</b> 28分割出来高プロファイルで商いが極端に薄い価格帯。レジスタンス抜けやサポート割れ時に価格が一気に走りやすいエアポケットです。<br>・<b>4切替コマンドドック：</b> チャート直下のドックで「⚡ 執行コマンド / 🧭 市場レーダー / 🎯 シナリオ＆寄与 / 🧮 シミュレーター」を瞬時に切り替えられます。<br>・<b>二壁FPT到達確率：</b> 大引けまでに「損切りライン(SL)へ先に触れずに利確目標(TP)へ到達する」確率モデルに基づく物理確率です。</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10.8px;line-height:1.62;color:#cbd5e1;">・<b>音声＆電子音トリガー監視官：</b> チャート右上「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と音声で即時通知します（状態は同一タブ内で保持。米国株WS接続時はリアルタイム、WS未接続時は画面操作後の更新ごとに判定）。<br>・<b>LVN真空帯（流動性真空地帯）：</b> 28分割出来高プロファイルで商いが極端に薄い価格帯。レジスタンス抜けやサポート割れ時に価格が一気に走りやすいエアポケットです。<br>・<b>4切替コマンドドック：</b> チャート直下のドックで「⚡ 執行コマンド / 🧭 市場レーダー / 🎯 シナリオ＆寄与 / 🧮 シミュレーター」を瞬時に切り替えられます。<br>・<b>二壁FPT到達確率：</b> 大引けまでに「損切りライン(SL)へ先に触れずに利確目標(TP)へ到達する」確率モデルに基づく物理確率です。</div>', unsafe_allow_html=True)
+# === PART 2 / 4 ===
+# =========================================================================
+# 3. ヘルパー・1クリックコピー・保有ポジションHUD・音声監視＆Finnhub WS描画
+# =========================================================================
+def _fmt_cur(val, is_jp: bool) -> str:
+    if val is None or (isinstance(val, float) and np.isnan(val)):
+        return "-"
+    return f"{val:,.0f}円" if is_jp else f"${val:,.2f}"
+
+
+def _fmt_raw_num(val, is_jp: bool) -> str:
+    if val is None or (isinstance(val, float) and np.isnan(val)):
+        return "0"
+    return f"{int(round(float(val)))}" if is_jp else f"{float(val):.2f}"
+
+
+def _fmt_sh(n: int) -> str:
+    if not n or n <= 0:
+        return "-"
+    if n >= 1e9:
+        return f"{n/1e9:.2f}B株"
+    if n >= 1e6:
+        return f"{n/1e6:.1f}M株"
+    return f"{n/1e4:.1f}万株" if n >= 1e4 else f"{n:,}株"
+
+
+def _get_gemini_key(passed_key: str = "") -> str:
+    return passed_key.strip() if passed_key else _dd_safe_secret("GEMINI_API_KEY")
+
+
+def _get_finnhub_key() -> str:
+    sess_k = str(st.session_state.get("dd_finnhub_key_input", "") or "").strip()
+    return sess_k if sess_k else _dd_safe_secret("FINNHUB_API_KEY")
+
+
+def _render_copy_toolbar(items: list, height: int = 38):
+    if not items:
+        return
+    btns = []
+    for idx, it in enumerate(items):
+        lbl = html.escape(str(it.get("label", "")))
+        disp = html.escape(str(it.get("disp", it.get("val", ""))))
+        raw_v = json.dumps(str(it.get("val", "")))
+        col = html.escape(str(it.get("color", "#38bdf8")))
+        btns.append(
+            f'<button class="cp-btn" id="cpb_{idx}" '
+            f'onclick=\'doCopy("cpb_{idx}", {raw_v})\' '
+            f'style="border-color:rgba(148,163,184,0.24);color:{col};">'
+            f'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:{col};margin-right:4px;"></span>'
+            f'{lbl}: <b>{disp}</b></button>'
+        )
+    html_code = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+      html,body{{width:100%;margin:0;padding:0;background:transparent;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}}
+      .bar{{display:flex;align-items:center;gap:5px;overflow-x:auto;scrollbar-width:none;padding:2px 0;}}
+      .bar::-webkit-scrollbar{{display:none;}}
+      .cp-btn{{flex-shrink:0;background:#0f172a;border:1px solid;border-radius:5px;padding:4px 8px;font-size:10px;font-family:'JetBrains Mono',monospace;cursor:pointer;line-height:1.25;transition:all .15s ease;white-space:nowrap;display:inline-flex;align-items:center;}}
+      .cp-btn b{{color:#f8fafc;margin-left:2px;}}
+      .cp-btn:hover{{background:#1e293b;}}
+      .cp-btn.copied{{background:rgba(16,185,129,.20)!important;border-color:#10b981!important;color:#6ee7b7!important;font-weight:800;}}
+    </style></head><body><div class="bar">{"".join(btns)}</div><script>
+      function doCopy(btnId, textVal) {{
+        var btn = document.getElementById(btnId);
+        function markDone() {{
+          if (!btn) return;
+          var origHtml = btn.innerHTML;
+          btn.classList.add('copied');
+          btn.textContent = '✓ コピー済 (' + textVal + ')';
+          setTimeout(function() {{
+            btn.classList.remove('copied');
+            btn.innerHTML = origHtml;
+          }}, 1200);
+        }}
+        if (navigator.clipboard && navigator.clipboard.writeText) {{
+          navigator.clipboard.writeText(textVal).then(markDone).catch(function() {{ fallbackCopy(textVal, markDone); }});
+        }} else {{
+          fallbackCopy(textVal, markDone);
+        }}
+      }}
+      function fallbackCopy(txt, cb) {{
+        try {{
+          var ta = document.createElement('textarea');
+          ta.value = txt;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          cb();
+        }} catch (e) {{}}
+      }}
+    </script></body></html>"""
+    components.html(html_code, height=height)
+
+
+def _compute_position_metrics(curr_px: float, entry_px: float, shares: int, init_sl: float, side: str, cur_vwap=None, last_ema9=None) -> dict:
+    is_long = (str(side).upper() != "SHORT")
+    dir_sgn = 1.0 if is_long else -1.0
+    ep = max(float(entry_px), 1e-4)
+    sh = max(int(shares), 1)
+    sl_val = float(init_sl) if (init_sl and float(init_sl) > 0) else (ep * 0.985 if is_long else ep * 1.015)
+    pnl = (float(curr_px) - ep) * sh * dir_sgn
+    pnl_pct = ((float(curr_px) - ep) / ep) * 100.0 * dir_sgn
+    risk_unit = max(abs(ep - sl_val), float(curr_px) * 0.002)
+    r_mult = ((float(curr_px) - ep) * dir_sgn) / risk_unit
+
+    sl_dist_pct = ((float(curr_px) - sl_val) / max(float(curr_px), 1e-4)) * 100.0 * dir_sgn
+    rem_loss = max(0.0, (float(curr_px) - sl_val) * sh * dir_sgn)
+
+    if r_mult >= 1.0:
+        cands = [ep]
+        if cur_vwap is not None and float(cur_vwap) > 0:
+            if (is_long and float(cur_vwap) < float(curr_px)) or (not is_long and float(cur_vwap) > float(curr_px)):
+                cands.append(float(cur_vwap))
+        if last_ema9 is not None and float(last_ema9) > 0:
+            if (is_long and float(last_ema9) < float(curr_px)) or (not is_long and float(last_ema9) > float(curr_px)):
+                cands.append(float(last_ema9))
+        trail_sl = round(max(cands) if is_long else min(cands), 2)
+        trail_note = "建値〜VWAP/9EMAへ引上げ"
+    else:
+        trail_sl = round(sl_val, 2)
+        trail_note = "初期SL維持（+1.0R待ち）"
+
+    if r_mult >= 1.0:
+        status_badge, badge_col = "🎯 +1.0R到達（半分利確＆建値撤退推奨）", "#fde047"
+    elif r_mult <= -0.8:
+        status_badge, badge_col = "🚨 SL接近・撤退厳守", "#ef4444"
+    elif pnl >= 0:
+        status_badge, badge_col = "🟢 含み益ホールド中", "#10b981"
+    else:
+        status_badge, badge_col = "🟡 含み損耐え圏内", "#f59e0b"
+
+    return {
+        "is_long": is_long, "side": "LONG" if is_long else "SHORT", "entry": ep, "shares": sh, "init_sl": sl_val,
+        "pnl": pnl, "pnl_pct": round(pnl_pct, 2), "r_mult": round(r_mult, 2), "sl_dist_pct": round(sl_dist_pct, 2),
+        "rem_loss": rem_loss, "trail_sl": trail_sl, "trail_note": trail_note, "status_badge": status_badge, "badge_col": badge_col,
+    }
+
+
+def _render_position_hud(fc: str, curr_px: float, is_jp: bool, default_side: str, default_sl: float, cur_vwap=None, last_ema9=None, key_suffix: str = "main", trigger_rerun_on_change: bool = False) -> dict:
+    active_key = f"dd_pos_active_{fc}"
+    side_key = f"dd_pos_side_{fc}"
+    entry_key = f"dd_pos_entry_{fc}"
+    shares_key = f"dd_pos_shares_{fc}"
+    sl_key = f"dd_pos_sl_{fc}"
+
+    if side_key not in st.session_state:
+        st.session_state[side_key] = "LONG" if str(default_side).upper() != "SHORT" else "SHORT"
+    if entry_key not in st.session_state or float(st.session_state[entry_key] or 0) <= 0:
+        st.session_state[entry_key] = float(round(curr_px)) if is_jp else float(round(curr_px, 2))
+    if shares_key not in st.session_state or int(st.session_state[shares_key] or 0) <= 0:
+        st.session_state[shares_key] = 100 if is_jp else 10
+    if sl_key not in st.session_state or float(st.session_state[sl_key] or 0) <= 0:
+        st.session_state[sl_key] = float(round(default_sl)) if (is_jp and default_sl > 0) else (float(round(default_sl, 2)) if default_sl > 0 else float(round(curr_px * 0.985, 2)))
+
+    prev_active = bool(st.session_state.get(active_key, False))
+    is_active = st.toggle("💼 保有ポジション管理HUD", key=f"{active_key}_{key_suffix}", value=prev_active)
+    if is_active != prev_active:
+        st.session_state[active_key] = is_active
+        if trigger_rerun_on_change:
+            st.rerun()
+
+    if not is_active:
+        return {"active": False}
+
+    ic1, ic2, ic3, ic4 = st.columns([1.0, 1.2, 1.0, 1.2])
+    pos_side = ic1.selectbox("売買", ["LONG", "SHORT"], index=0 if st.session_state[side_key] == "LONG" else 1, key=f"{side_key}_{key_suffix}", label_visibility="collapsed")
+    pos_entry = ic2.number_input("取得単価", min_value=0.01, value=float(st.session_state[entry_key]), step=1.0 if is_jp else 0.1, key=f"{entry_key}_{key_suffix}", label_visibility="collapsed")
+    pos_shares = ic3.number_input("株数", min_value=1, value=int(st.session_state[shares_key]), step=100 if is_jp else 1, key=f"{shares_key}_{key_suffix}", label_visibility="collapsed")
+    pos_sl = ic4.number_input("初期SL", min_value=0.01, value=float(st.session_state[sl_key]), step=1.0 if is_jp else 0.1, key=f"{sl_key}_{key_suffix}", label_visibility="collapsed")
+
+    changed_vals = (
+        str(st.session_state.get(side_key)) != str(pos_side)
+        or abs(float(st.session_state.get(entry_key, 0.0)) - float(pos_entry)) > 1e-6
+        or int(st.session_state.get(shares_key, 0)) != int(pos_shares)
+        or abs(float(st.session_state.get(sl_key, 0.0)) - float(pos_sl)) > 1e-6
+    )
+    st.session_state[side_key] = pos_side
+    st.session_state[entry_key] = float(pos_entry)
+    st.session_state[shares_key] = int(pos_shares)
+    st.session_state[sl_key] = float(pos_sl)
+
+    if changed_vals and trigger_rerun_on_change:
+        st.rerun()
+
+    pm = _compute_position_metrics(curr_px, pos_entry, int(pos_shares), pos_sl, pos_side, cur_vwap, last_ema9)
+    pnl_col = "#10b981" if pm["pnl"] >= 0 else "#ef4444"
+    pnl_sign = "+" if pm["pnl"] >= 0 else ""
+    loss_cls = " loss" if pm["pnl"] < 0 else ""
+    r_col = "#fde047" if pm["r_mult"] >= 1.0 else ("#10b981" if pm["r_mult"] >= 0 else "#ef4444")
+
+    st.markdown(
+        f'<div class="dd-pos-hud{loss_cls}">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
+        f'<span style="font-size:10.8px;font-weight:900;color:#f8fafc;">💼 {pm["side"]} {pm["shares"]:,}株 @ {_fmt_cur(pm["entry"], is_jp)}</span>'
+        f'<span style="font-family:JetBrains Mono,monospace;font-size:10px;font-weight:800;color:{pm["badge_col"]};">{html.escape(pm["status_badge"])}</span>'
+        f'</div>'
+        f'<div class="dd-pos-grid">'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">含み損益</div><div style="font-family:JetBrains Mono,monospace;font-size:11.5px;font-weight:800;color:{pnl_col};">{pnl_sign}{_fmt_cur(pm["pnl"], is_jp)} ({pm["pnl_pct"]:+.2f}%)</div></div>'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">現在 R倍数</div><div style="font-family:JetBrains Mono,monospace;font-size:11.5px;font-weight:800;color:{r_col};">{pm["r_mult"]:+.2f}R</div></div>'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">初期SL距離</div><div style="font-family:JetBrains Mono,monospace;font-size:11.5px;font-weight:800;color:#cbd5e1;">{pm["sl_dist_pct"]:+.2f}%</div></div>'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">推奨トレーリングSL</div><div style="font-family:JetBrains Mono,monospace;font-size:11.5px;font-weight:800;color:#38bdf8;">{_fmt_cur(pm["trail_sl"], is_jp)}</div></div>'
+        f'</div>'
+        f'<div style="font-size:9.5px;color:#94a3b8;margin-top:4px;">SL到達時リスク残: <b>{_fmt_cur(pm["rem_loss"], is_jp)}</b> ｜ 追従方針: <b>{html.escape(pm["trail_note"])}</b></div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    _render_copy_toolbar([
+        {"label": "推奨SL", "val": _fmt_raw_num(pm["trail_sl"], is_jp), "disp": _fmt_cur(pm["trail_sl"], is_jp), "color": "#38bdf8"},
+        {"label": "建値", "val": _fmt_raw_num(pm["entry"], is_jp), "disp": _fmt_cur(pm["entry"], is_jp), "color": "#fde047"},
+        {"label": "保有株数", "val": str(pm["shares"]), "disp": f"{pm['shares']:,}株", "color": "#10b981"},
+    ], height=34)
+
+    return {
+        "active": True, "side": pm["side"], "entry": pm["entry"], "shares": pm["shares"],
+        "sl": pm["init_sl"], "trail_sl": pm["trail_sl"],
+    }
+
+
+def _norm_cdf(x: float) -> float:
+    return 0.5 * math.erfc(-x / math.sqrt(2.0))
+
+
+def _calc_first_passage_prob(curr_px: float, target_px: float, rem_sigma_pct: float, rem_drift_pct: float = 0.0) -> float:
+    if curr_px <= 0 or target_px <= 0:
+        return 0.0
+    raw_dist = (target_px - curr_px) / curr_px
+    if abs(raw_dist) <= 1e-6:
+        return 99.0
+    b, mu_t = (raw_dist, rem_drift_pct) if raw_dist > 0 else (-raw_dist, -rem_drift_pct)
+    sig_t = max(rem_sigma_pct, 1e-4)
+    prob = (_norm_cdf((-b + mu_t) / sig_t) + math.exp(min((2.0 * mu_t * b) / (sig_t ** 2), 50.0)) * _norm_cdf((-b - mu_t) / sig_t)) * 100.0
+    return round(float(np.clip(prob, 1.0, 99.0)), 1)
+
+
+def _calc_two_barrier_tp_prob(curr_px: float, tp_px: float, sl_px: float, is_long: bool, rem_sigma_pct: float, rem_drift_pct: float = 0.0) -> float:
+    if curr_px <= 0 or tp_px <= 0 or sl_px <= 0:
+        return 0.0
+    if is_long:
+        if curr_px <= sl_px: return 0.0
+        if curr_px >= tp_px: return 99.0
+        d_tp, d_sl, mu = math.log(tp_px / curr_px), math.log(curr_px / sl_px), rem_drift_pct
+    else:
+        if curr_px >= sl_px: return 0.0
+        if curr_px <= tp_px: return 99.0
+        d_tp, d_sl, mu = math.log(curr_px / tp_px), math.log(sl_px / curr_px), -rem_drift_pct
+    sig2 = max(rem_sigma_pct ** 2, 1e-6)
+    if abs(mu) < 1e-5:
+        p_hit = d_sl / max(d_tp + d_sl, 1e-6)
+    else:
+        kd = (2.0 * mu) / sig2
+        den = math.exp(np.clip(kd * (d_tp + d_sl), -40.0, 40.0)) - 1.0
+        p_hit = (math.exp(np.clip(kd * d_sl, -40.0, 40.0)) - 1.0) / den if abs(den) > 1e-9 else (d_sl / max(d_tp + d_sl, 1e-6))
+    p_tp = _calc_first_passage_prob(curr_px, tp_px, rem_sigma_pct, rem_drift_pct) / 100.0
+    p_sl = _calc_first_passage_prob(curr_px, sl_px, rem_sigma_pct, rem_drift_pct) / 100.0
+    return round(float(np.clip(min(p_hit * min(1.0, p_tp + p_sl * (1.0 - p_tp)), p_tp) * 100.0, 1.0, 99.0)), 1)
+
+
+def _declutter_marklines(ml_list: list, curr_px: float, min_gap_pct: float = 0.45, avoid_left: bool = False) -> list:
+    if not ml_list:
+        return []
+    horiz, others = [], []
+    def _prio(t: str) -> int:
+        if t.startswith(("MY ENTRY", "MY SL")): return 110
+        if t.startswith(("TP ", "SL ")): return 100
+        if "+1.0R" in t: return 95
+        if "OB支持" in t or "窓埋目標" in t: return 90
+        if "節目" in t: return 85
+        if any(k in t for k in ("PDH", "PDL", "HOD", "LOD")): return 80
+        return 70 if "ORB" in t else 60
+    for item in ml_list:
+        if isinstance(item, dict) and item.get("yAxis") is not None:
+            try:
+                yv = float(item["yAxis"])
+                if math.isfinite(yv) and yv > 0:
+                    cp = json.loads(json.dumps(item))
+                    lbl = cp.get("label") if isinstance(cp.get("label"), dict) else {}
+                    horiz.append((yv, _prio(str(lbl.get("formatter", "")).strip()), cp))
+                    continue
+            except Exception:
+                pass
+        others.append(item)
+    if not horiz:
+        return others
+    horiz.sort(key=lambda x: x[0])
+    ref_base = max(curr_px if (curr_px and curr_px > 0) else float(np.mean([h[0] for h in horiz])), 1e-4)
+    merged = []
+    for yv, pr, obj in horiz:
+        if merged and abs(yv - merged[-1][0]) / ref_base * 100.0 < 0.22:
+            py, ppr, pobj = merged[-1]
+            lp = pobj.get("label", {}) if isinstance(pobj.get("label"), dict) else {}
+            lc = obj.get("label", {}) if isinstance(obj.get("label"), dict) else {}
+            tp, tc = str(lp.get("formatter", "")).strip(), str(lc.get("formatter", "")).strip()
+            if tc and tc not in tp:
+                lp["formatter"] = f"{tp} / {tc.split(' ')[0]}" if tp else tc
+                pobj["label"] = lp
+            if pr > ppr:
+                merged[-1] = (py, pr, pobj)
+            continue
+        merged.append((yv, pr, obj))
+    cl_gap = max(min_gap_pct * 2.2, 0.95)
+    clusters = []
+    for ent in merged:
+        if not clusters or abs(ent[0] - clusters[-1][-1][0]) / ref_base * 100.0 >= cl_gap:
+            clusters.append([ent])
+        else:
+            clusters[-1].append(ent)
+    pos_cycle = ["insideMiddleTop", "insideMiddleBottom"] if avoid_left else ["insideStartTop", "insideStartBottom"]
+    out_h = []
+    for cl in clusters:
+        top3 = {i for i, _ in sorted(enumerate(cl), key=lambda x: (-x[1][1], x[0]))[:3]} if len(cl) >= 4 else set(range(len(cl)))
+        vc = 0
+        for i, (_, _, obj) in enumerate(cl):
+            lbl = obj.get("label") if isinstance(obj.get("label"), dict) else {}
+            lbl["show"] = i in top3
+            if i in top3:
+                lbl["position"] = pos_cycle[vc % 2]
+                vc += 1
+            obj["label"] = lbl
+            out_h.append(obj)
+    return others + out_h
+
+
+def _declutter_pulse_points(pulse_pts: list, slots: list) -> list:
+    if not pulse_pts or not slots:
+        return pulse_pts
+    smap, n_tot = {sl: i for i, sl in enumerate(slots)}, len(slots)
+    def _sidx(pt):
+        v = pt.get("value")
+        return smap.get(str(v[0]), n_tot // 2) if (isinstance(v, (list, tuple)) and len(v) >= 1) else n_tot // 2
+    non_now = [_sidx(pt) for pt in pulse_pts if str(pt.get("name", "")) != "NOW"]
+    indexed = sorted([(i, _sidx(pt), json.loads(json.dumps(pt))) for i, pt in enumerate(pulse_pts)], key=lambda x: (x[1], 0 if str(x[2].get("name", "")) != "NOW" else 1))
+    last_s, last_top, cmap = None, True, {}
+    for orig_i, si, pt in indexed:
+        nm = str(pt.get("name", ""))
+        lbl = pt.get("label") if isinstance(pt.get("label"), dict) else {}
+        lbl.update({"align": "left" if si <= 4 else ("right" if si >= n_tot - 5 else "center"), "distance": 6, "backgroundColor": "rgba(7,11,20,0.88)", "padding": [1, 4], "borderRadius": 3})
+        if nm == "NOW" and any(abs(si - oi) <= 2 for oi in non_now):
+            lbl["show"] = False
+            pt["label"] = lbl; cmap[orig_i] = pt; continue
+        lbl["show"] = True
+        if nm == "押目":
+            lbl["position"], last_top = "bottom", False
+        elif nm == "高値":
+            lbl["position"], last_top = "top", True
+        elif last_s is not None and abs(si - last_s) <= 8:
+            last_top = not last_top
+            lbl["position"] = "top" if last_top else "bottom"
+        else:
+            lbl["position"], last_top = "top", True
+        pt["label"] = lbl; last_s = si; cmap[orig_i] = pt
+    return [cmap[i] for i in range(len(pulse_pts))]
+
+
+def _render_echarts(
+    option_dict: dict,
+    height: int = 300,
+    use_hud_tooltip: bool = False,
+    is_jp: bool = False,
+    enable_fullscreen: bool = False,
+    is_dual_grid: bool = False,
+    chart_key: str = "dd_chart_default",
+    finnhub_key: str = "",
+    live_symbol: str = "",
+    is_1m_mode: bool = False,
+    pos_ctx: dict = None,
+    alert_ctx: dict = None,
+):
+    opt_json = json.dumps(option_dict, ensure_ascii=False)
+    safe_ck = re.sub(r"[^A-Za-z0-9_\-]", "_", str(chart_key or "dd_chart_default"))
+    is_jp_js = "true" if is_jp else "false"
+    fh_key_js = json.dumps(str(finnhub_key or "").strip())
+    fh_sym_js = json.dumps(str(live_symbol or "").strip().upper())
+    is_1m_js = "true" if is_1m_mode else "false"
+    pos_ctx_js = json.dumps(pos_ctx if isinstance(pos_ctx, dict) else {"active": False}, ensure_ascii=False)
+    alert_ctx_js = json.dumps(alert_ctx if isinstance(alert_ctx, dict) else {}, ensure_ascii=False)
+
+    hud_js = f"""
+    if ({'true' if use_hud_tooltip else 'false'}) {{
+      opt.tooltip = {{
+        trigger:'axis',confine:true,backgroundColor:'transparent',borderWidth:0,padding:0,extraCssText:'display:none !important;pointer-events:none !important;',
+        axisPointer:{{type:'cross',lineStyle:{{color:'rgba(56,189,248,0.5)',type:'dashed',width:1}},crossStyle:{{color:'rgba(56,189,248,0.32)'}},label:{{backgroundColor:'#0f172a',borderColor:'#38bdf8',borderWidth:1,fontSize:9}}}},
+        formatter:function(params){{
+          var hudEl=document.getElementById('hud-line');if(!params||!params.length)return '';
+          var parts=['<span style="color:#7dd3fc;font-weight:800;">'+params[0].axisValue+'</span>'];
+          var sm={{'当日実測':'実測','ライブ修正':'ライブ','朝ロック':'ロック','朝ロック(無効化済)':'旧想定','VWAP':'VWAP','類似実測(Top-1)':'類似1位','上昇分岐':'▲上','横ばい分岐':'▶横','下落分岐':'▼下','9EMA':'9EMA','20EMA':'20EMA'}};
+          for(var i=0;i<params.length;i++){{
+            var p=params[i];
+            if(p.seriesName==='1分足'&&Array.isArray(p.value)&&p.value.length>=5){{
+              var o=Number(p.value[1]),c=Number(p.value[2]),l=Number(p.value[3]),h=Number(p.value[4]);
+              if(!isNaN(o)){{var f=function(x){{return {is_jp_js}?Math.round(x).toLocaleString():x.toFixed(2);}};parts.push('始:<b>'+f(o)+'</b> 高:<b>'+f(h)+'</b> 安:<b>'+f(l)+'</b> 終:<b>'+f(c)+'</b>');}}
+            }}else if(sm[p.seriesName]&&p.value!=null){{
+              var v=Number(p.value),vs={is_jp_js}?Math.round(v).toLocaleString()+'円':'$'+v.toFixed(2);
+              parts.push('<span style="color:'+p.color+';">●</span>'+sm[p.seriesName]+':<b>'+vs+'</b>');
+            }}else if(p.seriesName==='疑似CVD'&&p.value!=null){{
+              var cv=Number(p.value),ac=Math.abs(cv),cs=ac>=1e8?(cv/1e8).toFixed(2)+'億':(ac>=1e4?(cv/1e4).toFixed(1)+'万':Math.round(cv).toLocaleString());
+              parts.push('<span style="color:#22d3ee;">●</span>CVD:<b>'+(cv>=0?'+':'')+cs+'</b>');
+            }}
+          }}
+          if(hudEl)hudEl.innerHTML=parts.join(' ');return '';
+        }}
+      }};
+    }}
+    """
+
+    sound_and_ws_js = f"""
+    var FH_KEY = {fh_key_js};
+    var FH_SYM = {fh_sym_js};
+    var IS_1M_MODE = {is_1m_js};
+    var IS_JP_CHART = {is_jp_js};
+    var POS_CTX = {pos_ctx_js};
+    var ALERT_CTX = {alert_ctx_js};
+    var HAS_WS_CONN = Boolean(FH_KEY && FH_SYM && !IS_JP_CHART);
+    var SOUND_KEY = 'dd_sound_enabled';
+
+    var soundEnabled = false;
+    try {{
+      soundEnabled = (sessionStorage.getItem(SOUND_KEY) === '1');
+    }} catch (e) {{}}
+    var audioCtx = null;
+    var lastAlertTs = {{}};
+
+    function ensureAudioCtx() {{
+      try {{
+        if (!audioCtx) {{
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) audioCtx = new AC();
+        }}
+        if (audioCtx && audioCtx.state === 'suspended') {{
+          audioCtx.resume();
+        }}
+      }} catch (e) {{}}
+    }}
+
+    document.addEventListener('pointerdown', function() {{
+      if (soundEnabled) ensureAudioCtx();
+    }}, {{ passive: true }});
+
+    function playBeep(freq, durMs, oscType) {{
+      if (!soundEnabled) return;
+      try {{
+        ensureAudioCtx();
+        if (!audioCtx) return;
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = oscType || 'sine';
+        osc.frequency.setValueAtTime(freq || 880, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.14, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (durMs || 140) / 1000.0);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + (durMs || 140) / 1000.0);
+      }} catch (e) {{}}
+    }}
+
+    function speakAlert(txt) {{
+      if (!soundEnabled || !txt) return;
+      try {{
+        if ('speechSynthesis' in window) {{
+          window.speechSynthesis.cancel();
+          var u = new SpeechSynthesisUtterance(txt);
+          u.lang = 'ja-JP';
+          u.rate = 1.15;
+          window.speechSynthesis.speak(u);
+        }}
+      }} catch (e) {{}}
+    }}
+
+    function fireCooldownedAlert(key, freq, durMs, oscType, speechText) {{
+      var now = Date.now();
+      if (lastAlertTs[key] && (now - lastAlertTs[key]) < 60000) return;
+      lastAlertTs[key] = now;
+      playBeep(freq, durMs, oscType);
+      speakAlert(speechText);
+    }}
+
+    function checkPriceAlerts(px) {{
+      if (!soundEnabled || !ALERT_CTX || !px || px <= 0) return;
+      var sym = String(ALERT_CTX.symbol || '');
+      var isLong = (ALERT_CTX.is_long !== false);
+      var elo = Number(ALERT_CTX.entry_lo || 0);
+      var ehi = Number(ALERT_CTX.entry_hi || 0);
+      var hr = Number(ALERT_CTX.half_r || 0);
+      var tp = Number(ALERT_CTX.tp || 0);
+      var sl = Number(ALERT_CTX.sl || 0);
+
+      if (elo > 0 && ehi >= elo && px >= elo && px <= ehi) {{
+        fireCooldownedAlert('ENTRY', 660, 140, 'sine', sym + '、エントリーゾーン到達');
+      }}
+      if (hr > 0 && ((isLong && px >= hr) || (!isLong && px <= hr))) {{
+        fireCooldownedAlert('HALFR', 980, 150, 'triangle', 'プラス1R到達、半分利確ラインです');
+      }}
+      if (tp > 0 && ((isLong && px >= tp) || (!isLong && px <= tp))) {{
+        fireCooldownedAlert('TP', 1175, 200, 'sine', '利確目標到達');
+      }}
+      if (sl > 0 && ((isLong && px <= sl * 1.0015) || (!isLong && px >= sl * 0.9985))) {{
+        fireCooldownedAlert('SL', 320, 260, 'sawtooth', '損切りライン警戒');
+      }}
+    }}
+
+    function applySoundBtnVisual() {{
+      var sb = document.getElementById('snd-btn');
+      if (!sb) return;
+      if (soundEnabled) {{
+        sb.textContent = HAS_WS_CONN ? '🔊 音声ON(WS)' : '🔊 音声ON(更新時)';
+        sb.title = HAS_WS_CONN ? 'リアルタイムWS価格到達で音声通知中' : '更新時判定（画面操作後に有効）：手動/自動更新ごとに価格到達を判定します';
+        sb.style.borderColor = '#10b981';
+        sb.style.color = '#6ee7b7';
+        sb.style.background = 'rgba(16,185,129,0.20)';
+      }} else {{
+        sb.textContent = '🔇 音声OFF';
+        sb.title = HAS_WS_CONN ? '価格到達・ブレイク音声アラート切替' : '価格到達・ブレイク音声アラート切替（更新時判定・画面操作後に有効）';
+        sb.style.borderColor = 'rgba(148,163,184,0.35)';
+        sb.style.color = '#94a3b8';
+        sb.style.background = '#0f172a';
+      }}
+    }}
+
+    function triggerInitialAlertChecks() {{
+      if (!soundEnabled) return;
+      if (ALERT_CTX && (ALERT_CTX.exp_dir === 'UP' || ALERT_CTX.exp_dir === 'DOWN')) {{
+        fireCooldownedAlert('EXP_INIT', 740, 140, 'triangle', 'ブレイクモード稼働中');
+      }} else if (ALERT_CTX && (ALERT_CTX.cvd_state === 'DISTRIBUTION' || ALERT_CTX.cvd_state === 'ABSORPTION')) {{
+        fireCooldownedAlert('CVD_INIT', 620, 140, 'triangle', 'CVDダイバージェンス検知');
+      }}
+      var initPx = (typeof latestPx !== 'undefined' && latestPx !== null) ? latestPx : Number(ALERT_CTX && ALERT_CTX.curr_px ? ALERT_CTX.curr_px : 0);
+      if (initPx > 0) {{
+        checkPriceAlerts(initPx);
+      }}
+    }}
+
+    function toggleSound() {{
+      soundEnabled = !soundEnabled;
+      try {{
+        sessionStorage.setItem(SOUND_KEY, soundEnabled ? '1' : '0');
+      }} catch (e) {{}}
+      applySoundBtnVisual();
+      if (soundEnabled) {{
+        playBeep(880, 90, 'sine');
+        triggerInitialAlertChecks();
+      }}
+    }}
+
+    (function initSoundState() {{
+      applySoundBtnVisual();
+      if (soundEnabled) {{
+        triggerInitialAlertChecks();
+      }}
+    }})();
+
+    function buildPosHudSnippet(pxVal) {{
+      if (!POS_CTX || !POS_CTX.active || !pxVal || pxVal <= 0) return '';
+      var ep = Number(POS_CTX.entry || 0);
+      var sh = Number(POS_CTX.shares || 0);
+      var sl = Number(POS_CTX.sl || 0);
+      var sgn = (String(POS_CTX.side || 'LONG').toUpperCase() === 'SHORT') ? -1 : 1;
+      if (ep <= 0 || sh <= 0) return '';
+      var pnl = (pxVal - ep) * sh * sgn;
+      var ru = Math.max(Math.abs(ep - sl), pxVal * 0.002);
+      var rm = ((pxVal - ep) * sgn) / ru;
+      var pCol = pnl >= 0 ? '#10b981' : '#ef4444';
+      var pSgn = pnl >= 0 ? '+' : '-';
+      var rSgn = rm >= 0 ? '+' : '';
+      var pnlTxt = IS_JP_CHART ? (Math.round(Math.abs(pnl)).toLocaleString() + '円') : ('$' + Math.abs(pnl).toFixed(2));
+      return ' &nbsp;|&nbsp; <span style="color:#fde047;font-weight:800;">POS:</span> <b style="color:' + pCol + ';">' +
+             pSgn + pnlTxt + ' (' + rSgn + rm.toFixed(2) + 'R)</b>';
+    }}
+
+    if (HAS_WS_CONN) {{
+      var ws = null;
+      var latestPx = null;
+      var prevTickPx = null;
+      var dirty = false;
+      var wsHadError = false;
+
+      function setWsStatusBadge(htmlStr, borderCol) {{
+        var wsEl = document.getElementById('ws-live-badge');
+        if (wsEl) {{
+          wsEl.style.display = 'inline-flex';
+          if (borderCol) wsEl.style.borderColor = borderCol;
+          wsEl.innerHTML = htmlStr;
+        }}
+      }}
+
+      setWsStatusBadge('<span style="color:#38bdf8;font-weight:800;">🔵 WS接続中...</span>', 'rgba(56,189,248,0.40)');
+
+      function connectFinnhubWS() {{
+        wsHadError = false;
+        try {{
+          ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(FH_KEY));
+        }} catch (err) {{
+          setWsStatusBadge('<span style="color:#ef4444;font-weight:800;">🔴 WSエラー</span>', 'rgba(239,68,68,0.45)');
+          setTimeout(connectFinnhubWS, 4000);
+          return;
+        }}
+
+        ws.onopen = function() {{
+          setWsStatusBadge('<span style="color:#10b981;font-weight:800;">🟢 LIVE WS</span>&nbsp;<span style="color:#94a3b8;">' + FH_SYM + '</span>', 'rgba(16,185,129,0.40)');
+          try {{
+            ws.send(JSON.stringify({{ type: 'subscribe', symbol: FH_SYM }}));
+          }} catch (e) {{}}
+        }};
+
+        ws.onmessage = function(evt) {{
+          try {{
+            var msg = JSON.parse(evt.data);
+            if (msg && msg.type === 'error') {{
+              wsHadError = true;
+              setWsStatusBadge('<span style="color:#ef4444;font-weight:800;">🔴 WS認証/制限エラー</span>', 'rgba(239,68,68,0.45)');
+              return;
+            }}
+            if (msg && msg.type === 'trade' && Array.isArray(msg.data) && msg.data.length > 0) {{
+              var lastTr = msg.data[msg.data.length - 1];
+              var px = Number(lastTr.p);
+              if (!isNaN(px) && px > 0) {{
+                if (latestPx !== null) prevTickPx = latestPx;
+                latestPx = px;
+                dirty = true;
+              }}
+            }}
+          }} catch (e) {{}}
+        }};
+
+        ws.onerror = function() {{
+          wsHadError = true;
+          setWsStatusBadge('<span style="color:#ef4444;font-weight:800;">🔴 WSエラー</span>', 'rgba(239,68,68,0.45)');
+        }};
+
+        ws.onclose = function() {{
+          if (!wsHadError) {{
+            setWsStatusBadge('<span style="color:#f59e0b;font-weight:800;">🟡 再接続中...</span>', 'rgba(245,158,11,0.45)');
+          }}
+          setTimeout(connectFinnhubWS, 3500);
+        }};
+      }}
+
+      setInterval(function() {{
+        if (!dirty || latestPx === null) return;
+        dirty = false;
+
+        var pxRounded = Number(latestPx.toFixed(2));
+        checkPriceAlerts(pxRounded);
+
+        var tickCol = '#38bdf8';
+        var tickArrow = '';
+        if (prevTickPx !== null) {{
+          if (pxRounded > prevTickPx) {{
+            tickCol = '#10b981';
+            tickArrow = '▲';
+          }} else if (pxRounded < prevTickPx) {{
+            tickCol = '#ef4444';
+            tickArrow = '▼';
+          }}
+        }}
+
+        setWsStatusBadge(
+          '<span style="color:#10b981;font-weight:800;">🟢 LIVE WS</span>&nbsp;' +
+          '<b style="color:' + tickCol + ';font-size:10.5px;">$' + pxRounded.toFixed(2) + tickArrow + '</b>',
+          'rgba(16,185,129,0.40)'
+        );
+
+        var hudEl = document.getElementById('hud-line');
+        if (hudEl && !isUserHovering) {{
+          hudEl.innerHTML = '<span style="color:#10b981;font-weight:800;">● REALTIME</span> ' +
+                            '<span style="color:#7dd3fc;font-weight:800;">' + FH_SYM + '</span>: ' +
+                            '<b style="color:' + tickCol + ';font-size:10.8px;">$' + pxRounded.toFixed(2) + ' ' + tickArrow + '</b>' +
+                            buildPosHudSnippet(pxRounded);
+        }}
+
+        var curOpt = chart.getOption();
+        if (!curOpt || !Array.isArray(curOpt.series)) return;
+
+        var updatedSeries = [];
+        for (var i = 0; i < curOpt.series.length; i++) {{
+          var s = curOpt.series[i];
+          if (!IS_1M_MODE && s.name === '当日実測' && Array.isArray(s.data)) {{
+            var idx = -1;
+            for (var j = s.data.length - 1; j >= 0; j--) {{
+              if (s.data[j] !== null && s.data[j] !== undefined) {{
+                idx = j;
+                break;
+              }}
+            }}
+            if (idx >= 0) {{
+              s.data[idx] = pxRounded;
+              updatedSeries.push({{ name: '当日実測', data: s.data }});
+            }}
+          }} else if (!IS_1M_MODE && s.name === '重要点' && Array.isArray(s.data)) {{
+            var changedPt = false;
+            for (var pIdx = 0; pIdx < s.data.length; pIdx++) {{
+              var pt = s.data[pIdx];
+              if (pt && pt.name === 'NOW' && Array.isArray(pt.value) && pt.value.length >= 2) {{
+                pt.value[1] = pxRounded;
+                changedPt = true;
+              }}
+            }}
+            if (changedPt) {{
+              updatedSeries.push({{ name: '重要点', data: s.data }});
+            }}
+          }} else if (IS_1M_MODE && s.name === '1分足' && Array.isArray(s.data)) {{
+            var k = s.data.length - 11;
+            if (k >= 0 && Array.isArray(s.data[k]) && s.data[k][0] !== '-') {{
+              var bar = s.data[k];
+              bar[1] = pxRounded;
+              var curLo = Number(bar[2]);
+              var curHi = Number(bar[3]);
+              if (!isNaN(curLo)) bar[2] = Number(Math.min(curLo, pxRounded).toFixed(2));
+              if (!isNaN(curHi)) bar[3] = Number(Math.max(curHi, pxRounded).toFixed(2));
+              updatedSeries.push({{ name: '1分足', data: s.data }});
+            }}
+          }}
+        }}
+
+        if (updatedSeries.length > 0) {{
+          chart.setOption({{ series: updatedSeries }}, {{ notMerge: false, lazyUpdate: true }});
+        }}
+      }}, 250);
+
+      connectFinnhubWS();
+      window.addEventListener('beforeunload', function() {{
+        if (ws) {{
+          ws.onclose = null;
+          try {{ ws.close(); }} catch (e) {{}}
+        }}
+      }});
+    }}
+    """
+
+    top_bar = (
+        '<div id="top-bar">'
+        '<div id="ws-live-badge" style="display:none;align-items:center;background:#0f172a;border:1px solid rgba(56,189,248,.40);border-radius:4px;padding:1px 6px;font-family:\'JetBrains Mono\',monospace;font-variant-numeric:tabular-nums;font-size:9.5px;flex-shrink:0;"></div>'
+        '<div id="hud-line">👆 タップ / ホバーで精密数値表示</div>'
+        '<div id="ctrl-bar"><span id="fs-hint">自動更新OFF中のみ安定</span>'
+        '<button id="snd-btn" onclick="toggleSound()" title="価格到達・ブレイク音声アラート切替">🔇 音声OFF</button>'
+        '<button id="rst-btn" onclick="resetZoom()" title="拡大ズームを初期状態へリセット">↺</button>'
+        '<button id="fs-btn" onclick="toggleFS()" title="スマホ横向きフル大画面">⛶ 横拡大</button></div></div>'
+    ) if (enable_fullscreen or use_hud_tooltip) else ""
+
+    html_code = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>html,body{{width:100%;height:100%;margin:0;padding:0;background:#070b14;overflow:hidden;}}#wrap{{display:flex;flex-direction:column;width:100%;height:100%;background:#070b14;overflow:hidden;}}#wrap.force-landscape{{position:fixed!important;top:0!important;left:100vw!important;transform:rotate(90deg)!important;transform-origin:top left!important;z-index:999999!important;}}#top-bar{{height:28px;min-height:28px;max-height:28px;background:#0b1120;border-bottom:1px solid rgba(148,163,184,.16);display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 6px;box-sizing:border-box;flex-shrink:0;}}#hud-line{{flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:9.8px;color:#94a3b8;white-space:nowrap;overflow-x:auto;scrollbar-width:none;}}#hud-line::-webkit-scrollbar{{display:none;}}#hud-line b{{color:#f8fafc;}}#ctrl-bar{{display:inline-flex;align-items:center;gap:4px;flex-shrink:0;}}#fs-hint{{display:none;background:#0f172a;color:#fde047;border:1px solid rgba(250,204,21,.35);border-radius:4px;padding:1px 5px;font-size:8.6px;font-weight:700;font-family:'JetBrains Mono',sans-serif;white-space:nowrap;}}#wrap.is-fs #fs-hint{{display:inline-block;}}#snd-btn,#rst-btn,#fs-btn{{background:#0f172a;color:#7dd3fc;border:1px solid rgba(56,189,248,.38);border-radius:5px;padding:1.5px 6px;font-size:9.5px;font-weight:700;cursor:pointer;font-family:'JetBrains Mono',sans-serif;line-height:1.2;}}#snd-btn{{border-color:rgba(148,163,184,.35);color:#94a3b8;}}#rst-btn{{padding:1.5px 5px;color:#cbd5e1;}}#rst-btn:active,#fs-btn:active{{background:rgba(56,189,248,.22);}}#c{{flex:1;min-height:0;width:100%;}}</style>
+    </head><body><div id="wrap">{top_bar}<div id="c"></div></div><script>
+      var STORAGE_KEY='dd_dz_'+{json.dumps(safe_ck)},IS_DUAL={'true' if is_dual_grid else 'false'},ENABLE_FS={'true' if enable_fullscreen else 'false'},USE_HUD={'true' if use_hud_tooltip else 'false'};
+      var isUserHovering=false;
+      var osOrientationLocked=false;
+      var wakeLockSentinel=null;
+      var el=document.getElementById('c'),wrap=document.getElementById('wrap'),btn=document.getElementById('fs-btn');
+      var chart=echarts.init(el,'dark',{{renderer:'canvas',devicePixelRatio:Math.min(window.devicePixelRatio||2,3)}}),opt={opt_json};
+      opt.animationDuration=280;opt.animationDurationUpdate=220;opt.animationEasing='cubicOut';
+      if(opt.legend){{Object.assign(opt.legend,{{type:'scroll',top:2,left:6,right:8,pageIconColor:'#7dd3fc',pageIconInactiveColor:'#475569',pageTextStyle:{{color:'#94a3b8',fontSize:9}}}});}}
+      if(IS_DUAL&&Array.isArray(opt.yAxis)&&opt.yAxis.length>=3){{opt.yAxis[2].axisLabel=Object.assign({{}},opt.yAxis[2].axisLabel||{{}},{{formatter:function(v){{var n=Number(v);if(isNaN(n))return v;var a=Math.abs(n),s=n<0?'-':'';return a>=1e8?s+(a/1e8).toFixed(1)+'億':(a>=1e4?s+Math.round(a/1e4)+'万':Math.round(n).toString());}}}});}}
+      {hud_js}
+      var savedZoom=null;try{{var rz=sessionStorage.getItem(STORAGE_KEY);if(rz){{var pz=JSON.parse(rz);if(pz&&typeof pz.start==='number'&&typeof pz.end==='number')savedZoom=pz;}}}}catch(e){{}}
+      var origGridNormal=opt.grid?JSON.parse(JSON.stringify(opt.grid)):null;
+      if(opt.dataZoom&&Array.isArray(opt.dataZoom)&&opt.dataZoom.length>0){{
+        var xt=IS_DUAL?[0,1]:0,zs=savedZoom?savedZoom.start:0,ze=savedZoom?savedZoom.end:100;
+        opt.dataZoom=[{{type:'inside',xAxisIndex:xt,filterMode:'none',throttle:16,start:zs,end:ze}},{{type:'slider',show:false,xAxisIndex:xt,filterMode:'none',throttle:16,height:IS_DUAL?16:18,bottom:IS_DUAL?5:6,borderColor:'rgba(56,189,248,0.35)',fillerColor:'rgba(56,189,248,0.18)',textStyle:{{color:'#94a3b8',fontSize:9}},start:zs,end:ze}}];
+      }}
+      chart.setOption(opt);
+      if(USE_HUD){{
+        chart.getZr().on('mousemove',function(){{isUserHovering=true;}});
+        chart.getZr().on('globalout',function(){{isUserHovering=false;var h=document.getElementById('hud-line');if(h)h.innerHTML='👆 タップ / ホバーで精密数値表示';}});
+      }}
+      chart.on('datazoom',function(){{try{{var d0=chart.getOption().dataZoom[0];if(typeof d0.start==='number'&&typeof d0.end==='number')sessionStorage.setItem(STORAGE_KEY,JSON.stringify({{start:d0.start,end:d0.end}}));}}catch(e){{}}}});
+      function resetZoom(){{try{{sessionStorage.removeItem(STORAGE_KEY);}}catch(e){{}}chart.dispatchAction({{type:'dataZoom',start:0,end:100}});}}
+      function getCurZoomRange(){{try{{var d0=chart.getOption().dataZoom[0];return {{start:d0.start||0,end:d0.end||100}};}}catch(e){{}}return {{start:0,end:100}};}}
+      async function requestScreenWakeLock(){{
+        try{{
+          if('wakeLock' in navigator && !wakeLockSentinel){{
+            wakeLockSentinel = await navigator.wakeLock.request('screen');
+            wakeLockSentinel.addEventListener('release', function(){{ wakeLockSentinel = null; }});
+          }}
+        }}catch(e){{}}
+      }}
+      function releaseScreenWakeLock(){{
+        try{{
+          if(wakeLockSentinel){{
+            wakeLockSentinel.release();
+            wakeLockSentinel = null;
+          }}
+        }}catch(e){{}}
+      }}
+      function applyLayout(isFS){{
+        var topH=document.getElementById('top-bar')?28:0;
+        if(!isFS){{
+          if(wrap){{wrap.classList.remove('is-fs','force-landscape');wrap.style.cssText='display:flex;flex-direction:column;width:100%;height:100%;background:#070b14;overflow:hidden;';}}
+          var wN=wrap?wrap.clientWidth:el.clientWidth,hN=wrap?Math.max(wrap.clientHeight-topH,80):el.clientHeight;
+          wN>0&&hN>0?chart.resize({{width:wN,height:hN}}):chart.resize();
+          return;
+        }}
+        if(wrap)wrap.classList.add('is-fs');
+        var w=window.innerWidth,h=window.innerHeight;
+        if(!osOrientationLocked && h>w){{
+          if(wrap){{wrap.classList.add('force-landscape');wrap.style.width=h+'px';wrap.style.height=w+'px';}}
+          chart.resize({{width:h,height:Math.max(w-topH,100)}});
+        }}else{{
+          if(wrap){{wrap.classList.remove('force-landscape');wrap.style.width='100%';wrap.style.height='100%';}}
+          chart.resize({{width:w,height:Math.max(h-topH,100)}});
+        }}
+      }}
+      function updateZoomMode(isFS){{
+        if(!opt.dataZoom)return;var zr=getCurZoomRange(),xt=IS_DUAL?[0,1]:0,ng=origGridNormal;
+        if(isFS){{if(IS_DUAL&&Array.isArray(origGridNormal)&&origGridNormal.length>=2){{ng=[{{top:40,height:'53%',left:6,right:origGridNormal[0].right,containLabel:false}},{{top:'70%',height:'15%',left:6,right:origGridNormal[1].right,containLabel:false}}];}}else if(origGridNormal&&!Array.isArray(origGridNormal)){{ng=Object.assign({{}},origGridNormal,{{bottom:44,top:40}});}}}}
+        chart.setOption({{grid:ng,dataZoom:[{{type:'inside',xAxisIndex:xt,filterMode:'none',throttle:16,start:zr.start,end:zr.end}},{{type:'slider',show:isFS,xAxisIndex:xt,filterMode:'none',throttle:16,start:zr.start,end:zr.end}}]}});
+      }}
+      function toggleFS(){{
+        if(!ENABLE_FS)return;var d=document,isFS=!!(d.fullscreenElement||d.webkitFullscreenElement);
+        if(!isFS){{
+          var t=d.documentElement,rq=t.requestFullscreen||t.webkitRequestFullscreen;
+          if(rq)Promise.resolve(rq.call(t)).then(function(){{
+            requestScreenWakeLock();
+            if(screen.orientation&&screen.orientation.lock){{
+              screen.orientation.lock('landscape').then(function(){{
+                osOrientationLocked=true;
+                applyLayout(true);
+              }}).catch(function(){{
+                osOrientationLocked=false;
+                applyLayout(true);
+              }});
+            }}else{{
+              osOrientationLocked=false;
+            }}
+            setTimeout(function(){{applyLayout(true);}},180);
+            setTimeout(function(){{applyLayout(true);}},420);
+          }}).catch(function(){{}});
+        }}else{{
+          osOrientationLocked=false;
+          releaseScreenWakeLock();
+          var ex=d.exitFullscreen||d.webkitExitFullscreen;
+          if(ex)ex.call(d);
+          if(screen.orientation&&screen.orientation.unlock)try{{screen.orientation.unlock();}}catch(e){{}}
+        }}
+      }}
+      function onFSChange(){{
+        var isFS=!!(document.fullscreenElement||document.webkitFullscreenElement);
+        if(!isFS){{
+          osOrientationLocked=false;
+          releaseScreenWakeLock();
+        }}else{{
+          requestScreenWakeLock();
+        }}
+        if(btn)btn.textContent=isFS?'✕ 戻す':'⛶ 横拡大';
+        updateZoomMode(isFS);
+        [0,120,350,650].forEach(function(ms){{setTimeout(function(){{applyLayout(isFS);}},ms);}});
+      }}
+      var rt=null;function scheduleResize(){{if(rt)clearTimeout(rt);rt=setTimeout(function(){{applyLayout(!!(document.fullscreenElement||document.webkitFullscreenElement));}},80);}}
+      window.addEventListener('resize',scheduleResize);if(typeof ResizeObserver!=='undefined')new ResizeObserver(scheduleResize).observe(wrap||el);
+      if(ENABLE_FS){{
+        document.addEventListener('fullscreenchange',onFSChange);
+        document.addEventListener('webkitfullscreenchange',onFSChange);
+        document.addEventListener('visibilitychange',function(){{
+          if(document.visibilityState==='visible' && (document.fullscreenElement||document.webkitFullscreenElement)){{
+            requestScreenWakeLock();
+          }}
+        }});
+        window.addEventListener('orientationchange',function(){{setTimeout(function(){{applyLayout(!!(document.fullscreenElement||document.webkitFullscreenElement));}},240);}});
+      }}
+      setTimeout(scheduleResize,90);setTimeout(scheduleResize,320);
+      {sound_and_ws_js}
+    </script></body></html>"""
+    components.html(html_code, height=height + 2)
+
+
+def _render_live_clock(sync_interval: int = 60, active: bool = True):
+    dot_col, st_lbl, b_col, l_col = ("#10b981", "LIVE SYNC", "rgba(16,185,129,.28)", "#6ee7b7") if active else ("#64748b", "STATIC HOLD", "rgba(148,163,184,.20)", "#94a3b8")
+    r_html = f'AUTO <span id="cd" class="cnt">{sync_interval}s</span>' if active else '<span>手動更新モード（横拡大・精査保護中）</span>'
+    components.html(f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>html,body{{width:100%;margin:0;padding:0;background:transparent;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}}.bar{{display:flex;justify-content:space-between;align-items:center;background:#0b1120;border:1px solid {b_col};border-radius:6px;padding:2.5px 9px;font-size:9.8px;color:#e2e8f0;}}.dot{{width:6px;height:6px;background:{dot_col};border-radius:50%;display:inline-block;margin-right:5px;}}.left{{display:flex;align-items:center;color:{l_col};font-weight:700;}}.right{{color:#64748b;font-size:9.2px;}}.cnt{{color:#38bdf8;font-weight:700;}}</style></head><body><div class="bar"><div class="left"><span class="dot"></span>{st_lbl} <span id="clk" style="margin-left:7px;color:#f8fafc;">--:--:--</span> JST</div><div class="right">{r_html}</div></div><script>var rem={sync_interval},act={'true' if active else 'false'};function tick(){{var n=new Date(),j=new Date(n.getTime()+(n.getTimezoneOffset()+540)*60000);document.getElementById('clk').textContent=String(j.getHours()).padStart(2,'0')+':'+String(j.getMinutes()).padStart(2,'0')+':'+String(j.getSeconds()).padStart(2,'0');if(act){{var cd=document.getElementById('cd');if(cd)cd.textContent=rem+'s';rem=rem>1?rem-1:{sync_interval};}}}}tick();setInterval(tick,1000);</script></body></html>""", height=24)
+
+
+def _build_spark_svg(prices: np.ndarray) -> str:
+    if len(prices) < 2:
+        return ""
+    p_min, span = float(np.min(prices)), max(float(np.max(prices)) - float(np.min(prices)), 1e-4)
+    pts = [f"{round((i/max(len(prices)-1,1))*88.0,1)},{round(22.0-((float(p)-p_min)/span)*20.0,1)}" for i, p in enumerate(prices)]
+    return f'<svg width="88" height="22" viewBox="0 0 88 24" style="display:block;margin-left:auto;"><polyline fill="none" stroke="{"#10b981" if prices[-1]>=prices[0] else "#ef4444"}" stroke-width="1.6" points="{" ".join(pts)}"/></svg>'
+
+
+def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, short_3way: dict, exp_reg: dict, active_dip_time: str, active_peak_time: str, cur_vwap_now, curr_px: float, is_jp: bool, active_lab, is_1m_zoom: bool = False, zoom_1m_data: dict = None, lvn_zones: list = None):
+    exp_active, exp_dir = bool(exp_reg.get("active")), exp_reg.get("dir", "NONE")
+    sw_l = lambda c, st="solid", w=2: f'<span style="display:inline-block;width:13px;height:0;border-top:{w}px {st} {c};flex-shrink:0;"></span>'
+    sw_b = lambda bg, bd: f'<span style="display:inline-block;width:13px;height:8px;background:{bg};border:1px solid {bd};border-radius:2px;flex-shrink:0;"></span>'
+    tri_sw = '<span style="display:inline-flex;flex-direction:column;gap:2px;width:13px;flex-shrink:0;"><span style="border-top:1.5px dashed #10b981;"></span><span style="border-top:1.5px dotted #94a3b8;"></span><span style="border-top:1.5px dashed #ef4444;"></span></span>'
+
+    if is_1m_zoom and isinstance(zoom_1m_data, dict) and zoom_1m_data.get("valid"):
+        e9, e20 = zoom_1m_data.get("last_ema9", curr_px), zoom_1m_data.get("last_ema20", curr_px)
+        if curr_px >= e9 >= e20:
+            b_cls, b_txt = "dd-trans-banner exp-up", "⚡ 1分足ズーム(直近90分)：パーフェクトオーダー上昇中（現在値 > 9EMA > 20EMA）→ 9EMA押し目買い優位"
+        elif curr_px <= e9 <= e20:
+            b_cls, b_txt = "dd-trans-banner exp-down", "⚡ 1分足ズーム(直近90分)：パーフェクトオーダー下落中（現在値 < 9EMA < 20EMA）→ 9EMA戻り売り・撤退優位"
+        else:
+            b_cls, b_txt = "dd-trans-banner", "⚡ 1分足ズーム(直近90分)：9EMAと20EMAが交錯する揉み合い局面 → 下段CVDとVWAPの方向確定待ち"
+        c_sw = '<span style="display:inline-flex;align-items:center;gap:2px;width:13px;flex-shrink:0;"><span style="display:inline-block;width:5px;height:8px;background:#10b981;border-radius:1px;"></span><span style="display:inline-block;width:5px;height:8px;background:#ef4444;border-radius:1px;"></span></span>'
+        cards = [(c_sw, "1分足ローソク", "緑=陽線 / 赤=陰線（ヒゲ先端で反発・失速判定）"), (sw_l("#38bdf8"), "9EMA", "スキャルピングの勢い基準線（割れたら一旦利確）"), (sw_l("#c084fc"), "20EMA", "押し目買い・戻り売りの防波堤ライン"), (sw_l("#fbbf24", "dotted"), "当日VWAP", "機関の平均約定値（上なら買い優勢）"), (tri_sw, "10分先3分岐", "直近1分足ボラから算出した10分後ルート"), (sw_l("#22d3ee"), "下段 出来高&CVD", "陽線/陰線出来高バーと買い売り累積デルタ")]
+        if "前日/当日高安（PDH/PDL/HOD/LOD）" in opt_lines:
+            cards.append((sw_l("#34d399", "dashed", 1), "PDH/PDL/HOD/LOD", "前日・当日の高値安値（ブレイク基準）"))
+    else:
+        if exp_active and exp_dir == "UP":
+            b_cls, b_txt = "dd-trans-banner exp-up", "🚀 実測(白)が朝想定(紫)を大幅突破 → 急騰ブレイクモード中。紫線は無視し、VWAP(黄点線)や突破ライン付近の押し目追従を優先"
+        elif exp_active and exp_dir == "DOWN":
+            b_cls, b_txt = "dd-trans-banner exp-down", "🔻 実測(白)が朝想定(紫)を下抜け → 急落ブレイクモード中。紫線は無視し、VWAP(黄点線)での戻り売り・損切り徹底を優先"
+        elif traj.get("has_actual"):
+            vw_note = ("VWAP(黄点線)上で買い優勢" if curr_px >= cur_vwap_now else "VWAP(黄点線)下で戻り待ち") if (cur_vwap_now and cur_vwap_now > 0) else "VWAP(黄点線)の攻防に注目"
+            b_cls, b_txt = "dd-trans-banner", f"📊 実測(白)は朝想定レンジ内で推移中 → 押し目候補 {active_dip_time} 前後の反発と {vw_note}"
+        else:
+            b_cls, b_txt = "dd-trans-banner", f"🕒 寄り前待機モード → 想定始値 {_fmt_cur(traj['est_open_px'], is_jp)} からの押し目候補 {active_dip_time}・高値想定 {active_peak_time} を事前チェック"
+
+        cards = []
+        if traj.get("has_actual"): cards.append((sw_l("#ffffff"), "当日実測", "実際の株価の動き（主役）"))
+        if chart_mode in ("🔴 ライブ修正", "⚡ 両方重ね"): cards.append((sw_l("#38bdf8"), "ライブ修正", "今の勢い＋固有波動を反映した最新着地予測"))
+        if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
+            cards.append((sw_l("rgba(148,163,184,0.55)", "dotted"), "朝ロック(無効化)", "想定外ブレイクで参考線へ降格") if exp_active else (sw_l("#c084fc" if chart_mode == "⚡ 両方重ね" else "#38bdf8", "dashed" if chart_mode == "⚡ 両方重ね" else "solid"), "朝ロック", "寄り前固定の当初想定（基準線）"))
+        if "場中30分・3分岐点線（スコア比%）" in opt_lines and short_3way.get("active"): cards.append((tri_sw, "短期30分3分岐", "30分後に上/横/下へ進む確率と軌道"))
+        if active_lab and "LAB×DD 統合エントリー帯/+1.0R" in opt_lines: cards.append((sw_l("#fde047", "dashed"), "統合Entry/+1.0R", "LABとDDを融合した押し目帯と半分利確ライン"))
+        if "流動性真空帯（LVN加速ゾーン）" in opt_lines and lvn_zones: cards.append((sw_b("rgba(34,211,238,0.18)", "rgba(34,211,238,0.55)"), "LVN真空帯", "出来高が極端に薄く値動きが加速しやすい価格帯"))
+        if "VWAP" in opt_lines and traj.get("has_actual"): cards.append((sw_l("#fbbf24", "dotted"), "VWAP", "機関の平均買値（上なら買い優勢）"))
+        if "VWAP±σ" in opt_lines and traj.get("has_actual"): cards.append((sw_l("rgba(251,191,36,0.7)", "dashed", 1), "VWAP±1σ/2σ", "買われすぎ・売られすぎの標準偏差帯"))
+        if "類似実測波形（Top-1）" in opt_lines and isinstance(traj.get("medoid_analog"), dict) and traj["medoid_analog"].get("data"): cards.append((sw_l("#f59e0b"), "類似実測Top-1", "過去に最も似た日のリアル波形"))
+        if "予測レンジ帯（ファン）" in opt_lines: cards.append((sw_b("rgba(56,189,248,0.22)", "rgba(99,102,241,0.48)"), "予測レンジ帯", "値動きが収まりやすい確率ゾーン"))
+        if "高ボラ狩り場帯" in opt_lines and traj.get("high_vol_zones"): cards.append((sw_b("rgba(245,158,11,0.16)", "rgba(251,191,36,0.45)"), "高ボラ狩り場帯", "値幅が出やすく仕掛けが入りやすい時間"))
+        if "前日/当日高安（PDH/PDL/HOD/LOD）" in opt_lines: cards.append((sw_l("#34d399", "dashed", 1), "PDH/PDL/HOD/LOD", "前日・当日の高値安値（注文集中帯）"))
+        if "心理的キリ番節目" in opt_lines: cards.append((sw_l("#fde047", "dotted"), "キリ番節目", "注文が集中しやすいキリの良い価格"))
+        if "寄り30分高安（ORB）" in opt_lines and traj.get("orb_high") and traj.get("orb_low"): cards.append((sw_l("#7dd3fc", "dashed", 1), "寄り30分ORB", "寄り30分の高安レンジ（ブレイク基準）"))
+        if "出来高急増（◆ 2.5x+）" in opt_lines and traj.get("vol_spikes"): cards.append(('<span style="display:inline-block;width:13px;text-align:center;color:#10b981;font-size:10px;line-height:1;flex-shrink:0;">◆</span>', "出来高急増◆", "同時間帯平均の2.5倍以上の出来高スパイク発生点"))
+        if active_lab and "LAB TP/SL" in opt_lines: cards.append((sw_l("#10b981", "dashed"), "LAB TP/SL", "LAB上位足が算出した利確・損切り線"))
+        cards.append((sw_l("#22d3ee"), "下段 出来高&CVD", "陽線/陰線出来高と買い売り累積差"))
+
+    pills_html = "".join(f'<span class="dd-leg-pill">{sw}<span>{html.escape(nm)}</span></span>' for sw, nm, _ in cards)
+    cards_html = "".join(f'<div class="dd-leg-card"><div class="dd-leg-head">{sw}<span>{html.escape(nm)}</span></div><div class="dd-leg-desc">{html.escape(d)}</div></div>' for sw, nm, d in cards)
+    st.markdown(f'<div class="dd-legend-panel"><div class="{b_cls}">{html.escape(b_txt)}</div><div class="dd-chip-ribbon">{pills_html}</div></div>', unsafe_allow_html=True)
+    with st.expander("📖 アクティブ凡例の詳細 ＆ 専門指標クイック辞典", expanded=False):
+        st.markdown(f'<div class="dd-legend-grid" style="margin-bottom:8px;">{cards_html}</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10.8px;line-height:1.62;color:#cbd5e1;">・<b>音声＆電子音トリガー監視官：</b> チャート右上「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と音声で即時通知します（状態は同一タブ内で保持。米国株WS接続時はリアルタイム、WS未接続時は画面操作後の更新ごとに判定）。<br>・<b>LVN真空帯（流動性真空地帯）：</b> 28分割出来高プロファイルで商いが極端に薄い価格帯。レジスタンス抜けやサポート割れ時に価格が一気に走りやすいエアポケットです。<br>・<b>4切替コマンドドック：</b> チャート直下のドックで「⚡ 執行コマンド / 🧭 市場レーダー / 🎯 シナリオ＆寄与 / 🧮 シミュレーター」を瞬時に切り替えられます。<br>・<b>二壁FPT到達確率：</b> 大引けまでに「損切りライン(SL)へ先に触れずに利確目標(TP)へ到達する」確率モデルに基づく物理確率です。</div>', unsafe_allow_html=True)
+# === PART 3 / 4 ===
 # =========================================================================
 # 4. マーケット・ニュース・株主・1分足データ取得（TTL分離＆超短期速報）
 # =========================================================================
@@ -2108,15 +3128,21 @@ def _compute_hires_vp_28(df_1d: pd.DataFrame, curr_px: float, is_jp: bool) -> di
                     lvn_zones.append({"lo": round(lo_px, 2), "hi": round(hi_px, 2), "dir": "UP" if mid_px > curr_px else "DOWN"})
             lvn_zones = lvn_zones[:3]
 
+        max_bin_val = float(np.max(tot)) if len(tot) else 0.0
+        if max_bin_val >= 1e7:
+            divisor, unit_label, dec = 1e6, "M株", 2
+        else:
+            divisor, unit_label, dec = 1e4, "万株", 1
+
         sb, mb = [], []
         for i in range(28):
             cs, cm = ("#f59e0b", "rgba(245,158,11,.45)") if i == poc_i else (("#38bdf8", "rgba(56,189,248,.35)") if i in va else ("#94a3b8", "rgba(100,116,139,.32)"))
-            sb.append({"value": round(float(h_s[i]) / 1e6, 2), "itemStyle": {"color": cs}})
-            mb.append({"value": round(float(h_m[i]) / 1e6, 2), "itemStyle": {"color": cm}})
+            sb.append({"value": round(float(h_s[i]) / divisor, dec), "itemStyle": {"color": cs}})
+            mb.append({"value": round(float(h_m[i]) / divisor, dec), "itemStyle": {"color": cm}})
         return {
             "valid": True, "labels": [_fmt_cur(c, is_jp) for c in centers],
-            "short_bars": sb, "mid_bars": mb, "poc_px": float(centers[poc_i]),
-            "vah_px": float(centers[max(va)]), "val_px": float(centers[min(va)]),
+            "short_bars": sb, "mid_bars": mb, "unit_label": unit_label,
+            "poc_px": float(centers[poc_i]), "vah_px": float(centers[max(va)]), "val_px": float(centers[min(va)]),
             "curr_bin_idx": int(np.clip((curr_px - p_min) / max((p_max - p_min) / 28.0, 1e-6), 0, 27)),
             "lvn_zones": lvn_zones,
         }
@@ -3112,8 +4138,7 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
         "weights_evolution": {"active_cluster": cluster_key, "fallback_cluster": fallback_key, "cluster_n": cluster_n, "shrink_alpha": shrink_alpha, "vol_band": vol_cls["vol_band"], "atr_pct": vol_cls["atr_pct"], "active_regime": regime_code, "updates_count": w_evo.get("updates_count", 0), "regime_updates_count": cluster_n, "weights_updated": weights_updated, "open_gap": og_w, "intraday_drift": idr_w, "all_regimes": w_evo.get("clusters", {}).get(cluster_key, w_evo.get("regimes", {})), "last_decomp": w_evo.get("last_decomp", {})},
         "factors": {"mkt_label": mi["label"], "mkt_diff": mi["latest_diff"], "mkt_beta": mi["beta"], "macro_gap_pct": round(mg, 2), "fx_diff": fi["latest_diff"], "fx_beta": fi["beta"], "fx_gap_pct": round(fg, 2), "news_gap_pct": round(ng, 2), "whale_gap_pct": round(wg, 2), "lab_bias_pct": lab_bias_pct, "hvn_wall_px": hvn_wall_px, "ob_sup_px": ob_sup_px, "dow_wick_pct": round(dow_adj + wick_adj, 2), "calib_pct": calib_pct, "calib_n": calib_n, "live_vwap_pct": round(live_vwap_bias * 100.0, 2), "bench_alpha_pct": round(bench_live_alpha_adj * 100.0, 2)},
     }
-
-
+# === PART 4 / 4 ===
 # =========================================================================
 # 7. 実測5軸レーダー・AIメモ生成・If-Then抽出・LAB共有解決
 # =========================================================================
@@ -3124,7 +4149,7 @@ def _compute_real_5axis(info: dict, ovh_pct: float, gov_cnt: int) -> tuple:
         sc = fn(raw) if raw is not None else None
         if sc is not None: axes.append({"name": nm, "max": 100}); vals.append(int(np.clip(sc, 15, 98)))
         else: miss.append(m_lbl)
-    axes.extend([{"name": "需給軽さ", "max": 100}, {"name": "報道健全度", "max": 100}])
+    axes.extend([{"name": "需給軽さ", "max": 100}, {"name": "72h報道リスク", "max": 100}])
     vals.extend([int(np.clip(95 - ovh_pct * 0.85, 15, 95)), int(np.clip(95 - gov_cnt * 18, 20, 98))])
     return axes, vals, miss
 
@@ -3231,14 +4256,16 @@ def _format_lab_deep_context(lab_full: dict, lab_council: dict) -> str:
 
 
 def _render_unified_guide():
-    st.markdown('<div class="dd-guide-box"><b>🔰 v20.0 クオンツ＆プロ端末ガイド（完全版）</b><br>1. <b>🔊 音声＆電子音トリガー監視官:</b> チャート右上の「🔇 音声OFF」をクリックしてONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と日本語音声で即時通知します。<br>2. <b>💓 リアルタイムEV＆二壁FPT脈拍ゲージ:</b> 現在価格（成行基準）での「物理的二壁FPT勝率 vs 損益分岐勝率」とRR比を常時算出し、好機・待機・飛びつき禁止を即断できます。<br>3. <b>⚡ 流動性真空帯（LVN加速ゾーン）:</b> 28分割出来高プロファイルから板が極端に薄い真空価格帯を自動抽出し、メインチャートへ加速ゾーンとして重ね描きします。<br>4. <b>🧭 4切替コマンドドック:</b> チャート直下のドックで「⚡ 執行コマンド / 🧭 市場レーダー / 🎯 シナリオ＆寄与 / 🧮 シミュレーター」を瞬時に切り替えられます。<br>5. <b>⛶ 横拡大の安定保護:</b> 自動更新は初期値OFFのため、スマホ横拡大中に60秒で勝手に画面が戻ることはありません（Wake Lock搭載）。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="dd-guide-box"><b>🔰 v20.1 クオンツ＆プロ端末ガイド（完全版）</b><br>1. <b>🔊 音声＆電子音トリガー監視官:</b> チャート右上の「🔇 音声OFF」をクリックしてONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と日本語音声で即時通知します。<br>2. <b>💓 リアルタイムEV＆二壁FPT脈拍ゲージ:</b> 現在価格（成行基準）での「物理的二壁FPT勝率 vs 損益分岐勝率」とRR比を常時算出し、好機・待機・飛びつき禁止を即断できます。<br>3. <b>⚡ 流動性真空帯（LVN加速ゾーン）:</b> 28分割出来高プロファイルから板が極端に薄い真空価格帯を自動抽出し、メインチャートへ加速ゾーンとして重ね描きします。<br>4. <b>🧭 4切替コマンドドック:</b> チャート直下のドックで「⚡ 執行コマンド / 🧭 市場レーダー / 🎯 シナリオ＆寄与 / 🧮 シミュレーター」を瞬時に切り替えられます。<br>5. <b>⛶ 横拡大の安定保護:</b> 自動更新は初期値OFFのため、スマホ横拡大中に60秒で勝手に画面が戻ることはありません（Wake Lock搭載）。</div>', unsafe_allow_html=True)
+
+
 # =========================================================================
-# 8. メインエントリ関数（YAMASHISHI DEEP DIVE v20.0 完全版）
+# 8. メインエントリ関数（YAMASHISHI DEEP DIVE v20.1 完全版）
 # =========================================================================
 def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイトレード", gemini_api_key: str = "", lab_ctx: dict = None):
     _inject_dd_css()
     h1, h2, h3 = st.columns([2.6, 0.9, 1.1])
-    h1.markdown('<div class="dd-cmd-header"><div style="min-width:0;"><div class="dd-cmd-title">YAMASHISHI DEEP DIVE <span>v20.0</span></div><div class="dd-cmd-sub">音声監視官・EV脈拍・LVN真空帯・4切替コマンドドック・FS完全保護</div></div></div>', unsafe_allow_html=True)
+    h1.markdown('<div class="dd-cmd-header"><div style="min-width:0;"><div class="dd-cmd-title">YAMASHISHI DEEP DIVE <span>v20.1</span></div><div class="dd-cmd-sub">音声監視官・EV脈拍・LVN真空帯・4切替コマンドドック・FS完全保護</div></div></div>', unsafe_allow_html=True)
     with h2:
         with (st.popover("📖 見方", use_container_width=True) if hasattr(st, "popover") else st.expander("📖 見方")):
             _render_unified_guide()
@@ -3268,7 +4295,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     def _body():
         _render_live_clock(sync_interval=60, active=auto_sync)
         if ws_active_us:
-            st.markdown(f'<div class="dd-ws-badge"><span>⚡ <b>Finnhub WebSocket リアルタイム接続有効</b> ({html.escape(fc)})</span><span style="color:#94a3b8;font-size:9px;">自動更新OFFでもチャート無停止稼働</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="dd-ws-badge"><span>⚡ <b>Finnhub WS 設定済</b> ({html.escape(fc)})</span><span style="color:#94a3b8;font-size:9px;">接続状態はチャート内表示</span></div>', unsafe_allow_html=True)
 
         with ThreadPoolExecutor(max_workers=3) as ex:
             data, macro_data, df_bench_5m = ex.submit(_load_stock_core, fc).result(), ex.submit(_load_macro_data).result(), ex.submit(_load_benchmark_5m, is_jp).result()
@@ -3446,7 +4473,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         memo_nonce, top_m = st.session_state.get("dd_memo_nonce", 0), (macro_sens[0] if macro_sens else {"label": "市場指数", "corr": 0.0, "beta": 1.0})
         m_txt, m_src = _generate_detailed_memo_cached(fc, corp_name, _fmt_cur(curr_px, is_jp), _fmt_cur(active_open_px, is_jp), _fmt_cur(active_close_px, is_jp), _fmt_cur(active_bull_trig, is_jp), _fmt_cur(active_bull_tgt, is_jp), _fmt_cur(active_bear_trig, is_jp), _fmt_cur(active_bear_tgt, is_jp), active_dip_time, active_peak_time, vp["overhead_pct"], _fmt_cur(vp["res_px"], is_jp), _fmt_cur(vp["sup_px"], is_jp), top_m["label"], top_m["corr"], top_m["beta"], news_res["pos_pct"], news_res["tier1_cnt"], len(gov_risks), whale_anom["summary"], upside_str, lab_note, api_k, lab_deep_ctx, in_style, memo_nonce)
 
-        st.markdown(f"""<div class="dd-hero-card" style="border-left-color:{aura_col};"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;"><div style="min-width:0;flex:1;"><div><span class="pill-badge">{html.escape(fc)}</span><span class="pill-badge"><span class="dd-led-dot" style="background:#38bdf8;"></span>{html.escape(in_style)}</span><span class="pill-badge"><span class="dd-led-dot" style="background:{mkt_regime['color']};"></span>{mkt_regime['label']}・{traj['weights_evolution']['active_cluster']}</span>{earn_badge}</div><div style="font-size:15px;font-weight:800;color:#f8fafc;margin-top:3px;word-break:break-word;">{html.escape(corp_name)}</div><div style="font-size:9.8px;color:#64748b;">{html.escape(sector)} / {html.escape(industry)}</div></div><div style="text-align:right;flex-shrink:0;"><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:18px;font-weight:800;color:#fff;line-height:1.15;">{_fmt_cur(curr_px, is_jp)}</div><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11px;font-weight:700;color:{chg_col};margin-bottom:2px;">{chg_pct:+.2f}%</div>{_build_spark_svg(df_1d["Close"].tail(20).values)}</div></div><div style="margin-top:4px;"><div style="display:flex;justify-content:space-between;font-size:9px;color:#64748b;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;"><span>52W安 {_fmt_cur(lo_52, is_jp)}</span><span style="color:#94a3b8;">52W位置 {pos_52:.0f}%</span><span>52W高 {_fmt_cur(hi_52, is_jp)}</span></div><div class="dd-range-track"><div class="dd-range-dot" style="left:{pos_52:.1f}%;"></div></div></div><div class="dd-winrate-bar"><div><div class="dd-metric-lbl">{top_close_lbl}</div><div class="dd-metric-val" style="color:{aura_col};">{_fmt_cur(active_close_px, is_jp)} ({active_close_chg:+.2f}%)</div></div><div><div class="dd-metric-lbl">アナリスト乖離</div><div class="dd-metric-val" style="color:#fde047;">{upside_str}</div></div><div><div class="dd-metric-lbl">上値しこり玉</div><div class="dd-metric-val" style="color:#cbd5e1;">{vp['overhead_pct']}%</div></div><div><div class="dd-metric-lbl">報道健全度</div><div class="dd-metric-val" style="color:{r_col};">{r_stat}</div></div></div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="dd-hero-card" style="border-left-color:{aura_col};"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;"><div style="min-width:0;flex:1;"><div><span class="pill-badge">{html.escape(fc)}</span><span class="pill-badge"><span class="dd-led-dot" style="background:#38bdf8;"></span>{html.escape(in_style)}</span><span class="pill-badge"><span class="dd-led-dot" style="background:{mkt_regime['color']};"></span>{mkt_regime['label']}・{traj['weights_evolution']['active_cluster']}</span>{earn_badge}</div><div style="font-size:15px;font-weight:800;color:#f8fafc;margin-top:3px;word-break:break-word;">{html.escape(corp_name)}</div><div style="font-size:9.8px;color:#64748b;">{html.escape(sector)} / {html.escape(industry)}</div></div><div style="text-align:right;flex-shrink:0;"><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:18px;font-weight:800;color:#fff;line-height:1.15;">{_fmt_cur(curr_px, is_jp)}</div><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11px;font-weight:700;color:{chg_col};margin-bottom:2px;">{chg_pct:+.2f}%</div>{_build_spark_svg(df_1d["Close"].tail(20).values)}</div></div><div style="margin-top:4px;"><div style="display:flex;justify-content:space-between;font-size:9px;color:#64748b;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;"><span>52W安 {_fmt_cur(lo_52, is_jp)}</span><span style="color:#94a3b8;">52W位置 {pos_52:.0f}%</span><span>52W高 {_fmt_cur(hi_52, is_jp)}</span></div><div class="dd-range-track"><div class="dd-range-dot" style="left:{pos_52:.1f}%;"></div></div></div><div class="dd-winrate-bar"><div><div class="dd-metric-lbl">{top_close_lbl}</div><div class="dd-metric-val" style="color:{aura_col};">{_fmt_cur(active_close_px, is_jp)} ({active_close_chg:+.2f}%)</div></div><div><div class="dd-metric-lbl">アナリスト乖離</div><div class="dd-metric-val" style="color:#fde047;">{upside_str}</div></div><div><div class="dd-metric-lbl">上値しこり玉</div><div class="dd-metric-val" style="color:#cbd5e1;">{vp['overhead_pct']}%</div></div><div><div class="dd-metric-lbl">72h報道リスク</div><div class="dd-metric-val" style="color:{r_col};">{r_stat}</div></div></div></div>""", unsafe_allow_html=True)
 
         t1, t2, t3, t4 = st.tabs(["翌営業日 1日軌道", "マクロβ・曜日", "財務・大口株主", "リスク・AIメモ"])
 
@@ -3536,7 +4563,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 else:
                     gf_t, gf_c = "データ不足", "#94a3b8"
                 nsp = len(traj["vol_spikes"])
-                rib = "".join(f'<div class="dd-inst-pill-card"><div class="dd-metric-lbl">{l}</div><div style="font-family:JetBrains Mono,monospace;font-variant-numeric:tabular-nums;font-size:10.8px;font-weight:800;color:{c};margin-top:1px;">{v}</div></div>' for l, v, c in (("RVOL 相対出来高", rv_t, rv_c), ("窓埋め率 (1M標本)", gf_t, gf_c), ("心理的キリ番節目", _fmt_cur(round_level, is_jp), "#fde047"), ("大口約定スパイク", f"{nsp}回検知 ◆" if nsp else "なし", "#c084fc" if nsp else "#94a3b8"), ("OHLCV疑似CVD", html.escape(cvd_div["label"]), cvd_div["color"]), ("寄り15分 Gap判定", html.escape(g15["label"]), g15["color"])))
+                rib = "".join(f'<div class="dd-inst-pill-card"><div class="dd-metric-lbl">{l}</div><div style="font-family:JetBrains Mono,monospace;font-variant-numeric:tabular-nums;font-size:10.8px;font-weight:800;color:{c};margin-top:1px;">{v}</div></div>' for l, v, c in (("RVOL 相対出来高", rv_t, rv_c), ("窓埋め率 (1M標本)", gf_t, gf_c), ("心理的キリ番節目", _fmt_cur(round_level, is_jp), "#fde047"), ("出来高急増 (2.5x+)", f"{nsp}回検知 ◆" if nsp else "なし", "#c084fc" if nsp else "#94a3b8"), ("OHLCV疑似CVD", html.escape(cvd_div["label"]), cvd_div["color"]), ("寄り15分 Gap判定", html.escape(g15["label"]), g15["color"])))
                 st.markdown(f'<div class="dd-inst-ribbon">{rib}</div>', unsafe_allow_html=True)
 
             def _render_scenario_and_drivers_block():
@@ -3620,7 +4647,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 if imp >= 2.0 or traj["lab_mods"].get("kyle_warn"): st.markdown(f'<div class="dd-warn-box" style="margin-top:6px;margin-bottom:0;"><b>⚠️ 流動性インパクト警戒（出来高比 {imp:.2f}% / LAB Kyle-λ={traj["lab_mods"].get("kyle_val","-")}）</b><br>板が薄くスリッページでRR比が崩壊する恐れがあります。指値分割執行を推奨します。</div>', unsafe_allow_html=True)
                 if traj["has_actual"] and tb_tp < 20.0 and traj["rem_frac_now"] < 0.45 and not sl_b and not tp_p: st.markdown('<div class="dd-warn-box" style="margin-top:6px;margin-bottom:0;"><b>⛔ 時間切れ警戒（手遅れエントリー注意）</b><br>残存ボラティリティに対しTPが遠すぎます（二壁到達確率 20%未満）。新規の追っかけエントリーは非推奨です。</div>', unsafe_allow_html=True)
 
-            def _render_command_dock(key_pfx: str):
+            def _render_command_dock(key_pfx: str, rerun_on_pos: bool = False):
                 st.markdown('<div class="dd-dock-wrap"><div class="dd-dock-head"><span>COMMAND DOCK // プロ執行＆市場解析計器盤</span><span>4 MODES</span></div>', unsafe_allow_html=True)
                 dock_tabs = ["⚡ 執行コマンド", "🧭 市場レーダー", "🎯 シナリオ＆寄与", "🧮 シミュレーター"]
                 dock_key = f"dd_cmd_dock_{key_pfx}"
@@ -3634,7 +4661,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 if sel_dock == "⚡ 執行コマンド":
                     _render_fusion_and_copy_block()
                     _render_ev_pulse_bar()
-                    _render_position_hud(fc, curr_px, is_jp, def_pos_side, def_pos_sl, cur_vwap_now, z1_ema9_now, key_suffix=key_pfx)
+                    _render_position_hud(fc, curr_px, is_jp, def_pos_side, def_pos_sl, cur_vwap_now, z1_ema9_now, key_suffix=key_pfx, trigger_rerun_on_change=rerun_on_pos)
                     ifthen_txt = _extract_ifthen_block(m_txt)
                     if ifthen_txt:
                         st.markdown(f'<div class="dd-memo-box" style="margin-top:6px;margin-bottom:0;"><div style="font-size:9.8px;color:#7dd3fc;font-weight:800;margin-bottom:4px;">🎯 QUICK PLAYBOOK（{html.escape(in_style)}）</div>{html.escape(ifthen_txt).replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
@@ -3654,17 +4681,17 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     st.markdown(f'<div class="{"dd-breaking-ticker bull" if brk.get("sent")=="POS" else "dd-breaking-ticker"}"><span style="font-weight:800;flex-shrink:0;">{"🔥 速報(買い)" if brk.get("sent")=="POS" else ("⚠️ 速報(売り)" if brk.get("sent")=="NEG" else "⚡ 速報")} [{brk.get("age_min",1)}分前]</span><a href="{html.escape(brk.get("link") or "#")}" target="_blank" style="color:inherit;text-decoration:none;overflow:hidden;text-overflow:ellipsis;">{html.escape(brk["title"])} ({html.escape(brk.get("source") or "速報")})</a></div>', unsafe_allow_html=True)
 
                 is_short = in_style in ("デイトレード", "スキャルピング")
-                line_opts = ["場中30分・3分岐点線（スコア比%）", "類似実測波形（Top-1）", "高ボラ狩り場帯", "流動性真空帯（LVN加速ゾーン）", "予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "転換時間帯ガイド", "押目・利確ゾーン", "VWAP", "VWAP±σ", "前日/当日高安（PDH/PDL/HOD/LOD）", "心理的キリ番節目", "寄り30分高安（ORB）", "大口約定（◆）", "出来高"] + (["LAB×DD 統合エントリー帯/+1.0R", "LAB TP/SL"] if active_lab else [])
+                line_opts = ["場中30分・3分岐点線（スコア比%）", "類似実測波形（Top-1）", "高ボラ狩り場帯", "流動性真空帯（LVN加速ゾーン）", "予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "転換時間帯ガイド", "押目・利確ゾーン", "VWAP", "VWAP±σ", "前日/当日高安（PDH/PDL/HOD/LOD）", "心理的キリ番節目", "寄り30分高安（ORB）", "出来高急増（◆ 2.5x+）", "出来高"] + (["LAB×DD 統合エントリー帯/+1.0R", "LAB TP/SL"] if active_lab else [])
                 p_col, tf_col, cfg_col = st.columns([2.2, 1.4, 0.9])
                 sel_preset = (p_col.pills("表示プリセット", presets, default="📈 今の予測", selection_mode="single", label_visibility="collapsed", key="dd_preset_sel") or "📈 今の予測") if hasattr(st, "pills") else p_col.radio("表示プリセット", presets, index=0, horizontal=True, label_visibility="collapsed", key="dd_preset_sel")
                 sel_tf = tf_col.selectbox("表示足", ["5分足(1日全体)", "1分足(直近90分ズーム)"], label_visibility="collapsed", key="dd_tf_mode")
 
                 if sel_preset == "📈 今の予測":
-                    pmi, prl = 2, (["場中30分・3分岐点線（スコア比%）", "類似実測波形（Top-1）", "高ボラ狩り場帯", "流動性真空帯（LVN加速ゾーン）"] if is_short else ["場中30分・3分岐点線（スコア比%）", "流動性真空帯（LVN加速ゾーン）"]) + ["予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "押目・利確ゾーン", "VWAP", "心理的キリ番節目", "大口約定（◆）", "出来高"] + (["LAB×DD 統合エントリー帯/+1.0R", "LAB TP/SL"] if active_lab else [])
+                    pmi, prl = 2, (["場中30分・3分岐点線（スコア比%）", "類似実測波形（Top-1）", "高ボラ狩り場帯", "流動性真空帯（LVN加速ゾーン）"] if is_short else ["場中30分・3分岐点線（スコア比%）", "流動性真空帯（LVN加速ゾーン）"]) + ["予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "押目・利確ゾーン", "VWAP", "心理的キリ番節目", "出来高急増（◆ 2.5x+）", "出来高"] + (["LAB×DD 統合エントリー帯/+1.0R", "LAB TP/SL"] if active_lab else [])
                 elif sel_preset == "🔍 朝の答え合わせ":
                     pmi, prl = 1, ["場中30分・3分岐点線（スコア比%）", "予測レンジ帯（ファン）", "寄り30分高安（ORB）", "出来高"]
                 else:
-                    pmi, prl = 0, ["場中30分・3分岐点線（スコア比%）", "高ボラ狩り場帯", "流動性真空帯（LVN加速ゾーン）", "VWAP", "VWAP±σ", "前日/当日高安（PDH/PDL/HOD/LOD）", "転換時間帯ガイド", "心理的キリ番節目", "大口約定（◆）", "押目・利確ゾーン", "出来高"] + (["LAB×DD 統合エントリー帯/+1.0R", "LAB TP/SL"] if active_lab else [])
+                    pmi, prl = 0, ["場中30分・3分岐点線（スコア比%）", "高ボラ狩り場帯", "流動性真空帯（LVN加速ゾーン）", "VWAP", "VWAP±σ", "前日/当日高安（PDH/PDL/HOD/LOD）", "転換時間帯ガイド", "心理的キリ番節目", "出来高急増（◆ 2.5x+）", "押目・利確ゾーン", "出来高"] + (["LAB×DD 統合エントリー帯/+1.0R", "LAB TP/SL"] if active_lab else [])
 
                 spsig = f"{sel_preset}::{is_short}"
                 if st.session_state.get("dd_last_preset") != sel_preset or st.session_state.get("dd_last_style_sig") != spsig:
@@ -3721,7 +4748,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         {"name": "1分出来高", "type": "bar", "xAxisIndex": 1, "yAxisIndex": 1, "data": z1["vol_bars"], "barMaxWidth": 5, "markLine": {"symbol": ["none", "none"], "silent": True, "data": [{"yAxis": z1["avg_vol_1m"], "lineStyle": {"color": "rgba(148,163,184,.35)", "type": "dashed", "width": 1}, "label": {"show": False}}]} if z1["avg_vol_1m"] > 0 else {}},
                         {"name": "疑似CVD", "type": "line", "xAxisIndex": 1, "yAxisIndex": 2, "data": z1["cvd"], "itemStyle": {"color": "#22d3ee"}, "lineStyle": {"color": "#22d3ee", "width": 1.6}, "areaStyle": {"color": "rgba(34,211,238,.10)"}, "showSymbol": False},
                     ]
-                    st.caption(f"表示中: 1分足マイクロ・ズーム（{z1['target_date']} 直近90本 ＋ 9/20EMA ＋ VWAP ＋ 10分3分岐 ＋ 下段CVD）")
+                    ws_1m_note = "（WS接続時は最新1分足のみティック追従）" if ws_live_sym else ""
+                    st.caption(f"表示中: 1分足マイクロ・ズーム（{z1['target_date']} 直近90本 ＋ 9/20EMA ＋ VWAP ＋ 10分3分岐 ＋ 下段CVD）{ws_1m_note}")
                     _render_echarts(
                         {"backgroundColor": "#070b14", "legend": {"type": "scroll", "data": ["1分足", "9EMA", "20EMA", "VWAP", "疑似CVD"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2, "left": 6, "right": 8, "itemWidth": 12, "itemHeight": 8}, "axisPointer": {"link": [{"xAxisIndex": "all"}]}, "grid": [{"top": 42, "height": "57%", "left": 6, "right": rp1, "containLabel": False}, {"top": "74%", "height": "18%", "left": 6, "right": rp1, "containLabel": False}], "dataZoom": [{"type": "inside", "xAxisIndex": [0, 1], "filterMode": "none"}], "xAxis": [{"type": "category", "gridIndex": 0, "boundaryGap": True, "data": z1["times"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,.18)"}}, "axisLabel": {"show": False}}, {"type": "category", "gridIndex": 1, "boundaryGap": True, "data": z1["times"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,.18)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9, "interval": "auto", "hideOverlap": True}}], "yAxis": [{"type": "value", "gridIndex": 0, "position": "right", "scale": True, "splitLine": {"lineStyle": {"color": "rgba(255,255,255,.04)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9}}, {"type": "value", "gridIndex": 1, "show": False, "axisPointer": {"show": False}}, {"type": "value", "gridIndex": 1, "position": "right", "scale": True, "splitLine": {"show": False}, "axisLabel": {"color": "#22d3ee", "fontSize": 8}}], "series": s_1m},
                         height=chart_h, use_hud_tooltip=True, is_jp=is_jp, enable_fullscreen=True, is_dual_grid=True, chart_key=f"dd_1m_{fc}",
@@ -3765,7 +4793,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     _append_pos_marklines(ml_data, curr_px)
                     cdi, cpi = (traj["live_dip_idx"], traj["live_peak_idx"]) if use_live_basis else (traj["locked_dip_idx"], traj["locked_peak_idx"])
                     ml_cfg = {"symbol": ["none", "none"], "data": _declutter_marklines(ml_data, curr_px, 0.45, bool(cdi <= 6 or cpi <= 6))} if ml_data else {}
-                    pdesc = {"📈 今の予測": "ライブ修正軌道（固有波動合成）＋ 分位点ファン ＋ 場中30分3分岐 ＋ 下段CVD同期", "🔍 朝の答え合わせ": "寄り前ロック予測 vs 当日実測 ＋ 寄り30分高安 ＋ 下段CVD同期", "🏦 大口・節目": "VWAP±σ ＋ PDH/PDL/HOD/LOD ＋ キリ番 ＋ 大口約定 ＋ 下段CVD"}
+                    pdesc = {"📈 今の予測": "ライブ修正軌道（固有波動合成）＋ 分位点ファン ＋ 場中30分3分岐 ＋ 下段CVD同期", "🔍 朝の答え合わせ": "寄り前ロック予測 vs 当日実測 ＋ 寄り30分高安 ＋ 下段CVD同期", "🏦 大口・節目": "VWAP±σ ＋ PDH/PDL/HOD/LOD ＋ キリ番 ＋ 出来高急増 ＋ 下段CVD"}
                     st.caption(f"表示中: {pdesc.get(sel_preset, '')}{med_cap}{' ※LAB TP/SLの一部は現在値±12%外のため非表示' if lab_tpsl_hidden else ''}")
 
                     if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
@@ -3825,8 +4853,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     if show_3w:
                         for nm, pk, c, lc, lt, fmt, z in (("上昇分岐", "up_path", "#10b981", "#6ee7b7", "dashed", f"▲ {short_3way['p_up']}%", 11), ("横ばい分岐", "flat_path", "#94a3b8", "#cbd5e1", "dotted", f"▶ {short_3way['p_flat']}%", 10), ("下落分岐", "down_path", "#ef4444", "#fca5a5", "dashed", f"▼ {short_3way['p_down']}%", 11)):
                             s_list.append({"name": nm, "type": "line", "xAxisIndex": 0, "yAxisIndex": 0, "data": short_3way[pk], "itemStyle": {"color": c}, "lineStyle": {"color": c, "width": 1.8 if lt == "dashed" else 1.6, "type": lt}, "smooth": 0.15, "showSymbol": False, "endLabel": {"show": True, "distance": 4, "formatter": fmt, "color": lc, "fontSize": 9.5, "fontWeight": "bold", "fontFamily": "JetBrains Mono"}, "z": z})
-                    if "大口約定（◆）" in opt_lines and traj["vol_spikes"]:
-                        s_list.append({"name": "大口約定", "type": "scatter", "xAxisIndex": 0, "yAxisIndex": 0, "symbol": "diamond", "symbolSize": 8, "data": [{"value": [sp["time"], sp["price"]], "itemStyle": {"color": "#10b981" if sp["dir"] > 0 else "#ef4444", "borderColor": "#ffffff", "borderWidth": 1}} for sp in traj["vol_spikes"]], "z": 12})
+                    if "出来高急増（◆ 2.5x+）" in opt_lines and traj["vol_spikes"]:
+                        s_list.append({"name": "出来高急増", "type": "scatter", "xAxisIndex": 0, "yAxisIndex": 0, "symbol": "diamond", "symbolSize": 8, "data": [{"value": [sp["time"], sp["price"]], "itemStyle": {"color": "#10b981" if sp["dir"] > 0 else "#ef4444", "borderColor": "#ffffff", "borderWidth": 1}} for sp in traj["vol_spikes"]], "z": 12})
 
                     rpts = [{"name": "押目", "value": [active_dip_time, active_dip_px], "itemStyle": {"color": "#10b981"}}, {"name": "高値", "value": [active_peak_time, active_peak_px], "itemStyle": {"color": "#f43f5e"}}]
                     if traj["has_actual"] and la_idx >= 0: rpts.append({"name": "NOW", "value": [traj["slots"][la_idx], traj["actual"][la_idx]], "itemStyle": {"color": "#ffffff"}})
@@ -3858,13 +4886,13 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 left_col, right_col = st.columns([1.85, 1.0], gap="medium")
                 with right_col:
                     st.markdown('<div class="dd-cockpit-right">', unsafe_allow_html=True)
-                    _render_command_dock("pc")
+                    _render_command_dock("pc", rerun_on_pos=False)
                     st.markdown('</div>', unsafe_allow_html=True)
                 with left_col:
                     _render_chart_column_core(480)
             else:
+                _render_command_dock("mob", rerun_on_pos=True)
                 _render_chart_column_core(415)
-                _render_command_dock("mob")
 
         with t2:
             d_cells = "".join(f'<div class="dd-dow-cell" style="{"border:1.5px solid #fde047;background:rgba(250,204,21,.10);" if d["dow"]==next_wd else ""}"><div style="font-size:10px;color:{"#fde047" if d["dow"]==next_wd else "#94a3b8"};font-weight:800;">{d["label"]}曜 {"★対象" if d["dow"]==next_wd else ""}</div><div style="font-family:JetBrains Mono,monospace;font-size:12.5px;font-weight:800;color:{"#10b981" if d["avg"]>=0 else "#ef4444"};margin-top:2px;">{d["avg"]:+.2f}%</div><div style="font-size:9.5px;color:#cbd5e1;">勝率 {d["wr"]}%</div></div>' for d in dow_stats)
@@ -3910,9 +4938,10 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             _render_valuation_gauges(info, is_jp)
 
             if isinstance(vp28, dict) and vp28.get("valid"):
-                st.markdown("##### 📊 高解像度 Volume Profile（28分割・VA70% / POC / 短期20日vs中期60日減衰）")
+                u_lbl = vp28.get("unit_label", "M株")
+                st.markdown(f"##### 📊 高解像度 Volume Profile（28分割・VA70% / POC / 短期20日vs中期60日減衰 [{u_lbl}]）")
                 st.markdown(f'<div class="dd-ev-grid" style="margin-top:4px;margin-bottom:6px;"><div class="dd-ev-cell"><div class="dd-metric-lbl">VAH (VA上限)</div><div style="font-family:JetBrains Mono,monospace;font-size:12px;font-weight:800;color:#38bdf8;">{_fmt_cur(vp28["vah_px"], is_jp)}</div></div><div class="dd-ev-cell"><div class="dd-metric-lbl">POC (最大出来高)</div><div style="font-family:JetBrains Mono,monospace;font-size:12px;font-weight:800;color:#fbbf24;">{_fmt_cur(vp28["poc_px"], is_jp)}</div></div><div class="dd-ev-cell"><div class="dd-metric-lbl">VAL (VA下限)</div><div style="font-family:JetBrains Mono,monospace;font-size:12px;font-weight:800;color:#6ee7b7;">{_fmt_cur(vp28["val_px"], is_jp)}</div></div></div>', unsafe_allow_html=True)
-                _render_echarts({"backgroundColor": "#070b14", "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}, "backgroundColor": "rgba(7,11,20,.92)", "borderColor": "rgba(56,189,248,.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}}, "legend": {"type": "scroll", "data": ["直近20日出来高", "中期60日減衰"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2}, "grid": {"top": 28, "bottom": 20, "left": 6, "right": 14, "containLabel": True}, "xAxis": {"type": "value", "splitLine": {"lineStyle": {"color": "rgba(255,255,255,.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9}}, "yAxis": {"type": "category", "data": vp28["labels"], "axisLabel": {"color": "#cbd5e1", "fontSize": 8.5, "interval": 1, "hideOverlap": True}}, "series": [{"name": "直近20日出来高", "type": "bar", "stack": "vp28_stack", "data": vp28["short_bars"], "barMaxWidth": 9, "markLine": {"symbol": ["none", "none"], "silent": True, "data": [{"yAxis": vp28["curr_bin_idx"], "lineStyle": {"color": "#ffffff", "type": "dashed", "width": 1.6}, "label": {"formatter": "現在値", "color": "#ffffff", "fontSize": 9, "fontWeight": "bold", "position": "insideEndTop"}}]}}, {"name": "中期60日減衰", "type": "bar", "stack": "vp28_stack", "data": vp28["mid_bars"], "barMaxWidth": 9}]}, 310, chart_key=f"dd_vp28_{fc}")
+                _render_echarts({"backgroundColor": "#070b14", "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}, "backgroundColor": "rgba(7,11,20,.92)", "borderColor": "rgba(56,189,248,.45)", "textStyle": {"color": "#f8fafc", "fontSize": 10}, "formatter": "{b}<br/>{a0}: {c0}" + u_lbl + "<br/>{a1}: {c1}" + u_lbl}, "legend": {"type": "scroll", "data": ["直近20日出来高", "中期60日減衰"], "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2}, "grid": {"top": 28, "bottom": 20, "left": 6, "right": 14, "containLabel": True}, "xAxis": {"type": "value", "splitLine": {"lineStyle": {"color": "rgba(255,255,255,.06)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9, "formatter": "{value}" + u_lbl}}, "yAxis": {"type": "category", "data": vp28["labels"], "axisLabel": {"color": "#cbd5e1", "fontSize": 8.5, "interval": 1, "hideOverlap": True}}, "series": [{"name": "直近20日出来高", "type": "bar", "stack": "vp28_stack", "data": vp28["short_bars"], "barMaxWidth": 9, "markLine": {"symbol": ["none", "none"], "silent": True, "data": [{"yAxis": vp28["curr_bin_idx"], "lineStyle": {"color": "#ffffff", "type": "dashed", "width": 1.6}, "label": {"formatter": "現在値", "color": "#ffffff", "fontSize": 9, "fontWeight": "bold", "position": "insideEndTop"}}]}}, {"name": "中期60日減衰", "type": "bar", "stack": "vp28_stack", "data": vp28["mid_bars"], "barMaxWidth": 9}]}, 310, chart_key=f"dd_vp28_{fc}")
 
             if (sq := _compute_bbw_squeeze(df_1d)).get("valid"):
                 sqb = f' <span style="background:#0f172a;border:1px solid #ef4444;color:#fecaca;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:800;">🔥 スクイーズ警戒（BBW下位{sq["cur_pct"]}% / ブレイク前兆）</span>' if sq.get("is_squeeze") else f' <span style="color:#94a3b8;font-size:10px;">(BBWパーセンタイル {sq["cur_pct"]}% / 幅 {sq["cur_bbw"]}%)</span>'
@@ -3965,6 +4994,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 st.markdown(f'<div class="dd-dark-box" style="padding:8px 10px;font-size:11px;"><b>📊 日次検証推移:</b> 大引け確定済みロック検証データ蓄積中（現在 {len(vh)}件 / 3件以上で推移グラフを表示）</div>', unsafe_allow_html=True)
 
         ma_d = traj.get("medoid_analog") if isinstance(traj.get("medoid_analog"), dict) else {}
+        we_out = traj["weights_evolution"]
         dd_result = {
             "full_code": fc, "style": in_style, "comp_score": int(comp_score), "meter_lbl": str(meter_lbl), "mkt_regime": mkt_regime, "expansion_regime": exp_reg, "mtf_alignment": mtf_res, "pro_ref_levels": ref_levels,
             "ev_pulse": ev_pulse, "lead_lag_canary": canary_res, "lvn_zones": lvn_zones,
@@ -3981,7 +5011,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "lunch_jump_std_pct": traj.get("lunch_jump_std_pct", 0.0), "lunch_gap_adj_pct": traj.get("lunch_gap_adj_pct", 0.0), "lab_mods": traj.get("lab_mods", {}),
             "medoid_analog": {"date": ma_d.get("date"), "gap_pct": ma_d.get("gap_pct"), "amp_scale": ma_d.get("amp_scale", 1.0) if ma_d else None, "mode": ma_d.get("mode")},
             "vol_profile_meta": traj["vol_profile_meta"], "knn_match": {"matched_dates": traj["knn_match"]["matched_dates"], "mean_dist": traj["knn_match"]["mean_dist"]}, "invalidation_alert": inv_al,
-            "weights_evolution": {"active_cluster": we["active_cluster"], "active_regime": we["active_regime"], "updates_count": we["updates_count"], "regime_updates_count": we["regime_updates_count"], "last_decomp": we["last_decomp"]},
+            "weights_evolution": {"active_cluster": we_out["active_cluster"], "active_regime": we_out["active_regime"], "updates_count": we_out["updates_count"], "regime_updates_count": we_out["regime_updates_count"], "last_decomp": we_out["last_decomp"]},
             "verdict": f"{meter_lbl} (スコア{comp_score} / 想定大引け{active_close_chg:+.2f}% / {mkt_regime['label']} / 信頼度{meta_a['rank']})",
             "summary": m_txt[:450], "dd_score": int(comp_score), "updated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
