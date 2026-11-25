@@ -46,7 +46,7 @@ DEFAULT_WEIGHTS_EVOLUTION = {
 
 
 # =========================================================================
-# 1. DEEP DIVE v21.0 専用CSS（Bloomberg / TradingView Pro 統一端末デザイン）
+# 1. DEEP DIVE v21.1 専用CSS（スマホ横並び強制・高密度プロ端末デザイン）
 # =========================================================================
 def _inject_dd_css():
     css = (
@@ -54,44 +54,47 @@ def _inject_dd_css():
         '[data-stale="true"],[data-stale="false"]{opacity:1!important;transition:none!important;}'
         '[data-testid="stStatusWidget"]{display:none!important;}'
         'iframe{background-color:#050811!important;}'
-        '.block-container{padding-top:2.1rem!important;padding-bottom:1.4rem!important;max-width:1440px!important;}'
-        '.element-container{margin-bottom:0.35rem!important;}'
-        # 上部ヘッダー（アイコンなし・プロ端末タイトル）
-        '.dd-cmd-header{background:#0b1120;border:1px solid rgba(148,163,184,.10);border-radius:7px;padding:6px 11px;display:flex;align-items:center;justify-content:space-between;gap:8px;height:36px;box-sizing:border-box;}'
-        '.dd-cmd-title{font-family:"JetBrains Mono",monospace;font-size:12.5px;font-weight:800;letter-spacing:.06em;color:#f8fafc;line-height:1;}'
-        '.dd-cmd-title span{color:#38bdf8;font-weight:700;margin-left:4px;}'
-        '.dd-cmd-sub{font-size:9px;color:#64748b;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-        # 上部ボタン刷新（操作ガイド / LABへ戻る）
-        'div[data-testid="stPopover"]>button,button[kind="secondary"]{height:36px!important;min-height:36px!important;padding:0 10px!important;border-radius:7px!important;font-family:"JetBrains Mono",sans-serif!important;font-size:11px!important;font-weight:700!important;letter-spacing:.03em!important;background:#0b1120!important;color:#cbd5e1!important;border:1px solid rgba(148,163,184,.16)!important;box-shadow:none!important;transition:all .15s ease!important;white-space:nowrap!important;}'
-        'div[data-testid="stPopover"]>button:hover{background:#111827!important;border-color:rgba(56,189,248,.40)!important;color:#f8fafc!important;}'
+        '.block-container{padding-top:0.55rem!important;padding-bottom:1.2rem!important;padding-left:0.65rem!important;padding-right:0.65rem!important;max-width:1440px!important;}'
+        '.element-container{margin-bottom:0.22rem!important;}'
+        # スマホ画面でも横並びカラムを縦積みさせない強制ルール
+        '[data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;gap:5px!important;width:100%!important;}'
+        '[data-testid="stHorizontalBlock"]>[data-testid="stColumn"]{min-width:0!important;flex-shrink:1!important;}'
+        # タイトルヘッダー（元のサイズ感・洗練された発光アクセント）
+        '.dd-cmd-header{background:linear-gradient(135deg,#0b1120 0%,#0f172a 100%);border:1px solid rgba(56,189,248,.22);border-left:3.5px solid #38bdf8;border-radius:8px;padding:7px 10px;display:flex;flex-direction:column;justify-content:center;min-height:42px;box-sizing:border-box;}'
+        '.dd-cmd-title{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:900;letter-spacing:.05em;color:#f8fafc;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+        '.dd-cmd-title span{color:#38bdf8;font-weight:800;margin-left:4px;}'
+        '.dd-cmd-sub{font-size:9px;color:#94a3b8;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+        # 上部ボタン刷新（操作ガイド / LABへ戻る：スリム・モダン）
+        'div[data-testid="stPopover"]>button{height:38px!important;min-height:38px!important;padding:0 8px!important;border-radius:8px!important;font-family:"JetBrains Mono",sans-serif!important;font-size:10.5px!important;font-weight:700!important;letter-spacing:.02em!important;background:rgba(15,23,42,.92)!important;color:#cbd5e1!important;border:1px solid rgba(148,163,184,.22)!important;box-shadow:none!important;transition:all .15s ease!important;white-space:nowrap!important;}'
+        'div[data-testid="stPopover"]>button:hover{background:#1e293b!important;border-color:rgba(56,189,248,.48)!important;color:#f8fafc!important;}'
         'div[data-testid="stPopover"]>button svg{display:none!important;}'
-        '.dd-back-wrap button{background:rgba(56,189,248,.08)!important;border:1px solid rgba(56,189,248,.42)!important;color:#38bdf8!important;font-weight:800!important;}'
-        '.dd-back-wrap button:hover{background:rgba(56,189,248,.18)!important;border-color:#38bdf8!important;color:#f8fafc!important;}'
-        # モダン・ピルトグルスイッチ（10s自動 / PC表示）
-        '[data-testid="stToggle"]{background:#0b1120;border:1px solid rgba(148,163,184,.12);border-radius:7px;padding:4px 8px!important;height:36px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}'
-        '[data-testid="stToggle"] label{gap:6px!important;margin:0!important;align-items:center!important;}'
-        '[data-testid="stToggle"] label p{font-family:"JetBrains Mono",sans-serif!important;font-size:10.5px!important;font-weight:700!important;color:#94a3b8!important;white-space:nowrap!important;}'
-        '[data-testid="stToggle"] input:checked + div{background-color:#0284c7!important;box-shadow:0 0 8px rgba(56,189,248,.45)!important;}'
+        'button[kind="secondary"]{height:38px!important;min-height:38px!important;padding:0 8px!important;border-radius:8px!important;font-family:"JetBrains Mono",sans-serif!important;font-size:10.5px!important;font-weight:800!important;letter-spacing:.02em!important;background:linear-gradient(135deg,rgba(14,165,233,.16),rgba(56,189,248,.08))!important;border:1px solid rgba(56,189,248,.52)!important;color:#38bdf8!important;box-shadow:0 0 10px rgba(56,189,248,.12)!important;transition:all .15s ease!important;white-space:nowrap!important;}'
+        'button[kind="secondary"]:hover{background:rgba(56,189,248,.24)!important;border-color:#38bdf8!important;color:#ffffff!important;}'
+        # モダン・ピルトグルスイッチ（10s自動 / PC表示：コンパクト1行）
+        '[data-testid="stToggle"]{background:#0b1120;border:1px solid rgba(148,163,184,.14);border-radius:7px;padding:0 6px!important;height:34px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}'
+        '[data-testid="stToggle"] label{gap:4px!important;margin:0!important;align-items:center!important;}'
+        '[data-testid="stToggle"] label p{font-family:"JetBrains Mono",sans-serif!important;font-size:9.8px!important;font-weight:700!important;color:#cbd5e1!important;white-space:nowrap!important;}'
+        '[data-testid="stToggle"] input:checked + div{background-color:#0284c7!important;box-shadow:0 0 8px rgba(56,189,248,.50)!important;}'
         # 入力欄＆セレクトボックスのスリム化
-        '[data-testid="stTextInput"] input,[data-testid="stSelectbox"]>div>div{background:#0b1120!important;border:1px solid rgba(148,163,184,.14)!important;border-radius:7px!important;min-height:36px!important;height:36px!important;font-family:"JetBrains Mono",monospace!important;font-size:11.5px!important;color:#f8fafc!important;}'
+        '[data-testid="stTextInput"] input,[data-testid="stSelectbox"]>div>div{background:#0b1120!important;border:1px solid rgba(148,163,184,.16)!important;border-radius:7px!important;min-height:34px!important;height:34px!important;font-family:"JetBrains Mono",monospace!important;font-size:11px!important;color:#f8fafc!important;padding-top:0!important;padding-bottom:0!important;}'
         # バッジ＆ストリップ
         '.pill-badge{display:inline-flex;align-items:center;gap:4px;font-family:"JetBrains Mono",monospace;font-size:9px;font-weight:700;padding:1.5px 6px;border-radius:4px;background:#111827;border:1px solid rgba(148,163,184,.12);color:#94a3b8;margin-right:4px;}'
         '.dd-led-dot{width:5px;height:5px;border-radius:50%;display:inline-block;flex-shrink:0;}'
         '.dd-macro-strip,.dd-status-strip,.dd-inst-ribbon,.dd-chip-ribbon{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;scrollbar-width:none;}'
         '.dd-macro-strip::-webkit-scrollbar,.dd-status-strip::-webkit-scrollbar,.dd-inst-ribbon::-webkit-scrollbar,.dd-chip-ribbon::-webkit-scrollbar,.dd-mtf-bar::-webkit-scrollbar{display:none;}'
         '.dd-macro-strip{padding:1px 0 2px 0;margin-bottom:2px;}'
-        '.dd-macro-chip{flex-shrink:0;background:#0b1120;border:1px solid rgba(148,163,184,.09);border-radius:5px;padding:2px 6px;font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;font-size:9.5px;display:inline-flex;align-items:center;gap:4px;}'
-        '.dd-status-strip{padding:1px 0 3px 0;}'
+        '.dd-macro-chip{flex-shrink:0;background:#0b1120;border:1px solid rgba(148,163,184,.10);border-radius:5px;padding:2px 6px;font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;font-size:9.5px;display:inline-flex;align-items:center;gap:4px;}'
+        '.dd-status-strip{padding:1px 0 2px 0;}'
         '.dd-st-pill{flex-shrink:0;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:#0b1120;border:1px solid rgba(148,163,184,.12);color:#cbd5e1;display:inline-flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums;}'
         # スリム・ヒーローカード
-        '.dd-hero-card{background:#0b1120;border:1px solid rgba(148,163,184,.11);border-left:2.5px solid #38bdf8;border-radius:8px;padding:7px 10px;margin:2px 0 5px 0;}'
-        '.dd-winrate-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:#050811;border:1px solid rgba(148,163,184,.09);border-radius:6px;padding:4px 5px;margin-top:5px;text-align:center;}'
+        '.dd-hero-card{background:#0b1120;border:1px solid rgba(148,163,184,.12);border-left:3px solid #38bdf8;border-radius:8px;padding:7px 10px;margin:2px 0 4px 0;}'
+        '.dd-winrate-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:#050811;border:1px solid rgba(148,163,184,.10);border-radius:6px;padding:4px 5px;margin-top:5px;text-align:center;}'
         '.dd-metric-val{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;font-size:11.5px;font-weight:800;color:#f8fafc;margin-top:1px;}'
         '.dd-metric-lbl{font-size:8.6px;color:#64748b;font-weight:700;letter-spacing:.02em;}'
         '.dd-range-track{width:100%;height:3px;background:rgba(148,163,184,.14);border-radius:99px;position:relative;margin:3px 0 1px 0;}'
         '.dd-range-dot{width:7px;height:7px;background:#38bdf8;border:1.5px solid #050811;border-radius:50%;position:absolute;top:-2px;transform:translateX(-50%);}'
         # コマンドドック（1行4分割セグメントバー）
-        '.dd-dock-wrap{background:#0b1120;border:1px solid rgba(148,163,184,.11);border-radius:8px;padding:6px 8px;margin:4px 0 6px 0;}'
+        '.dd-dock-wrap{background:#0b1120;border:1px solid rgba(148,163,184,.12);border-radius:8px;padding:6px 8px;margin:3px 0 5px 0;}'
         '.dd-dock-head{font-family:"JetBrains Mono",monospace;font-size:9px;font-weight:700;color:#64748b;letter-spacing:.05em;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;}'
         '.dd-dock-nav [data-testid="stRadio"]>div{display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:3px!important;background:#050811!important;padding:3px!important;border-radius:6px!important;border:1px solid rgba(148,163,184,.10)!important;width:100%!important;}'
         '.dd-dock-nav [data-testid="stRadio"] label{margin:0!important;padding:0!important;height:28px!important;min-height:28px!important;display:flex!important;align-items:center!important;justify-content:center!important;border-radius:5px!important;background:transparent!important;cursor:pointer!important;transition:all .15s ease!important;border:1px solid transparent!important;}'
@@ -3318,7 +3321,7 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
     }
 # === PART 5 / 5 ===
 # =========================================================================
-# 8. 実測5軸レーダー・AIメモ生成・LAB共有・メイン関数（v21.0 完全版）
+# 8. 実測5軸レーダー・AIメモ生成・LAB共有・メイン関数（v21.1 完全版）
 # =========================================================================
 def _compute_real_5axis(info: dict, ovh_pct: float, gov_cnt: int) -> tuple:
     axes, vals, miss = [], [], []
@@ -3434,11 +3437,11 @@ def _format_lab_deep_context(lab_full: dict, lab_council: dict) -> str:
 
 
 def _render_unified_guide():
-    st.markdown('<div class="dd-guide-box"><b>v21.0 クオンツ＆プロ端末 操作ガイド</b><br>1. <b>非破壊10秒リアルタイム同期:</b> 「10s自動」をONにすると、チャートフレームを再生成せず差分データのみを注入します。スマホ横拡大中でも画面が戻らず、点滅も発生しません。<br>2. <b>音声＆電子音トリガー監視官:</b> チャート右上の「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と日本語音声で即時通知します。<br>3. <b>リアルタイムEV＆二壁FPT脈拍ゲージ:</b> 現在価格（成行基準）での「物理的二壁FPT勝率 vs 損益分岐勝率」とRR比を常時算出し、好機・待機・飛びつき禁止を即断できます。<br>4. <b>流動性真空帯（LVN加速ゾーン）:</b> 28分割出来高プロファイルから板が極端に薄い真空価格帯を自動抽出し、メインチャートへ加速ゾーンとして重ね描きします。<br>5. <b>1行コマンドドック（執行 / レーダー / シナリオ / 計算）:</b> チャート直下（PC表示時は右カラム）の4切替バーで執行管理と市場解析を瞬時に切り替えられます。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="dd-guide-box"><b>v21.1 クオンツ＆プロ端末 操作ガイド</b><br>1. <b>非破壊10秒リアルタイム同期:</b> 「10s自動」ON（初期値ON）時は、チャートフレームを再生成せず差分データのみを注入します。スマホ横拡大中でも画面が戻らず、点滅も発生しません。<br>2. <b>音声＆電子音トリガー監視官:</b> チャート右上の「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と日本語音声で即時通知します。<br>3. <b>リアルタイムEV＆二壁FPT脈拍ゲージ:</b> 現在価格（成行基準）での「物理的二壁FPT勝率 vs 損益分岐勝率」とRR比を常時算出し、好機・待機・飛びつき禁止を即断できます。<br>4. <b>流動性真空帯（LVN加速ゾーン）:</b> 28分割出来高プロファイルから板が極端に薄い真空価格帯を自動抽出し、メインチャートへ加速ゾーンとして重ね描きします。<br>5. <b>1行コマンドドック（執行 / レーダー / シナリオ / 計算）:</b> チャート直下（PC表示時は右カラム）の4切替バーで執行管理と市場解析を瞬時に切り替えられます。</div>', unsafe_allow_html=True)
 
 
 # =========================================================================
-# 9. メインエントリ関数（YAMASHISHI DEEP DIVE v21.0 完全版）
+# 9. メインエントリ関数（YAMASHISHI DEEP DIVE v21.1 完全版）
 # =========================================================================
 def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイトレード", gemini_api_key: str = "", lab_ctx: dict = None):
     _inject_dd_css()
@@ -3450,27 +3453,26 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     eff_init_code = qp_code if qp_code else init_code
     eff_init_style = qp_style if qp_style in STYLES else (init_style if init_style in STYLES else STYLES[0])
 
-    h1, h2, h3 = st.columns([2.5, 0.95, 1.05])
-    h1.markdown('<div class="dd-cmd-header"><div style="min-width:0;"><div class="dd-cmd-title">YAMASHISHI DEEP DIVE<span>v21.0</span></div><div class="dd-cmd-sub">非破壊10s同期・音声監視・EV脈拍・LVN真空帯・WSライブ</div></div></div>', unsafe_allow_html=True)
+    # 1行目：タイトル（左）＋ 操作ガイド ＋ LABへ戻る（スマホでも横並び1行固定）
+    h1, h2, h3 = st.columns([2.25, 0.85, 0.90])
+    h1.markdown('<div class="dd-cmd-header"><div class="dd-cmd-title">YAMASHISHI DEEP DIVE<span>v21.1</span></div><div class="dd-cmd-sub">非破壊10s同期・音声監視・EV脈拍・LVN真空帯</div></div>', unsafe_allow_html=True)
     with h2:
         with (st.popover("操作ガイド", use_container_width=True) if hasattr(st, "popover") else st.expander("操作ガイド")):
             _render_unified_guide()
-    with h3:
-        st.markdown('<div class="dd-back-wrap">', unsafe_allow_html=True)
-        if st.button("LABへ戻る", key="dd_back_to_lab_btn", use_container_width=True, type="secondary"):
-            try:
-                st.query_params["page"] = "TOP"
-            except Exception:
-                pass
-            st.session_state["navigation_page"] = "TOP"
-            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+    if h3.button("LABへ戻る", key="dd_back_to_lab_btn", use_container_width=True, type="secondary"):
+        try:
+            st.query_params["page"] = "TOP"
+        except Exception:
+            pass
+        st.session_state["navigation_page"] = "TOP"
+        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+        st.rerun()
 
-    c1, c2, c3, c4 = st.columns([1.6, 1.4, 0.95, 0.95])
-    in_code = c1.text_input("銘柄コード", value=eff_init_code, placeholder="例: NVDA / 6920", label_visibility="collapsed", key="dd_code_in")
+    # 2行目：銘柄コード ＋ スタイル ＋ 10s自動（初期ON） ＋ PC表示（スマホでも横並び1行固定）
+    c1, c2, c3, c4 = st.columns([1.25, 1.35, 0.70, 0.70])
+    in_code = c1.text_input("銘柄コード", value=eff_init_code, placeholder="NVDA / 6920", label_visibility="collapsed", key="dd_code_in")
     in_style = c2.selectbox("スタイル", STYLES, index=STYLES.index(eff_init_style), label_visibility="collapsed", key="dd_style_in")
-    auto_sync = c3.toggle("10s自動", value=False, key="dd_auto_sync", help="ONで10秒ごとに非破壊パッチ同期（横拡大中も維持）")
+    auto_sync = c3.toggle("10s自動", value=True, key="dd_auto_sync", help="ONで10秒ごとに非破壊パッチ同期（横拡大中も維持）")
     pc_cockpit = c4.toggle("PC表示", value=False, key="dd_pc_cockpit", help="PC横画面専用の2カラム・コックピット表示")
 
     fc = in_code.strip().upper()
@@ -3976,7 +3978,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     st.session_state.update({"dd_last_preset": sel_preset, "dd_last_style_sig": spsig, "dd_chart_mode": modes[pmi], "dd_opt_lines": [x for x in prl if x in line_opts]})
 
                 with cfg_col:
-                    with (st.popover("表示設定", use_container_width=True) if hasattr(st, "popover") else st.expander("表示設定")):
+                    with (st.popover("設定", use_container_width=True) if hasattr(st, "popover") else st.expander("設定")):
                         chart_mode = st.radio("軌道モード", modes, index=pmi, key="dd_chart_mode")
                         opt_lines = st.multiselect("表示レイヤー", line_opts, default=[x for x in prl if x in line_opts], key="dd_opt_lines")
                         if not is_jp:
