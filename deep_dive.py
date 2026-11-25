@@ -45,7 +45,7 @@ DEFAULT_WEIGHTS_EVOLUTION = {
 
 
 # =========================================================================
-# 1. DEEP DIVE v19.3 専用CSS（EV脈拍ゲージ・遅行カナリア・コックピット統合）
+# 1. DEEP DIVE v19.3 専用CSS（完全版）
 # =========================================================================
 def _inject_dd_css():
     css = (
@@ -68,11 +68,10 @@ def _inject_dd_css():
         '.dd-pos-hud.loss{border-left-color:#ef4444;background:linear-gradient(135deg,rgba(30,15,22,.94) 0%,rgba(11,17,32,.96) 100%);}'
         '.dd-pos-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:7px;}'
         '.dd-pos-cell{background:rgba(7,11,20,.84);border:1px solid rgba(148,163,184,.18);border-radius:7px;padding:5px 7px;}'
-        '.dd-ev-pulse{background:linear-gradient(135deg,rgba(11,17,32,.92) 0%,rgba(15,23,42,.88) 100%);backdrop-filter:blur(8px);border:1px solid rgba(148,163,184,.20);border-left:4px solid #38bdf8;border-radius:9px;padding:7px 10px;margin:5px 0 7px 0;font-variant-numeric:tabular-nums;}'
+        '.dd-ev-pulse{background:rgba(11,17,32,.86);backdrop-filter:blur(8px);border:1px solid rgba(148,163,184,.18);border-left:4px solid #38bdf8;border-radius:9px;padding:7px 10px;margin:5px 0 7px 0;font-variant-numeric:tabular-nums;}'
         '.dd-ev-pulse-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:5px;}'
-        '.dd-ev-pulse-cell{background:rgba(7,11,20,.78);border:1px solid rgba(148,163,184,.15);border-radius:6px;padding:4px 6px;}'
-        '.dd-canary-banner{display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,rgba(16,185,129,.16) 0%,rgba(15,23,42,.92) 100%);border:1px solid rgba(16,185,129,.45);border-left:3.5px solid #10b981;border-radius:7px;padding:5px 10px;margin-bottom:6px;font-size:10.8px;line-height:1.45;color:#d1fae5;}'
-        '.dd-canary-banner.bear{background:linear-gradient(90deg,rgba(239,68,68,.16) 0%,rgba(15,23,42,.92) 100%);border-color:rgba(239,68,68,.45);border-left-color:#ef4444;color:#fecaca;}'
+        '.dd-canary-banner{background:linear-gradient(90deg,rgba(16,185,129,.16) 0%,rgba(15,23,42,.92) 100%);border:1px solid rgba(16,185,129,.42);border-left:3.5px solid #10b981;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:11px;line-height:1.5;color:#d1fae5;}'
+        '.dd-canary-banner.bear{background:linear-gradient(90deg,rgba(239,68,68,.16) 0%,rgba(15,23,42,.92) 100%);border-color:rgba(239,68,68,.42);border-left-color:#ef4444;color:#fecaca;}'
         '.dd-copy-bar{margin:2px 0 6px 0;}'
         '.dd-cockpit-right .dd-dark-box,.dd-cockpit-right .dd-memo-box{padding:9px 11px;margin-bottom:8px;font-size:11.2px;line-height:1.58;}'
         '.dd-mtf-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;overflow-x:auto;gap:5px;background:rgba(11,17,32,.78);backdrop-filter:blur(8px);border:1px solid rgba(56,189,248,.22);border-radius:8px;padding:4px 8px;margin-bottom:6px;scrollbar-width:none;}'
@@ -449,7 +448,7 @@ def _update_weights_two_stage(w_evo: dict, fc_code: str, df_1d: pd.DataFrame, st
 
 
 # =========================================================================
-# 3. ヘルパー・1クリックコピー・保有ポジションHUD・音声監視官＆Finnhub WS描画
+# 3. ヘルパー・1クリックコピー・保有ポジションHUD・音声監視＆Finnhub WS描画
 # =========================================================================
 def _fmt_cur(val, is_jp: bool) -> str:
     if val is None or (isinstance(val, float) and np.isnan(val)):
@@ -579,20 +578,9 @@ def _compute_position_metrics(curr_px: float, entry_px: float, shares: int, init
         status_badge, badge_col = "🟡 含み損耐え圏内", "#f59e0b"
 
     return {
-        "is_long": is_long,
-        "side": "LONG" if is_long else "SHORT",
-        "entry": ep,
-        "shares": sh,
-        "init_sl": sl_val,
-        "pnl": pnl,
-        "pnl_pct": round(pnl_pct, 2),
-        "r_mult": round(r_mult, 2),
-        "sl_dist_pct": round(sl_dist_pct, 2),
-        "rem_loss": rem_loss,
-        "trail_sl": trail_sl,
-        "trail_note": trail_note,
-        "status_badge": status_badge,
-        "badge_col": badge_col,
+        "is_long": is_long, "side": "LONG" if is_long else "SHORT", "entry": ep, "shares": sh, "init_sl": sl_val,
+        "pnl": pnl, "pnl_pct": round(pnl_pct, 2), "r_mult": round(r_mult, 2), "sl_dist_pct": round(sl_dist_pct, 2),
+        "rem_loss": rem_loss, "trail_sl": trail_sl, "trail_note": trail_note, "status_badge": status_badge, "badge_col": badge_col,
     }
 
 
@@ -657,12 +645,8 @@ def _render_position_hud(fc: str, curr_px: float, is_jp: bool, default_side: str
     ], height=34)
 
     return {
-        "active": True,
-        "side": pm["side"],
-        "entry": pm["entry"],
-        "shares": pm["shares"],
-        "sl": pm["init_sl"],
-        "trail_sl": pm["trail_sl"],
+        "active": True, "side": pm["side"], "entry": pm["entry"], "shares": pm["shares"],
+        "sl": pm["init_sl"], "trail_sl": pm["trail_sl"],
     }
 
 
@@ -852,7 +836,7 @@ def _render_echarts(
     }}
     """
 
-    finnhub_and_audio_js = f"""
+    sound_and_ws_js = f"""
     var FH_KEY = {fh_key_js};
     var FH_SYM = {fh_sym_js};
     var IS_1M_MODE = {is_1m_js};
@@ -860,124 +844,98 @@ def _render_echarts(
     var POS_CTX = {pos_ctx_js};
     var ALERT_CTX = {alert_ctx_js};
 
-    // === ブラウザ内蔵・音声＆電子音トリガー監視官 ===
     var soundEnabled = false;
     var audioCtx = null;
     var lastAlertTs = {{}};
 
-    function playBeep(freq, durMs, waveType) {{
+    function playBeep(freq, durMs, oscType) {{
       if (!soundEnabled) return;
       try {{
-        var AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return;
-        if (!audioCtx) audioCtx = new AC();
+        if (!audioCtx) {{
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) audioCtx = new AC();
+        }}
+        if (!audioCtx) return;
         if (audioCtx.state === 'suspended') audioCtx.resume();
         var osc = audioCtx.createOscillator();
         var gain = audioCtx.createGain();
-        osc.type = waveType || 'sine';
+        osc.type = oscType || 'sine';
         osc.frequency.setValueAtTime(freq || 880, audioCtx.currentTime);
         gain.gain.setValueAtTime(0.14, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (durMs || 120) / 1000.0);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (durMs || 140) / 1000.0);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start();
-        osc.stop(audioCtx.currentTime + (durMs || 120) / 1000.0);
+        osc.stop(audioCtx.currentTime + (durMs || 140) / 1000.0);
       }} catch (e) {{}}
     }}
 
-    function speakAlert(text) {{
-      if (!soundEnabled || !text) return;
+    function speakAlert(txt) {{
+      if (!soundEnabled || !txt) return;
       try {{
         if ('speechSynthesis' in window) {{
           window.speechSynthesis.cancel();
-          var ut = new SpeechSynthesisUtterance(text);
-          ut.lang = 'ja-JP';
-          ut.rate = 1.15;
-          ut.volume = 0.95;
-          window.speechSynthesis.speak(ut);
+          var u = new SpeechSynthesisUtterance(txt);
+          u.lang = 'ja-JP';
+          u.rate = 1.15;
+          window.speechSynthesis.speak(u);
         }}
       }} catch (e) {{}}
     }}
 
-    function canFireAlert(key, cooldownMs) {{
+    function fireCooldownedAlert(key, freq, durMs, oscType, speechText) {{
       var now = Date.now();
-      var cd = cooldownMs || 60000;
-      if (!lastAlertTs[key] || (now - lastAlertTs[key]) >= cd) {{
-        lastAlertTs[key] = now;
-        return true;
-      }}
-      return false;
+      if (lastAlertTs[key] && (now - lastAlertTs[key]) < 60000) return;
+      lastAlertTs[key] = now;
+      playBeep(freq, durMs, oscType);
+      speakAlert(speechText);
     }}
 
-    function checkPriceAlerts(pxVal) {{
-      if (!soundEnabled || !ALERT_CTX || !pxVal || pxVal <= 0) return;
-      var sym = String(ALERT_CTX.symbol || '').replace('.T', '');
+    function checkPriceAlerts(px) {{
+      if (!soundEnabled || !ALERT_CTX || !px || px <= 0) return;
+      var sym = String(ALERT_CTX.symbol || '');
       var isLong = (ALERT_CTX.is_long !== false);
-      var eLo = Number(ALERT_CTX.entry_lo || 0);
-      var eHi = Number(ALERT_CTX.entry_hi || 0);
-      var halfR = Number(ALERT_CTX.half_r || 0);
+      var elo = Number(ALERT_CTX.entry_lo || 0);
+      var ehi = Number(ALERT_CTX.entry_hi || 0);
+      var hr = Number(ALERT_CTX.half_r || 0);
       var tp = Number(ALERT_CTX.tp || 0);
       var sl = Number(ALERT_CTX.sl || 0);
 
-      if (sl > 0) {{
-        var slHit = isLong ? (pxVal <= sl * 1.0015) : (pxVal >= sl * 0.9985);
-        if (slHit && canFireAlert('sl', 60000)) {{
-          playBeep(320, 260, 'sawtooth');
-          speakAlert(sym + '、損切りライン警戒');
-          return;
-        }}
+      if (elo > 0 && ehi >= elo && px >= elo && px <= ehi) {{
+        fireCooldownedAlert('ENTRY', 660, 140, 'sine', sym + '、エントリーゾーン到達');
       }}
-      if (tp > 0) {{
-        var tpHit = isLong ? (pxVal >= tp) : (pxVal <= tp);
-        if (tpHit && canFireAlert('tp', 60000)) {{
-          playBeep(1046, 180, 'sine');
-          speakAlert(sym + '、利確目標到達');
-          return;
-        }}
+      if (hr > 0 && ((isLong && px >= hr) || (!isLong && px <= hr))) {{
+        fireCooldownedAlert('HALFR', 980, 150, 'triangle', 'プラス1R到達、半分利確ラインです');
       }}
-      if (halfR > 0) {{
-        var hrHit = isLong ? (pxVal >= halfR) : (pxVal <= halfR);
-        if (hrHit && canFireAlert('half_r', 60000)) {{
-          playBeep(880, 100, 'sine');
-          setTimeout(function() {{ playBeep(1100, 140, 'sine'); }}, 120);
-          speakAlert('プラス1R到達、半分利確ラインです');
-          return;
-        }}
+      if (tp > 0 && ((isLong && px >= tp) || (!isLong && px <= tp))) {{
+        fireCooldownedAlert('TP', 1175, 200, 'sine', '利確目標到達');
       }}
-      if (eLo > 0 && eHi >= eLo && pxVal >= eLo && pxVal <= eHi) {{
-        if (canFireAlert('entry', 60000)) {{
-          playBeep(660, 120, 'sine');
-          speakAlert(sym + '、エントリーゾーン到達');
-        }}
+      if (sl > 0 && ((isLong && px <= sl * 1.0015) || (!isLong && px >= sl * 0.9985))) {{
+        fireCooldownedAlert('SL', 320, 260, 'sawtooth', '損切りライン警戒');
       }}
     }}
 
     function toggleSound() {{
       soundEnabled = !soundEnabled;
-      var sBtn = document.getElementById('snd-btn');
-      if (soundEnabled) {{
-        if (sBtn) {{
-          sBtn.textContent = '🔊 音声ON';
-          sBtn.style.borderColor = '#10b981';
-          sBtn.style.color = '#6ee7b7';
-          sBtn.style.background = 'rgba(16,185,129,0.20)';
+      var sb = document.getElementById('snd-btn');
+      if (sb) {{
+        if (soundEnabled) {{
+          sb.textContent = '🔊 音声ON';
+          sb.style.borderColor = '#10b981';
+          sb.style.color = '#6ee7b7';
+          sb.style.background = 'rgba(16,185,129,0.22)';
+          playBeep(880, 90, 'sine');
+          if (ALERT_CTX && (ALERT_CTX.exp_dir === 'UP' || ALERT_CTX.exp_dir === 'DOWN')) {{
+            fireCooldownedAlert('EXP_INIT', 740, 140, 'triangle', 'ブレイクモード稼働中');
+          }} else if (ALERT_CTX && (ALERT_CTX.cvd_state === 'DISTRIBUTION' || ALERT_CTX.cvd_state === 'ABSORPTION')) {{
+            fireCooldownedAlert('CVD_INIT', 620, 140, 'triangle', 'CVDダイバージェンス検知');
+          }}
+        }} else {{
+          sb.textContent = '🔇 音声OFF';
+          sb.style.borderColor = 'rgba(148,163,184,0.4)';
+          sb.style.color = '#94a3b8';
+          sb.style.background = 'rgba(15,23,42,0.92)';
         }}
-        playBeep(880, 80, 'sine');
-        var curP = (typeof latestPx === 'number' && latestPx > 0) ? latestPx : Number(ALERT_CTX.curr_px || 0);
-        if (curP > 0) checkPriceAlerts(curP);
-        if ((ALERT_CTX.exp_dir === 'UP' || ALERT_CTX.exp_dir === 'DOWN') && canFireAlert('exp_init', 120000)) {{
-          setTimeout(function() {{ playBeep(980, 110, 'triangle'); }}, 160);
-        }} else if ((ALERT_CTX.cvd_state === 'DISTRIBUTION' || ALERT_CTX.cvd_state === 'ABSORPTION') && canFireAlert('cvd_init', 120000)) {{
-          setTimeout(function() {{ playBeep(740, 110, 'triangle'); }}, 160);
-        }}
-      }} else {{
-        if (sBtn) {{
-          sBtn.textContent = '🔇 音声OFF';
-          sBtn.style.borderColor = 'rgba(56,189,248,0.42)';
-          sBtn.style.color = '#94a3b8';
-          sBtn.style.background = 'rgba(15,23,42,0.92)';
-        }}
-        try {{ if ('speechSynthesis' in window) window.speechSynthesis.cancel(); }} catch (e) {{}}
       }}
     }}
 
@@ -998,9 +956,9 @@ def _render_echarts(
              pSgn + '$' + Math.abs(pnl).toFixed(2) + ' (' + rSgn + rm.toFixed(2) + 'R)</b>';
     }}
 
-    var latestPx = null;
     if (FH_KEY && FH_SYM && !IS_JP_CHART) {{
       var ws = null;
+      var latestPx = null;
       var prevTickPx = null;
       var dirty = false;
 
@@ -1145,14 +1103,14 @@ def _render_echarts(
         '<div id="ws-live-badge" style="display:none;align-items:center;background:rgba(15,23,42,.95);border:1px solid rgba(16,185,129,.42);border-radius:4px;padding:1px 6px;font-family:\'JetBrains Mono\',monospace;font-variant-numeric:tabular-nums;font-size:9.5px;flex-shrink:0;"></div>'
         '<div id="hud-line">👆 タップ / ホバーで精密数値表示</div>'
         '<div id="ctrl-bar"><span id="fs-hint">FS中（60s更新OFF推奨）</span>'
-        '<button id="snd-btn" onclick="toggleSound()" title="ブラウザ音声＆電子音トリガー通知を切替">🔇 音声OFF</button>'
+        '<button id="snd-btn" onclick="toggleSound()" title="価格到達・ブレイク音声アラート切替">🔇 音声OFF</button>'
         '<button id="rst-btn" onclick="resetZoom()" title="拡大ズームを初期状態へリセット">↺</button>'
         '<button id="fs-btn" onclick="toggleFS()" title="スマホ横向きフル大画面">⛶ 横拡大</button></div></div>'
     ) if (enable_fullscreen or use_hud_tooltip) else ""
 
     html_code = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-    <style>html,body{{width:100%;height:100%;margin:0;padding:0;background:#070b14;overflow:hidden;}}#wrap{{display:flex;flex-direction:column;width:100%;height:100%;background:#070b14;overflow:hidden;}}#wrap.force-landscape{{position:fixed!important;top:0!important;left:100vw!important;transform:rotate(90deg)!important;transform-origin:top left!important;z-index:999999!important;}}#top-bar{{height:28px;min-height:28px;max-height:28px;background:#0b1120;border-bottom:1px solid rgba(148,163,184,.16);display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 6px;box-sizing:border-box;flex-shrink:0;}}#hud-line{{flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:9.8px;color:#94a3b8;white-space:nowrap;overflow-x:auto;scrollbar-width:none;}}#hud-line::-webkit-scrollbar{{display:none;}}#hud-line b{{color:#f8fafc;}}#ctrl-bar{{display:inline-flex;align-items:center;gap:4px;flex-shrink:0;}}#fs-hint{{display:none;background:rgba(15,23,42,.9);color:#fde047;border:1px solid rgba(250,204,21,.4);border-radius:4px;padding:1px 5px;font-size:8.8px;font-weight:700;font-family:'JetBrains Mono',sans-serif;white-space:nowrap;}}#wrap.is-fs #fs-hint{{display:inline-block;}}#snd-btn,#rst-btn,#fs-btn{{background:rgba(15,23,42,.92);color:#7dd3fc;border:1px solid rgba(56,189,248,.42);border-radius:5px;padding:1.5px 6px;font-size:9.5px;font-weight:700;cursor:pointer;font-family:'JetBrains Mono',sans-serif;line-height:1.2;}}#snd-btn{{color:#94a3b8;}}#rst-btn{{padding:1.5px 5px;color:#cbd5e1;}}#snd-btn:active,#rst-btn:active,#fs-btn:active{{background:rgba(56,189,248,.25);}}#c{{flex:1;min-height:0;width:100%;}}</style>
+    <style>html,body{{width:100%;height:100%;margin:0;padding:0;background:#070b14;overflow:hidden;}}#wrap{{display:flex;flex-direction:column;width:100%;height:100%;background:#070b14;overflow:hidden;}}#wrap.force-landscape{{position:fixed!important;top:0!important;left:100vw!important;transform:rotate(90deg)!important;transform-origin:top left!important;z-index:999999!important;}}#top-bar{{height:28px;min-height:28px;max-height:28px;background:#0b1120;border-bottom:1px solid rgba(148,163,184,.16);display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 6px;box-sizing:border-box;flex-shrink:0;}}#hud-line{{flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:9.8px;color:#94a3b8;white-space:nowrap;overflow-x:auto;scrollbar-width:none;}}#hud-line::-webkit-scrollbar{{display:none;}}#hud-line b{{color:#f8fafc;}}#ctrl-bar{{display:inline-flex;align-items:center;gap:4px;flex-shrink:0;}}#fs-hint{{display:none;background:rgba(15,23,42,.9);color:#fde047;border:1px solid rgba(250,204,21,.4);border-radius:4px;padding:1px 5px;font-size:8.8px;font-weight:700;font-family:'JetBrains Mono',sans-serif;white-space:nowrap;}}#wrap.is-fs #fs-hint{{display:inline-block;}}#snd-btn,#rst-btn,#fs-btn{{background:rgba(15,23,42,.92);color:#7dd3fc;border:1px solid rgba(56,189,248,.42);border-radius:5px;padding:1.5px 6px;font-size:9.5px;font-weight:700;cursor:pointer;font-family:'JetBrains Mono',sans-serif;line-height:1.2;}}#snd-btn{{border-color:rgba(148,163,184,.4);color:#94a3b8;}}#rst-btn{{padding:1.5px 5px;color:#cbd5e1;}}#rst-btn:active,#fs-btn:active{{background:rgba(56,189,248,.25);}}#c{{flex:1;min-height:0;width:100%;}}</style>
     </head><body><div id="wrap">{top_bar}<div id="c"></div></div><script>
       var STORAGE_KEY='dd_dz_'+{json.dumps(safe_ck)},IS_DUAL={'true' if is_dual_grid else 'false'},ENABLE_FS={'true' if enable_fullscreen else 'false'},USE_HUD={'true' if use_hud_tooltip else 'false'};
       var isUserHovering=false;
@@ -1198,7 +1156,7 @@ def _render_echarts(
       window.addEventListener('resize',scheduleResize);if(typeof ResizeObserver!=='undefined')new ResizeObserver(scheduleResize).observe(wrap||el);
       if(ENABLE_FS){{document.addEventListener('fullscreenchange',onFSChange);document.addEventListener('webkitfullscreenchange',onFSChange);window.addEventListener('orientationchange',function(){{setTimeout(function(){{applyLayout(!!(document.fullscreenElement||document.webkitFullscreenElement));}},240);}});}}
       setTimeout(scheduleResize,90);setTimeout(scheduleResize,320);
-      {finnhub_and_audio_js}
+      {sound_and_ws_js}
     </script></body></html>"""
     components.html(html_code, height=height + 2)
 
@@ -1217,7 +1175,7 @@ def _build_spark_svg(prices: np.ndarray) -> str:
     return f'<svg width="88" height="24" viewBox="0 0 88 24" style="display:block;margin-left:auto;"><polyline fill="none" stroke="{"#10b981" if prices[-1]>=prices[0] else "#ef4444"}" stroke-width="1.6" points="{" ".join(pts)}"/></svg>'
 
 
-def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, short_3way: dict, exp_reg: dict, active_dip_time: str, active_peak_time: str, cur_vwap_now, curr_px: float, is_jp: bool, active_lab, is_1m_zoom: bool = False, zoom_1m_data: dict = None, has_lvn: bool = False):
+def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, short_3way: dict, exp_reg: dict, active_dip_time: str, active_peak_time: str, cur_vwap_now, curr_px: float, is_jp: bool, active_lab, is_1m_zoom: bool = False, zoom_1m_data: dict = None, lvn_zones: list = None):
     exp_active, exp_dir = bool(exp_reg.get("active")), exp_reg.get("dir", "NONE")
     sw_l = lambda c, st="solid", w=2: f'<span style="display:inline-block;width:14px;height:0;border-top:{w}px {st} {c};flex-shrink:0;"></span>'
     sw_b = lambda bg, bd: f'<span style="display:inline-block;width:14px;height:9px;background:{bg};border:1px solid {bd};border-radius:2px;flex-shrink:0;"></span>'
@@ -1253,7 +1211,7 @@ def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, sho
             cards.append((sw_l("rgba(148,163,184,0.55)", "dotted"), "朝ロック(無効化)", "想定外ブレイクで参考線へ降格") if exp_active else (sw_l("#c084fc" if chart_mode == "⚡ 両方重ね" else "#38bdf8", "dashed" if chart_mode == "⚡ 両方重ね" else "solid"), "朝ロック", "寄り前固定の当初想定（基準線）"))
         if "場中30分・3分岐点線（スコア比%）" in opt_lines and short_3way.get("active"): cards.append((tri_sw, "短期30分3分岐", "30分後に上/横/下へ進む確率と軌道"))
         if active_lab and "LAB×DD 統合エントリー帯/+1.0R" in opt_lines: cards.append((sw_l("#fde047", "dashed"), "統合Entry/+1.0R", "LABとDDを融合した押し目帯と半分利確ライン"))
-        if "流動性真空帯（LVN加速ゾーン）" in opt_lines and has_lvn: cards.append((sw_b("rgba(34,211,238,0.16)", "rgba(34,211,238,0.55)"), "LVN真空帯", "出来高が極端に薄く値動きが加速しやすい価格帯"))
+        if "流動性真空帯（LVN加速ゾーン）" in opt_lines and lvn_zones: cards.append((sw_b("rgba(34,211,238,0.18)", "rgba(34,211,238,0.55)"), "LVN真空帯", "出来高が極端に薄く値動きが加速しやすい価格帯"))
         if "VWAP" in opt_lines and traj.get("has_actual"): cards.append((sw_l("#fbbf24", "dotted"), "VWAP", "機関の平均買値（上なら買い優勢）"))
         if "VWAP±σ" in opt_lines and traj.get("has_actual"): cards.append((sw_l("rgba(251,191,36,0.7)", "dashed", 1), "VWAP±1σ/2σ", "買われすぎ・売られすぎの標準偏差帯"))
         if "類似実測波形（Top-1）" in opt_lines and isinstance(traj.get("medoid_analog"), dict) and traj["medoid_analog"].get("data"): cards.append((sw_l("#f59e0b"), "類似実測Top-1", "過去に最も似た日のリアル波形"))
@@ -1271,7 +1229,7 @@ def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, sho
     st.markdown(f'<div class="dd-legend-panel"><div class="{b_cls}">{html.escape(b_txt)}</div><div class="dd-chip-ribbon">{pills_html}</div></div>', unsafe_allow_html=True)
     with st.expander("📖 アクティブ凡例の詳細 ＆ 専門指標クイック辞典", expanded=False):
         st.markdown(f'<div class="dd-legend-grid" style="margin-bottom:8px;">{cards_html}</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:11px;line-height:1.65;color:#cbd5e1;">・<b>🔊 音声＆電子音トリガー監視官：</b> チャート右上バーの「🔇 音声OFF」をクリックしてONにすると、Entryゾーン到達・+1.0R半分利確・TP到達・SL接近を電子音と日本語音声で即時通知します。<br>・<b>リアルタイムEV＆二壁FPT脈拍ゲージ：</b> 現在値から入った場合の物理的な二壁FPT勝率と損益分岐勝率を比較し、飛びつき禁止（EV悪化）や絶好の押し目ゾーンをリアルタイム判定します。<br>・<b>LVN真空帯（流動性真空地帯）：</b> 28分割Volume Profileから出来高が極端に薄い価格帯を自動抽出。板が薄く価格が急速に滑りやすい加速ゾーンです。<br>・<b>マクロ先行・遅行カナリア：</b> 主連動指数の直近15分の動きに対し、個別株の反応が遅れている初動歪み（買い出遅れ・売り出遅れ）を自動検知します。</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:11px;line-height:1.65;color:#cbd5e1;">・<b>音声＆電子音トリガー監視官：</b> チャート右上「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と音声で即時通知します。<br>・<b>LVN真空帯（流動性真空地帯）：</b> 28分割出来高プロファイルで商いが極端に薄い価格帯。レジスタンス抜けやサポート割れ時に価格が一気に走りやすいエアポケットです。<br>・<b>PCコックピット＆ポジション管理HUD：</b> 上部の「🖥️ PC画面」ONで2カラム計器盤モードへ切替。「💼 保有ポジション管理HUD」ONで建値・SL線をチャートへ描画し、含み損益・R倍数・トレーリングSLをリアルタイム追跡します。<br>・<b>二壁FPT到達確率：</b> 大引けまでに「損切りライン(SL)へ先に触れずに利確目標(TP)へ到達する」確率モデルに基づく物理確率です。</div>', unsafe_allow_html=True)
 # =========================================================================
 # 4. マーケット・ニュース・株主・1分足データ取得（TTL分離＆超短期速報）
 # =========================================================================
@@ -1814,76 +1772,8 @@ def _render_mtf_and_ladder(mtf_res: dict, curr_px: float, is_jp: bool, ref_lv: d
 
 
 # =========================================================================
-# 5B. Phase 3 プロ仕様高度分析エンジン（EV脈拍・LVN真空帯・遅行カナリア統合）
+# 5B. Phase 3 プロ仕様高度分析エンジン（完全版）
 # =========================================================================
-def _compute_ev_pulse_metrics(curr_px: float, tp_px: float, sl_px: float, is_long: bool, rem_sigma_pct: float, rem_drift_pct: float, rem_frac_now: float, has_actual: bool) -> dict:
-    if curr_px <= 0 or tp_px <= 0 or sl_px <= 0:
-        return {"valid": False}
-    risk = (curr_px - sl_px) if is_long else (sl_px - curr_px)
-    reward = (tp_px - curr_px) if is_long else (curr_px - tp_px)
-    if risk <= 0 or reward <= 0:
-        return {
-            "valid": True, "rr": 0.0, "be_wr": 99.9, "tb_fpt": 0.0, "edge_pct": -99.9,
-            "verdict": "⛔ 条件破綻（見送り）", "color": "#ef4444", "note": "現在値がすでにTPまたはSL水準を突破済み",
-        }
-    rr = reward / max(risk, curr_px * 0.002)
-    be_wr = (1.0 / (1.0 + rr)) * 100.0
-    tb_fpt = _calc_two_barrier_tp_prob(curr_px, tp_px, sl_px, is_long, rem_sigma_pct, rem_drift_pct)
-    edge_pct = round(tb_fpt - be_wr, 1)
-
-    if rr < 0.8 or edge_pct <= -10.0 or (has_actual and tb_fpt < 18.0 and rem_frac_now < 0.40):
-        verdict, col, note = "🔴 飛びつき禁止（EV悪化・押し目待ち）", "#ef4444", "値幅余地に対しSLリスク過大または残り時間不足"
-    elif rr >= 1.4 and edge_pct >= 0.0:
-        verdict, col, note = "🟢 絶好の期待値ゾーン（執行優位）", "#10b981", "二壁物理勝率が損益分岐を上回る好リスクリワード帯"
-    else:
-        verdict, col, note = "🟡 標準レンジ（引きつけ待機）", "#38bdf8", "もう一段の引きつけでRR比・期待値がさらに改善"
-
-    return {
-        "valid": True,
-        "rr": round(rr, 2),
-        "be_wr": round(be_wr, 1),
-        "tb_fpt": round(tb_fpt, 1),
-        "edge_pct": edge_pct,
-        "verdict": verdict,
-        "color": col,
-        "note": note,
-    }
-
-
-def _detect_lead_lag_canary(df_5m: pd.DataFrame, df_bench_5m: pd.DataFrame, is_jp: bool, market_today_str: str, bench_beta_5m: float) -> dict:
-    empty = {"active": False, "dir": "NONE", "label": "", "color": "#94a3b8", "detail": ""}
-    if df_5m is None or df_5m.empty or df_bench_5m is None or df_bench_5m.empty:
-        return empty
-    try:
-        ts = df_5m.copy(); ts["_d"] = _convert_5m_index_to_market_tz(ts, is_jp).strftime("%Y-%m-%d")
-        tb = df_bench_5m.copy(); tb["_d"] = _convert_5m_index_to_market_tz(tb, is_jp).strftime("%Y-%m-%d")
-        ss, sb = ts[ts["_d"] == market_today_str], tb[tb["_d"] == market_today_str]
-        if len(ss) < 4 or len(sb) < 4:
-            return empty
-        sc, bc = ss["Close"].values.astype(float), sb["Close"].values.astype(float)
-        if sc[-4] <= 0 or bc[-4] <= 0:
-            return empty
-        stk_15m = (sc[-1] - sc[-4]) / sc[-4] * 100.0
-        bnc_15m = (bc[-1] - bc[-4]) / bc[-4] * 100.0
-        eff_beta = float(np.clip(bench_beta_5m, 0.2, 2.5))
-        exp_15m = bnc_15m * eff_beta
-        lag_gap = round(exp_15m - stk_15m, 2)
-
-        if abs(bnc_15m) >= 0.15 and abs(lag_gap) >= 0.18:
-            if lag_gap > 0:
-                return {
-                    "active": True, "dir": "BULL_LAG", "label": "🐤 買い出遅れ検知", "color": "#10b981",
-                    "detail": f"先行指数が直近15分で {bnc_15m:+.2f}%（β換算 {exp_15m:+.2f}%）に対し、本銘柄は {stk_15m:+.2f}%（遅行差 {lag_gap:+.2f}%）→ 追従上昇の初動候補",
-                }
-            return {
-                "active": True, "dir": "BEAR_LAG", "label": "🐤 売り出遅れ警戒", "color": "#ef4444",
-                "detail": f"先行指数が直近15分で {bnc_15m:+.2f}%（β換算 {exp_15m:+.2f}%）に対し、本銘柄は {stk_15m:+.2f}%（遅行差 {lag_gap:+.2f}%）→ 遅行連れ安リスクに警戒",
-            }
-        return empty
-    except Exception:
-        return empty
-
-
 def _compute_dow_intraday_heatmap(df_5m: pd.DataFrame, is_jp: bool) -> dict:
     if df_5m is None or df_5m.empty or len(df_5m) < 40:
         return {"valid": False}
@@ -1991,12 +1881,13 @@ def _compute_vp(df_1d: pd.DataFrame, curr_px: float, is_jp: bool) -> dict:
 
 def _compute_hires_vp_28(df_1d: pd.DataFrame, curr_px: float, is_jp: bool) -> dict:
     if df_1d is None or len(df_1d) < 25:
-        return {"valid": False, "lvn_zones": []}
+        return {"valid": False}
     try:
         sub = df_1d.tail(250); n = len(sub)
         lo, hi, vo = sub["Low"].values.astype(float), sub["High"].values.astype(float), sub["Volume"].values.astype(float)
         p_min, p_max = float(np.min(lo)), float(np.max(hi))
-        if p_max <= p_min: p_max = p_min + 1e-3
+        if p_max <= p_min:
+            p_max = p_min + 1e-3
         bins = np.linspace(p_min, p_max, 29)
         ages = np.arange(n - 1, -1, -1, dtype=float)
         h_s = _distribute_vp_hist(lo, hi, np.where(ages < 20, vo, 0.0), p_min, bins, 28)
@@ -2007,38 +1898,585 @@ def _compute_hires_vp_28(df_1d: pd.DataFrame, curr_px: float, is_jp: bool) -> di
         va, acc, lp, hp = {poc_i}, float(tot[poc_i]), poc_i - 1, poc_i + 1
         while acc < tsum * 0.70 and (lp >= 0 or hp < 28):
             vl, vh = float(tot[lp]) if lp >= 0 else -1.0, float(tot[hp]) if hp < 28 else -1.0
-            if vh >= vl and hp < 28: va.add(hp); acc += vh; hp += 1
-            elif lp >= 0: va.add(lp); acc += vl; lp -= 1
-            else: break
+            if vh >= vl and hp < 28:
+                va.add(hp); acc += vh; hp += 1
+            elif lp >= 0:
+                va.add(lp); acc += vl; lp -= 1
+            else:
+                break
 
         lvn_zones = []
         pos_tot = tot[tot > 0]
-        if len(pos_tot) >= 6 and curr_px > 0:
+        if len(pos_tot) >= 5 and curr_px > 0:
             lvn_th = float(np.percentile(pos_tot, 22))
-            runs, cur_s = [], None
-            for idx_b in range(28):
-                if tot[idx_b] <= lvn_th:
-                    if cur_s is None: cur_s = idx_b
-                elif cur_s is not None:
-                    runs.append((cur_s, idx_b - 1)); cur_s = None
-            if cur_s is not None: runs.append((cur_s, 27))
-            near_lvn = []
-            for s_b, e_b in runs:
-                lo_p, hi_p = float(bins[s_b]), float(bins[e_b + 1])
-                mid_p = 0.5 * (lo_p + hi_p)
-                dist_pct = abs(mid_p - curr_px) / curr_px
-                if dist_pct <= 0.08:
-                    near_lvn.append((dist_pct, {"lo": round(lo_p, 2), "hi": round(hi_p, 2), "dir": "UP" if mid_p > curr_px else "DOWN"}))
-            lvn_zones = [x[1] for x in sorted(near_lvn, key=lambda z: z[0])[:3]]
+            cur_span, raw_spans = None, []
+            for i in range(28):
+                if tot[i] <= lvn_th:
+                    if cur_span is None: cur_span = [i, i]
+                    else: cur_span[1] = i
+                elif cur_span is not None:
+                    raw_spans.append(cur_span); cur_span = None
+            if cur_span is not None:
+                raw_spans.append(cur_span)
+            for s_i, e_i in raw_spans:
+                lo_px, hi_px = float(bins[s_i]), float(bins[e_i + 1])
+                mid_px = (lo_px + hi_px) * 0.5
+                if abs(mid_px - curr_px) / curr_px <= 0.08:
+                    lvn_zones.append({"lo": round(lo_px, 2), "hi": round(hi_px, 2), "dir": "UP" if mid_px > curr_px else "DOWN"})
+            lvn_zones = lvn_zones[:3]
 
         sb, mb = [], []
         for i in range(28):
             cs, cm = ("#f59e0b", "rgba(245,158,11,.45)") if i == poc_i else (("#38bdf8", "rgba(56,189,248,.35)") if i in va else ("#94a3b8", "rgba(100,116,139,.32)"))
             sb.append({"value": round(float(h_s[i]) / 1e6, 2), "itemStyle": {"color": cs}})
             mb.append({"value": round(float(h_m[i]) / 1e6, 2), "itemStyle": {"color": cm}})
-        return {"valid": True, "labels": [_fmt_cur(c, is_jp) for c in centers], "short_bars": sb, "mid_bars": mb, "poc_px": float(centers[poc_i]), "vah_px": float(centers[max(va)]), "val_px": float(centers[min(va)]), "curr_bin_idx": int(np.clip((curr_px - p_min) / max((p_max - p_min) / 28.0, 1e-6), 0, 27)), "lvn_zones": lvn_zones}
+        return {
+            "valid": True, "labels": [_fmt_cur(c, is_jp) for c in centers],
+            "short_bars": sb, "mid_bars": mb, "poc_px": float(centers[poc_i]),
+            "vah_px": float(centers[max(va)]), "val_px": float(centers[min(va)]),
+            "curr_bin_idx": int(np.clip((curr_px - p_min) / max((p_max - p_min) / 28.0, 1e-6), 0, 27)),
+            "lvn_zones": lvn_zones,
+        }
     except Exception:
-        return {"valid": False, "lvn_zones": []}
+        return {"valid": False}
+
+
+def _compute_bbw_squeeze(df_1d: pd.DataFrame) -> dict:
+    if df_1d is None or len(df_1d) < 40:
+        return {"valid": False}
+    try:
+        c = df_1d.tail(145)["Close"]
+        ma, sd = c.rolling(20).mean(), c.rolling(20).std()
+        up, dn = ma + 2.0 * sd, ma - 2.0 * sd
+        vdf = pd.DataFrame({"c": c, "ma": ma, "up": up, "dn": dn, "bbw": ((up - dn) / ma.replace(0, np.nan)) * 100.0}).dropna().tail(120)
+        if len(vdf) < 20: return {"valid": False}
+        bv = vdf["bbw"].values.astype(float)
+        pr = int(round(float(np.mean(bv <= bv[-1]) * 100.0)))
+        return {"valid": True, "dates": [i.strftime("%m/%d") for i in vdf.index], "closes": [round(float(x), 2) for x in vdf["c"]], "ma20": [round(float(x), 2) for x in vdf["ma"]], "upper": [round(float(x), 2) for x in vdf["up"]], "lower": [round(float(x), 2) for x in vdf["dn"]], "band_diff": [round(float(u - l), 2) for u, l in zip(vdf["up"], vdf["dn"])], "bbw_pct_series": [int(round(float(np.mean(bv <= v) * 100.0))) for v in bv], "cur_pct": pr, "cur_bbw": round(float(bv[-1]), 1), "is_squeeze": bool(pr <= 20)}
+    except Exception:
+        return {"valid": False}
+
+
+def _build_news_72h_timeline(all_72h_items: list) -> dict:
+    if not all_72h_items: return {"valid": False}
+    counts, scores = [0] * 6, [0.0] * 6
+    for it in all_72h_items:
+        ah = float(it.get("age_h", 999.0))
+        if 0 <= ah <= 72.0:
+            bi = int(np.clip(5 - int(ah // 12.0), 0, 5))
+            counts[bi] += 1
+            scores[bi] += (1.0 if it.get("sent") == "POS" else (-1.0 if it.get("sent") == "NEG" else 0.0)) * float(it.get("w_trust", 1.0))
+    return {"valid": True, "labels": ["72-60h前", "60-48h前", "48-36h前", "36-24h前", "24-12h前", "直近12h"], "counts": counts, "scores": [round(x, 2) for x in scores]} if sum(counts) else {"valid": False}
+
+
+def _extract_ledger_verify_history(ledger: dict, is_jp: bool) -> list:
+    if not isinstance(ledger, dict): return []
+    recs = []
+    for ck, hm in ledger.items():
+        if is_jp != ck.endswith(".T") or not isinstance(hm, dict): continue
+        for dk, sn in hm.items():
+            vs = sn.get("verify_result") if isinstance(sn, dict) else None
+            if isinstance(sn, dict) and sn.get("locked_premarket") is True and isinstance(vs, dict) and vs.get("finalized"):
+                recs.append({"date": str(dk), "code": ck.replace(".T", ""), "cone": round(float(vs.get("in_cone_pct", 0.0)), 1), "err": round(float(vs.get("err_pct", 0.0)), 2)})
+    return sorted(recs, key=lambda x: x["date"])[-15:]
+
+
+def _detect_whale_anomaly(insider_tx: list, whale_news: list, ref_today_str: str) -> dict:
+    bull, bear = [], []
+    try: ref_d = datetime.datetime.strptime(ref_today_str, "%Y-%m-%d").date()
+    except Exception: ref_d = datetime.date.today()
+    for tx in insider_tx:
+        tds = str(tx.get("date") or "").strip()
+        if not tds: continue
+        try:
+            age = (ref_d - datetime.datetime.strptime(tds[:10], "%Y-%m-%d").date()).days
+            if not (0 <= age <= 30): continue
+        except Exception:
+            continue
+        tu = tx["text"].upper()
+        if "PURCHASE" in tu or "BUY" in tu: bull.append(f"役員買付({tds}): {tx['insider']} ({_fmt_sh(tx['shares'])})")
+        elif "SALE" in tu or "SELL" in tu: bear.append(f"役員売却({tds}): {tx['insider']} ({_fmt_sh(tx['shares'])})")
+    for wn in whale_news:
+        t, tu = wn["title"], wn["title"].upper()
+        if any(k in t for k in ("新規保有", "買い増し", "保有割合増加", "5%超")) or any(k in tu for k in ("13D", "INSIDER BUY", "STAKE INCREASE", "ACQUIRES STAKE")):
+            bull.append(f"大口買付: {t[:34]}")
+        elif any(k in t for k in ("保有割合低下", "売却", "空売り残高増加", "売り増し")) or any(k in tu for k in ("INSIDER SELL", "CUTS STAKE", "SHORT INTEREST SURGE")):
+            bear.append(f"大口売/空売: {t[:34]}")
+    if len(bull) > len(bear): return {"detected": True, "dir": "BULL", "adj_pct": round(min(0.65, 0.25 * (len(bull) - len(bear))), 2), "summary": " / ".join(bull[:2])}
+    if len(bear) > len(bull): return {"detected": True, "dir": "BEAR", "adj_pct": round(-min(0.65, 0.25 * (len(bear) - len(bull))), 2), "summary": " / ".join(bear[:2])}
+    return {"detected": False, "dir": "NEUTRAL", "adj_pct": 0.0, "summary": "直近30日以内の特異な大口異変なし"}
+
+
+def _detect_expansion_regime(has_actual: bool, last_act_idx: int, slots: list, actual_arr: list, locked_p85: list, locked_p15: list, is_locked: bool, vwap_arr: list, vwap_p2_arr: list, vwap_m2_arr: list, vwap_p1_arr: list, vwap_m1_arr: list, act_vol_map: dict, act_dir_map: dict, slot_vols: np.ndarray, rvol: float, catalyst_alert: dict = None) -> dict:
+    res = {"active": False, "dir": "NONE", "reasons": [], "unconfirmed_catalyst": False, "label": "通常レジーム"}
+    if not has_actual or last_act_idx < 1: return res
+    rup, rdn, unconf = [], [], False
+    if is_locked:
+        vp = [(actual_arr[i], locked_p85[i], locked_p15[i]) for i in range(max(0, last_act_idx - 2), last_act_idx + 1) if actual_arr[i] is not None and locked_p85[i] is not None and locked_p15[i] is not None]
+        if len(vp) >= 2:
+            if all(a > hi for a, hi, _ in vp[-2:]): rup.append("朝ロック上限バンド(85%帯)を2本連続上抜け")
+            if all(a < lo for a, _, lo in vp[-2:]): rdn.append("朝ロック下限バンド(15%帯)を2本連続下抜け")
+    ca = actual_arr[last_act_idx]
+    if rvol is not None and rvol >= 2.2 and ca is not None:
+        if vwap_p2_arr[last_act_idx] is not None and ca > vwap_p2_arr[last_act_idx]: rup.append(f"大商いRVOL({rvol:.2f}x)＋VWAP+2σ突破")
+        if vwap_m2_arr[last_act_idx] is not None and ca < vwap_m2_arr[last_act_idx]: rdn.append(f"大商いRVOL({rvol:.2f}x)＋VWAP-2σ割れ")
+    rec3 = [i for i in range(max(0, last_act_idx - 4), last_act_idx + 1) if actual_arr[i] is not None][-3:]
+    if len(rec3) == 3:
+        d3 = [act_dir_map.get(slots[i], 0) for i in rec3]
+        av3, mv3 = sum(float(act_vol_map.get(slots[i], 0.0)) for i in rec3), sum(float(slot_vols[i]) for i in rec3)
+        rv3 = (av3 / mv3) if mv3 > 0 else 0.0
+        vw, p1, m1 = vwap_arr[last_act_idx], vwap_p1_arr[last_act_idx], vwap_m1_arr[last_act_idx]
+        if rv3 >= 3.0 and vw and p1 and m1 and ca is not None:
+            zv = (ca - vw) / max(p1 - vw, 1e-4)
+            if all(d > 0 for d in d3) and zv >= 1.5: rup.append(f"直近15分3連続陽線＋出来高{rv3:.1f}倍＋VWAP+{zv:.1f}σ（未確認カタリスト・踏み上げ初動）"); unconf = True
+            elif all(d < 0 for d in d3) and zv <= -1.5: rdn.append(f"直近15分3連続陰線＋出来高{rv3:.1f}倍＋VWAP{zv:.1f}σ（未確認悪材料・投げ売り初動）"); unconf = True
+    if isinstance(catalyst_alert, dict) and catalyst_alert.get("active"):
+        if catalyst_alert.get("dir") == "POS": rup.append(f"速報特大カタリスト検知「{catalyst_alert.get('kw','')}」({catalyst_alert.get('age_min',1)}分前)")
+        elif catalyst_alert.get("dir") == "NEG": rdn.append(f"速報悪材料カタリスト検知「{catalyst_alert.get('kw','')}」({catalyst_alert.get('age_min',1)}分前)")
+    if rup and len(rup) >= len(rdn): return {"active": True, "dir": "UP", "reasons": rup, "unconfirmed_catalyst": unconf, "label": "急騰ブレイクモード"}
+    if rdn: return {"active": True, "dir": "DOWN", "reasons": rdn, "unconfirmed_catalyst": unconf, "label": "急落ブレイクモード"}
+    return res
+
+
+def _detect_cvd_divergence(slots: list, actual_arr: list, cvd_arr: list, act_vol_map: dict) -> dict:
+    pts = [(i, slots[i], actual_arr[i], cvd_arr[i], float(act_vol_map.get(slots[i], 0.0))) for i in range(len(slots)) if actual_arr[i] is not None and cvd_arr[i] is not None]
+    if len(pts) < 7: return {"state": "WAIT", "label": "計測中", "color": "#94a3b8", "detail": "場中スイングデータ蓄積待ち", "marker": None}
+    avg_v = float(np.mean([p[4] for p in pts]))
+    sh, sl = [], []
+    for idx in range(2, len(pts) - 2):
+        pc, vc = pts[idx][2], pts[idx][4]
+        if avg_v > 0 and vc < avg_v: continue
+        wp = [pts[j][2] for j in range(idx - 2, idx + 3)]
+        if pc >= max(wp) and pc > pts[idx - 1][2] and pc >= pts[idx + 1][2]: sh.append(pts[idx])
+        if pc <= min(wp) and pc < pts[idx - 1][2] and pc <= pts[idx + 1][2]: sl.append(pts[idx])
+    if len(sh) >= 2 and sh[-1][2] > sh[-2][2] * 1.0012 and sh[-1][3] < sh[-2][3]:
+        return {"state": "DISTRIBUTION", "label": "上ヒゲ売り圧力", "color": "#ef4444", "detail": f"スイング高値更新（{sh[-2][1]}→{sh[-1][1]}）に対し、OHLCV疑似CVDが切り下げ。高値圏での上ヒゲ売り圧力・失速（弱気ダイバージェンス）の兆候。", "marker": {"time": sh[-1][1], "price": sh[-1][2], "name": "売り圧力", "color": "#ef4444"}}
+    if len(sl) >= 2 and sl[-1][2] < sl[-2][2] * 0.9988 and sl[-1][3] > sl[-2][3]:
+        return {"state": "ABSORPTION", "label": "下ヒゲ買い支え", "color": "#10b981", "detail": f"スイング安値更新（{sl[-2][1]}→{sl[-1][1]}）に対し、OHLCV疑似CVDが切り上げ。安値圏での下ヒゲ買い支え（強気ダイバージェンス）の兆候。", "marker": {"time": sl[-1][1], "price": sl[-1][2], "name": "買い支え", "color": "#10b981"}}
+    lc = pts[-1][3]
+    if lc > 0: return {"state": "ALIGNED_BULL", "label": "陽線出来高優位", "color": "#38bdf8", "detail": "OHLCV疑似CVDプラス圏で買い主導の推移。", "marker": None}
+    if lc < 0: return {"state": "ALIGNED_BEAR", "label": "陰線出来高優位", "color": "#f59e0b", "detail": "OHLCV疑似CVDマイナス圏で売り主導の推移。", "marker": None}
+    return {"state": "NEUTRAL", "label": "均衡", "color": "#94a3b8", "detail": "売り買いのデルタは均衡。", "marker": None}
+
+
+def _evaluate_gap_open15(has_actual: bool, slots: list, actual_arr: list, vwap_arr: list, act_low_map: dict, act_high_map: dict, act_vol_map: dict, slot_vols: np.ndarray, prev_px: float) -> dict:
+    if not has_actual or prev_px <= 0:
+        return {"status": "WAIT", "label": "待機中", "color": "#94a3b8", "bias": 0.0, "detail": "", "show_gap_target": False}
+    fp = [(i, slots[i], actual_arr[i], vwap_arr[i]) for i in range(len(slots)) if actual_arr[i] is not None][:3]
+    if len(fp) < 3:
+        return {"status": "WAIT", "label": "待機中", "color": "#94a3b8", "bias": 0.0, "detail": "", "show_gap_target": False}
+    gp = (fp[0][2] - prev_px) / max(prev_px, 1e-4) * 100.0
+    if abs(gp) < 0.20:
+        return {"status": "FLAT", "label": "フラット寄り", "color": "#94a3b8", "bias": 0.0, "detail": f"寄付きギャップ {gp:+.2f}%（通常スタート）", "show_gap_target": False}
+    rv15 = (sum(act_vol_map.get(sl, 0.0) for _, sl, _, _ in fp) / sum(float(slot_vols[i]) for i, _, _, _ in fp)) if sum(float(slot_vols[i]) for i, _, _, _ in fp) > 0 else 1.0
+    lows3, highs3 = [act_low_map.get(sl, px) for _, sl, px, _ in fp], [act_high_map.get(sl, px) for _, sl, px, _ in fp]
+    abv, blw = all(px >= vw for _, _, px, vw in fp if vw is not None), all(px <= vw for _, _, px, vw in fp if vw is not None)
+    lp, lvw = fp[-1][2], fp[-1][3] or fp[-1][2]
+    if gp >= 0.20:
+        if abv and rv15 >= 1.5 and min(lows3[1:]) >= lows3[0] * 0.999:
+            return {"status": "GAP_AND_GO_UP", "label": "Gap&Go 上昇確定", "color": "#10b981", "bias": 0.0045, "detail": f"GU({gp:+.2f}%)後15分すべてVWAP上・RVOL {rv15:.2f}x・寄り安値割れなし。窓は埋まらず上昇加速しやすい本物初動。", "show_gap_target": False}
+        if rv15 < 1.0 or lp < lvw:
+            return {"status": "GAP_AND_FADE_DOWN", "label": "Gap&Fade 窓埋警戒", "color": "#ef4444", "bias": -0.0045, "detail": f"GU({gp:+.2f}%)後に勢い失速（RVOL {rv15:.2f}x / VWAP割れ）。飛びつき買い危険・前日終値までの窓埋め警戒。", "show_gap_target": True}
+        return {"status": "GU_HOLD", "label": "GU 様子見", "color": "#38bdf8", "bias": 0.001, "detail": f"GU({gp:+.2f}%)・RVOL {rv15:.2f}x。", "show_gap_target": False}
+    if blw and rv15 >= 1.5 and max(highs3[1:]) <= highs3[0] * 1.001:
+        return {"status": "GAP_AND_GO_DOWN", "label": "Gap&Go 下落確定", "color": "#ef4444", "bias": -0.0045, "detail": f"GD({gp:+.2f}%)後15分すべてVWAP下・RVOL {rv15:.2f}x。投げ売り継続の本物下落初動。", "show_gap_target": False}
+    if rv15 < 1.0 or lp > lvw:
+        return {"status": "GAP_AND_FADE_UP", "label": "Gap&Fade 窓埋反発", "color": "#10b981", "bias": 0.0045, "detail": f"GD({gp:+.2f}%)後に売り一巡（RVOL {rv15:.2f}x / VWAP回復）。前日終値に向けた窓埋め反発に優位性。", "show_gap_target": True}
+    return {"status": "GD_HOLD", "label": "GD 様子見", "color": "#f59e0b", "bias": -0.001, "detail": f"GD({gp:+.2f}%)・RVOL {rv15:.2f}x。", "show_gap_target": False}
+
+
+def _compute_macro_sens(stock_close: pd.Series, macro_data: dict) -> list:
+    sr, res = stock_close.pct_change().dropna().tail(90), []
+    for k, m in macro_data.items():
+        if k == "VIX": continue
+        j = pd.concat([sr.rename("stk"), m["series"].pct_change().dropna().rename("mac")], axis=1).dropna()
+        if len(j) >= 20:
+            corr, vm = float(j["stk"].corr(j["mac"])), float(j["mac"].var())
+            beta = float(j["stk"].cov(j["mac"]) / vm) if vm > 1e-9 else 0.0
+            res.append({"key": k, "label": m["label"], "corr": round(0.0 if np.isnan(corr) else corr, 2), "beta": round(0.0 if np.isnan(beta) else beta, 2), "latest_diff": m["diff_pct"]})
+    return sorted(res, key=lambda x: abs(x["corr"]), reverse=True)
+
+
+def _compute_dow_edge(df_1d: pd.DataFrame, is_jp: bool) -> tuple:
+    rets = df_1d["Close"].pct_change().dropna() * 100.0
+    stats = [{"dow": d, "label": "月火水木金"[d], "wr": int(round(float((sub > 0).mean() * 100.0), 0)) if len(sub) >= 3 else 50, "avg": round(float(sub.mean()), 2) if len(sub) >= 3 else 0.0} for d in range(5) for sub in (rets[rets.index.dayofweek == d],)]
+    try: wd = datetime.datetime.strptime(_get_target_session_date(is_jp), "%Y-%m-%d").weekday()
+    except Exception: wd = _get_market_now(is_jp).weekday()
+    return stats, min(max(wd, 0), 4)
+
+
+def _compute_wick_bias(df_1d: pd.DataFrame) -> float:
+    sub = df_1d.tail(5)
+    if len(sub) < 3: return 0.0
+    o, h, l, c = sub["Open"].values, sub["High"].values, sub["Low"].values, sub["Close"].values
+    rng = np.maximum(h - l, 1e-4)
+    return round(float(np.clip((float(np.mean((np.minimum(o, c) - l) / rng)) - float(np.mean((h - np.maximum(o, c)) / rng))) * 0.8, -0.45, 0.45)), 2)
+
+
+def _compute_self_calibration(stock_hist: dict, df_1d: pd.DataFrame, market_today_str: str) -> tuple:
+    if not stock_hist or df_1d is None or df_1d.empty: return 0.0, 0
+    cmap = {idx.strftime("%Y-%m-%d"): float(val) for idx, val in df_1d["Close"].items()}
+    diffs = [(cmap[dk] - float(sn["p50"][-1])) / float(sn["p50"][-1]) * 100.0 for dk in sorted(stock_hist.keys()) if dk < market_today_str and stock_hist[dk].get("locked_premarket") is True and dk in cmap and (sn := stock_hist[dk]).get("p50") and float(sn["p50"][-1]) > 0]
+    return (round(float(np.clip(np.mean(diffs[-5:]) * 0.40, -0.50, 0.50)), 2), len(diffs[-5:])) if diffs else (0.0, 0)
+
+
+def _compute_ev_pulse_metrics(curr_px: float, tp_px: float, sl_px: float, is_long: bool, rem_sigma_pct: float, rem_drift_pct: float, rem_frac_now: float, has_actual: bool) -> dict:
+    if curr_px <= 0 or tp_px <= 0 or sl_px <= 0:
+        return {"status": "🟡 計測待機中", "color": "#94a3b8", "rr": 0.0, "be_wr": 50.0, "tb_fpt": 50.0, "edge_pct": 0.0}
+    risk = (curr_px - sl_px) if is_long else (sl_px - curr_px)
+    reward = (tp_px - curr_px) if is_long else (curr_px - tp_px)
+    if risk <= 0 or reward <= 0:
+        return {"status": "⛔ 条件破綻（見送り）", "color": "#ef4444", "rr": 0.0, "be_wr": 99.9, "tb_fpt": 0.0, "edge_pct": -99.9}
+    rr = reward / max(risk, curr_px * 0.002)
+    be_wr = (1.0 / (1.0 + rr)) * 100.0
+    tb_fpt = _calc_two_barrier_tp_prob(curr_px, tp_px, sl_px, is_long, rem_sigma_pct, rem_drift_pct)
+    edge_pct = round(tb_fpt - be_wr, 1)
+
+    if rr < 0.8 or edge_pct <= -10.0 or (has_actual and tb_fpt < 18.0 and rem_frac_now < 0.40):
+        st_txt, col = "🔴 飛びつき禁止（EV悪化・押し目待ち）", "#ef4444"
+    elif rr >= 1.4 and edge_pct >= 0.0:
+        st_txt, col = "🟢 絶好の期待値ゾーン（執行優位）", "#10b981"
+    else:
+        st_txt, col = "🟡 標準レンジ（引きつけ待機）", "#38bdf8"
+    return {"status": st_txt, "color": col, "rr": round(rr, 2), "be_wr": round(be_wr, 1), "tb_fpt": round(tb_fpt, 1), "edge_pct": edge_pct}
+
+
+def _detect_lead_lag_canary(df_5m: pd.DataFrame, df_bench_5m: pd.DataFrame, is_jp: bool, market_today_str: str, bench_beta_5m: float) -> dict:
+    off = {"active": False, "dir": "NONE", "label": "", "color": "#94a3b8", "lag_gap": 0.0, "detail": ""}
+    if df_5m is None or df_5m.empty or df_bench_5m is None or df_bench_5m.empty:
+        return off
+    try:
+        ts = df_5m.copy(); ts["_d"] = _convert_5m_index_to_market_tz(ts, is_jp).strftime("%Y-%m-%d")
+        tb = df_bench_5m.copy(); tb["_d"] = _convert_5m_index_to_market_tz(tb, is_jp).strftime("%Y-%m-%d")
+        ss, sb = ts[ts["_d"] == market_today_str], tb[tb["_d"] == market_today_str]
+        if len(ss) < 4 or len(sb) < 4:
+            return off
+        cs, cb = ss["Close"].values.astype(float), sb["Close"].values.astype(float)
+        if cs[-4] <= 0 or cb[-4] <= 0:
+            return off
+        stk_15m = (cs[-1] - cs[-4]) / cs[-4] * 100.0
+        bnc_15m = (cb[-1] - cb[-4]) / cb[-4] * 100.0
+        exp_15m = bnc_15m * float(np.clip(bench_beta_5m, 0.2, 2.5))
+        lag_gap = round(exp_15m - stk_15m, 2)
+        if abs(bnc_15m) >= 0.15 and abs(lag_gap) >= 0.18:
+            if lag_gap > 0:
+                return {"active": True, "dir": "BULL_LAG", "label": "🐤 買い出遅れ検知", "color": "#10b981", "lag_gap": lag_gap, "detail": f"先行指数が直近15分で {bnc_15m:+.2f}%（β換算 {exp_15m:+.2f}%）に対し、本銘柄は {stk_15m:+.2f}%（遅行差 {lag_gap:+.2f}%）→ 追従上昇の初動候補"}
+            return {"active": True, "dir": "BEAR_LAG", "label": "🐤 売り出遅れ警戒", "color": "#ef4444", "lag_gap": lag_gap, "detail": f"先行指数が直近15分で {bnc_15m:+.2f}%（β換算 {exp_15m:+.2f}%）に対し、本銘柄は {stk_15m:+.2f}%（遅行差 {lag_gap:+.2f}%）→ 遅行連れ安リスクに警戒"}
+    except Exception:
+        pass
+    return off
+
+
+def _extract_lab_side(active_lab: dict) -> str:
+    if not isinstance(active_lab, dict): return "LONG"
+    side = active_lab.get("side") or (active_lab.get("strat", {}).get("side") if isinstance(active_lab.get("strat"), dict) else None)
+    return str(side or "LONG").upper()
+
+
+def _parse_float_safe(val, default_val=None):
+    if val is None: return default_val
+    if isinstance(val, (int, float)): return float(val) if not np.isnan(float(val)) else default_val
+    m = re.search(r"[-+]?[0-9]*\.?[0-9]+", str(val).replace(",", ""))
+    try: return float(m.group(0)) if m else default_val
+    except Exception: return default_val
+
+
+def _extract_lab_quant_modifiers(active_lab: dict, lab_council: dict) -> dict:
+    res = {"has_lab": False, "lab_trust_mult": 1.0, "vpin_vboost": 1.0, "kyle_vboost": 1.0, "kyle_warn": False, "vpin_val": None, "kyle_val": None, "rs_30m": None, "council_caution": False, "wf_pf": None, "wf_wr": None}
+    if not isinstance(active_lab, dict) or not active_lab:
+        return res
+    res["has_lab"] = True
+    trust = 1.0
+    wf22 = next((active_lab[k] for k in ("wf_22d", "walk_forward_22d", "forward_test") if isinstance(active_lab.get(k), dict)), {})
+    if wf22:
+        pf_v, wr_v = _parse_float_safe(wf22.get("pf", wf22.get("profit_factor"))), _parse_float_safe(wf22.get("win_rate", wf22.get("actual_win_rate")))
+        res["wf_pf"], res["wf_wr"] = pf_v, wr_v
+        if (pf_v is not None and pf_v < 1.0) or (wr_v is not None and wr_v < 45.0): trust = 0.35
+        elif (pf_v is not None and pf_v >= 1.5) and (wr_v is not None and wr_v >= 55.0): trust = 1.15
+    if isinstance(lab_council, dict) and lab_council:
+        ctxt = str(lab_council.get("verdict") or lab_council.get("conclusion") or lab_council.get("summary") or "").upper()
+        if any(kw in ctxt for kw in ("見送り", "回避", "警戒", "様子見", "HOLD", "危険")):
+            trust *= 0.45; res["council_caution"] = True
+    res["lab_trust_mult"] = round(float(np.clip(trust, 0.10, 1.30)), 3)
+
+    qi = next((active_lab[k] for k in ("quant_metrics", "quants") if isinstance(active_lab.get(k), dict)), {})
+    vpin_v = _parse_float_safe(qi.get("vpin", active_lab.get("vpin")))
+    kyle_v = _parse_float_safe(qi.get("kyle_lambda", active_lab.get("kyle_lambda")))
+    rs30_v = _parse_float_safe(qi.get("rs_30m", active_lab.get("intraday_rs_30m")))
+    res.update({"vpin_val": vpin_v, "kyle_val": kyle_v, "rs_30m": rs30_v})
+    if vpin_v is not None and vpin_v > 0.55:
+        res["vpin_vboost"] = round(float(1.0 + min((vpin_v - 0.55) * 0.65, 0.25)), 3)
+    if kyle_v is not None and abs(kyle_v) > 0.05:
+        res["kyle_vboost"] = round(float(1.0 + min((abs(kyle_v) - 0.05) * 0.80, 0.18)), 3)
+        if abs(kyle_v) >= 0.12:
+            res["kyle_warn"] = True
+    return res
+
+
+def _fit_short_3way_logreg(df_5m: pd.DataFrame, is_jp: bool, slots: list, slot_vols: np.ndarray, atr_pct: float, horizon_slots: int = 6) -> dict:
+    empty = {"fitted": False, "n_samples": 0, "W": None, "b": None, "mu": None, "sd": None}
+    if df_5m is None or df_5m.empty or len(df_5m) < 80: return empty
+    try:
+        mt_str = _get_market_now(is_jp).strftime("%Y-%m-%d")
+        tmp = df_5m.copy(); idx_dt = _convert_5m_index_to_market_tz(tmp, is_jp)
+        tmp["_d"], tmp["_hm"] = idx_dt.strftime("%Y-%m-%d"), idx_dt.strftime("%H:%M")
+        smap = {sl: i for i, sl in enumerate(slots)}
+        cum_avg_v = np.cumsum(slot_vols) if len(slot_vols) == len(slots) else np.zeros(len(slots))
+        th = float(np.clip((atr_pct / 100.0) * 0.14, 0.0018, 0.0045))
+        Xr, yr = [], []
+        for ds, sub in tmp.groupby("_d"):
+            if ds == mt_str or len(sub) < horizon_slots + 8: continue
+            sv = sub[sub["_hm"].isin(smap)]
+            if len(sv) < horizon_slots + 8: continue
+            cl = sv["Close"].values.astype(float)
+            op = sv["Open"].values.astype(float) if "Open" in sv.columns else cl
+            hi = sv["High"].values.astype(float) if "High" in sv.columns else cl
+            lo = sv["Low"].values.astype(float) if "Low" in sv.columns else cl
+            vo = np.maximum(sv["Volume"].values.astype(float), 0.0) if "Volume" in sv.columns else np.zeros(len(cl))
+            hms, nd = sv["_hm"].values, len(cl)
+            vw_d, cvd_d, cv_d = np.zeros(nd), np.zeros(nd), np.zeros(nd)
+            cpv, cv, ccvd = 0.0, 0.0, 0.0
+            for k in range(nd):
+                cpv += ((hi[k] + lo[k] + cl[k]) / 3.0) * vo[k]; cv += vo[k]
+                vw_d[k] = (cpv / cv) if cv > 0 else cl[k]
+                hls = hi[k] - lo[k]
+                clv = (((cl[k] - lo[k]) - (hi[k] - cl[k])) / hls) if hls > 1e-6 else (1.0 if cl[k] >= op[k] else -1.0)
+                ccvd += clv * vo[k]; cvd_d[k], cv_d[k] = ccvd, cv
+            for k in range(3, nd - horizon_slots):
+                cn, cf = cl[k], cl[k + horizon_slots]
+                if cn <= 0 or cf <= 0: continue
+                vwn, cb = vw_d[k] or cn, cl[max(0, k - 6)] or cn
+                si = smap.get(hms[k], -1)
+                acv = float(cum_avg_v[si]) if 0 <= si < len(cum_avg_v) else 0.0
+                lrvol = math.log(max(cv_d[k] / acv, 0.1)) if (acv > 0 and cv_d[k] > 0) else 0.0
+                fr = (cf - cn) / cn
+                Xr.append([(cn - vwn) / vwn, (cn - cb) / cb, lrvol, math.tanh(cvd_d[k] / max(cv_d[k] * 0.25, 1.0))])
+                yr.append(0 if fr > th else (2 if fr < -th else 1))
+        ns = len(Xr)
+        if ns < 60: return {**empty, "n_samples": ns}
+        X, y = np.array(Xr, dtype=float), np.array(yr, dtype=int)
+        mu, sd = np.mean(X, axis=0), np.where(np.std(X, axis=0) < 1e-6, 1.0, np.std(X, axis=0))
+        Xs = (X - mu) / sd
+        Yoh = np.zeros((ns, 3)); Yoh[np.arange(ns), y] = 1.0
+        W, b = np.zeros((4, 3)), np.zeros(3)
+        for _ in range(120):
+            lg = Xs @ W + b; lg -= np.max(lg, axis=1, keepdims=True)
+            ex = np.exp(lg); pr = ex / np.sum(ex, axis=1, keepdims=True)
+            df = (pr - Yoh) / ns
+            W -= 0.15 * ((Xs.T @ df) + 0.05 * W); b -= 0.15 * np.sum(df, axis=0)
+        return {"fitted": True, "n_samples": ns, "W": W, "b": b, "mu": mu, "sd": sd}
+    except Exception:
+        return empty
+
+
+def _apply_hvn_ob_bounce(mid: float, ref_px: float, hvn_wall_px: float, ob_sup_px: float, vp: dict, exp_dir: str = "NONE") -> float:
+    if ref_px <= 0: return mid
+    is_hvn = hvn_wall_px > ref_px * 1.002
+    res_w = hvn_wall_px if is_hvn else (float(vp.get("res_px", 0.0)) if float(vp.get("res_px", 0.0)) > ref_px * 1.002 else 0.0)
+    is_ob = 0 < ob_sup_px < ref_px * 0.998
+    sup_f = ob_sup_px if is_ob else (float(vp.get("sup_px", 0.0)) if 0 < float(vp.get("sup_px", 0.0)) < ref_px * 0.998 else 0.0)
+    if exp_dir == "UP":
+        fls = [p for p in (hvn_wall_px, float(vp.get("res_px", 0.0)), sup_f) if 0 < p < ref_px * 0.999]
+        if fls and mid < max(fls) * 1.003:
+            bf = max(fls) * 1.003; return bf - (bf - mid) * 0.30
+        return mid
+    if exp_dir == "DOWN":
+        cls = [p for p in (ob_sup_px, float(vp.get("sup_px", 0.0)), res_w) if p > ref_px * 1.001]
+        if cls and mid > min(cls) * 0.997:
+            bc = min(cls) * 0.997; return bc + (mid - bc) * 0.30
+        return mid
+    if res_w > 0 and mid > res_w * 0.995:
+        damp = 0.35 if is_hvn else (0.45 if vp.get("overhead_pct", 0.0) >= 35.0 else 1.0)
+        if damp < 1.0: mid = res_w * 0.995 + (mid - res_w * 0.995) * damp
+    if sup_f > 0 and mid < sup_f * 1.005:
+        mid = sup_f * 1.005 - (sup_f * 1.005 - mid) * (0.38 if is_ob else 0.65)
+    return mid
+
+
+def _compute_short_horizon_3way(has_actual: bool, last_act_idx: int, n_slots: int, anchor_px: float, cur_vwap: float, mom_30m: float, rvol: float, cvd_div: dict, gap_open15: dict, bench_live_alpha_adj: float, knn_moves: dict, slot_means: np.ndarray, slot_inc_stds: np.ndarray, vboost: float, hvn_wall_px: float, ob_sup_px: float, vp: dict, shock_ext_pct: float = 0.0, horizon_slots: int = 6, ml_model: dict = None, cum_cvd_now: float = 0.0, cum_vol_now: float = 0.0, lab_dir_score: float = 0.0, lab_rs30: float = None, exp_dir: str = "NONE") -> dict:
+    empty = {"active": False, "horizon": 0, "end_idx": -1, "p_up": 33, "p_flat": 34, "p_down": 33, "ml_used": False, "ml_samples": 0, "up_path": [None] * n_slots, "flat_path": [None] * n_slots, "down_path": [None] * n_slots}
+    if not has_actual or last_act_idx < 0 or anchor_px <= 0: return empty
+    horizon = min(int(horizon_slots), n_slots - 1 - last_act_idx)
+    if horizon < 1: return empty
+    end_idx = last_act_idx + horizon
+    vw_ref = cur_vwap if (cur_vwap is not None and cur_vwap > 0) else anchor_px
+    vw_gap = (anchor_px - vw_ref) / max(vw_ref, 1e-4)
+    lu, lf, ld = 0.0, 0.18, 0.0
+
+    if abs(vw_gap) <= 0.0015: lf += 0.42
+    elif vw_gap > 0: lu += float(np.clip(vw_gap * 85.0, 0.15, 1.05)); ld -= float(np.clip(vw_gap * 45.0, 0.05, 0.55))
+    else: ld += float(np.clip(-vw_gap * 85.0, 0.15, 1.05)); lu -= float(np.clip(-vw_gap * 45.0, 0.05, 0.55))
+
+    if abs(mom_30m) <= 0.0012: lf += 0.30
+    elif mom_30m > 0: lu += float(np.clip(mom_30m * 95.0, 0.10, 1.15))
+    else: ld += float(np.clip(-mom_30m * 95.0, 0.10, 1.15))
+
+    if rvol is not None:
+        if rvol >= 1.4:
+            rb = float(np.clip((rvol - 1.0) * 0.42, 0.15, 0.85))
+            if mom_30m >= 0 and vw_gap >= -0.001: lu += rb
+            elif mom_30m < 0 and vw_gap <= 0.001: ld += rb
+            lf -= rb * 0.65
+        elif rvol < 0.85:
+            lf += 0.68; lu -= 0.25; ld -= 0.25
+
+    cst = cvd_div.get("state", "NEUTRAL")
+    if cst == "ABSORPTION": lu += 0.62; ld -= 0.45
+    elif cst == "ALIGNED_BULL": lu += 0.34
+    elif cst == "DISTRIBUTION": ld += 0.62; lu -= 0.45
+    elif cst == "ALIGNED_BEAR": ld += 0.34
+
+    for val, mul, lo_c, hi_c in ((float(gap_open15.get("bias", 0.0)), 90.0, 0.10, 0.50), (bench_live_alpha_adj, 55.0, 0.05, 0.55)):
+        if val > 0: lu += float(np.clip(val * mul, lo_c, hi_c))
+        elif val < 0: ld += float(np.clip(-val * mul, lo_c, hi_c))
+
+    kr = float(knn_moves.get(end_idx, 0.0)) if isinstance(knn_moves, dict) else 0.0
+    if abs(kr) <= 0.0015: lf += 0.25
+    elif kr > 0: lu += float(np.clip(kr * 75.0, 0.08, 0.65))
+    else: ld += float(np.clip(-kr * 75.0, 0.08, 0.65))
+
+    if lab_dir_score > 0.01: lu += float(np.clip(lab_dir_score * 0.48, 0.0, 0.55))
+    elif lab_dir_score < -0.01: ld += float(np.clip(-lab_dir_score * 0.48, 0.0, 0.55))
+    if lab_rs30 is not None:
+        if lab_rs30 > 0.15: lu += float(np.clip(lab_rs30 * 0.22, 0.05, 0.40))
+        elif lab_rs30 < -0.15: ld += float(np.clip(-lab_rs30 * 0.22, 0.05, 0.40))
+    if exp_dir == "UP": lu += 0.55; ld -= 0.35
+    elif exp_dir == "DOWN": ld += 0.55; lu -= 0.35
+    if shock_ext_pct > 0.01: lu += float(np.clip(shock_ext_pct * 0.70, 0.0, 1.40)); ld -= float(np.clip(shock_ext_pct * 0.35, 0.0, 0.70))
+    elif shock_ext_pct < -0.01: ld += float(np.clip(-shock_ext_pct * 0.70, 0.0, 1.40)); lu -= float(np.clip(-shock_ext_pct * 0.35, 0.0, 0.70))
+
+    lg_r = np.array([lu, lf, ld]); lg_r -= np.max(lg_r); pr_f = np.exp(lg_r) / np.sum(np.exp(lg_r))
+    ml_used, ml_n = False, int(ml_model.get("n_samples", 0)) if isinstance(ml_model, dict) else 0
+    if isinstance(ml_model, dict) and ml_model.get("fitted") and ml_n >= 60:
+        try:
+            xn = np.array([vw_gap, mom_30m, math.log(max(float(rvol), 0.1)) if (rvol and rvol > 0) else 0.0, math.tanh(float(cum_cvd_now) / max(float(cum_vol_now) * 0.25, 1.0))])
+            lm = ((xn - ml_model["mu"]) / ml_model["sd"]) @ ml_model["W"] + ml_model["b"]; lm -= np.max(lm)
+            pm = np.exp(lm) / np.sum(np.exp(lm))
+            wm = float(np.clip(ml_n / (ml_n + 120.0), 0.25, 0.70)) * (0.65 if exp_dir in ("UP", "DOWN") else 1.0)
+            pr_f = wm * pm + (1.0 - wm) * pr_f; pr_f /= np.sum(pr_f); ml_used = True
+        except Exception:
+            pass
+
+    pp = pr_f * 100.0
+    p_up, p_dn = int(np.clip(round(float(pp[0])), 2, 96)), int(np.clip(round(float(pp[2])), 2, 96))
+    p_fl = 100 - p_up - p_dn
+    if p_fl < 2:
+        p_fl = 2
+        if p_up >= p_dn: p_up = 98 - p_dn
+        else: p_dn = 98 - p_up
+
+    up_p, fl_p, dn_p = [None] * n_slots, [None] * n_slots, [None] * n_slots
+    up_p[last_act_idx] = fl_p[last_act_idx] = dn_p[last_act_idx] = round(float(anchor_px), 2)
+    am, vmid, sr = float(slot_means[last_act_idx]), 0.5 * (anchor_px + vw_ref), shock_ext_pct / 100.0
+    for k in range(1, horizon + 1):
+        idx, sf = last_act_idx + k, k / max(horizon, 1)
+        cs = max(float(np.sqrt(np.sum(slot_inc_stds[last_act_idx + 1:idx + 1] ** 2))) * vboost, 0.0014 * math.sqrt(k))
+        md = float(slot_means[idx]) - am
+        ls = 0.45 * md + 0.55 * (float(knn_moves[idx]) if (isinstance(knn_moves, dict) and idx in knn_moves) else md)
+        ur = max(_apply_hvn_ob_bounce(anchor_px * (1.0 + ls * 0.72 + cs * 1.05 + max(0.0, sr) * 0.45 * sf), anchor_px, hvn_wall_px, ob_sup_px, vp, exp_dir), anchor_px * (1.0 + 0.0005 * k))
+        fr = _apply_hvn_ob_bounce(anchor_px + (vmid - anchor_px) * (0.45 * sf) + anchor_px * (ls * 0.40 + sr * 0.15 * sf), anchor_px, hvn_wall_px, ob_sup_px, vp, exp_dir)
+        dr = max(min(_apply_hvn_ob_bounce(anchor_px * (1.0 + ls * 0.72 - cs * 1.05 - max(0.0, -sr) * 0.45 * sf), anchor_px, hvn_wall_px, ob_sup_px, vp, exp_dir), anchor_px * (1.0 - 0.0005 * k)), anchor_px * 0.5)
+        up_p[idx], fl_p[idx], dn_p[idx] = round(float(ur), 2), round(float(fr), 2), round(float(dr), 2)
+    return {"active": True, "horizon": horizon, "end_idx": end_idx, "p_up": p_up, "p_flat": p_fl, "p_down": p_dn, "ml_used": ml_used, "ml_samples": ml_n, "up_path": up_p, "flat_path": fl_p, "down_path": dn_p}
+
+
+def _compute_bayesian_scenario_probs(has_actual: bool, curr_px: float, anchor_base_close: float, est_open_gap_pct: float, est_close_chg: float, bull_trig: float, bull_target: float, bear_trig: float, bear_target: float, rem_sigma_pct: float, rem_drift_pct: float, rvol: float, cvd_div: dict, gap_open15: dict, cur_vwap: float, shock_ext_pct: float = 0.0, exp_dir: str = "NONE") -> dict:
+    fb, fbr = _calc_first_passage_prob(curr_px, bull_trig, rem_sigma_pct, rem_drift_pct) / 100.0, _calc_first_passage_prob(curr_px, bear_trig, rem_sigma_pct, rem_drift_pct) / 100.0
+    lb = math.log(max(fb, 0.05)) + est_close_chg * 0.35 + shock_ext_pct * 0.60
+    lbr = math.log(max(fbr, 0.05)) - est_close_chg * 0.35 - shock_ext_pct * 0.60
+    lr = math.log(max(1.0 - max(fb, fbr), 0.15)) + 0.55 - abs(est_close_chg) * 0.20
+    lf = math.log(max(min(abs(est_open_gap_pct) / 2.5, 0.75), 0.08)) + 0.35
+    if exp_dir == "UP": lb += 0.90; lr -= 0.35; lf -= 0.45
+    elif exp_dir == "DOWN": lbr += 0.90; lr -= 0.35; lf -= 0.45
+    if rvol is not None:
+        if rvol >= 1.5:
+            bs = min((rvol - 1.0) * 0.45, 0.90)
+            if est_close_chg >= 0: lb += bs
+            else: lbr += bs
+            lr -= bs * 0.5
+        elif rvol < 0.85: lr += 0.45; lf += 0.35; lb -= 0.30; lbr -= 0.30
+    if has_actual and cur_vwap and cur_vwap > 0:
+        vd = (curr_px - cur_vwap) / cur_vwap * 100.0
+        lb += float(np.clip(vd * 0.55, -0.8, 0.8)); lbr -= float(np.clip(vd * 0.55, -0.8, 0.8))
+        if (est_open_gap_pct > 0.25 and vd < -0.15) or (est_open_gap_pct < -0.25 and vd > 0.15): lf += 0.65
+    gs = gap_open15.get("status", "WAIT")
+    if gs == "GAP_AND_GO_UP": lb += 0.75; lf -= 0.60
+    elif gs == "GAP_AND_GO_DOWN": lbr += 0.75; lf -= 0.60
+    elif gs in ("GAP_AND_FADE_DOWN", "GAP_AND_FADE_UP"): lf += 0.85; lr += 0.20
+    cs = cvd_div.get("state", "NEUTRAL")
+    if cs == "DISTRIBUTION": lbr += 0.45; lf += 0.40; lb -= 0.45
+    elif cs == "ABSORPTION": lb += 0.45; lf += 0.40; lbr -= 0.45
+    lg = np.array([lb, lr, lf, lbr]); lg -= np.max(lg); ps = (np.exp(lg) / np.sum(np.exp(lg))) * 100.0
+    pb, pr, pf = round(float(ps[0]), 1), round(float(ps[1]), 1), round(float(ps[2]), 1)
+    return {"bull": pb, "range": pr, "fade": pf, "bear": round(max(0.5, 100.0 - pb - pr - pf), 1), "fpt_bull_pct": round(fb * 100.0, 1), "fpt_bear_pct": round(fbr * 100.0, 1)}
+
+
+def _audit_meta_labeling_accuracy(ledger: dict, fc_code: str, is_jp: bool, cur_regime: str, cur_rvol: float, cur_gap_pct: float) -> dict:
+    if not isinstance(ledger, dict) or not ledger:
+        return {"rank": "計測中", "color": "#94a3b8", "n": 0, "hit_rate": 0.0, "mean_err": 0.0, "detail": "事前ロック検証データ蓄積中"}
+    c_gb = abs(cur_gap_pct) >= 0.8
+    matched, all_m = [], []
+    for ck, hm in ledger.items():
+        if is_jp != ck.endswith(".T") or not isinstance(hm, dict): continue
+        for sn in hm.values():
+            vs = sn.get("verify_result") if isinstance(sn, dict) else None
+            if not (isinstance(sn, dict) and sn.get("locked_premarket") is True and isinstance(vs, dict) and vs.get("finalized")): continue
+            ic, ep = float(vs.get("in_cone_pct", -1.0)), float(vs.get("err_pct", -1.0))
+            if ic < 0 or ep < 0: continue
+            rec = {"regime": str(sn.get("regime_code") or "NEUTRAL"), "gap_big": abs(float(sn.get("pred_open_gap_pct") or 0.0)) >= 0.8, "in_cone": ic, "err_pct": ep}
+            all_m.append(rec)
+            if rec["regime"] == cur_regime and rec["gap_big"] == c_gb: matched.append(rec)
+    tgt = matched if len(matched) >= 3 else all_m
+    if len(tgt) < 3:
+        return {"rank": "計測中", "color": "#94a3b8", "n": len(tgt), "hit_rate": 0.0, "mean_err": 0.0, "detail": f"大引け確定済みの事前ロック検証が {len(tgt)}件（3件以上でランク判定）"}
+    ac, ae = float(np.mean([r["in_cone"] for r in tgt])), float(np.mean([r["err_pct"] for r in tgt]))
+    scope = f"{cur_regime}・{'大Gap' if c_gb else '通常Gap'}" if len(matched) >= 3 else ("日本株全体" if is_jp else "米国株全体")
+    rank, col = ("A", "#10b981") if (ac >= 72.0 and ae <= 0.85) else (("B", "#38bdf8") if (ac >= 58.0 and ae <= 1.35) else (("C", "#f59e0b") if ac >= 45.0 else ("D", "#ef4444")))
+    return {"rank": rank, "color": col, "n": len(tgt), "hit_rate": round(ac, 1), "mean_err": round(ae, 2), "detail": f"{scope} (大引け確定 N={len(tgt)}): 予測帯収束率 {ac:.1f}% / 平均誤差 {ae:.2f}%"}
+
+
+def _compute_lab_dd_fusion(active_lab: dict, traj: dict, short_3way: dict, scen_probs: dict, curr_px: float, is_jp: bool, active_dip_px: float, active_dip_time: str, active_peak_px: float, active_peak_time: str, active_bull_tgt: float, active_bear_tgt: float, active_bull_trig: float, active_bear_trig: float, active_close_chg: float, exp_reg: dict, cvd_div: dict) -> dict:
+    if not isinstance(active_lab, dict) or not active_lab or curr_px <= 0:
+        return {"has_lab": False}
+    l_side = _extract_lab_side(active_lab)
+    is_long = (l_side != "SHORT")
+    sgn = 1.0 if is_long else -1.0
+    l_exp = float(active_lab.get("expect_pct", 55.0) or 55.0)
+    l_tp, l_sl = float(active_lab.get("tp", active_lab.get("raw_tp", 0.0)) or 0.0), float(active_lab.get("sl", active_lab.get("raw_sl", 0.0)) or 0.0)
+    l_vwap, l_ob = float(active_lab.get("vwap", active_lab.get("raw_vwap", 0.0)) or 0.0), float(active_lab.get("ob_support_px", 0.0) or 0.0)
+    l_grade = str(active_lab.get("exec_grade", "🔵 Grade-B")).split("（")[0]
+    l_shares = int((active_lab.get("lot_info") or {}).get("shares", 100) if isinstance(active_lab.get("lot_info"), dict) else 100)
+    l_emode = str((active_lab.get("strat") or {}).get("entry_mode", "押し目・ブレイク確認") if isinstance(active_lab.get("strat"), dict) else "押し目・ブレイク確認")
+
+    ds = 50.0 + float(np.clip(sgn * active_close_chg * 6.5, -18.0, 18.0)) + sgn * (float(scen_probs["bull"]) - float(scen_probs["bear"])) * 0.20
+    if short_3way.get("active"): ds += sgn * (float(short_3way["p_up"]) - float(short_3way["p_down"])) * 0.25
+    if exp_reg.get("active"): ds += 10.0 if ((is_long and exp_reg.get("dir") == "UP") or (not is_long and exp_reg.get("dir") == "DOWN")) else -14.0
+    cst = cvd_div.get("state")
+    if cst == ("ABSORPTION" if is_long else "DISTRIBUTION"): ds += 6.0
+    elif cst == ("DISTRIBUTION" if is_long else "ABSORPTION"): ds -= 8.0
+    ds = float(np.clip(ds, 10.0, 98.0))
+    f_sc = round(l_exp * 0.50 + ds * 0.50, 1)
+    supp = (active_close_chg >= -0.15) if is_long else (active_close_chg <= 0.15)
+    s_st, s_col = ("🟢 完全同期（高確度執行）", "#10b981") if (supp and f_sc >= 68.0) else (("🔵 概ね一致（押し目引きつけ）", "#38bdf8") if (supp or f_sc >= 55.0) else ("🟡 乖離警戒（時間・反転待ち）", "#f59e0b"))
+
+    if is_long:
+        ec = [p for p in (l_vwap, l_ob, active_dip_px) if 0 < p <= curr_px * 1.005]
+        fe = round(float(np.mean(ec)), 2) if ec else round(min(curr_px, active_dip_px), 2)
+        sc = [p for p in (l_sl, active_bear_trig) if 0 < p < fe * 0.998]
+        fsl = round(max(sc), 2) if sc else round(fe * 0.985, 2)
+        ru = max(fe - fsl, curr_px * 0.004); fhr = round(fe + ru, 2)
+        tc = [p for p in (l_tp, active_bull_tgt) if p > fhr]
+        ftp, thint = (round(min(tc), 2) if tc else round(fe + ru * 2.0, 2)), f"{active_dip_time}前後 押目"
+    else:
+        ec = [p for p in (l_vwap, active_peak_px) if p >= curr_px * 0.995]
+        fe = round(float(np.mean(ec)), 2) if ec else round(max(curr_px, active_peak_px), 2)
+        sc = [p for p in (l_sl, active_bull_trig) if p > fe * 1.002]
+        fsl = round(min(sc), 2) if sc else round(fe * 1.015, 2)
+        ru = max(fsl - fe, curr_px * 0.004); fhr = round(max(fe - ru, curr_px * 0.5), 2)
+        tc = [p for p in (l_tp, active_bear_tgt) if 0 < p < fhr]
+        ftp, thint = (round(max(tc), 2) if tc else round(max(fe - ru * 2.0, curr_px * 0.5), 2)), f"{active_peak_time}前後 戻り"
+    bh = max(curr_px * 0.0022, ru * 0.28)
+    return {"has_lab": True, "side": l_side, "is_long": is_long, "lab_expect": l_exp, "dd_dir_score": round(ds, 1), "fusion_score": f_sc, "sync_state": s_st, "sync_col": s_col, "exec_grade": l_grade, "entry_mode": l_emode, "shares": l_shares, "fusion_entry_px": fe, "entry_zone_lo": round(max(fe - bh, curr_px * 0.5), 2), "entry_zone_hi": round(fe + bh, 2), "fusion_half_r_px": fhr, "fusion_tp_px": ftp, "fusion_sl_px": fsl, "target_time_hint": thint}
 # =========================================================================
 # 6. デュアル5分足軌道エンジン（振幅保存型・固有波形合成エンジン搭載）
 # =========================================================================
