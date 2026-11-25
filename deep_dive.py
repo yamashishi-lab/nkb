@@ -4276,7 +4276,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     c1, c2, c3, c4 = st.columns([1.6, 1.4, 0.95, 0.95])
     in_code = c1.text_input("銘柄コード", value=init_code, placeholder="例: NVDA / 6920", label_visibility="collapsed", key="dd_code_in")
     in_style = c2.selectbox("スタイル", STYLES, index=STYLES.index(init_style) if init_style in STYLES else 0, label_visibility="collapsed", key="dd_style_in")
-    auto_sync = c3.toggle("60s自動更新", value=False, key="dd_auto_sync", help="ONで60秒ごとに自動同期（横拡大閲覧中はOFF推奨）")
+    auto_sync = c3.toggle("60s自動更新", value=True, key="dd_auto_sync", help="ONで60秒ごとに自動同期（横拡大閲覧中はOFF推奨）")
     pc_cockpit = c4.toggle("🖥️ PC画面", value=False, key="dd_pc_cockpit", help="PC横画面専用の2カラム・コックピットモードに切替")
 
     fc = in_code.strip().upper()
