@@ -46,7 +46,7 @@ DEFAULT_WEIGHTS_EVOLUTION = {
 
 
 # =========================================================================
-# 1. DEEP DIVE v21.2 専用CSS（スマホ横並び最適化・高密度プロ端末デザイン）
+# 1. DEEP DIVE v21.3 専用CSS（スマホ横並び最適化・高密度プロ端末デザイン）
 # =========================================================================
 def _inject_dd_css():
     css = (
@@ -70,7 +70,7 @@ def _inject_dd_css():
         'div[data-testid="stPopover"]>button svg{display:none!important;}'
         '.st-key-dd_back_to_lab_btn button[kind="secondary"]{height:38px!important;min-height:38px!important;padding:0 8px!important;border-radius:8px!important;font-family:"JetBrains Mono",sans-serif!important;font-size:10.5px!important;font-weight:800!important;letter-spacing:.02em!important;background:linear-gradient(135deg,rgba(14,165,233,.16),rgba(56,189,248,.08))!important;border:1px solid rgba(56,189,248,.52)!important;color:#38bdf8!important;box-shadow:0 0 10px rgba(56,189,248,.12)!important;transition:all .15s ease!important;white-space:nowrap!important;}'
         '.st-key-dd_back_to_lab_btn button[kind="secondary"]:hover{background:rgba(56,189,248,.24)!important;border-color:#38bdf8!important;color:#ffffff!important;}'
-        # モダン・ピルトグルスイッチ（10s自動 / PC表示：コンパクト1行）
+        # モダン・ピルトグルスイッチ（15s自動 / PC表示：コンパクト1行）
         '[data-testid="stToggle"]{background:#0b1120;border:1px solid rgba(148,163,184,.14);border-radius:7px;padding:0 6px!important;height:34px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}'
         '[data-testid="stToggle"] label{gap:4px!important;margin:0!important;align-items:center!important;}'
         '[data-testid="stToggle"] label p{font-family:"JetBrains Mono",sans-serif!important;font-size:9.8px!important;font-weight:700!important;color:#cbd5e1!important;white-space:nowrap!important;}'
@@ -161,6 +161,7 @@ def _inject_dd_css():
         '.dd-val-track{width:100%;height:4px;background:rgba(148,163,184,.14);border-radius:99px;position:relative;margin-top:4px;}'
         '.dd-val-fill{height:100%;border-radius:99px;}'
         '.dd-ws-badge{display:flex;align-items:center;justify-content:space-between;background:#0b1120;border:1px solid rgba(56,189,248,.24);border-left:2.5px solid #38bdf8;border-radius:5px;padding:2.5px 8px;margin:1px 0 3px 0;font-family:"JetBrains Mono",monospace;font-size:9.5px;color:#7dd3fc;}'
+        'iframe[height="0"]{display:none!important;height:0!important;margin:0!important;padding:0!important;}'
         '@media (min-width:768px){.dd-sc-stack{grid-template-columns:repeat(3,1fr);}}'
         '@media (max-width:640px){'
         '[data-testid="stHorizontalBlock"]:has([data-testid="stNumberInput"]),[data-testid="stHorizontalBlock"]:has([data-testid="stSlider"]){flex-wrap:wrap!important;}'
@@ -593,6 +594,8 @@ def _backfill_unverified_locks(ledger: dict, fc_code: str, df_5m: pd.DataFrame, 
         ledger[fc_code] = stock_hist
         _dd_db_set("dd_forecast_ledger_v9", ledger)
     return ledger, changed
+
+
 # === PART 2 / 5 ===
 # =========================================================================
 # 3. ヘルパー・1クリックコピー・保有ポジションHUD・非破壊パッチECharts描画
@@ -786,18 +789,18 @@ def _render_position_hud(fc: str, curr_px: float, is_jp: bool, default_side: str
     r_col = "#fde047" if pm["r_mult"] >= 1.0 else ("#10b981" if pm["r_mult"] >= 0 else "#ef4444")
 
     st.markdown(
-        f'<div class="dd-pos-hud{loss_cls}">'
+        f'<div id="dd-pos-card" class="dd-pos-hud{loss_cls}">'
         f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
         f'<span style="font-size:10.5px;font-weight:900;color:#f8fafc;">POS // {pm["side"]} {pm["shares"]:,}株 @ {_fmt_cur(pm["entry"], is_jp)}</span>'
-        f'<span style="font-family:JetBrains Mono,monospace;font-size:9.8px;font-weight:800;color:{pm["badge_col"]};">{html.escape(pm["status_badge"])}</span>'
+        f'<span id="dd-pos-badge" style="font-family:JetBrains Mono,monospace;font-size:9.8px;font-weight:800;color:{pm["badge_col"]};">{html.escape(pm["status_badge"])}</span>'
         f'</div>'
         f'<div class="dd-pos-grid">'
-        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">含み損益</div><div style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:{pnl_col};">{pnl_sign}{_fmt_cur(pm["pnl"], is_jp)} ({pm["pnl_pct"]:+.2f}%)</div></div>'
-        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">現在 R倍数</div><div style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:{r_col};">{pm["r_mult"]:+.2f}R</div></div>'
-        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">初期SL距離</div><div style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:#cbd5e1;">{pm["sl_dist_pct"]:+.2f}%</div></div>'
-        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">推奨トレーリングSL</div><div style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:#38bdf8;">{_fmt_cur(pm["trail_sl"], is_jp)}</div></div>'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">含み損益</div><div id="dd-pos-pnl" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:{pnl_col};">{pnl_sign}{_fmt_cur(pm["pnl"], is_jp)} ({pm["pnl_pct"]:+.2f}%)</div></div>'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">現在 R倍数</div><div id="dd-pos-rmult" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:{r_col};">{pm["r_mult"]:+.2f}R</div></div>'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">初期SL距離</div><div id="dd-pos-sldist" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:#cbd5e1;">{pm["sl_dist_pct"]:+.2f}%</div></div>'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">推奨トレーリングSL</div><div id="dd-pos-trailsl" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:#38bdf8;">{_fmt_cur(pm["trail_sl"], is_jp)}</div></div>'
         f'</div>'
-        f'<div style="font-size:9.2px;color:#94a3b8;margin-top:4px;">SL到達時リスク残: <b>{_fmt_cur(pm["rem_loss"], is_jp)}</b> ｜ 追従方針: <b>{html.escape(pm["trail_note"])}</b></div>'
+        f'<div style="font-size:9.2px;color:#94a3b8;margin-top:4px;">SL到達時リスク残: <b id="dd-pos-remloss">{_fmt_cur(pm["rem_loss"], is_jp)}</b> ｜ 追従方針: <b>{html.escape(pm["trail_note"])}</b></div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -949,7 +952,7 @@ def _declutter_pulse_points(pulse_pts: list, slots: list) -> list:
 
 
 def _dispatch_live_patch(chart_key: str, patch_payload: dict):
-    """既存チャートiframeと親画面DOM（ヒーローカード・EV脈拍・3分岐%）を破棄せず非破壊更新する不可視ブリッジ"""
+    """既存チャートiframeと親画面DOM（ヒーローカード・EV脈拍・3分岐%・マクロ帯・HUD・速報）を破棄せず非破壊更新する不可視ブリッジ"""
     msg_obj = {
         "type": "DD_LIVE_PATCH",
         "chartKey": re.sub(r"[^A-Za-z0-9_\-]", "_", str(chart_key or "dd_chart_default")),
@@ -959,12 +962,14 @@ def _dispatch_live_patch(chart_key: str, patch_payload: dict):
     html_bridge = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>html,body{{margin:0;padding:0;background:#050811;overflow:hidden;}}</style></head><body><script>
       (function() {{
         var msg = {msg_json};
+        var clkResetMsg = {{ type: 'DD_CLOCK_RESET', interval: 15 }};
         try {{
           var pDoc = window.parent.document;
           var frames = pDoc.querySelectorAll('iframe');
           for (var i = 0; i < frames.length; i++) {{
             if (frames[i].contentWindow && frames[i].contentWindow !== window) {{
               frames[i].contentWindow.postMessage(msg, '*');
+              frames[i].contentWindow.postMessage(clkResetMsg, '*');
             }}
           }}
           var domUpd = (msg.payload && msg.payload.dom_updates) ? msg.payload.dom_updates : null;
@@ -977,6 +982,10 @@ def _dispatch_live_patch(chart_key: str, patch_payload: dict):
                 if (spec.text !== undefined) el.textContent = spec.text;
                 if (spec.color) el.style.color = spec.color;
                 if (spec.borderColor) el.style.borderLeftColor = spec.borderColor;
+                if (spec.width !== undefined) el.style.width = spec.width;
+                if (spec.display !== undefined) el.style.display = spec.display;
+                if (spec.html !== undefined) el.innerHTML = spec.html;
+                if (spec.className !== undefined) el.className = spec.className;
               }}
             }});
           }}
@@ -1047,6 +1056,7 @@ def _render_echarts(
     var ALERT_CTX = {alert_ctx_js};
     var HAS_WS_CONN = Boolean(FH_KEY && FH_SYM && !IS_JP_CHART);
     var SOUND_KEY = 'dd_sound_enabled';
+    var latestPx = null;
 
     var soundEnabled = false;
     try {{
@@ -1054,6 +1064,7 @@ def _render_echarts(
     }} catch (e) {{}}
     var audioCtx = null;
     var lastAlertTs = {{}};
+    var lastAlertNewsId = '';
 
     function ensureAudioCtx() {{
       try {{
@@ -1176,6 +1187,9 @@ def _render_echarts(
     }}
 
     (function initSoundState() {{
+      if (ALERT_CTX && ALERT_CTX.news_id) {{
+        lastAlertNewsId = String(ALERT_CTX.news_id);
+      }}
       applySoundBtnVisual();
       if (soundEnabled) {{
         triggerInitialAlertChecks();
@@ -1200,16 +1214,28 @@ def _render_echarts(
              pSgn + pnlTxt + ' (' + rSgn + rm.toFixed(2) + 'R)</b>';
     }}
 
-    // 非破壊 postMessage パッチ受信リスナー（フルスクリーン維持・点滅ゼロ更新）
+    // 非破壊 postMessage パッチ受信リスナー（フルスクリーン維持・点滅ゼロ・WS巻き戻り防止・速報音声通知）
     window.addEventListener('message', function(ev) {{
       try {{
         var d = ev.data;
         if (!d || d.type !== 'DD_LIVE_PATCH' || d.chartKey !== CHART_KEY) return;
         var p = d.payload || {{}};
         if (p.pos_ctx) POS_CTX = p.pos_ctx;
-        if (p.alert_ctx) ALERT_CTX = p.alert_ctx;
+        if (p.alert_ctx) {{
+          ALERT_CTX = p.alert_ctx;
+          var nid = String(ALERT_CTX.news_id || '');
+          if (nid && nid !== lastAlertNewsId) {{
+            lastAlertNewsId = nid;
+            if (soundEnabled) {{
+              var ndir = String(ALERT_CTX.news_dir || '');
+              var nkw = String(ALERT_CTX.news_kw || '重要ニュース');
+              playBeep(ndir === 'NEG' ? 380 : 1040, 180, 'triangle');
+              speakAlert('速報材料、' + nkw + 'を検知しました');
+            }}
+          }}
+        }}
 
-        var pxNow = Number(p.curr_px || 0);
+        var pxNow = (HAS_WS_CONN && latestPx !== null && latestPx > 0) ? Number(latestPx.toFixed(2)) : Number(p.curr_px || 0);
         if (pxNow > 0) {{
           checkPriceAlerts(pxNow);
           var hudEl = document.getElementById('hud-line');
@@ -1233,7 +1259,32 @@ def _render_echarts(
           var s = curOpt.series[i];
           var sName = s.name;
           if (Object.prototype.hasOwnProperty.call(seriesMap, sName)) {{
-            var obj = {{ name: sName, data: seriesMap[sName] }};
+            var nextData = seriesMap[sName];
+            if (HAS_WS_CONN && latestPx !== null && latestPx > 0 && Array.isArray(nextData)) {{
+              var wsPxSafe = Number(latestPx.toFixed(2));
+              if (!IS_1M_MODE && sName === '当日実測') {{
+                nextData = nextData.slice();
+                for (var j = nextData.length - 1; j >= 0; j--) {{
+                  if (nextData[j] !== null && nextData[j] !== undefined) {{
+                    nextData[j] = wsPxSafe;
+                    break;
+                  }}
+                }}
+              }} else if (IS_1M_MODE && sName === '1分足') {{
+                var k1m = nextData.length - 11;
+                if (k1m >= 0 && Array.isArray(nextData[k1m]) && nextData[k1m][0] !== '-') {{
+                  nextData = nextData.slice();
+                  var b1m = nextData[k1m].slice();
+                  b1m[1] = wsPxSafe;
+                  var lo1m = Number(b1m[2]);
+                  var hi1m = Number(b1m[3]);
+                  if (!isNaN(lo1m)) b1m[2] = Number(Math.min(lo1m, wsPxSafe).toFixed(2));
+                  if (!isNaN(hi1m)) b1m[3] = Number(Math.max(hi1m, wsPxSafe).toFixed(2));
+                  nextData[k1m] = b1m;
+                }}
+              }}
+            }}
+            var obj = {{ id: s.id || sName, name: sName, data: nextData }};
             if (Object.prototype.hasOwnProperty.call(endLabelMap, sName)) {{
               obj.endLabel = {{ formatter: endLabelMap[sName] }};
             }}
@@ -1255,7 +1306,6 @@ def _render_echarts(
     var ws = null;
     var connectFinnhubWS = null;
     if (HAS_WS_CONN) {{
-      var latestPx = null;
       var prevTickPx = null;
       var dirty = false;
       var wsHadError = false;
@@ -1374,7 +1424,7 @@ def _render_echarts(
             }}
             if (idx >= 0) {{
               s.data[idx] = pxRounded;
-              updatedSeries.push({{ name: '当日実測', data: s.data }});
+              updatedSeries.push({{ id: s.id || '当日実測', name: '当日実測', data: s.data }});
             }}
           }} else if (!IS_1M_MODE && s.name === '重要点' && Array.isArray(s.data)) {{
             var changedPt = false;
@@ -1386,7 +1436,7 @@ def _render_echarts(
               }}
             }}
             if (changedPt) {{
-              updatedSeries.push({{ name: '重要点', data: s.data }});
+              updatedSeries.push({{ id: s.id || '重要点', name: '重要点', data: s.data }});
             }}
           }} else if (IS_1M_MODE && s.name === '1分足' && Array.isArray(s.data)) {{
             var k = s.data.length - 11;
@@ -1397,7 +1447,7 @@ def _render_echarts(
               var curHi = Number(bar[3]);
               if (!isNaN(curLo)) bar[2] = Number(Math.min(curLo, pxRounded).toFixed(2));
               if (!isNaN(curHi)) bar[3] = Number(Math.max(curHi, pxRounded).toFixed(2));
-              updatedSeries.push({{ name: '1分足', data: s.data }});
+              updatedSeries.push({{ id: s.id || '1分足', name: '1分足', data: s.data }});
             }}
           }}
         }}
@@ -1562,10 +1612,10 @@ def _render_echarts(
     components.html(html_code, height=height + 2)
 
 
-def _render_live_clock(sync_interval: int = 10, active: bool = True):
+def _render_live_clock(sync_interval: int = 15, active: bool = True):
     dot_col, st_lbl, b_col, l_col = ("#10b981", "LIVE SYNC", "rgba(16,185,129,.22)", "#6ee7b7") if active else ("#64748b", "STATIC HOLD", "rgba(148,163,184,.12)", "#94a3b8")
     r_html = f'PATCH <span id="cd" class="cnt">{sync_interval}s</span>' if active else '<span>手動同期モード</span>'
-    components.html(f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>html,body{{width:100%;margin:0;padding:0;background:#050811;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}}.bar{{display:flex;justify-content:space-between;align-items:center;background:#0b1120;border:1px solid {b_col};border-radius:6px;padding:2px 8px;font-size:9.3px;color:#e2e8f0;}}.dot{{width:5px;height:5px;background:{dot_col};border-radius:50%;display:inline-block;margin-right:5px;}}.left{{display:flex;align-items:center;color:{l_col};font-weight:700;}}.right{{color:#64748b;font-size:8.8px;}}.cnt{{color:#38bdf8;font-weight:700;}}</style></head><body><div class="bar"><div class="left"><span class="dot"></span>{st_lbl} <span id="clk" style="margin-left:6px;color:#f8fafc;">--:--:--</span> JST</div><div class="right">{r_html}</div></div><script>var rem={sync_interval},act={'true' if active else 'false'};function tick(){{var n=new Date(),j=new Date(n.getTime()+(n.getTimezoneOffset()+540)*60000);document.getElementById('clk').textContent=String(j.getHours()).padStart(2,'0')+':'+String(j.getMinutes()).padStart(2,'0')+':'+String(j.getSeconds()).padStart(2,'0');if(act){{var cd=document.getElementById('cd');if(cd)cd.textContent=rem+'s';rem=rem>1?rem-1:{sync_interval};}}}}tick();setInterval(tick,1000);</script></body></html>""", height=22)
+    components.html(f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>html,body{{width:100%;margin:0;padding:0;background:#050811;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}}.bar{{display:flex;justify-content:space-between;align-items:center;background:#0b1120;border:1px solid {b_col};border-radius:6px;padding:2px 8px;font-size:9.3px;color:#e2e8f0;}}.dot{{width:5px;height:5px;background:{dot_col};border-radius:50%;display:inline-block;margin-right:5px;}}.left{{display:flex;align-items:center;color:{l_col};font-weight:700;}}.right{{color:#64748b;font-size:8.8px;}}.cnt{{color:#38bdf8;font-weight:700;}}</style></head><body><div class="bar"><div class="left"><span class="dot"></span>{st_lbl} <span id="clk" style="margin-left:6px;color:#f8fafc;">--:--:--</span> JST</div><div class="right">{r_html}</div></div><script>var rem={sync_interval},act={'true' if active else 'false'};window.addEventListener('message',function(ev){{try{{if(ev&&ev.data&&ev.data.type==='DD_CLOCK_RESET'){{rem=Number(ev.data.interval)||15;var cd=document.getElementById('cd');if(cd&&act)cd.textContent=rem+'s';}}}}catch(e){{}}}});function tick(){{var n=new Date(),j=new Date(n.getTime()+(n.getTimezoneOffset()+540)*60000);document.getElementById('clk').textContent=String(j.getHours()).padStart(2,'0')+':'+String(j.getMinutes()).padStart(2,'0')+':'+String(j.getSeconds()).padStart(2,'0');if(act){{var cd=document.getElementById('cd');if(cd)cd.textContent=rem+'s';rem=rem>1?rem-1:{sync_interval};}}}}tick();setInterval(tick,1000);</script></body></html>""", height=22)
 
 
 def _build_spark_svg(prices: np.ndarray) -> str:
@@ -1635,7 +1685,9 @@ def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, sho
     st.markdown(f'<div class="dd-legend-panel"><div class="{b_cls}">{html.escape(b_txt)}</div><div class="dd-chip-ribbon">{pills_html}</div></div>', unsafe_allow_html=True)
     with st.expander("アクティブ凡例の詳細 ＆ 専門指標クイック辞典", expanded=False):
         st.markdown(f'<div class="dd-legend-grid" style="margin-bottom:8px;">{cards_html}</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:10.5px;line-height:1.6;color:#cbd5e1;">・<b>非破壊リアルタイム同期：</b> 10s自動ON時はチャートフレームを破棄せず最新データのみを注入するため、横向き大画面でも画面戻りや点滅が起きません。<br>・<b>音声＆電子音トリガー監視官：</b> チャート右上「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と音声で即時通知します。<br>・<b>LVN真空帯（流動性真空地帯）：</b> 28分割出来高プロファイルで商いが極端に薄い価格帯。レジスタンス抜けやサポート割れ時に価格が一気に走りやすいエアポケットです。<br>・<b>二壁FPT到達確率：</b> 大引けまでに「損切りライン(SL)へ先に触れずに利確目標(TP)へ到達する」確率モデルに基づく物理確率です。</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10.5px;line-height:1.6;color:#cbd5e1;">・<b>非破壊リアルタイム同期：</b> 15s自動ON時はチャートフレームを破棄せず最新データのみを注入するため、横向き大画面でも画面戻りや点滅が起きません。<br>・<b>音声＆電子音トリガー監視官：</b> チャート右上「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近・速報重要ニュース検知を電子音と音声で即時通知します。<br>・<b>LVN真空帯（流動性真空地帯）：</b> 28分割出来高プロファイルで商いが極端に薄い価格帯。レジスタンス抜けやサポート割れ時に価格が一気に走りやすいエアポケットです。<br>・<b>二壁FPT到達確率：</b> 大引けまでに「損切りライン(SL)へ先に触れずに利確目標(TP)へ到達する」確率モデルに基づく物理確率です。</div>', unsafe_allow_html=True)
+
+
 # === PART 3 / 5 ===
 # =========================================================================
 # 4. マーケット・ニュース・株主・1分足データ取得（Static層 / Live層分離）
@@ -1685,7 +1737,7 @@ def _load_macro_daily_base() -> dict:
     return out
 
 
-@st.cache_data(ttl=8)
+@st.cache_data(ttl=13)
 def _load_macro_rt_quotes() -> dict:
     rt_map = {}
     try:
@@ -1714,7 +1766,7 @@ def _load_macro_data() -> dict:
     return out
 
 
-@st.cache_data(ttl=8)
+@st.cache_data(ttl=13)
 def _load_benchmark_5m(is_jp: bool) -> pd.DataFrame:
     for b_tk in (["1306.T", "^N225"] if is_jp else ["QQQ", "SPY"]):
         try:
@@ -1809,7 +1861,7 @@ def _load_stock_static(code: str) -> dict:
     return {"df_1d": df_1d, "info": info, "earnings_hist": earnings_hist, "next_earnings_days": next_earnings_days, "inst_holders": inst_holders, "insider_tx": insider_tx}
 
 
-@st.cache_data(ttl=8)
+@st.cache_data(ttl=13)
 def _load_stock_intraday(code: str) -> pd.DataFrame:
     try:
         df = yf.Ticker(code).history(period="1mo", interval="5m", auto_adjust=True)
@@ -1820,7 +1872,7 @@ def _load_stock_intraday(code: str) -> pd.DataFrame:
     return pd.DataFrame()
 
 
-@st.cache_data(ttl=8)
+@st.cache_data(ttl=13)
 def _load_stock_1m(code: str) -> pd.DataFrame:
     try:
         df = yf.Ticker(code).history(period="2d", interval="1m", auto_adjust=True)
@@ -2897,7 +2949,7 @@ def _compute_lab_dd_fusion(active_lab: dict, traj: dict, short_3way: dict, scen_
 # =========================================================================
 # 7. デュアル5分足軌道エンジン（振幅保存型・固有波形合成エンジン搭載）
 # =========================================================================
-def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1d: pd.DataFrame, df_5m: pd.DataFrame, macro_sens: list, macro_data: dict, news_res: dict, whale_anom: dict, dow_next_avg: float, vp: dict, is_jp: bool, mkt_regime: dict, active_lab: dict = None, df_bench_5m: pd.DataFrame = None, lab_mods: dict = None, is_patch_tick: bool = False, cached_ledger: dict = None, cached_weights: dict = None) -> dict:
+def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1d: pd.DataFrame, df_5m: pd.DataFrame, macro_sens: list, macro_data: dict, news_res: dict, whale_anom: dict, dow_next_avg: float, vp: dict, is_jp: bool, mkt_regime: dict, active_lab: dict = None, df_bench_5m: pd.DataFrame = None, lab_mods: dict = None, is_patch_tick: bool = False, cached_ledger: dict = None, cached_weights: dict = None, cached_hist_base: dict = None) -> dict:
     if is_jp:
         am = [f"{h:02d}:{m:02d}" for h in range(9, 12) for m in range(0, 60, 5) if not (h == 11 and m > 30)]
         pm = [f"{h:02d}:{m:02d}" for h in range(12, 16) for m in range(0, 60, 5) if not (h == 12 and m < 30) and not (h == 15 and m > 30)]
@@ -2985,128 +3037,217 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
     raw_calib_pct, calib_n = _compute_self_calibration(stock_hist, df_1d, market_today_str)
     calib_pct = round(float(np.clip(raw_calib_pct * (idr_w["calib"] / 0.40), -0.65, 0.65)), 2)
 
-    bench_day_rmaps, bench_today_rmap, bench_beta_5m, has_bench_5m = {}, {}, float(np.clip(mi.get("beta", 0.8), -2.5, 2.5)), False
+    est_open = anchor_base_close * (1.0 + tot_gap / 100.0)
+    target_atr = max(float(vol_cls["atr_pct"]), 0.8)
+    pm_open_idx = (lunch_idx + 1) if (is_jp and lunch_idx is not None and (lunch_idx + 1) < n_slots) else None
+
+    bench_today_rmap = {}
     if df_bench_5m is not None and not df_bench_5m.empty:
         tmp_b = df_bench_5m.copy(); idx_b = _convert_5m_index_to_market_tz(tmp_b, is_jp)
         tmp_b["_d"], tmp_b["_hm"] = idx_b.strftime("%Y-%m-%d"), idx_b.strftime("%H:%M")
-        for dsb, sb in tmp_b.groupby("_d"):
-            if len(sb) >= 5 and float(sb["Open"].iloc[0]) > 0:
-                opb = float(sb["Open"].iloc[0])
-                rmb = {r["_hm"]: (float(r["Close"]) - opb) / opb for _, r in sb.iterrows() if r["_hm"] in slots}
-                if rmb:
-                    if dsb == market_today_str: bench_today_rmap = rmb
-                    else: bench_day_rmaps[dsb] = rmb
-        has_bench_5m = len(bench_day_rmaps) >= 5
+        sb_td = tmp_b[tmp_b["_d"] == market_today_str]
+        if len(sb_td) >= 5 and float(sb_td["Open"].iloc[0]) > 0:
+            opb_td = float(sb_td["Open"].iloc[0])
+            bench_today_rmap = {r["_hm"]: (float(r["Close"]) - opb_td) / opb_td for _, r in sb_td.iterrows() if r["_hm"] in slots}
 
-    slot_means, slot_stds, slot_vols, slot_inc_stds = np.zeros(n_slots), np.full(n_slots, 0.003), np.zeros(n_slots), np.full(n_slots, 0.0022)
-    slot_q10, slot_q25, slot_q75, slot_q90 = np.zeros(n_slots), np.zeros(n_slots), np.zeros(n_slots), np.zeros(n_slots)
-    regime_tag, rmaps, alpha_rmaps, rdates, day_gaps_hist, day_ranges_hist, vmaps, use_maps, weights = "標準", [], [], [], [], [], [], [], []
-    gap_fill_stats = {"prob": None, "avg_min": None, "n_samples": 0, "dir": "FLAT"}
-
-    if df_5m is not None and not df_5m.empty:
-        tmp = df_5m.copy(); idx_dt = _convert_5m_index_to_market_tz(tmp, is_jp)
-        tmp["_d"], tmp["_hm"] = idx_dt.strftime("%Y-%m-%d"), idx_dt.strftime("%H:%M")
-        pdays = [d for d in sorted(tmp["_d"].unique().tolist()) if d != market_today_str]
-        want_gu, want_gd = tot_gap >= 0.15, tot_gap <= -0.15
-        regime_tag = "GU類似加重" if want_gu else ("GD類似加重" if want_gd else "フラット加重")
-        gf_total, gf_filled, gf_mins, target_gap_dir, prev_dc = 0, 0, [], (1 if want_gu else (-1 if want_gd else 0)), None
-
-        if has_bench_5m:
-            sr_l, br_l = [], []
-            for ds in pdays:
-                if ds in bench_day_rmaps:
-                    ss = tmp[tmp["_d"] == ds]
-                    if len(ss) >= 10 and float(ss["Open"].iloc[0]) > 0 and bench_day_rmaps[ds]:
-                        sr_l.append((float(ss["Close"].iloc[-1]) - float(ss["Open"].iloc[0])) / float(ss["Open"].iloc[0]))
-                        br_l.append(list(bench_day_rmaps[ds].values())[-1])
-            if len(sr_l) >= 6 and float(np.var(br_l)) > 1e-8:
-                bench_beta_5m = float(np.clip(float(np.cov(sr_l, br_l)[0, 1]) / float(np.var(br_l)), -2.5, 2.5))
-
-        for di, ds in enumerate(pdays):
-            sub = tmp[tmp["_d"] == ds]
-            if len(sub) < 10 or float(sub["Open"].iloc[0]) <= 0: continue
-            op, cl_end = float(sub["Open"].iloc[0]), float(sub["Close"].iloc[-1])
-            dgap = ((op - prev_dc) / prev_dc * 100.0) if (prev_dc and prev_dc > 0) else 0.0
-            drng = ((float(sub["High"].max()) if "High" in sub.columns else float(sub["Close"].max())) - (float(sub["Low"].min()) if "Low" in sub.columns else float(sub["Close"].min()))) / op * 100.0
-            if prev_dc and prev_dc > 0 and abs(dgap) >= 0.20 and (target_gap_dir == 0 or dgap * target_gap_dir > 0):
-                gf_total += 1
-                hits = np.where(sub["Low"].values <= prev_dc)[0] if dgap > 0 else np.where(sub["High"].values >= prev_dc)[0]
-                if len(hits) > 0: gf_filled += 1; gf_mins.append((int(hits[0]) + 1) * 5)
-            prev_dc = cl_end
-            rm, arm, vm, brm = {}, {}, {}, (bench_day_rmaps.get(ds, {}) if has_bench_5m else {})
-            for _, row in sub.iterrows():
-                hmk = row["_hm"]
-                if hmk in slots:
-                    rr = (float(row["Close"]) - op) / op
-                    rm[hmk], arm[hmk], vm[hmk] = rr, (rr - bench_beta_5m * brm[hmk] if (has_bench_5m and hmk in brm) else rr), float(row["Volume"])
-            if rm:
-                bw = float(np.exp(1.2 * (di / max(len(pdays) - 1, 1)))) * (2.5 if ((want_gu and dgap > 0.1) or (want_gd and dgap < -0.1)) else 1.0)
-                rmaps.append(rm); alpha_rmaps.append(arm); rdates.append(ds); day_gaps_hist.append(dgap); day_ranges_hist.append(drng); vmaps.append(vm); weights.append(bw)
-
-        if gf_total >= 2:
-            gap_fill_stats = {"prob": round(gf_filled / gf_total * 100.0, 0), "avg_min": int(round(float(np.mean(gf_mins)), 0)) if gf_mins else None, "n_samples": gf_total, "dir": "GU" if target_gap_dir > 0 else ("GD" if target_gap_dir < 0 else "BOTH")}
-
-        use_maps = alpha_rmaps if has_bench_5m else rmaps
-        for i, sl in enumerate(slots):
-            rvm, rvv, wv, vv = [], [], [], []
-            for rmu, rmr, vm, w in zip(use_maps, rmaps, vmaps, weights):
-                if sl in rmu: rvm.append(rmu[sl]); rvv.append(rmr[sl]); wv.append(w); vv.append(vm[sl])
-            if len(rvm) >= 3:
-                wa = np.array(wv) / np.sum(wv); ram, rav = np.array(rvm), np.array(rvv)
-                wm, wmr = float(np.sum(wa * ram)), float(np.sum(wa * rav))
-                slot_means[i], slot_stds[i], slot_vols[i] = wm, max(float(np.sqrt(np.sum(wa * ((rav - wmr) ** 2)))), 0.0025), (float(np.mean(vv)) if vv else 0.0)
-                oi = np.argsort(rav); ras, was = rav[oi] - wmr, wa[oi]; cdfs = np.cumsum(was) - 0.5 * was
-                slot_q10[i], slot_q25[i], slot_q75[i], slot_q90[i] = (wm + float(np.interp(q, cdfs, ras)) for q in (0.10, 0.25, 0.75, 0.90))
-            else:
-                sf = 0.003 + 0.009 * np.sqrt((i + 1) / n_slots)
-                slot_stds[i], slot_q10[i], slot_q25[i], slot_q75[i], slot_q90[i] = sf, -1.28 * sf, -0.67 * sf, 0.67 * sf, 1.28 * sf
-
-        for i in range(n_slots):
-            slc, slp = slots[i], (slots[i - 1] if i > 0 else None)
-            iv, iw = [], []
-            for rmr, w in zip(rmaps, weights):
-                if slp is None and slc in rmr: iv.append(rmr[slc]); iw.append(w)
-                elif slp is not None and slc in rmr and slp in rmr: iv.append(rmr[slc] - rmr[slp]); iw.append(w)
-            if len(iv) >= 3:
-                wai, ia = np.array(iw) / np.sum(iw), np.array(iv)
-                slot_inc_stds[i] = max(float(np.sqrt(np.sum(wai * ((ia - float(np.sum(wai * ia))) ** 2)))), 0.0012)
-            else:
-                slot_inc_stds[i] = 0.0022 * (1.35 if (i < 6 or i >= n_slots - 6) else 0.85)
-
-    vol_clock_active = bool(float(np.sum(slot_vols)) > 0 and n_slots > 1)
-    if vol_clock_active:
-        cva = np.cumsum(slot_vols)
-        vol_frac = np.clip((cva - float(cva[0])) / max(float(cva[-1]) - float(cva[0]), 1e-6), 0.0, 1.0)
+    # 当日中に変化しない過去日ベース計算のキャッシュ分離（パッチ時は再計算を完全スキップ）
+    use_cached_hist = bool(is_patch_tick and isinstance(cached_hist_base, dict) and cached_hist_base.get("n_slots") == n_slots)
+    if use_cached_hist:
+        hb = cached_hist_base
+        bench_day_rmaps = hb["bench_day_rmaps"]
+        bench_beta_5m = hb["bench_beta_5m"]
+        has_bench_5m = hb["has_bench_5m"]
+        regime_tag = hb["regime_tag"]
+        rmaps = hb["rmaps"]
+        alpha_rmaps = hb["alpha_rmaps"]
+        rdates = hb["rdates"]
+        day_gaps_hist = hb["day_gaps_hist"]
+        day_ranges_hist = hb["day_ranges_hist"]
+        vmaps = hb["vmaps"]
+        use_maps = hb["use_maps"]
+        weights = hb["weights"]
+        gap_fill_stats = hb["gap_fill_stats"]
+        slot_means = hb["slot_means"]
+        slot_stds = hb["slot_stds"]
+        slot_vols = hb["slot_vols"]
+        slot_inc_stds = hb["slot_inc_stds"]
+        slot_q10 = hb["slot_q10"]
+        slot_q25 = hb["slot_q25"]
+        slot_q75 = hb["slot_q75"]
+        slot_q90 = hb["slot_q90"]
+        vol_clock_active = hb["vol_clock_active"]
+        vol_frac = hb["vol_frac"]
+        lunch_jump_std_pct = hb["lunch_jump_std_pct"]
+        ml_3way_model = hb["ml_3way_model"]
+        high_vol_zones = hb["high_vol_zones"]
+        vol_profile_meta = hb["vol_profile_meta"]
+        avg_5m_vol = hb["avg_5m_vol"]
+        premarket_medoid = hb["premarket_medoid"]
+        pre_medoid_rel = hb["pre_medoid_rel"]
+        pre_eigen_wave = hb["pre_eigen_wave"]
+        has_pre_eigen = hb["has_pre_eigen"]
+        hist_base_out = hb
     else:
-        vol_frac = np.linspace(0.0, 1.0, max(n_slots, 1))
+        bench_day_rmaps, bench_beta_5m, has_bench_5m = {}, float(np.clip(mi.get("beta", 0.8), -2.5, 2.5)), False
+        if df_bench_5m is not None and not df_bench_5m.empty:
+            tmp_b = df_bench_5m.copy(); idx_b = _convert_5m_index_to_market_tz(tmp_b, is_jp)
+            tmp_b["_d"], tmp_b["_hm"] = idx_b.strftime("%Y-%m-%d"), idx_b.strftime("%H:%M")
+            for dsb, sb in tmp_b.groupby("_d"):
+                if dsb == market_today_str:
+                    continue
+                if len(sb) >= 5 and float(sb["Open"].iloc[0]) > 0:
+                    opb = float(sb["Open"].iloc[0])
+                    rmb = {r["_hm"]: (float(r["Close"]) - opb) / opb for _, r in sb.iterrows() if r["_hm"] in slots}
+                    if rmb:
+                        bench_day_rmaps[dsb] = rmb
+            has_bench_5m = len(bench_day_rmaps) >= 5
 
-    lunch_jump_std_pct = 0.0
-    pm_open_idx = (lunch_idx + 1) if (is_jp and lunch_idx is not None and (lunch_idx + 1) < n_slots) else None
-    if pm_open_idx is not None:
-        ljv = [(rmr[slots[pm_open_idx]] - rmr[slots[lunch_idx]], w) for rmr, w in zip(rmaps, weights) if slots[lunch_idx] in rmr and slots[pm_open_idx] in rmr]
-        if len(ljv) >= 3:
-            wal = np.array([x[1] for x in ljv]); wal /= np.sum(wal); lja = np.array([x[0] for x in ljv])
-            ljs = max(float(np.sqrt(np.sum(wal * ((lja - float(np.sum(wal * lja))) ** 2)))), float(np.mean(slot_inc_stds)) * 1.4)
+        slot_means, slot_stds, slot_vols, slot_inc_stds = np.zeros(n_slots), np.full(n_slots, 0.003), np.zeros(n_slots), np.full(n_slots, 0.0022)
+        slot_q10, slot_q25, slot_q75, slot_q90 = np.zeros(n_slots), np.zeros(n_slots), np.zeros(n_slots), np.zeros(n_slots)
+        regime_tag, rmaps, alpha_rmaps, rdates, day_gaps_hist, day_ranges_hist, vmaps, use_maps, weights = "標準", [], [], [], [], [], [], [], []
+        gap_fill_stats = {"prob": None, "avg_min": None, "n_samples": 0, "dir": "FLAT"}
+
+        if df_5m is not None and not df_5m.empty:
+            tmp = df_5m.copy(); idx_dt = _convert_5m_index_to_market_tz(tmp, is_jp)
+            tmp["_d"], tmp["_hm"] = idx_dt.strftime("%Y-%m-%d"), idx_dt.strftime("%H:%M")
+            pdays = [d for d in sorted(tmp["_d"].unique().tolist()) if d != market_today_str]
+            want_gu, want_gd = tot_gap >= 0.15, tot_gap <= -0.15
+            regime_tag = "GU類似加重" if want_gu else ("GD類似加重" if want_gd else "フラット加重")
+            gf_total, gf_filled, gf_mins, target_gap_dir, prev_dc = 0, 0, [], (1 if want_gu else (-1 if want_gd else 0)), None
+
+            if has_bench_5m:
+                sr_l, br_l = [], []
+                for ds in pdays:
+                    if ds in bench_day_rmaps:
+                        ss = tmp[tmp["_d"] == ds]
+                        if len(ss) >= 10 and float(ss["Open"].iloc[0]) > 0 and bench_day_rmaps[ds]:
+                            sr_l.append((float(ss["Close"].iloc[-1]) - float(ss["Open"].iloc[0])) / float(ss["Open"].iloc[0]))
+                            br_l.append(list(bench_day_rmaps[ds].values())[-1])
+                if len(sr_l) >= 6 and float(np.var(br_l)) > 1e-8:
+                    bench_beta_5m = float(np.clip(float(np.cov(sr_l, br_l)[0, 1]) / float(np.var(br_l)), -2.5, 2.5))
+
+            for di, ds in enumerate(pdays):
+                sub = tmp[tmp["_d"] == ds]
+                if len(sub) < 10 or float(sub["Open"].iloc[0]) <= 0: continue
+                op, cl_end = float(sub["Open"].iloc[0]), float(sub["Close"].iloc[-1])
+                dgap = ((op - prev_dc) / prev_dc * 100.0) if (prev_dc and prev_dc > 0) else 0.0
+                drng = ((float(sub["High"].max()) if "High" in sub.columns else float(sub["Close"].max())) - (float(sub["Low"].min()) if "Low" in sub.columns else float(sub["Close"].min()))) / op * 100.0
+                if prev_dc and prev_dc > 0 and abs(dgap) >= 0.20 and (target_gap_dir == 0 or dgap * target_gap_dir > 0):
+                    gf_total += 1
+                    hits = np.where(sub["Low"].values <= prev_dc)[0] if dgap > 0 else np.where(sub["High"].values >= prev_dc)[0]
+                    if len(hits) > 0: gf_filled += 1; gf_mins.append((int(hits[0]) + 1) * 5)
+                prev_dc = cl_end
+                rm, arm, vm, brm = {}, {}, {}, (bench_day_rmaps.get(ds, {}) if has_bench_5m else {})
+                for _, row in sub.iterrows():
+                    hmk = row["_hm"]
+                    if hmk in slots:
+                        rr = (float(row["Close"]) - op) / op
+                        rm[hmk], arm[hmk], vm[hmk] = rr, (rr - bench_beta_5m * brm[hmk] if (has_bench_5m and hmk in brm) else rr), float(row["Volume"])
+                if rm:
+                    bw = float(np.exp(1.2 * (di / max(len(pdays) - 1, 1)))) * (2.5 if ((want_gu and dgap > 0.1) or (want_gd and dgap < -0.1)) else 1.0)
+                    rmaps.append(rm); alpha_rmaps.append(arm); rdates.append(ds); day_gaps_hist.append(dgap); day_ranges_hist.append(drng); vmaps.append(vm); weights.append(bw)
+
+            if gf_total >= 2:
+                gap_fill_stats = {"prob": round(gf_filled / gf_total * 100.0, 0), "avg_min": int(round(float(np.mean(gf_mins)), 0)) if gf_mins else None, "n_samples": gf_total, "dir": "GU" if target_gap_dir > 0 else ("GD" if target_gap_dir < 0 else "BOTH")}
+
+            use_maps = alpha_rmaps if has_bench_5m else rmaps
+            for i, sl in enumerate(slots):
+                rvm, rvv, wv, vv = [], [], [], []
+                for rmu, rmr, vm, w in zip(use_maps, rmaps, vmaps, weights):
+                    if sl in rmu: rvm.append(rmu[sl]); rvv.append(rmr[sl]); wv.append(w); vv.append(vm[sl])
+                if len(rvm) >= 3:
+                    wa = np.array(wv) / np.sum(wv); ram, rav = np.array(rvm), np.array(rvv)
+                    wm, wmr = float(np.sum(wa * ram)), float(np.sum(wa * rav))
+                    slot_means[i], slot_stds[i], slot_vols[i] = wm, max(float(np.sqrt(np.sum(wa * ((rav - wmr) ** 2)))), 0.0025), (float(np.mean(vv)) if vv else 0.0)
+                    oi = np.argsort(rav); ras, was = rav[oi] - wmr, wa[oi]; cdfs = np.cumsum(was) - 0.5 * was
+                    slot_q10[i], slot_q25[i], slot_q75[i], slot_q90[i] = (wm + float(np.interp(q, cdfs, ras)) for q in (0.10, 0.25, 0.75, 0.90))
+                else:
+                    sf = 0.003 + 0.009 * np.sqrt((i + 1) / n_slots)
+                    slot_stds[i], slot_q10[i], slot_q25[i], slot_q75[i], slot_q90[i] = sf, -1.28 * sf, -0.67 * sf, 0.67 * sf, 1.28 * sf
+
+            for i in range(n_slots):
+                slc, slp = slots[i], (slots[i - 1] if i > 0 else None)
+                iv, iw = [], []
+                for rmr, w in zip(rmaps, weights):
+                    if slp is None and slc in rmr: iv.append(rmr[slc]); iw.append(w)
+                    elif slp is not None and slc in rmr and slp in rmr: iv.append(rmr[slc] - rmr[slp]); iw.append(w)
+                if len(iv) >= 3:
+                    wai, ia = np.array(iw) / np.sum(iw), np.array(iv)
+                    slot_inc_stds[i] = max(float(np.sqrt(np.sum(wai * ((ia - float(np.sum(wai * ia))) ** 2)))), 0.0012)
+                else:
+                    slot_inc_stds[i] = 0.0022 * (1.35 if (i < 6 or i >= n_slots - 6) else 0.85)
+
+        vol_clock_active = bool(float(np.sum(slot_vols)) > 0 and n_slots > 1)
+        if vol_clock_active:
+            cva = np.cumsum(slot_vols)
+            vol_frac = np.clip((cva - float(cva[0])) / max(float(cva[-1]) - float(cva[0]), 1e-6), 0.0, 1.0)
         else:
-            ljs = float(np.mean(slot_inc_stds)) * 1.8
-        slot_inc_stds[pm_open_idx], lunch_jump_std_pct = ljs, round(ljs * 100.0, 2)
+            vol_frac = np.linspace(0.0, 1.0, max(n_slots, 1))
 
-    ml_3way_model = _fit_short_3way_logreg(df_5m, is_jp, slots, slot_vols, float(vol_cls["atr_pct"]), horizon_slots=6)
-    mean_inc_std = float(np.mean(slot_inc_stds)) if len(slot_inc_stds) else 0.0022
-    hv_th = max(mean_inc_std * 1.18, float(np.percentile(slot_inc_stds, 75)) if len(slot_inc_stds) else mean_inc_std * 1.18)
-    raw_hv, zs = [], None
-    for i in range(n_slots):
-        if slot_inc_stds[i] >= hv_th:
-            if zs is None: zs = i
-        elif zs is not None:
-            raw_hv.append([zs, i - 1]); zs = None
-    if zs is not None: raw_hv.append([zs, n_slots - 1])
-    merged_hv = []
-    for sp in raw_hv:
-        if merged_hv and sp[0] - merged_hv[-1][1] <= 2: merged_hv[-1][1] = sp[1]
-        else: merged_hv.append(list(sp))
-    high_vol_zones = [{"start_slot": slots[s], "end_slot": slots[e], "width_slots": e - s + 1, "show_label": bool(e - s + 1 >= 3), "avg_move_pct": round(float(np.mean(slot_inc_stds[s:e + 1])) * 100.0, 2)} for s, e in merged_hv]
-    vol_profile_meta = {"mean_move_pct": round(mean_inc_std * 100.0, 2), "max_move_pct": round(float(np.max(slot_inc_stds)) * 100.0, 2) if len(slot_inc_stds) else 0.22, "zone_cnt": len(high_vol_zones)}
+        lunch_jump_std_pct = 0.0
+        if pm_open_idx is not None:
+            ljv = [(rmr[slots[pm_open_idx]] - rmr[slots[lunch_idx]], w) for rmr, w in zip(rmaps, weights) if slots[lunch_idx] in rmr and slots[pm_open_idx] in rmr]
+            if len(ljv) >= 3:
+                wal = np.array([x[1] for x in ljv]); wal /= np.sum(wal); lja = np.array([x[0] for x in ljv])
+                ljs = max(float(np.sqrt(np.sum(wal * ((lja - float(np.sum(wal * lja))) ** 2)))), float(np.mean(slot_inc_stds)) * 1.4)
+            else:
+                ljs = float(np.mean(slot_inc_stds)) * 1.8
+            slot_inc_stds[pm_open_idx], lunch_jump_std_pct = ljs, round(ljs * 100.0, 2)
+
+        ml_3way_model = _fit_short_3way_logreg(df_5m, is_jp, slots, slot_vols, float(vol_cls["atr_pct"]), horizon_slots=6)
+        mean_inc_std = float(np.mean(slot_inc_stds)) if len(slot_inc_stds) else 0.0022
+        hv_th = max(mean_inc_std * 1.18, float(np.percentile(slot_inc_stds, 75)) if len(slot_inc_stds) else mean_inc_std * 1.18)
+        raw_hv, zs = [], None
+        for i in range(n_slots):
+            if slot_inc_stds[i] >= hv_th:
+                if zs is None: zs = i
+            elif zs is not None:
+                raw_hv.append([zs, i - 1]); zs = None
+        if zs is not None: raw_hv.append([zs, n_slots - 1])
+        merged_hv = []
+        for sp in raw_hv:
+            if merged_hv and sp[0] - merged_hv[-1][1] <= 2: merged_hv[-1][1] = sp[1]
+            else: merged_hv.append(list(sp))
+        high_vol_zones = [{"start_slot": slots[s], "end_slot": slots[e], "width_slots": e - s + 1, "show_label": bool(e - s + 1 >= 3), "avg_move_pct": round(float(np.mean(slot_inc_stds[s:e + 1])) * 100.0, 2)} for s, e in merged_hv]
+        vol_profile_meta = {"mean_move_pct": round(mean_inc_std * 100.0, 2), "max_move_pct": round(float(np.max(slot_inc_stds)) * 100.0, 2) if len(slot_inc_stds) else 0.22, "zone_cnt": len(high_vol_zones)}
+
+        pos_vols = [v for v in slot_vols if v > 0]
+        avg_5m_vol = float(np.mean(pos_vols)) if pos_vols else (float(df_1d["Volume"].tail(20).mean()) / max(n_slots, 1))
+
+        max_r_cap_pre, premarket_medoid, pre_medoid_rel, pre_eigen_wave, has_pre_eigen = (target_atr * 1.45) / 100.0, None, np.zeros(n_slots), np.zeros(n_slots), False
+        if use_maps and rdates:
+            nr, max_nr = len(use_maps), max(float(vol_cls["atr_pct"]) * 2.2, 5.0)
+            vm_idx = [i for i in range(nr) if abs((day_gaps_hist[i] if i < len(day_gaps_hist) else 0.0) - tot_gap) <= 3.0 and (day_ranges_hist[i] if i < len(day_ranges_hist) else target_atr) <= max_nr]
+            scored = sorted([(abs((day_gaps_hist[i] if i < len(day_gaps_hist) else 0.0) - tot_gap) + abs((day_ranges_hist[i] if i < len(day_ranges_hist) else target_atr) - target_atr) * 0.6 + 0.25 * (1.0 - i / max(nr - 1, 1)), i) for i in (vm_idx or range(nr))])
+            bi = scored[0][1]
+            brm, bds, bgap, brng = use_maps[bi], rdates[bi], (round(float(day_gaps_hist[bi]), 2) if bi < len(day_gaps_hist) else 0.0), (float(day_ranges_hist[bi]) if bi < len(day_ranges_hist) else target_atr)
+            amp_s = float(np.clip(target_atr / max(brng, 0.5), 0.40, 1.35))
+            med_path, lvr = [], 0.0
+            for i, sl in enumerate(slots):
+                if sl in brm: lvr = float(brm[sl])
+                rs = float(np.clip(lvr * amp_s, -max_r_cap_pre, max_r_cap_pre))
+                pre_medoid_rel[i] = rs
+                med_path.append(round(float(est_open * (1.0 + rs)), 2) if (sl in brm or med_path) else None)
+            if n_slots >= 6:
+                m_hf = pre_medoid_rel - (pre_medoid_rel[0] + (pre_medoid_rel[-1] - pre_medoid_rel[0]) * np.linspace(0.0, 1.0, n_slots))
+                if float(np.ptp(m_hf)) > 1e-5:
+                    pre_eigen_wave = m_hf * float(np.clip(((target_atr / 100.0) * 0.55) / max(float(np.ptp(m_hf)), 0.003), 0.35, 0.85))
+                    has_pre_eigen = True
+            premarket_medoid = {"date": bds, "gap_pct": bgap, "amp_scale": round(amp_s, 2), "data": med_path, "mode": "PREMARKET"}
+
+        hist_base_out = {
+            "n_slots": n_slots,
+            "bench_day_rmaps": bench_day_rmaps, "bench_beta_5m": bench_beta_5m, "has_bench_5m": has_bench_5m,
+            "regime_tag": regime_tag, "rmaps": rmaps, "alpha_rmaps": alpha_rmaps, "rdates": rdates,
+            "day_gaps_hist": day_gaps_hist, "day_ranges_hist": day_ranges_hist, "vmaps": vmaps,
+            "use_maps": use_maps, "weights": weights, "gap_fill_stats": gap_fill_stats,
+            "slot_means": slot_means, "slot_stds": slot_stds, "slot_vols": slot_vols, "slot_inc_stds": slot_inc_stds,
+            "slot_q10": slot_q10, "slot_q25": slot_q25, "slot_q75": slot_q75, "slot_q90": slot_q90,
+            "vol_clock_active": vol_clock_active, "vol_frac": vol_frac, "lunch_jump_std_pct": lunch_jump_std_pct,
+            "ml_3way_model": ml_3way_model, "high_vol_zones": high_vol_zones, "vol_profile_meta": vol_profile_meta,
+            "avg_5m_vol": avg_5m_vol, "premarket_medoid": premarket_medoid, "pre_medoid_rel": pre_medoid_rel,
+            "pre_eigen_wave": pre_eigen_wave, "has_pre_eigen": has_pre_eigen,
+        }
 
     rvol, vol_spikes = None, []
     if has_actual:
@@ -3118,14 +3259,11 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
                     vol_spikes.append({"time": sl, "price": actual_arr[i], "dir": act_dir_map.get(sl, 1), "ratio": round(av / avgv, 1)})
         if cavg > 0: rvol = round(cav / cavg, 2)
 
-    pos_vols = [v for v in slot_vols if v > 0]
-    avg_5m_vol = float(np.mean(pos_vols)) if pos_vols else (float(df_1d["Volume"].tail(20).mean()) / max(n_slots, 1))
     cvd_div = _detect_cvd_divergence(slots, actual_arr, cvd_arr, act_vol_map)
     gap_open15 = _evaluate_gap_open15(has_actual, slots, actual_arr, vwap_arr, act_low_map, act_high_map, act_vol_map, slot_vols, prev_px)
 
     cat_al = news_res.get("catalyst_alert")
     cat_drift_boost = (float(cat_al.get("boost_drift_pct", 0.0)) / 100.0) if (isinstance(cat_al, dict) and cat_al.get("active")) else 0.0
-    est_open = anchor_base_close * (1.0 + tot_gap / 100.0)
     drift = float(np.clip((raw_news_x * idr_w["news"]) + ((dow_adj + wick_adj + calib_pct + lab_bias_pct) / 100.0) + cat_drift_boost, -0.045, 0.045))
     vboost = (1.0 + abs(raw_news_x) * 0.25) * (1.0 + max(0.0, vix_d / 100.0) * 1.2) * vpin_vboost * kyle_vboost
 
@@ -3137,28 +3275,6 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
     if isinstance(active_lab, dict) and active_lab:
         d2c = active_lab.get("daily_2y") if isinstance(active_lab.get("daily_2y"), dict) else {}
         hvn_wall_px, ob_sup_px = float(d2c.get("hvn_wall_price", 0.0) or 0.0), float(active_lab.get("ob_support_px", 0.0) or 0.0)
-
-    target_atr = max(float(vol_cls["atr_pct"]), 0.8)
-    max_r_cap_pre, premarket_medoid, pre_medoid_rel, pre_eigen_wave, has_pre_eigen = (target_atr * 1.45) / 100.0, None, np.zeros(n_slots), np.zeros(n_slots), False
-    if use_maps and rdates:
-        nr, max_nr = len(use_maps), max(float(vol_cls["atr_pct"]) * 2.2, 5.0)
-        vm_idx = [i for i in range(nr) if abs((day_gaps_hist[i] if i < len(day_gaps_hist) else 0.0) - tot_gap) <= 3.0 and (day_ranges_hist[i] if i < len(day_ranges_hist) else target_atr) <= max_nr]
-        scored = sorted([(abs((day_gaps_hist[i] if i < len(day_gaps_hist) else 0.0) - tot_gap) + abs((day_ranges_hist[i] if i < len(day_ranges_hist) else target_atr) - target_atr) * 0.6 + 0.25 * (1.0 - i / max(nr - 1, 1)), i) for i in (vm_idx or range(nr))])
-        bi = scored[0][1]
-        brm, bds, bgap, brng = use_maps[bi], rdates[bi], (round(float(day_gaps_hist[bi]), 2) if bi < len(day_gaps_hist) else 0.0), (float(day_ranges_hist[bi]) if bi < len(day_ranges_hist) else target_atr)
-        amp_s = float(np.clip(target_atr / max(brng, 0.5), 0.40, 1.35))
-        med_path, lvr = [], 0.0
-        for i, sl in enumerate(slots):
-            if sl in brm: lvr = float(brm[sl])
-            rs = float(np.clip(lvr * amp_s, -max_r_cap_pre, max_r_cap_pre))
-            pre_medoid_rel[i] = rs
-            med_path.append(round(float(est_open * (1.0 + rs)), 2) if (sl in brm or med_path) else None)
-        if n_slots >= 6:
-            m_hf = pre_medoid_rel - (pre_medoid_rel[0] + (pre_medoid_rel[-1] - pre_medoid_rel[0]) * np.linspace(0.0, 1.0, n_slots))
-            if float(np.ptp(m_hf)) > 1e-5:
-                pre_eigen_wave = m_hf * float(np.clip(((target_atr / 100.0) * 0.55) / max(float(np.ptp(m_hf)), 0.003), 0.35, 0.85))
-                has_pre_eigen = True
-        premarket_medoid = {"date": bds, "gap_pct": bgap, "amp_scale": round(amp_s, 2), "data": med_path, "mode": "PREMARKET"}
 
     p50, p85, p15, bdiff, p68, p32, bdiff_inner = [], [], [], [], [], [], []
     for i, sl in enumerate(slots):
@@ -3177,7 +3293,8 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
         is_locked = True
     else:
         locked_p50, locked_p85, locked_p15, locked_bdiff, locked_p32, locked_bdiff_in, is_locked = p50, p85, p15, bdiff, p32, bdiff_inner, False
-        if (not is_patch_tick) and (not has_actual) and _is_valid_premarket_lock_window(is_jp, target_date):
+        lock_done_key = f"dd_locked_{fc_code}_{target_date}"
+        if (not has_actual) and _is_valid_premarket_lock_window(is_jp, target_date) and (not st.session_state.get(lock_done_key)):
             stock_hist[target_date] = {
                 "p50": p50, "p85": p85, "p15": p15, "band_diff": bdiff, "p32": p32, "band_diff_in": bdiff_inner,
                 "locked_premarket": True, "locked_at": _get_market_now(is_jp).strftime("%Y-%m-%d %H:%M:%S"),
@@ -3187,6 +3304,7 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
             }
             for old_k in sorted(stock_hist.keys())[:-15]: del stock_hist[old_k]
             ledger[fc_code] = stock_hist; _dd_db_set("dd_forecast_ledger_v9", ledger)
+            st.session_state[lock_done_key] = True
 
     expansion_reg = _detect_expansion_regime(has_actual, last_act_idx, slots, actual_arr, locked_p85, locked_p15, is_locked, vwap_arr, vwap_p2_arr, vwap_m2_arr, vwap_p1_arr, vwap_m1_arr, act_vol_map, act_dir_map, slot_vols, rvol, cat_al)
     exp_dir = expansion_reg["dir"] if expansion_reg["active"] else "NONE"
@@ -3292,9 +3410,11 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
             in_c = sum(1 for a, lo, hi in zip(actual_arr, locked_p15, locked_p85) if a is not None and lo <= a <= hi)
             isf = bool(len(errs) >= int(n_slots * 0.80))
             verify_stats = {"has_verify": True, "in_cone_pct": round(in_c / len(errs) * 100.0, 1), "err_pct": round(float(np.mean(errs)), 2), "n_pts": len(errs), "finalized": isf}
-            if (not is_patch_tick) and isf and isinstance(saved_today, dict):
+            fin_done_key = f"dd_finalized_{fc_code}_{market_today_str}"
+            if isf and isinstance(saved_today, dict) and (not st.session_state.get(fin_done_key)):
                 saved_today["verify_result"] = {"in_cone_pct": verify_stats["in_cone_pct"], "err_pct": verify_stats["err_pct"], "rvol_hi": bool(rvol is not None and rvol >= 1.3), "finalized": True}
                 stock_hist[market_today_str] = saved_today; ledger[fc_code] = stock_hist; _dd_db_set("dd_forecast_ledger_v9", ledger)
+                st.session_state[fin_done_key] = True
 
     inv_reasons = []
     if has_actual and last_act_idx >= 0:
@@ -3319,7 +3439,7 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
 
     return {
         "target_date": target_date, "is_locked": is_locked, "has_actual": has_actual, "last_act_idx": last_act_idx, "anchor_base_close": anchor_base_close,
-        "_raw_ledger": ledger, "_raw_weights": w_evo,
+        "_raw_ledger": ledger, "_raw_weights": w_evo, "_hist_base": hist_base_out,
         "slots": slots, "lunch_idx": lunch_idx, "vols": [round(float(v), 1) for v in slot_vols], "actual_vols": actual_vols_arr, "actual_dirs": actual_dirs_arr, "cvd_arr": cvd_arr,
         "actual": actual_arr, "vwap": vwap_arr, "vwap_p1": vwap_p1_arr, "vwap_m1": vwap_m1_arr, "vwap_p2": vwap_p2_arr, "vwap_m2": vwap_m2_arr,
         "rvol": rvol, "orb_high": orb_high, "orb_low": orb_low, "vol_spikes": vol_spikes, "avg_5m_vol": avg_5m_vol, "cvd_div": cvd_div, "gap_open15": gap_open15,
@@ -3349,9 +3469,11 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
         "weights_evolution": {"active_cluster": cluster_key, "fallback_cluster": fallback_key, "cluster_n": cluster_n, "shrink_alpha": shrink_alpha, "vol_band": vol_cls["vol_band"], "atr_pct": vol_cls["atr_pct"], "active_regime": regime_code, "updates_count": w_evo.get("updates_count", 0), "regime_updates_count": cluster_n, "weights_updated": weights_updated, "open_gap": og_w, "intraday_drift": idr_w, "all_regimes": w_evo.get("clusters", {}).get(cluster_key, w_evo.get("regimes", {})), "last_decomp": w_evo.get("last_decomp", {})},
         "factors": {"mkt_label": mi["label"], "mkt_diff": mi["latest_diff"], "mkt_beta": mi["beta"], "macro_gap_pct": round(mg, 2), "fx_diff": fi["latest_diff"], "fx_beta": fi["beta"], "fx_gap_pct": round(fg, 2), "news_gap_pct": round(ng, 2), "whale_gap_pct": round(wg, 2), "lab_bias_pct": lab_bias_pct, "hvn_wall_px": hvn_wall_px, "ob_sup_px": ob_sup_px, "dow_wick_pct": round(dow_adj + wick_adj, 2), "calib_pct": calib_pct, "calib_n": calib_n, "live_vwap_pct": round(live_vwap_bias * 100.0, 2), "bench_alpha_pct": round(bench_live_alpha_adj * 100.0, 2)},
     }
+
+
 # === PART 5 / 5 ===
 # =========================================================================
-# 8. 実測5軸レーダー・AIメモ生成・LAB共有・メイン関数（v21.2 完全版）
+# 8. 実測5軸レーダー・AIメモ生成・LAB共有・メイン関数（v21.3 完全版）
 # =========================================================================
 def _compute_real_5axis(info: dict, ovh_pct: float, gov_cnt: int) -> tuple:
     axes, vals, miss = [], [], []
@@ -3467,11 +3589,11 @@ def _format_lab_deep_context(lab_full: dict, lab_council: dict) -> str:
 
 
 def _render_unified_guide():
-    st.markdown('<div class="dd-guide-box"><b>v21.2 クオンツ＆プロ端末 操作ガイド</b><br>1. <b>非破壊10秒リアルタイム同期:</b> 「10s自動」ON時はDB通信をキャッシュ化し、チャートフレーム・予測ファン帯・親画面主要数値を点滅ゼロで同期します。<br>2. <b>紫線（朝ロック）の始値アンカー補正:</b> チャート設定内の「紫線を始値に合わせる」ON（初期値ON）で、寄付Gap誤差を切り離し日中波形の精度を直感的に比較できます。<br>3. <b>音声＆電子音トリガー監視官:</b> チャート右上の「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と日本語音声で即時通知します。<br>4. <b>リアルタイムEV＆二壁FPT脈拍ゲージ:</b> 現在価格（成行基準）での「物理的二壁FPT勝率 vs 損益分岐勝率」とRR比を常時算出し、好機・待機・飛びつき禁止を即断できます。<br>5. <b>1行コマンドドック（執行 / レーダー / シナリオ / 計算）:</b> チャート直下（PC表示時は右カラム）の4切替バーで執行管理と市場解析を瞬時に切り替えられます。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="dd-guide-box"><b>v21.3 クオンツ＆プロ端末 操作ガイド</b><br>1. <b>非破壊15秒完全同期:</b> 「15s自動」ON時は重い過去計算とDB通信を完全分離・キャッシュ化し、チャートフレーム・マクロ帯・シナリオ配分・HUD・速報ティッカーを点滅ゼロで同期します。<br>2. <b>紫線（朝ロック）の始値アンカー補正:</b> チャート設定内の「紫線を始値に合わせる」ON（初期値ON）で、寄付Gap誤差を切り離し日中波形の精度を直感的に比較できます。<br>3. <b>音声＆電子音トリガー監視官:</b> チャート右上の「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近・速報重要ニュース検知を電子音と日本語音声で即時通知します。<br>4. <b>リアルタイムEV＆二壁FPT脈拍ゲージ:</b> 現在価格（成行基準）での「物理的二壁FPT勝率 vs 損益分岐勝率」とRR比を常時算出し、好機・待機・飛びつき禁止を即断できます。<br>5. <b>1行コマンドドック（執行 / レーダー / シナリオ / 計算）:</b> チャート直下（PC表示時は右カラム）の4切替バーで執行管理と市場解析を瞬時に切り替えられます。</div>', unsafe_allow_html=True)
 
 
 # =========================================================================
-# 9. メインエントリ関数（YAMASHISHI DEEP DIVE v21.2 完全版）
+# 9. メインエントリ関数（YAMASHISHI DEEP DIVE v21.3 完全版）
 # =========================================================================
 def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイトレード", gemini_api_key: str = "", lab_ctx: dict = None):
     _inject_dd_css()
@@ -3484,7 +3606,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
     # 1行目：タイトル（左）＋ 操作ガイド ＋ LABへ戻る
     h1, h2, h3 = st.columns([2.25, 0.85, 0.90])
-    h1.markdown('<div class="dd-cmd-header"><div class="dd-cmd-title">YAMASHISHI DEEP DIVE<span>v21.2</span></div><div class="dd-cmd-sub">非破壊10s同期・始値アンカー・音声監視・EV脈拍</div></div>', unsafe_allow_html=True)
+    h1.markdown('<div class="dd-cmd-header"><div class="dd-cmd-title">YAMASHISHI DEEP DIVE<span>v21.3</span></div><div class="dd-cmd-sub">非破壊15s完全同期・始値アンカー・音声監視・速報検知</div></div>', unsafe_allow_html=True)
     with h2:
         with (st.popover("操作ガイド", use_container_width=True) if hasattr(st, "popover") else st.expander("操作ガイド")):
             _render_unified_guide()
@@ -3497,11 +3619,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
         st.rerun()
 
-    # 2行目：銘柄コード ＋ スタイル ＋ 10s自動（初期ON） ＋ PC表示
+    # 2行目：銘柄コード ＋ スタイル ＋ 15s自動（初期ON） ＋ PC表示
     c1, c2, c3, c4 = st.columns([1.25, 1.35, 0.70, 0.70])
     in_code = c1.text_input("銘柄コード", value=eff_init_code, placeholder="NVDA / 6920", label_visibility="collapsed", key="dd_code_in")
     in_style = c2.selectbox("スタイル", STYLES, index=STYLES.index(eff_init_style), label_visibility="collapsed", key="dd_style_in")
-    auto_sync = c3.toggle("10s自動", value=True, key="dd_auto_sync", help="ONで10秒ごとに非破壊パッチ同期（横拡大中も維持）")
+    auto_sync = c3.toggle("15s自動", value=True, key="dd_auto_sync", help="ONで15秒ごとに非破壊パッチ同期（横拡大中も維持）")
     pc_cockpit = c4.toggle("PC表示", value=False, key="dd_pc_cockpit", help="PC横画面専用の2カラム・コックピット表示")
 
     fc = in_code.strip().upper()
@@ -3530,8 +3652,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     active_lab = lab_full if lab_full else (lab_ctx if (isinstance(lab_ctx, dict) and lab_ctx.get("full_code") == fc) else None)
     lab_deep_ctx, lab_mods = _format_lab_deep_context(lab_full, lab_council), _extract_lab_quant_modifiers(active_lab, lab_council)
 
-    # Static層（日足・ニュース・財務・大株主等）のセッションキャッシュ取得／構築
+    # Static層（日足・ニュース・財務・大株主・日足ベースVP/マクロ感応度）のセッションキャッシュ取得／構築
     static_cache_key = f"dd_static_cache_{fc}"
+    news_ts_key = f"dd_news_poll_ts_{fc}"
     now_ts = time.time()
     cached_st = st.session_state.get(static_cache_key)
     if not isinstance(cached_st, dict) or (now_ts - float(cached_st.get("ts", 0))) > 600:
@@ -3544,8 +3667,18 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             return
         corp_n = info_s.get("longName") or info_s.get("shortName") or fc
         short_c = fc.replace(".T", "")
-        with ThreadPoolExecutor(max_workers=2) as exi:
-            news_r, (gov_r, whale_n) = exi.submit(_fetch_global_intel, corp_n, short_c, fc).result(), exi.submit(_fetch_gov_and_whales, corp_n, short_c, is_jp).result()
+        with ThreadPoolExecutor(max_workers=3) as exi:
+            f_news = exi.submit(_fetch_global_intel, corp_n, short_c, fc)
+            f_gw = exi.submit(_fetch_gov_and_whales, corp_n, short_c, is_jp)
+            f_mac_b = exi.submit(_load_macro_data)
+            news_r = f_news.result()
+            gov_r, whale_n = f_gw.result()
+            mac_init = f_mac_b.result()
+        base_px_s = float(df_1d_s["Close"].iloc[-1])
+        vp_s = _compute_vp(df_1d_s, base_px_s, is_jp)
+        vp28_s = _compute_hires_vp_28(df_1d_s, base_px_s, is_jp)
+        lvn_s = vp28_s.get("lvn_zones", []) if isinstance(vp28_s, dict) and vp28_s.get("valid") else []
+        macro_sens_s = _compute_macro_sens(df_1d_s["Close"], mac_init)
         cached_st = {
             "ts": now_ts,
             "st_data": {**st_data, "df_1d": df_1d_s},
@@ -3558,8 +3691,13 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "news_res": news_r,
             "gov_risks": gov_r,
             "whale_news": whale_n,
+            "vp": vp_s,
+            "vp28": vp28_s,
+            "lvn_zones": lvn_s,
+            "macro_sens": macro_sens_s,
         }
         st.session_state[static_cache_key] = cached_st
+        st.session_state[news_ts_key] = now_ts
 
     data_st = cached_st["st_data"]
     df_1d, info = data_st["df_1d"], data_st["info"]
@@ -3567,16 +3705,43 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     sector, industry = cached_st["sector"], cached_st["industry"]
     mkt_regime = cached_st["mkt_regime"]
     dow_stats, next_wd = cached_st["dow_edge"]
-    news_res, gov_risks, whale_news = cached_st["news_res"], cached_st["gov_risks"], cached_st["whale_news"]
+    gov_risks, whale_news = cached_st["gov_risks"], cached_st["whale_news"]
     market_today_str = _get_market_now(is_jp).strftime("%Y-%m-%d")
     whale_anom = _detect_whale_anomaly(data_st["insider_tx"], whale_news, market_today_str)
 
-    # 非破壊フラグメント＆DBキャッシュ状態管理
+    # 非破壊フラグメント＆DBキャッシュ＆過去計算ベースキャッシュ状態管理
     frag_run_key = f"dd_frag_runs_{fc}"
     st.session_state[frag_run_key] = 0
     db_cache_key = f"dd_db_cache_{fc}"
+    hist_base_cache_key = f"dd_hist_base_{fc}_{market_today_str}"
+
+    def _build_news_alert_meta(nr_dict: dict) -> tuple:
+        if not isinstance(nr_dict, dict):
+            return "", "", ""
+        ca = nr_dict.get("catalyst_alert")
+        if isinstance(ca, dict) and ca.get("active") and ca.get("title"):
+            nid = f"{str(ca.get('title'))[:40]}_{ca.get('age_min', '')}_{ca.get('kw', '')}"
+            return nid, str(ca.get("kw") or "重要材料"), str(ca.get("dir") or "")
+        brk = nr_dict.get("breaking_news")
+        if isinstance(brk, dict) and brk.get("title"):
+            nid = f"{str(brk.get('title'))[:40]}_{brk.get('age_min', '')}"
+            return nid, str(brk.get("title"))[:24], str(brk.get("sent") or "")
+        return "", "", ""
 
     def _compute_live_snapshot(is_patch_tick: bool = False) -> dict:
+        # 最新重要ニュース120秒間引きポーリング
+        if is_patch_tick and (time.time() - float(st.session_state.get(news_ts_key, 0) or 0) >= 120):
+            try:
+                fresh_news = _fetch_global_intel(corp_name, short_code, fc)
+                if isinstance(fresh_news, dict):
+                    cached_st["news_res"] = fresh_news
+                    st.session_state[static_cache_key] = cached_st
+            except Exception:
+                pass
+            st.session_state[news_ts_key] = time.time()
+
+        news_res_cur = cached_st["news_res"]
+
         with ThreadPoolExecutor(max_workers=3) as ex:
             f_live = ex.submit(_load_stock_live_only, fc)
             f_mac = ex.submit(_load_macro_data)
@@ -3596,27 +3761,36 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             if not s5.empty and math.isfinite(float(s5["Close"].iloc[-1])) and float(s5["Close"].iloc[-1]) > 0:
                 curr_px_rt = round(float(s5["Close"].iloc[-1]), 2)
 
-        macro_sens = _compute_macro_sens(df_1d["Close"], macro_data)
-        vp = _compute_vp(df_1d, curr_px_rt, is_jp)
+        macro_sens = cached_st.get("macro_sens") if (is_patch_tick and isinstance(cached_st.get("macro_sens"), list)) else _compute_macro_sens(df_1d["Close"], macro_data)
+        vp = cached_st.get("vp") if (is_patch_tick and isinstance(cached_st.get("vp"), dict)) else _compute_vp(df_1d, curr_px_rt, is_jp)
+        if not is_patch_tick:
+            cached_st["macro_sens"] = macro_sens
+            cached_st["vp"] = vp
 
         db_c = st.session_state.get(db_cache_key) if is_patch_tick else None
         c_ledger = db_c.get("ledger") if isinstance(db_c, dict) else None
         c_weights = db_c.get("weights") if isinstance(db_c, dict) else None
+        c_hist_base = st.session_state.get(hist_base_cache_key) if is_patch_tick else None
 
         traj = _build_dual_5m_trajectory(
-            fc, curr_px_rt, prev_px, df_1d, df_5m, macro_sens, macro_data, news_res, whale_anom,
+            fc, curr_px_rt, prev_px, df_1d, df_5m, macro_sens, macro_data, news_res_cur, whale_anom,
             dow_stats[next_wd]["avg"], vp, is_jp, mkt_regime, active_lab, df_bench_5m, lab_mods,
-            is_patch_tick=is_patch_tick, cached_ledger=c_ledger, cached_weights=c_weights,
+            is_patch_tick=is_patch_tick, cached_ledger=c_ledger, cached_weights=c_weights, cached_hist_base=c_hist_base,
         )
         if not is_patch_tick:
             st.session_state[db_cache_key] = {"ledger": traj.get("_raw_ledger"), "weights": traj.get("_raw_weights")}
+            if isinstance(traj.get("_hist_base"), dict):
+                st.session_state[hist_base_cache_key] = traj.get("_hist_base")
 
         curr_px = float(traj["actual"][traj["last_act_idx"]]) if (traj["has_actual"] and traj["last_act_idx"] >= 0 and traj["actual"][traj["last_act_idx"]] and math.isfinite(float(traj["actual"][traj["last_act_idx"]]))) else curr_px_rt
         round_level = _compute_round_number_level(curr_px, is_jp)
         ref_levels = _compute_pro_ref_levels(df_1d, df_5m, is_jp, market_today_str)
         mtf_res = _compute_mtf_alignment(df_1m, df_5m, df_1d, is_jp)
-        vp28 = _compute_hires_vp_28(df_1d, curr_px, is_jp)
-        lvn_zones = vp28.get("lvn_zones", []) if isinstance(vp28, dict) and vp28.get("valid") else []
+        vp28 = cached_st.get("vp28") if (is_patch_tick and isinstance(cached_st.get("vp28"), dict)) else _compute_hires_vp_28(df_1d, curr_px, is_jp)
+        lvn_zones = cached_st.get("lvn_zones") if (is_patch_tick and isinstance(cached_st.get("lvn_zones"), list)) else (vp28.get("lvn_zones", []) if isinstance(vp28, dict) and vp28.get("valid") else [])
+        if not is_patch_tick:
+            cached_st["vp28"] = vp28
+            cached_st["lvn_zones"] = lvn_zones
         canary_res = _detect_lead_lag_canary(df_5m, df_bench_5m, is_jp, market_today_str, traj.get("bench_beta_5m", 1.0))
 
         chg_pct = ((curr_px - prev_px) / max(prev_px, 1e-4)) * 100.0
@@ -3691,6 +3865,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
         return {
             "df_5m": df_5m, "df_1m": df_1m, "macro_data": macro_data, "macro_sens": macro_sens, "vp": vp, "vp28": vp28, "lvn_zones": lvn_zones,
+            "news_res": news_res_cur,
             "traj": traj, "curr_px": curr_px, "prev_px": prev_px, "chg_pct": chg_pct, "round_level": round_level, "ref_levels": ref_levels,
             "mtf_res": mtf_res, "canary_res": canary_res, "exp_reg": exp_reg, "exp_active": exp_active, "exp_dir": exp_dir,
             "presets": presets, "modes": modes, "cur_cm": cur_cm, "use_live_basis": use_live_basis, "open_anchor_info": open_anchor_info,
@@ -3708,6 +3883,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
     def _render_full_ui(snap: dict):
         macro_data, macro_sens, vp, vp28, lvn_zones = snap["macro_data"], snap["macro_sens"], snap["vp"], snap["vp28"], snap["lvn_zones"]
+        news_res = snap.get("news_res") or cached_st["news_res"]
         traj, curr_px, prev_px, chg_pct = snap["traj"], snap["curr_px"], snap["prev_px"], snap["chg_pct"]
         round_level, ref_levels, mtf_res, canary_res = snap["round_level"], snap["ref_levels"], snap["mtf_res"], snap["canary_res"]
         exp_reg, exp_active, exp_dir = snap["exp_reg"], snap["exp_active"], snap["exp_dir"]
@@ -3730,12 +3906,12 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             den = max(n_sl_tot - 1 - la_idx, 1)
             return [None if v is None else (round(float(v), 2) if i <= la_idx else round(float(v) * (1.0 + (shock_ext_pct / 100.0) * ((i - la_idx) / den)), 2)) for i, v in enumerate(arr)]
 
-        _render_live_clock(sync_interval=10, active=auto_sync)
+        _render_live_clock(sync_interval=15, active=auto_sync)
         if ws_active_us:
             st.markdown(f'<div class="dd-ws-badge"><span>● <b>Finnhub WS 接続構成</b> ({html.escape(fc)})</span><span style="color:#94a3b8;font-size:8.8px;">接続状態はチャート内表示</span></div>', unsafe_allow_html=True)
 
         if macro_data:
-            chips = "".join(f'<div class="dd-macro-chip"><span style="color:#64748b;">{macro_data[k]["label"]}{"⚡" if macro_data[k].get("is_rt") else ""}</span><span style="color:{"#10b981" if macro_data[k]["diff_pct"]>=0 else "#ef4444"};font-weight:700;">{macro_data[k]["diff_pct"]:+.2f}%</span></div>' for k in ["SOX", "SP500", "NQ_FUT", "ES_FUT", "NK_FUT", "USDJPY", "US10Y", "OIL", "VIX"] if k in macro_data)
+            chips = "".join(f'<div class="dd-macro-chip"><span style="color:#64748b;">{macro_data[k]["label"]}{"⚡" if macro_data[k].get("is_rt") else ""}</span><span id="dd-mac-{k}" style="color:{"#10b981" if macro_data[k]["diff_pct"]>=0 else "#ef4444"};font-weight:700;">{macro_data[k]["diff_pct"]:+.2f}%</span></div>' for k in ["SOX", "SP500", "NQ_FUT", "ES_FUT", "NK_FUT", "USDJPY", "US10Y", "OIL", "VIX"] if k in macro_data)
             st.markdown(f'<div class="dd-macro-strip">{chips}</div>', unsafe_allow_html=True)
 
         chg_col = "#10b981" if chg_pct >= 0 else "#ef4444"
@@ -3835,12 +4011,14 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 st.session_state["dd_last_style_tf"] = in_style
                 st.session_state["dd_tf_mode"] = "1分足(直近90分ズーム)" if (in_style == "スキャルピング" and z1_pay.get("valid")) else "5分足(1日全体)"
 
+            nid_init, nkw_init, ndir_init = _build_news_alert_meta(news_res)
             alert_payload = {
                 "symbol": short_code, "curr_px": float(curr_px), "is_long": ev_is_long,
                 "entry_lo": fusion["entry_zone_lo"] if fusion.get("has_lab") else round(active_dip_px * 0.998, 2),
                 "entry_hi": fusion["entry_zone_hi"] if fusion.get("has_lab") else round(active_dip_px * 1.002, 2),
                 "half_r": fusion["fusion_half_r_px"] if fusion.get("has_lab") else round((curr_px + ev_tp_ref) * 0.5, 2),
                 "tp": ev_tp_ref, "sl": ev_sl_ref, "cvd_state": cvd_div.get("state", "NEUTRAL"), "exp_dir": exp_dir,
+                "news_id": nid_init, "news_kw": nkw_init, "news_dir": ndir_init,
             }
 
             def_pos_side = fusion["side"] if fusion.get("has_lab") else (_extract_lab_side(active_lab) if active_lab else "LONG")
@@ -4021,8 +4199,19 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
             def _render_chart_column_core(chart_h: int):
                 pos_state = _get_current_pos_ctx()
-                if isinstance(brk := news_res.get("breaking_news"), dict) and brk.get("title"):
-                    st.markdown(f'<div class="{"dd-breaking-ticker bull" if brk.get("sent")=="POS" else "dd-breaking-ticker"}"><span style="font-weight:800;flex-shrink:0;">{"速報(買い)" if brk.get("sent")=="POS" else ("速報(売り)" if brk.get("sent")=="NEG" else "速報")} [{brk.get("age_min",1)}分前]</span><a href="{html.escape(brk.get("link") or "#")}" target="_blank" style="color:inherit;text-decoration:none;overflow:hidden;text-overflow:ellipsis;">{html.escape(brk["title"])} ({html.escape(brk.get("source") or "速報")})</a></div>', unsafe_allow_html=True)
+                brk = news_res.get("breaking_news") if isinstance(news_res, dict) else None
+                cat_tick = news_res.get("catalyst_alert") if isinstance(news_res, dict) else None
+                if isinstance(cat_tick, dict) and cat_tick.get("active") and cat_tick.get("title"):
+                    t_cls = "dd-breaking-ticker bull" if cat_tick.get("dir") == "POS" else "dd-breaking-ticker"
+                    t_tag = f"速報材料:{html.escape(str(cat_tick.get('kw') or '重要'))} [{cat_tick.get('age_min', 1)}分前]"
+                    t_body = html.escape(str(cat_tick.get("title")))
+                    st.markdown(f'<div id="dd-breaking-ticker" class="{t_cls}"><span style="font-weight:800;flex-shrink:0;">{t_tag}</span><span>{t_body}</span></div>', unsafe_allow_html=True)
+                elif isinstance(brk, dict) and brk.get("title"):
+                    t_cls = "dd-breaking-ticker bull" if brk.get("sent") == "POS" else "dd-breaking-ticker"
+                    t_tag = f"{'速報(買い)' if brk.get('sent')=='POS' else ('速報(売り)' if brk.get('sent')=='NEG' else '速報')} [{brk.get('age_min',1)}分前]"
+                    st.markdown(f'<div id="dd-breaking-ticker" class="{t_cls}"><span style="font-weight:800;flex-shrink:0;">{t_tag}</span><a href="{html.escape(brk.get("link") or "#")}" target="_blank" style="color:inherit;text-decoration:none;overflow:hidden;text-overflow:ellipsis;">{html.escape(brk["title"])} ({html.escape(brk.get("source") or "速報")})</a></div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div id="dd-breaking-ticker" class="dd-breaking-ticker" style="display:none;"></div>', unsafe_allow_html=True)
 
                 is_short = in_style in ("デイトレード", "スキャルピング")
                 line_opts = ["場中30分・3分岐点線（スコア比%）", "類似実測波形（Top-1）", "高ボラ狩り場帯", "流動性真空帯（LVN加速ゾーン）", "予測レンジ帯（ファン）", "類似日スパゲッティ軌道", "転換時間帯ガイド", "押目・利確ゾーン", "VWAP", "VWAP±σ", "前日/当日高安（PDH/PDL/HOD/LOD）", "心理的キリ番節目", "寄り30分高安（ORB）", "出来高急増（◆ 2.5x+）", "出来高"] + (["LAB×DD 統合エントリー帯/+1.0R", "LAB TP/SL"] if active_lab else [])
@@ -4093,6 +4282,8 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         {"name": "1分出来高", "type": "bar", "xAxisIndex": 1, "yAxisIndex": 1, "data": z1["vol_bars"], "barMaxWidth": 5, "markLine": {"symbol": ["none", "none"], "silent": True, "data": [{"yAxis": z1["avg_vol_1m"], "lineStyle": {"color": "rgba(148,163,184,.35)", "type": "dashed", "width": 1}, "label": {"show": False}}]} if z1["avg_vol_1m"] > 0 else {}},
                         {"name": "疑似CVD", "type": "line", "xAxisIndex": 1, "yAxisIndex": 2, "data": z1["cvd"], "itemStyle": {"color": "#22d3ee"}, "lineStyle": {"color": "#22d3ee", "width": 1.6}, "areaStyle": {"color": "rgba(34,211,238,.10)"}, "showSymbol": False},
                     ]
+                    for _s in s_1m:
+                        _s.setdefault("id", _s["name"])
                     ws_1m_note = "（WS接続時は最新1分足のみティック追従）" if ws_live_sym else ""
                     st.caption(f"表示中: 1分足マイクロ・ズーム（{z1['target_date']} 直近90本 ＋ 9/20EMA ＋ VWAP ＋ 10分3分岐 ＋ 下段CVD）{ws_1m_note}")
                     _render_echarts(
@@ -4212,6 +4403,9 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         s_list.append({"name": "疑似CVD", "type": "line", "xAxisIndex": 1, "yAxisIndex": 2, "data": traj["cvd_arr"], "itemStyle": {"color": "#22d3ee"}, "lineStyle": {"color": "#22d3ee", "width": 1.6}, "areaStyle": {"color": "rgba(34,211,238,.10)"}, "showSymbol": False, "markLine": {"symbol": ["none", "none"], "silent": True, "data": [{"yAxis": 0, "lineStyle": {"color": "rgba(148,163,184,.25)", "type": "dotted", "width": 1}, "label": {"show": False}}]}})
                         l_names.append("疑似CVD")
 
+                    for _s in s_list:
+                        _s.setdefault("id", _s["name"])
+
                     rp5 = (58 if is_jp else 52) if show_3w else (50 if is_jp else 44)
                     _render_echarts(
                         {"backgroundColor": "#050811", "legend": {"type": "scroll", "data": l_names, "textStyle": {"color": "#cbd5e1", "fontSize": 9.5}, "top": 2, "left": 6, "right": 8, "itemWidth": 12, "itemHeight": 8}, "axisPointer": {"link": [{"xAxisIndex": "all"}]}, "grid": [{"top": 40, "height": "57%", "left": 6, "right": rp5, "containLabel": False}, {"top": "74%", "height": "18%", "left": 6, "right": rp5, "containLabel": False}], "dataZoom": [{"type": "inside", "xAxisIndex": [0, 1], "filterMode": "none"}], "xAxis": [{"type": "category", "gridIndex": 0, "boundaryGap": False, "data": traj["slots"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,.16)"}}, "axisLabel": {"show": False}}, {"type": "category", "gridIndex": 1, "boundaryGap": False, "data": traj["slots"], "axisLine": {"lineStyle": {"color": "rgba(148,163,184,.16)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9, "interval": "auto", "hideOverlap": True}}], "yAxis": [{"type": "value", "gridIndex": 0, "position": "right", "scale": True, "splitLine": {"lineStyle": {"color": "rgba(255,255,255,.04)"}}, "axisLabel": {"color": "#94a3b8", "fontSize": 9}}, {"type": "value", "gridIndex": 1, "show": False, "axisPointer": {"show": False}}, {"type": "value", "gridIndex": 1, "position": "right", "scale": True, "splitLine": {"show": False}, "axisLabel": {"color": "#22d3ee", "fontSize": 8}}], "series": s_list},
@@ -4226,7 +4420,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
                 basis_txt = "ライブ連動" if use_live_basis else "朝ロック基準"
                 shk_txt = f" / 衝撃波{shock_ext_pct:+.2f}%" if abs(shock_ext_pct) > 0.01 else ""
-                st.markdown(f'<div class="dd-prob-meter"><div style="display:flex;justify-content:space-between;align-items:center;font-size:9.5px;"><span style="font-weight:800;color:#94a3b8;">SCENARIO ALLOCATION // リアルタイム・シナリオ配分（スコア比）</span><span style="font-family:JetBrains Mono,monospace;color:#64748b;font-size:8.8px;">{basis_txt}{shk_txt}</span></div><div class="dd-prob-stack"><div style="width:{scen_probs["bull"]}%;background:#10b981;"></div><div style="width:{scen_probs["range"]}%;background:#38bdf8;"></div><div style="width:{scen_probs["fade"]}%;background:#f59e0b;"></div><div style="width:{scen_probs["bear"]}%;background:#ef4444;"></div></div><div class="dd-prob-legend"><div style="color:#6ee7b7;">● 上振れ突破 <b>{scen_probs["bull"]:.1f}%</b></div><div style="color:#7dd3fc;">● 標準レンジ <b>{scen_probs["range"]:.1f}%</b></div><div style="color:#fde047;">● 窓埋め反転 <b>{scen_probs["fade"]:.1f}%</b></div><div style="color:#fca5a5;">● 下振れ崩壊 <b>{scen_probs["bear"]:.1f}%</b></div></div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="dd-prob-meter"><div style="display:flex;justify-content:space-between;align-items:center;font-size:9.5px;"><span style="font-weight:800;color:#94a3b8;">SCENARIO ALLOCATION // リアルタイム・シナリオ配分（スコア比）</span><span style="font-family:JetBrains Mono,monospace;color:#64748b;font-size:8.8px;">{basis_txt}{shk_txt}</span></div><div class="dd-prob-stack"><div id="dd-prob-bar-bull" style="width:{scen_probs["bull"]}%;background:#10b981;"></div><div id="dd-prob-bar-range" style="width:{scen_probs["range"]}%;background:#38bdf8;"></div><div id="dd-prob-bar-fade" style="width:{scen_probs["fade"]}%;background:#f59e0b;"></div><div id="dd-prob-bar-bear" style="width:{scen_probs["bear"]}%;background:#ef4444;"></div></div><div class="dd-prob-legend"><div style="color:#6ee7b7;">● 上振れ突破 <b id="dd-prob-txt-bull">{scen_probs["bull"]:.1f}%</b></div><div style="color:#7dd3fc;">● 標準レンジ <b id="dd-prob-txt-range">{scen_probs["range"]:.1f}%</b></div><div style="color:#fde047;">● 窓埋め反転 <b id="dd-prob-txt-fade">{scen_probs["fade"]:.1f}%</b></div><div style="color:#fca5a5;">● 下振れ崩壊 <b id="dd-prob-txt-bear">{scen_probs["bear"]:.1f}%</b></div></div></div>', unsafe_allow_html=True)
 
             if pc_cockpit:
                 left_col, right_col = st.columns([1.85, 1.0], gap="medium")
@@ -4373,15 +4567,19 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         db_shared[fc] = entry_obj
         st.session_state["shared_ticker_intel"] = db_shared
         _dd_db_set("shared_ticker_intel", db_shared)
+        st.session_state[f"dd_shared_sync_meta_{fc}"] = {"px": float(curr_px), "ts": time.time(), "news_id": nid_init}
 
     def _send_non_destructive_patch(snap: dict):
-        """10s自動更新時の2回目以降：DOM・フルスクリーンを一切破棄せず既存チャートと親画面主要数値のみ注入"""
+        """15s自動更新時の2回目以降：DOM・フルスクリーンを一切破棄せず既存チャートと親画面全HUDのみ注入"""
         traj = snap["traj"]
         curr_px = float(snap["curr_px"])
         chg_pct = float(snap["chg_pct"])
         short_3way = snap["short_3way"]
         z1 = snap["z1_pay"]
         evp = snap["ev_pulse"]
+        scen_p = snap["scen_probs"]
+        macro_d = snap.get("macro_data") or {}
+        news_r_now = snap.get("news_res") or cached_st["news_res"]
         sel_tf = st.session_state.get("dd_tf_mode", "5分足(1日全体)")
         use_1m = bool(sel_tf == "1分足(直近90分ズーム)" and z1.get("valid"))
         chart_mode_now = st.session_state.get("dd_chart_mode", "⚡ 両方重ね")
@@ -4405,14 +4603,50 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "dd-3w-up": {"text": f"▲上昇 {z1['p_up'] if use_1m else short_3way['p_up']}%"},
             "dd-3w-fl": {"text": f"▶横ばい {z1['p_flat'] if use_1m else short_3way['p_flat']}%"},
             "dd-3w-dn": {"text": f"▼下落 {z1['p_down'] if use_1m else short_3way['p_down']}%"},
+            "dd-prob-bar-bull": {"width": f"{scen_p['bull']}%"},
+            "dd-prob-bar-range": {"width": f"{scen_p['range']}%"},
+            "dd-prob-bar-fade": {"width": f"{scen_p['fade']}%"},
+            "dd-prob-bar-bear": {"width": f"{scen_p['bear']}%"},
+            "dd-prob-txt-bull": {"text": f"{scen_p['bull']:.1f}%"},
+            "dd-prob-txt-range": {"text": f"{scen_p['range']:.1f}%"},
+            "dd-prob-txt-fade": {"text": f"{scen_p['fade']:.1f}%"},
+            "dd-prob-txt-bear": {"text": f"{scen_p['bear']:.1f}%"},
         }
 
+        for mk_k in ("SOX", "SP500", "NQ_FUT", "ES_FUT", "NK_FUT", "USDJPY", "US10Y", "OIL", "VIX"):
+            if mk_k in macro_d:
+                md_v = float(macro_d[mk_k].get("diff_pct", 0.0))
+                dom_updates[f"dd-mac-{mk_k}"] = {"text": f"{md_v:+.2f}%", "color": "#10b981" if md_v >= 0 else "#ef4444"}
+
+        cat_tick = news_r_now.get("catalyst_alert") if isinstance(news_r_now, dict) else None
+        brk_tick = news_r_now.get("breaking_news") if isinstance(news_r_now, dict) else None
+        if isinstance(cat_tick, dict) and cat_tick.get("active") and cat_tick.get("title"):
+            t_cls = "dd-breaking-ticker bull" if cat_tick.get("dir") == "POS" else "dd-breaking-ticker"
+            t_tag = f"速報材料:{html.escape(str(cat_tick.get('kw') or '重要'))} [{cat_tick.get('age_min', 1)}分前]"
+            dom_updates["dd-breaking-ticker"] = {
+                "display": "flex",
+                "className": t_cls,
+                "html": f'<span style="font-weight:800;flex-shrink:0;">{t_tag}</span><span>{html.escape(str(cat_tick.get("title")))}</span>',
+            }
+        elif isinstance(brk_tick, dict) and brk_tick.get("title"):
+            t_cls = "dd-breaking-ticker bull" if brk_tick.get("sent") == "POS" else "dd-breaking-ticker"
+            t_tag = f"{'速報(買い)' if brk_tick.get('sent')=='POS' else ('速報(売り)' if brk_tick.get('sent')=='NEG' else '速報')} [{brk_tick.get('age_min',1)}分前]"
+            dom_updates["dd-breaking-ticker"] = {
+                "display": "flex",
+                "className": t_cls,
+                "html": f'<span style="font-weight:800;flex-shrink:0;">{t_tag}</span><a href="{html.escape(brk_tick.get("link") or "#")}" target="_blank" style="color:inherit;text-decoration:none;overflow:hidden;text-overflow:ellipsis;">{html.escape(brk_tick["title"])} ({html.escape(brk_tick.get("source") or "速報")})</a>',
+            }
+        else:
+            dom_updates["dd-breaking-ticker"] = {"display": "none"}
+
+        nid_now, nkw_now, ndir_now = _build_news_alert_meta(news_r_now)
         alert_payload = {
             "symbol": short_code, "curr_px": curr_px, "is_long": snap["ev_is_long"],
             "entry_lo": snap["fusion"]["entry_zone_lo"] if snap["fusion"].get("has_lab") else round(snap["active_dip_px"] * 0.998, 2),
             "entry_hi": snap["fusion"]["entry_zone_hi"] if snap["fusion"].get("has_lab") else round(snap["active_dip_px"] * 1.002, 2),
             "half_r": snap["fusion"]["fusion_half_r_px"] if snap["fusion"].get("has_lab") else round((curr_px + snap["ev_tp_ref"]) * 0.5, 2),
             "tp": snap["ev_tp_ref"], "sl": snap["ev_sl_ref"], "cvd_state": traj["cvd_div"].get("state", "NEUTRAL"), "exp_dir": snap["exp_dir"],
+            "news_id": nid_now, "news_kw": nkw_now, "news_dir": ndir_now,
         }
 
         pos_ctx = {"active": False}
@@ -4425,6 +4659,38 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             sd = str(st.session_state.get(f"dd_pos_side_{fc}", def_side) or def_side)
             pm = _compute_position_metrics(curr_px, ep, sh, sl, sd, snap["cur_vwap_now"], z1.get("last_ema9") if z1.get("valid") else None)
             pos_ctx = {"active": True, "side": pm["side"], "entry": pm["entry"], "shares": pm["shares"], "sl": pm["init_sl"], "trail_sl": pm["trail_sl"]}
+            pnl_c = "#10b981" if pm["pnl"] >= 0 else "#ef4444"
+            pnl_s = "+" if pm["pnl"] >= 0 else ""
+            r_c = "#fde047" if pm["r_mult"] >= 1.0 else ("#10b981" if pm["r_mult"] >= 0 else "#ef4444")
+            dom_updates["dd-pos-card"] = {"className": f"dd-pos-hud{' loss' if pm['pnl'] < 0 else ''}"}
+            dom_updates["dd-pos-badge"] = {"text": pm["status_badge"], "color": pm["badge_col"]}
+            dom_updates["dd-pos-pnl"] = {"text": f"{pnl_s}{_fmt_cur(pm['pnl'], is_jp)} ({pm['pnl_pct']:+.2f}%)", "color": pnl_c}
+            dom_updates["dd-pos-rmult"] = {"text": f"{pm['r_mult']:+.2f}R", "color": r_c}
+            dom_updates["dd-pos-sldist"] = {"text": f"{pm['sl_dist_pct']:+.2f}%"}
+            dom_updates["dd-pos-trailsl"] = {"text": _fmt_cur(pm["trail_sl"], is_jp)}
+            dom_updates["dd-pos-remloss"] = {"text": _fmt_cur(pm["rem_loss"], is_jp)}
+
+        # LAB共有 shared_ticker_intel の差分同期（0.3%以上変動または新着ニュース検知時、かつ60秒間隔制限）
+        sync_meta_key = f"dd_shared_sync_meta_{fc}"
+        prev_sync = st.session_state.get(sync_meta_key) or {"px": curr_px, "ts": 0.0, "news_id": ""}
+        now_s_ts = time.time()
+        px_moved = abs(curr_px - float(prev_sync.get("px", curr_px))) / max(float(prev_sync.get("px", curr_px)), 1e-4) >= 0.003
+        news_changed = bool(nid_now and nid_now != str(prev_sync.get("news_id", "")))
+        if (px_moved or news_changed) and (now_s_ts - float(prev_sync.get("ts", 0.0)) >= 60.0):
+            upd_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ss_sh = st.session_state.get("shared_ticker_intel")
+            if isinstance(ss_sh, dict) and isinstance(ss_sh.get(fc), dict) and isinstance(ss_sh[fc].get("dd_result"), dict):
+                ss_sh[fc]["dd_result"].update({
+                    "est_close_px": float(snap["active_close_px"]),
+                    "est_close_chg": float(snap["active_close_chg"]),
+                    "scenario_probs": scen_p,
+                    "ev_pulse": evp,
+                    "updated_at": upd_str,
+                })
+                ss_sh[fc]["dd_updated_at"] = upd_str
+                st.session_state["shared_ticker_intel"] = ss_sh
+                _dd_db_set("shared_ticker_intel", ss_sh)
+            st.session_state[sync_meta_key] = {"px": curr_px, "ts": now_s_ts, "news_id": nid_now}
 
         if use_1m:
             s_map = {
@@ -4484,12 +4750,12 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             }
             _dispatch_live_patch(f"dd_5m_{fc}", {"curr_px": curr_px, "chg_pct": chg_pct, "series_map": s_map, "end_labels": el_map, "pos_ctx": pos_ctx, "alert_ctx": alert_payload, "dom_updates": dom_updates})
 
-    # 初回フル描画 ＋ 10秒自動更新時は非破壊差分パッチ送信（フルスクリーン・画面維持）
+    # 初回フル描画 ＋ 15秒自動更新時は非破壊差分パッチ送信（フルスクリーン・画面維持）
     snap_init = _compute_live_snapshot(is_patch_tick=False)
     _render_full_ui(snap_init)
 
     if hasattr(st, "fragment") and auto_sync:
-        @st.fragment(run_every="10s")
+        @st.fragment(run_every="15s")
         def _live_patch_runner():
             runs = int(st.session_state.get(frag_run_key, 0)) + 1
             st.session_state[frag_run_key] = runs
