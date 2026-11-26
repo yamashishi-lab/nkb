@@ -46,7 +46,7 @@ DEFAULT_WEIGHTS_EVOLUTION = {
 
 
 # =========================================================================
-# 1. DEEP DIVE v21.1 専用CSS（スマホ横並び強制・高密度プロ端末デザイン）
+# 1. DEEP DIVE v21.2 専用CSS（スマホ横並び最適化・高密度プロ端末デザイン）
 # =========================================================================
 def _inject_dd_css():
     css = (
@@ -56,10 +56,10 @@ def _inject_dd_css():
         'iframe{background-color:#050811!important;}'
         '.block-container{padding-top:0.55rem!important;padding-bottom:1.2rem!important;padding-left:0.65rem!important;padding-right:0.65rem!important;max-width:1440px!important;}'
         '.element-container{margin-bottom:0.22rem!important;}'
-        # スマホ画面でも横並びカラムを縦積みさせない強制ルール
+        # 横並びカラム制御（コンパクト操作行は1行維持・入力/スライダー行はスマホ幅で2列折り返し）
         '[data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;gap:5px!important;width:100%!important;}'
         '[data-testid="stHorizontalBlock"]>[data-testid="stColumn"]{min-width:0!important;flex-shrink:1!important;}'
-        # タイトルヘッダー（元のサイズ感・洗練された発光アクセント）
+        # タイトルヘッダー（洗練された発光アクセント）
         '.dd-cmd-header{background:linear-gradient(135deg,#0b1120 0%,#0f172a 100%);border:1px solid rgba(56,189,248,.22);border-left:3.5px solid #38bdf8;border-radius:8px;padding:7px 10px;display:flex;flex-direction:column;justify-content:center;min-height:42px;box-sizing:border-box;}'
         '.dd-cmd-title{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:900;letter-spacing:.05em;color:#f8fafc;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
         '.dd-cmd-title span{color:#38bdf8;font-weight:800;margin-left:4px;}'
@@ -70,7 +70,7 @@ def _inject_dd_css():
         'div[data-testid="stPopover"]>button svg{display:none!important;}'
         '.st-key-dd_back_to_lab_btn button[kind="secondary"]{height:38px!important;min-height:38px!important;padding:0 8px!important;border-radius:8px!important;font-family:"JetBrains Mono",sans-serif!important;font-size:10.5px!important;font-weight:800!important;letter-spacing:.02em!important;background:linear-gradient(135deg,rgba(14,165,233,.16),rgba(56,189,248,.08))!important;border:1px solid rgba(56,189,248,.52)!important;color:#38bdf8!important;box-shadow:0 0 10px rgba(56,189,248,.12)!important;transition:all .15s ease!important;white-space:nowrap!important;}'
         '.st-key-dd_back_to_lab_btn button[kind="secondary"]:hover{background:rgba(56,189,248,.24)!important;border-color:#38bdf8!important;color:#ffffff!important;}'
-        # モダン・ピルトグルスイッチ（15s自動 / PC表示：コンパクト1行）
+        # モダン・ピルトグルスイッチ（10s自動 / PC表示：コンパクト1行）
         '[data-testid="stToggle"]{background:#0b1120;border:1px solid rgba(148,163,184,.14);border-radius:7px;padding:0 6px!important;height:34px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}'
         '[data-testid="stToggle"] label{gap:4px!important;margin:0!important;align-items:center!important;}'
         '[data-testid="stToggle"] label p{font-family:"JetBrains Mono",sans-serif!important;font-size:9.8px!important;font-weight:700!important;color:#cbd5e1!important;white-space:nowrap!important;}'
@@ -162,7 +162,11 @@ def _inject_dd_css():
         '.dd-val-fill{height:100%;border-radius:99px;}'
         '.dd-ws-badge{display:flex;align-items:center;justify-content:space-between;background:#0b1120;border:1px solid rgba(56,189,248,.24);border-left:2.5px solid #38bdf8;border-radius:5px;padding:2.5px 8px;margin:1px 0 3px 0;font-family:"JetBrains Mono",monospace;font-size:9.5px;color:#7dd3fc;}'
         '@media (min-width:768px){.dd-sc-stack{grid-template-columns:repeat(3,1fr);}}'
-        '@media (max-width:640px){.dd-fusion-grid,.dd-pos-grid,.dd-ev-pulse-grid,.dd-winrate-bar,.dd-legend-grid,.dd-prob-legend{grid-template-columns:repeat(2,1fr);}.dd-val-grid{grid-template-columns:1fr;}}'
+        '@media (max-width:640px){'
+        '[data-testid="stHorizontalBlock"]:has([data-testid="stNumberInput"]),[data-testid="stHorizontalBlock"]:has([data-testid="stSlider"]){flex-wrap:wrap!important;}'
+        '[data-testid="stHorizontalBlock"]:has([data-testid="stNumberInput"])>[data-testid="stColumn"],[data-testid="stHorizontalBlock"]:has([data-testid="stSlider"])>[data-testid="stColumn"]{flex:1 1 calc(50% - 4px)!important;min-width:calc(50% - 4px)!important;}'
+        '.dd-fusion-grid,.dd-pos-grid,.dd-ev-pulse-grid,.dd-winrate-bar,.dd-legend-grid,.dd-prob-legend{grid-template-columns:repeat(2,1fr);}.dd-val-grid{grid-template-columns:1fr;}'
+        '}'
     )
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
@@ -782,18 +786,18 @@ def _render_position_hud(fc: str, curr_px: float, is_jp: bool, default_side: str
     r_col = "#fde047" if pm["r_mult"] >= 1.0 else ("#10b981" if pm["r_mult"] >= 0 else "#ef4444")
 
     st.markdown(
-        f'<div id="dd-pos-hud-wrap" class="dd-pos-hud{loss_cls}">'
+        f'<div class="dd-pos-hud{loss_cls}">'
         f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
         f'<span style="font-size:10.5px;font-weight:900;color:#f8fafc;">POS // {pm["side"]} {pm["shares"]:,}株 @ {_fmt_cur(pm["entry"], is_jp)}</span>'
-        f'<span id="dd-pos-badge" style="font-family:JetBrains Mono,monospace;font-size:9.8px;font-weight:800;color:{pm["badge_col"]};">{html.escape(pm["status_badge"])}</span>'
+        f'<span style="font-family:JetBrains Mono,monospace;font-size:9.8px;font-weight:800;color:{pm["badge_col"]};">{html.escape(pm["status_badge"])}</span>'
         f'</div>'
         f'<div class="dd-pos-grid">'
-        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">含み損益</div><div id="dd-pos-pnl" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:{pnl_col};">{pnl_sign}{_fmt_cur(pm["pnl"], is_jp)} ({pm["pnl_pct"]:+.2f}%)</div></div>'
-        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">現在 R倍数</div><div id="dd-pos-rmult" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:{r_col};">{pm["r_mult"]:+.2f}R</div></div>'
-        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">初期SL距離</div><div id="dd-pos-sldist" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:#cbd5e1;">{pm["sl_dist_pct"]:+.2f}%</div></div>'
-        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">推奨トレーリングSL</div><div id="dd-pos-trailsl" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:#38bdf8;">{_fmt_cur(pm["trail_sl"], is_jp)}</div></div>'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">含み損益</div><div style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:{pnl_col};">{pnl_sign}{_fmt_cur(pm["pnl"], is_jp)} ({pm["pnl_pct"]:+.2f}%)</div></div>'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">現在 R倍数</div><div style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:{r_col};">{pm["r_mult"]:+.2f}R</div></div>'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">初期SL距離</div><div style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:#cbd5e1;">{pm["sl_dist_pct"]:+.2f}%</div></div>'
+        f'<div class="dd-pos-cell"><div class="dd-metric-lbl">推奨トレーリングSL</div><div style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:#38bdf8;">{_fmt_cur(pm["trail_sl"], is_jp)}</div></div>'
         f'</div>'
-        f'<div style="font-size:9.2px;color:#94a3b8;margin-top:4px;">SL到達時リスク残: <b id="dd-pos-remloss">{_fmt_cur(pm["rem_loss"], is_jp)}</b> ｜ 追従方針: <b id="dd-pos-trailnote">{html.escape(pm["trail_note"])}</b></div>'
+        f'<div style="font-size:9.2px;color:#94a3b8;margin-top:4px;">SL到達時リスク残: <b>{_fmt_cur(pm["rem_loss"], is_jp)}</b> ｜ 追従方針: <b>{html.escape(pm["trail_note"])}</b></div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -945,7 +949,7 @@ def _declutter_pulse_points(pulse_pts: list, slots: list) -> list:
 
 
 def _dispatch_live_patch(chart_key: str, patch_payload: dict):
-    """既存チャートiframeを破棄せず postMessage ＋ 親DOM直接パッチで最新データのみを非破壊注入する不可視ブリッジ"""
+    """既存チャートiframeと親画面DOM（ヒーローカード・EV脈拍・3分岐%）を破棄せず非破壊更新する不可視ブリッジ"""
     msg_obj = {
         "type": "DD_LIVE_PATCH",
         "chartKey": re.sub(r"[^A-Za-z0-9_\-]", "_", str(chart_key or "dd_chart_default")),
@@ -956,42 +960,25 @@ def _dispatch_live_patch(chart_key: str, patch_payload: dict):
       (function() {{
         var msg = {msg_json};
         try {{
-          var frames = window.parent.document.querySelectorAll('iframe');
+          var pDoc = window.parent.document;
+          var frames = pDoc.querySelectorAll('iframe');
           for (var i = 0; i < frames.length; i++) {{
             if (frames[i].contentWindow && frames[i].contentWindow !== window) {{
               frames[i].contentWindow.postMessage(msg, '*');
             }}
           }}
-        }} catch (e) {{}}
-        try {{
-          var dp = msg.payload && msg.payload.dom_patch;
-          if (dp && window.parent && window.parent.document) {{
-            var pdoc = window.parent.document;
-            if (dp.texts) {{
-              Object.keys(dp.texts).forEach(function(id) {{
-                var el = pdoc.getElementById(id);
-                if (!el) return;
-                var cfg = dp.texts[id];
-                if (cfg.text !== undefined) el.textContent = cfg.text;
-                if (cfg.color) el.style.color = cfg.color;
-              }});
-            }}
-            if (dp.styles) {{
-              Object.keys(dp.styles).forEach(function(id) {{
-                var el = pdoc.getElementById(id);
-                if (!el) return;
-                var stObj = dp.styles[id];
-                Object.keys(stObj).forEach(function(prop) {{
-                  el.style[prop] = stObj[prop];
-                }});
-              }});
-            }}
-            if (dp.classes) {{
-              Object.keys(dp.classes).forEach(function(id) {{
-                var el = pdoc.getElementById(id);
-                if (el) el.className = dp.classes[id];
-              }});
-            }}
+          var domUpd = (msg.payload && msg.payload.dom_updates) ? msg.payload.dom_updates : null;
+          if (domUpd) {{
+            Object.keys(domUpd).forEach(function(elId) {{
+              var el = pDoc.getElementById(elId);
+              if (!el) return;
+              var spec = domUpd[elId];
+              if (spec && typeof spec === 'object') {{
+                if (spec.text !== undefined) el.textContent = spec.text;
+                if (spec.color) el.style.color = spec.color;
+                if (spec.borderColor) el.style.borderLeftColor = spec.borderColor;
+              }}
+            }});
           }}
         }} catch (e) {{}}
       }})();
@@ -1575,7 +1562,7 @@ def _render_echarts(
     components.html(html_code, height=height + 2)
 
 
-def _render_live_clock(sync_interval: int = 15, active: bool = True):
+def _render_live_clock(sync_interval: int = 10, active: bool = True):
     dot_col, st_lbl, b_col, l_col = ("#10b981", "LIVE SYNC", "rgba(16,185,129,.22)", "#6ee7b7") if active else ("#64748b", "STATIC HOLD", "rgba(148,163,184,.12)", "#94a3b8")
     r_html = f'PATCH <span id="cd" class="cnt">{sync_interval}s</span>' if active else '<span>手動同期モード</span>'
     components.html(f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>html,body{{width:100%;margin:0;padding:0;background:#050811;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}}.bar{{display:flex;justify-content:space-between;align-items:center;background:#0b1120;border:1px solid {b_col};border-radius:6px;padding:2px 8px;font-size:9.3px;color:#e2e8f0;}}.dot{{width:5px;height:5px;background:{dot_col};border-radius:50%;display:inline-block;margin-right:5px;}}.left{{display:flex;align-items:center;color:{l_col};font-weight:700;}}.right{{color:#64748b;font-size:8.8px;}}.cnt{{color:#38bdf8;font-weight:700;}}</style></head><body><div class="bar"><div class="left"><span class="dot"></span>{st_lbl} <span id="clk" style="margin-left:6px;color:#f8fafc;">--:--:--</span> JST</div><div class="right">{r_html}</div></div><script>var rem={sync_interval},act={'true' if active else 'false'};function tick(){{var n=new Date(),j=new Date(n.getTime()+(n.getTimezoneOffset()+540)*60000);document.getElementById('clk').textContent=String(j.getHours()).padStart(2,'0')+':'+String(j.getMinutes()).padStart(2,'0')+':'+String(j.getSeconds()).padStart(2,'0');if(act){{var cd=document.getElementById('cd');if(cd)cd.textContent=rem+'s';rem=rem>1?rem-1:{sync_interval};}}}}tick();setInterval(tick,1000);</script></body></html>""", height=22)
@@ -1589,11 +1576,16 @@ def _build_spark_svg(prices: np.ndarray) -> str:
     return f'<svg width="82" height="20" viewBox="0 0 82 22" style="display:block;margin-left:auto;"><polyline fill="none" stroke="{"#10b981" if prices[-1]>=prices[0] else "#ef4444"}" stroke-width="1.5" points="{" ".join(pts)}"/></svg>'
 
 
-def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, short_3way: dict, exp_reg: dict, active_dip_time: str, active_peak_time: str, cur_vwap_now, curr_px: float, is_jp: bool, active_lab, is_1m_zoom: bool = False, zoom_1m_data: dict = None, lvn_zones: list = None):
+def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, short_3way: dict, exp_reg: dict, active_dip_time: str, active_peak_time: str, cur_vwap_now, curr_px: float, is_jp: bool, active_lab, is_1m_zoom: bool = False, zoom_1m_data: dict = None, lvn_zones: list = None, open_anchor_info: dict = None):
     exp_active, exp_dir = bool(exp_reg.get("active")), exp_reg.get("dir", "NONE")
     sw_l = lambda c, st="solid", w=2: f'<span style="display:inline-block;width:12px;height:0;border-top:{w}px {st} {c};flex-shrink:0;"></span>'
     sw_b = lambda bg, bd: f'<span style="display:inline-block;width:12px;height:7px;background:{bg};border:1px solid {bd};border-radius:2px;flex-shrink:0;"></span>'
     tri_sw = '<span style="display:inline-flex;flex-direction:column;gap:1.5px;width:12px;flex-shrink:0;"><span style="border-top:1.5px dashed #10b981;"></span><span style="border-top:1.5px dotted #94a3b8;"></span><span style="border-top:1.5px dashed #ef4444;"></span></span>'
+
+    oa_badge = ""
+    if isinstance(open_anchor_info, dict) and open_anchor_info.get("applied") and chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
+        ge = float(open_anchor_info.get("gap_err_pct", 0.0))
+        oa_badge = f"（紫線始値合わせON / 寄付Gap誤差: {ge:+.2f}%）"
 
     if is_1m_zoom and isinstance(zoom_1m_data, dict) and zoom_1m_data.get("valid"):
         e9, e20 = zoom_1m_data.get("last_ema9", curr_px), zoom_1m_data.get("last_ema20", curr_px)
@@ -1609,12 +1601,12 @@ def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, sho
             cards.append((sw_l("#34d399", "dashed", 1), "PDH/PDL/HOD/LOD", "前日・当日の高値安値（ブレイク基準）"))
     else:
         if exp_active and exp_dir == "UP":
-            b_cls, b_txt = "dd-trans-banner exp-up", "実測(白)が朝想定(紫)を大幅突破 → 急騰ブレイクモード中。VWAP(黄点線)や突破ライン付近の押し目追従を優先"
+            b_cls, b_txt = "dd-trans-banner exp-up", f"実測(白)が朝想定(紫)を大幅突破 → 急騰ブレイクモード中。VWAP(黄点線)や突破ライン付近の押し目追従を優先{oa_badge}"
         elif exp_active and exp_dir == "DOWN":
-            b_cls, b_txt = "dd-trans-banner exp-down", "実測(白)が朝想定(紫)を下抜け → 急落ブレイクモード中。VWAP(黄点線)での戻り売り・損切り徹底を優先"
+            b_cls, b_txt = "dd-trans-banner exp-down", f"実測(白)が朝想定(紫)を下抜け → 急落ブレイクモード中。VWAP(黄点線)での戻り売り・損切り徹底を優先{oa_badge}"
         elif traj.get("has_actual"):
             vw_note = ("VWAP(黄点線)上で買い優勢" if curr_px >= cur_vwap_now else "VWAP(黄点線)下で戻り待ち") if (cur_vwap_now and cur_vwap_now > 0) else "VWAP(黄点線)の攻防に注目"
-            b_cls, b_txt = "dd-trans-banner", f"実測(白)は朝想定レンジ内で推移中 → 押し目候補 {active_dip_time} 前後の反発と {vw_note}"
+            b_cls, b_txt = "dd-trans-banner", f"実測(白)は朝想定レンジ内で推移中 → 押し目候補 {active_dip_time} 前後の反発と {vw_note}{oa_badge}"
         else:
             b_cls, b_txt = "dd-trans-banner", f"寄り前待機モード → 想定始値 {_fmt_cur(traj['est_open_px'], is_jp)} からの押し目候補 {active_dip_time}・高値想定 {active_peak_time} を事前チェック"
 
@@ -1622,7 +1614,7 @@ def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, sho
         if traj.get("has_actual"): cards.append((sw_l("#ffffff"), "当日実測", "実際の株価の動き（主役）"))
         if chart_mode in ("🔴 ライブ修正", "⚡ 両方重ね"): cards.append((sw_l("#38bdf8"), "ライブ修正", "今の勢い＋固有波動を反映した最新着地予測"))
         if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
-            cards.append((sw_l("rgba(148,163,184,0.55)", "dotted"), "朝ロック(無効化)", "想定外ブレイクで参考線へ降格") if exp_active else (sw_l("#c084fc" if chart_mode == "⚡ 両方重ね" else "#38bdf8", "dashed" if chart_mode == "⚡ 両方重ね" else "solid"), "朝ロック", "寄り前固定の当初想定（基準線）"))
+            cards.append((sw_l("rgba(148,163,184,0.55)", "dotted"), "朝ロック(無効化)", "想定外ブレイクで参考線へ降格") if exp_active else (sw_l("#c084fc" if chart_mode == "⚡ 両方重ね" else "#38bdf8", "dashed" if chart_mode == "⚡ 両方重ね" else "solid"), "朝ロック", "寄り前固定の当初想定（設定で始値合わせ可）"))
         if "場中30分・3分岐点線（スコア比%）" in opt_lines and short_3way.get("active"): cards.append((tri_sw, "短期30分3分岐", "30分後に上/横/下へ進む確率と軌道"))
         if active_lab and "LAB×DD 統合エントリー帯/+1.0R" in opt_lines: cards.append((sw_l("#fde047", "dashed"), "統合Entry/+1.0R", "LABとDDを融合した押し目帯と半分利確ライン"))
         if "流動性真空帯（LVN加速ゾーン）" in opt_lines and lvn_zones: cards.append((sw_b("rgba(34,211,238,0.18)", "rgba(34,211,238,0.55)"), "LVN真空帯", "出来高が極端に薄く値動きが加速しやすい価格帯"))
@@ -1643,7 +1635,7 @@ def _render_chart_legend_panel(traj: dict, chart_mode: str, opt_lines: list, sho
     st.markdown(f'<div class="dd-legend-panel"><div class="{b_cls}">{html.escape(b_txt)}</div><div class="dd-chip-ribbon">{pills_html}</div></div>', unsafe_allow_html=True)
     with st.expander("アクティブ凡例の詳細 ＆ 専門指標クイック辞典", expanded=False):
         st.markdown(f'<div class="dd-legend-grid" style="margin-bottom:8px;">{cards_html}</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:10.5px;line-height:1.6;color:#cbd5e1;">・<b>非破壊リアルタイム同期：</b> 15s自動ON時はチャートフレームを破棄せず最新データのみを注入するため、横向き大画面でも画面戻りや点滅が起きません。<br>・<b>音声＆電子音トリガー監視官：</b> チャート右上「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と音声で即時通知します。<br>・<b>LVN真空帯（流動性真空地帯）：</b> 28分割出来高プロファイルで商いが極端に薄い価格帯。レジスタンス抜けやサポート割れ時に価格が一気に走りやすいエアポケットです。<br>・<b>二壁FPT到達確率：</b> 大引けまでに「損切りライン(SL)へ先に触れずに利確目標(TP)へ到達する」確率モデルに基づく物理確率です。</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10.5px;line-height:1.6;color:#cbd5e1;">・<b>非破壊リアルタイム同期：</b> 10s自動ON時はチャートフレームを破棄せず最新データのみを注入するため、横向き大画面でも画面戻りや点滅が起きません。<br>・<b>音声＆電子音トリガー監視官：</b> チャート右上「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と音声で即時通知します。<br>・<b>LVN真空帯（流動性真空地帯）：</b> 28分割出来高プロファイルで商いが極端に薄い価格帯。レジスタンス抜けやサポート割れ時に価格が一気に走りやすいエアポケットです。<br>・<b>二壁FPT到達確率：</b> 大引けまでに「損切りライン(SL)へ先に触れずに利確目標(TP)へ到達する」確率モデルに基づく物理確率です。</div>', unsafe_allow_html=True)
 # === PART 3 / 5 ===
 # =========================================================================
 # 4. マーケット・ニュース・株主・1分足データ取得（Static層 / Live層分離）
@@ -2137,8 +2129,8 @@ def _compute_mtf_alignment(df_1m: pd.DataFrame, df_5m: pd.DataFrame, df_1d: pd.D
 
 
 def _render_mtf_bar(mtf_res: dict):
-    leds = "".join(f'<span id="dd-mtf-led-{tf}" class="dd-mtf-led" style="color:{c};"><span id="dd-mtf-dot-{tf}" class="dd-led-dot" style="background:{c};"></span><span id="dd-mtf-txt-{tf}">{tf} {ar}</span></span>' for tf, _, ar, c in mtf_res["items"])
-    st.markdown(f'<div class="dd-mtf-bar"><div class="dd-mtf-pills"><span style="font-size:9px;font-weight:800;color:#64748b;margin-right:2px;">MTF</span>{leds}</div><div id="dd-mtf-sum" class="dd-mtf-sum" style="color:{mtf_res["color"]};">{html.escape(mtf_res["summary"])}</div></div>', unsafe_allow_html=True)
+    leds = "".join(f'<span class="dd-mtf-led" style="color:{c};"><span class="dd-led-dot" style="background:{c};"></span>{tf} {ar}</span>' for tf, _, ar, c in mtf_res["items"])
+    st.markdown(f'<div class="dd-mtf-bar"><div class="dd-mtf-pills"><span style="font-size:9px;font-weight:800;color:#64748b;margin-right:2px;">MTF</span>{leds}</div><div class="dd-mtf-sum" style="color:{mtf_res["color"]};">{html.escape(mtf_res["summary"])}</div></div>', unsafe_allow_html=True)
 
 
 def _render_price_ladder(curr_px: float, is_jp: bool, ref_lv: dict, traj: dict, vp: dict, round_level: float, active_lab, default_expanded: bool = False):
@@ -2905,7 +2897,7 @@ def _compute_lab_dd_fusion(active_lab: dict, traj: dict, short_3way: dict, scen_
 # =========================================================================
 # 7. デュアル5分足軌道エンジン（振幅保存型・固有波形合成エンジン搭載）
 # =========================================================================
-def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1d: pd.DataFrame, df_5m: pd.DataFrame, macro_sens: list, macro_data: dict, news_res: dict, whale_anom: dict, dow_next_avg: float, vp: dict, is_jp: bool, mkt_regime: dict, active_lab: dict = None, df_bench_5m: pd.DataFrame = None, lab_mods: dict = None) -> dict:
+def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1d: pd.DataFrame, df_5m: pd.DataFrame, macro_sens: list, macro_data: dict, news_res: dict, whale_anom: dict, dow_next_avg: float, vp: dict, is_jp: bool, mkt_regime: dict, active_lab: dict = None, df_bench_5m: pd.DataFrame = None, lab_mods: dict = None, is_patch_tick: bool = False, cached_ledger: dict = None, cached_weights: dict = None) -> dict:
     if is_jp:
         am = [f"{h:02d}:{m:02d}" for h in range(9, 12) for m in range(0, 60, 5) if not (h == 11 and m > 30)]
         pm = [f"{h:02d}:{m:02d}" for h in range(12, 16) for m in range(0, 60, 5) if not (h == 12 and m < 30) and not (h == 15 and m > 30)]
@@ -2956,13 +2948,19 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
     last_act_idx = max([i for i, v in enumerate(actual_arr) if v is not None], default=-1)
     anchor_base_close = prev_px if has_actual else curr_px
 
-    ledger = _dd_db_get("dd_forecast_ledger_v9", {})
-    if not isinstance(ledger, dict): ledger = {}
-    ledger, _ = _backfill_unverified_locks(ledger, fc_code, df_5m, is_jp, market_today_str)
+    if is_patch_tick and isinstance(cached_ledger, dict):
+        ledger = cached_ledger
+    else:
+        ledger = _dd_db_get("dd_forecast_ledger_v9", {})
+        if not isinstance(ledger, dict): ledger = {}
+        ledger, _ = _backfill_unverified_locks(ledger, fc_code, df_5m, is_jp, market_today_str)
     stock_hist = ledger.get(fc_code, {})
     if not isinstance(stock_hist, dict): stock_hist = {}
 
-    w_evo, weights_updated = _update_weights_two_stage(_load_weights_evolution(), fc_code, df_1d, stock_hist, market_today_str, cluster_key, fallback_key)
+    if is_patch_tick and isinstance(cached_weights, dict):
+        w_evo, weights_updated = _merge_default_weights(cached_weights), False
+    else:
+        w_evo, weights_updated = _update_weights_two_stage(_load_weights_evolution(), fc_code, df_1d, stock_hist, market_today_str, cluster_key, fallback_key)
     og_w, idr_w, cluster_n, shrink_alpha = _get_shrunk_cluster_brain(w_evo, cluster_key, fallback_key, regime_code)
 
     smap = {x["key"]: x for x in macro_sens}
@@ -3179,7 +3177,7 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
         is_locked = True
     else:
         locked_p50, locked_p85, locked_p15, locked_bdiff, locked_p32, locked_bdiff_in, is_locked = p50, p85, p15, bdiff, p32, bdiff_inner, False
-        if not has_actual and _is_valid_premarket_lock_window(is_jp, target_date):
+        if (not is_patch_tick) and (not has_actual) and _is_valid_premarket_lock_window(is_jp, target_date):
             stock_hist[target_date] = {
                 "p50": p50, "p85": p85, "p15": p15, "band_diff": bdiff, "p32": p32, "band_diff_in": bdiff_inner,
                 "locked_premarket": True, "locked_at": _get_market_now(is_jp).strftime("%Y-%m-%d %H:%M:%S"),
@@ -3294,7 +3292,7 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
             in_c = sum(1 for a, lo, hi in zip(actual_arr, locked_p15, locked_p85) if a is not None and lo <= a <= hi)
             isf = bool(len(errs) >= int(n_slots * 0.80))
             verify_stats = {"has_verify": True, "in_cone_pct": round(in_c / len(errs) * 100.0, 1), "err_pct": round(float(np.mean(errs)), 2), "n_pts": len(errs), "finalized": isf}
-            if isf and isinstance(saved_today, dict):
+            if (not is_patch_tick) and isf and isinstance(saved_today, dict):
                 saved_today["verify_result"] = {"in_cone_pct": verify_stats["in_cone_pct"], "err_pct": verify_stats["err_pct"], "rvol_hi": bool(rvol is not None and rvol >= 1.3), "finalized": True}
                 stock_hist[market_today_str] = saved_today; ledger[fc_code] = stock_hist; _dd_db_set("dd_forecast_ledger_v9", ledger)
 
@@ -3321,6 +3319,7 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
 
     return {
         "target_date": target_date, "is_locked": is_locked, "has_actual": has_actual, "last_act_idx": last_act_idx, "anchor_base_close": anchor_base_close,
+        "_raw_ledger": ledger, "_raw_weights": w_evo,
         "slots": slots, "lunch_idx": lunch_idx, "vols": [round(float(v), 1) for v in slot_vols], "actual_vols": actual_vols_arr, "actual_dirs": actual_dirs_arr, "cvd_arr": cvd_arr,
         "actual": actual_arr, "vwap": vwap_arr, "vwap_p1": vwap_p1_arr, "vwap_m1": vwap_m1_arr, "vwap_p2": vwap_p2_arr, "vwap_m2": vwap_m2_arr,
         "rvol": rvol, "orb_high": orb_high, "orb_low": orb_low, "vol_spikes": vol_spikes, "avg_5m_vol": avg_5m_vol, "cvd_div": cvd_div, "gap_open15": gap_open15,
@@ -3352,7 +3351,7 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
     }
 # === PART 5 / 5 ===
 # =========================================================================
-# 8. 実測5軸レーダー・AIメモ生成・LAB共有・メイン関数（v21.1 完全版）
+# 8. 実測5軸レーダー・AIメモ生成・LAB共有・メイン関数（v21.2 完全版）
 # =========================================================================
 def _compute_real_5axis(info: dict, ovh_pct: float, gov_cnt: int) -> tuple:
     axes, vals, miss = [], [], []
@@ -3468,25 +3467,24 @@ def _format_lab_deep_context(lab_full: dict, lab_council: dict) -> str:
 
 
 def _render_unified_guide():
-    st.markdown('<div class="dd-guide-box"><b>v21.1 クオンツ＆プロ端末 操作ガイド</b><br>1. <b>非破壊15秒リアルタイム同期:</b> 「15s自動」ON（初期値ON）時は、チャートフレームを再生成せず差分データのみを注入します。スマホ横拡大中でも画面が戻らず、点滅も発生しません。<br>2. <b>音声＆電子音トリガー監視官:</b> チャート右上の「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と日本語音声で即時通知します。<br>3. <b>リアルタイムEV＆二壁FPT脈拍ゲージ:</b> 現在価格（成行基準）での「物理的二壁FPT勝率 vs 損益分岐勝率」とRR比を常時算出し、好機・待機・飛びつき禁止を即断できます。<br>4. <b>流動性真空帯（LVN加速ゾーン）:</b> 28分割出来高プロファイルから板が極端に薄い真空価格帯を自動抽出し、メインチャートへ加速ゾーンとして重ね描きします。<br>5. <b>1行コマンドドック（執行 / レーダー / シナリオ / 計算）:</b> チャート直下（PC表示時は右カラム）の4切替バーで執行管理と市場解析を瞬時に切り替えられます。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="dd-guide-box"><b>v21.2 クオンツ＆プロ端末 操作ガイド</b><br>1. <b>非破壊10秒リアルタイム同期:</b> 「10s自動」ON時はDB通信をキャッシュ化し、チャートフレーム・予測ファン帯・親画面主要数値を点滅ゼロで同期します。<br>2. <b>紫線（朝ロック）の始値アンカー補正:</b> チャート設定内の「紫線を始値に合わせる」ON（初期値ON）で、寄付Gap誤差を切り離し日中波形の精度を直感的に比較できます。<br>3. <b>音声＆電子音トリガー監視官:</b> チャート右上の「🔇 音声OFF」をONにすると、Entry到達・+1.0R到達・TP到達・SL接近を電子音と日本語音声で即時通知します。<br>4. <b>リアルタイムEV＆二壁FPT脈拍ゲージ:</b> 現在価格（成行基準）での「物理的二壁FPT勝率 vs 損益分岐勝率」とRR比を常時算出し、好機・待機・飛びつき禁止を即断できます。<br>5. <b>1行コマンドドック（執行 / レーダー / シナリオ / 計算）:</b> チャート直下（PC表示時は右カラム）の4切替バーで執行管理と市場解析を瞬時に切り替えられます。</div>', unsafe_allow_html=True)
 
 
 # =========================================================================
-# 9. メインエントリ関数（YAMASHISHI DEEP DIVE v21.1 完全版）
+# 9. メインエントリ関数（YAMASHISHI DEEP DIVE v21.2 完全版）
 # =========================================================================
 def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイトレード", gemini_api_key: str = "", lab_ctx: dict = None):
     _inject_dd_css()
     STYLES = ["デイトレード", "スキャルピング", "スイングトレード", "バイ＆ホールド"]
 
-    # クエリパラメータからのセッション切れ自動復元（マルチタスク復帰対策）
     qp_code = str(st.query_params.get("code") or "").strip().upper()
     qp_style = str(st.query_params.get("style") or "").strip()
     eff_init_code = qp_code if qp_code else init_code
     eff_init_style = qp_style if qp_style in STYLES else (init_style if init_style in STYLES else STYLES[0])
 
-    # 1行目：タイトル（左）＋ 操作ガイド ＋ LABへ戻る（スマホでも横並び1行固定）
+    # 1行目：タイトル（左）＋ 操作ガイド ＋ LABへ戻る
     h1, h2, h3 = st.columns([2.25, 0.85, 0.90])
-    h1.markdown('<div class="dd-cmd-header"><div class="dd-cmd-title">YAMASHISHI DEEP DIVE<span>v21.1</span></div><div class="dd-cmd-sub">非破壊15s同期・音声監視・EV脈拍・LVN真空帯</div></div>', unsafe_allow_html=True)
+    h1.markdown('<div class="dd-cmd-header"><div class="dd-cmd-title">YAMASHISHI DEEP DIVE<span>v21.2</span></div><div class="dd-cmd-sub">非破壊10s同期・始値アンカー・音声監視・EV脈拍</div></div>', unsafe_allow_html=True)
     with h2:
         with (st.popover("操作ガイド", use_container_width=True) if hasattr(st, "popover") else st.expander("操作ガイド")):
             _render_unified_guide()
@@ -3499,11 +3497,11 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         st.session_state["scroll_top_trig"] = int(time.time() * 1000)
         st.rerun()
 
-    # 2行目：銘柄コード ＋ スタイル ＋ 15s自動（初期ON） ＋ PC表示（スマホでも横並び1行固定）
+    # 2行目：銘柄コード ＋ スタイル ＋ 10s自動（初期ON） ＋ PC表示
     c1, c2, c3, c4 = st.columns([1.25, 1.35, 0.70, 0.70])
     in_code = c1.text_input("銘柄コード", value=eff_init_code, placeholder="NVDA / 6920", label_visibility="collapsed", key="dd_code_in")
     in_style = c2.selectbox("スタイル", STYLES, index=STYLES.index(eff_init_style), label_visibility="collapsed", key="dd_style_in")
-    auto_sync = c3.toggle("15s自動", value=True, key="dd_auto_sync", help="ONで15秒ごとに非破壊パッチ同期（横拡大中も維持）")
+    auto_sync = c3.toggle("10s自動", value=True, key="dd_auto_sync", help="ONで10秒ごとに非破壊パッチ同期（横拡大中も維持）")
     pc_cockpit = c4.toggle("PC表示", value=False, key="dd_pc_cockpit", help="PC横画面専用の2カラム・コックピット表示")
 
     fc = in_code.strip().upper()
@@ -3512,7 +3510,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     if re.match(r"^[0-9]{3}[0-9A-Z]$", fc):
         fc = f"{fc}.T"
 
-    # URLクエリパラメータへ現在のページ・銘柄・スタイルを常時同期
     try:
         if st.query_params.get("page") != "dd":
             st.query_params["page"] = "dd"
@@ -3533,7 +3530,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     active_lab = lab_full if lab_full else (lab_ctx if (isinstance(lab_ctx, dict) and lab_ctx.get("full_code") == fc) else None)
     lab_deep_ctx, lab_mods = _format_lab_deep_context(lab_full, lab_council), _extract_lab_quant_modifiers(active_lab, lab_council)
 
-    # Static層（日足・ニュース・財務・大株主・VP28等）のセッションキャッシュ取得／構築
+    # Static層（日足・ニュース・財務・大株主等）のセッションキャッシュ取得／構築
     static_cache_key = f"dd_static_cache_{fc}"
     now_ts = time.time()
     cached_st = st.session_state.get(static_cache_key)
@@ -3574,11 +3571,12 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
     market_today_str = _get_market_now(is_jp).strftime("%Y-%m-%d")
     whale_anom = _detect_whale_anomaly(data_st["insider_tx"], whale_news, market_today_str)
 
-    # 非破壊フラグメント状態管理
+    # 非破壊フラグメント＆DBキャッシュ状態管理
     frag_run_key = f"dd_frag_runs_{fc}"
     st.session_state[frag_run_key] = 0
+    db_cache_key = f"dd_db_cache_{fc}"
 
-    def _compute_live_snapshot() -> dict:
+    def _compute_live_snapshot(is_patch_tick: bool = False) -> dict:
         with ThreadPoolExecutor(max_workers=3) as ex:
             f_live = ex.submit(_load_stock_live_only, fc)
             f_mac = ex.submit(_load_macro_data)
@@ -3600,7 +3598,19 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
         macro_sens = _compute_macro_sens(df_1d["Close"], macro_data)
         vp = _compute_vp(df_1d, curr_px_rt, is_jp)
-        traj = _build_dual_5m_trajectory(fc, curr_px_rt, prev_px, df_1d, df_5m, macro_sens, macro_data, news_res, whale_anom, dow_stats[next_wd]["avg"], vp, is_jp, mkt_regime, active_lab, df_bench_5m, lab_mods)
+
+        db_c = st.session_state.get(db_cache_key) if is_patch_tick else None
+        c_ledger = db_c.get("ledger") if isinstance(db_c, dict) else None
+        c_weights = db_c.get("weights") if isinstance(db_c, dict) else None
+
+        traj = _build_dual_5m_trajectory(
+            fc, curr_px_rt, prev_px, df_1d, df_5m, macro_sens, macro_data, news_res, whale_anom,
+            dow_stats[next_wd]["avg"], vp, is_jp, mkt_regime, active_lab, df_bench_5m, lab_mods,
+            is_patch_tick=is_patch_tick, cached_ledger=c_ledger, cached_weights=c_weights,
+        )
+        if not is_patch_tick:
+            st.session_state[db_cache_key] = {"ledger": traj.get("_raw_ledger"), "weights": traj.get("_raw_weights")}
+
         curr_px = float(traj["actual"][traj["last_act_idx"]]) if (traj["has_actual"] and traj["last_act_idx"] >= 0 and traj["actual"][traj["last_act_idx"]] and math.isfinite(float(traj["actual"][traj["last_act_idx"]]))) else curr_px_rt
         round_level = _compute_round_number_level(curr_px, is_jp)
         ref_levels = _compute_pro_ref_levels(df_1d, df_5m, is_jp, market_today_str)
@@ -3630,6 +3640,31 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             den = max(n_sl_tot - 1 - la_idx, 1)
             return [None if v is None else (round(float(v), 2) if i <= la_idx else round(float(v) * (1.0 + (shock_ext_pct / 100.0) * ((i - la_idx) / den)), 2)) for i, v in enumerate(arr)]
 
+        # 紫線（朝ロック）の実測始値アンカー補正（表示用配列のみ平行移動）
+        anchor_toggle_on = bool(st.session_state.get("dd_anchor_locked_open", True))
+        open_anchor_info = {"applied": False, "gap_err_pct": 0.0, "scale": 1.0}
+        disp_locked_p50, disp_locked_p85, disp_locked_p15, disp_locked_bdiff, disp_locked_p32, disp_locked_bdiff_in = (list(traj[k]) for k in ("locked_p50", "locked_p85", "locked_p15", "locked_bdiff", "locked_p32", "locked_bdiff_in"))
+
+        if traj["has_actual"]:
+            act_indices = [i for i, v in enumerate(traj["actual"]) if v is not None]
+            if act_indices:
+                first_act_idx = act_indices[0]
+                base_lk = float(traj["locked_p50"][first_act_idx] or 0.0)
+                base_act = float(traj["actual"][first_act_idx] or 0.0)
+                if base_lk > 0 and base_act > 0:
+                    open_gap_err_pct = round((base_act - base_lk) / base_lk * 100.0, 2)
+                    anchor_scale = base_act / base_lk
+                    if anchor_toggle_on or (not traj["is_locked"]):
+                        open_anchor_info = {"applied": True, "gap_err_pct": open_gap_err_pct, "scale": anchor_scale}
+                        disp_locked_p50 = [round(float(v) * anchor_scale, 2) if v is not None else None for v in disp_locked_p50]
+                        disp_locked_p85 = [round(float(v) * anchor_scale, 2) if v is not None else None for v in disp_locked_p85]
+                        disp_locked_p15 = [round(float(v) * anchor_scale, 2) if v is not None else None for v in disp_locked_p15]
+                        disp_locked_p32 = [round(float(v) * anchor_scale, 2) if v is not None else None for v in disp_locked_p32]
+                        disp_locked_bdiff = [round(float(hi) - float(lo), 2) if (hi is not None and lo is not None) else None for hi, lo in zip(disp_locked_p85, disp_locked_p15)]
+                        disp_locked_bdiff_in = [round(float(d) * anchor_scale, 2) if d is not None else None for d in disp_locked_bdiff_in]
+
+        disp_live_p50, disp_live_p85, disp_live_p15, disp_live_bdiff, disp_live_p32, disp_live_bdiff_in = (_scale_live(traj[k]) for k in ("live_p50", "live_p85", "live_p15", "live_bdiff", "live_p32", "live_bdiff_in"))
+
         pfx_b = "live_" if use_live_basis else "locked_"
         sm_eff = shock_mult if (use_live_basis or not traj["has_actual"]) else 1.0
         active_close_px = round(traj[f"{pfx_b}close_px"] * sm_eff, 2)
@@ -3639,9 +3674,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         active_open_gap_pct = round(traj["est_open_gap_pct"] + (shock_ext_pct if not traj["has_actual"] else 0.0), 2)
         active_open_px = round(traj["anchor_base_close"] * (1.0 + active_open_gap_pct / 100.0), 2)
         active_rem_drift = traj["rem_drift_pct"] + (shock_ext_pct / 100.0) * 0.65
-
-        disp_locked_p50, disp_locked_p85, disp_locked_p15, disp_locked_bdiff, disp_locked_p32, disp_locked_bdiff_in = (list(traj[k]) for k in ("locked_p50", "locked_p85", "locked_p15", "locked_bdiff", "locked_p32", "locked_bdiff_in"))
-        disp_live_p50, disp_live_p85, disp_live_p15, disp_live_bdiff, disp_live_p32, disp_live_bdiff_in = (_scale_live(traj[k]) for k in ("live_p50", "live_p85", "live_p15", "live_bdiff", "live_p32", "live_bdiff_in"))
 
         s3c = traj["short_3way_ctx"]
         short_3way = _compute_short_horizon_3way(traj["has_actual"], la_idx, n_sl_tot, s3c["anchor_px"], s3c["cur_vwap"], s3c["mom_30m"], traj["rvol"], traj["cvd_div"], traj["gap_open15"], s3c["bench_live_alpha_adj"], s3c["knn_rel_moves"], s3c["slot_means"], s3c["slot_inc_stds"], s3c["vboost"], s3c["hvn_wall_px"], s3c["ob_sup_px"], vp, shock_ext_pct, 6, traj.get("ml_3way_model"), s3c.get("cum_cvd_now", 0.0), s3c.get("cum_vol_now", 0.0), s3c.get("lab_dir_score", 0.0), s3c.get("lab_rs30"), exp_dir)
@@ -3661,7 +3693,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "df_5m": df_5m, "df_1m": df_1m, "macro_data": macro_data, "macro_sens": macro_sens, "vp": vp, "vp28": vp28, "lvn_zones": lvn_zones,
             "traj": traj, "curr_px": curr_px, "prev_px": prev_px, "chg_pct": chg_pct, "round_level": round_level, "ref_levels": ref_levels,
             "mtf_res": mtf_res, "canary_res": canary_res, "exp_reg": exp_reg, "exp_active": exp_active, "exp_dir": exp_dir,
-            "presets": presets, "modes": modes, "cur_cm": cur_cm, "use_live_basis": use_live_basis,
+            "presets": presets, "modes": modes, "cur_cm": cur_cm, "use_live_basis": use_live_basis, "open_anchor_info": open_anchor_info,
             "wi_idx_key": wi_idx_key, "wi_fx_key": wi_fx_key, "f_map": f_map, "mkt_beta_eff": mkt_beta_eff, "fx_beta_eff": fx_beta_eff,
             "shock_ext_pct": shock_ext_pct, "shock_mult": shock_mult, "n_sl_tot": n_sl_tot, "la_idx": la_idx,
             "active_close_px": active_close_px, "active_close_chg": active_close_chg,
@@ -3680,6 +3712,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         round_level, ref_levels, mtf_res, canary_res = snap["round_level"], snap["ref_levels"], snap["mtf_res"], snap["canary_res"]
         exp_reg, exp_active, exp_dir = snap["exp_reg"], snap["exp_active"], snap["exp_dir"]
         presets, modes, cur_cm, use_live_basis = snap["presets"], snap["modes"], snap["cur_cm"], snap["use_live_basis"]
+        open_anchor_info = snap["open_anchor_info"]
         wi_idx_key, wi_fx_key, f_map = snap["wi_idx_key"], snap["wi_fx_key"], snap["f_map"]
         mkt_beta_eff, fx_beta_eff, shock_ext_pct, shock_mult = snap["mkt_beta_eff"], snap["fx_beta_eff"], snap["shock_ext_pct"], snap["shock_mult"]
         n_sl_tot, la_idx = snap["n_sl_tot"], snap["la_idx"]
@@ -3697,7 +3730,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             den = max(n_sl_tot - 1 - la_idx, 1)
             return [None if v is None else (round(float(v), 2) if i <= la_idx else round(float(v) * (1.0 + (shock_ext_pct / 100.0) * ((i - la_idx) / den)), 2)) for i, v in enumerate(arr)]
 
-        _render_live_clock(sync_interval=15, active=auto_sync)
+        _render_live_clock(sync_interval=10, active=auto_sync)
         if ws_active_us:
             st.markdown(f'<div class="dd-ws-badge"><span>● <b>Finnhub WS 接続構成</b> ({html.escape(fc)})</span><span style="color:#94a3b8;font-size:8.8px;">接続状態はチャート内表示</span></div>', unsafe_allow_html=True)
 
@@ -3793,7 +3826,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         memo_nonce, top_m = st.session_state.get("dd_memo_nonce", 0), (macro_sens[0] if macro_sens else {"label": "市場指数", "corr": 0.0, "beta": 1.0})
         m_txt, m_src = _generate_detailed_memo_cached(fc, corp_name, _fmt_cur(curr_px, is_jp), _fmt_cur(active_open_px, is_jp), _fmt_cur(active_close_px, is_jp), _fmt_cur(active_bull_trig, is_jp), _fmt_cur(active_bull_tgt, is_jp), _fmt_cur(active_bear_trig, is_jp), _fmt_cur(active_bear_tgt, is_jp), active_dip_time, active_peak_time, vp["overhead_pct"], _fmt_cur(vp["res_px"], is_jp), _fmt_cur(vp["sup_px"], is_jp), top_m["label"], top_m["corr"], top_m["beta"], news_res["pos_pct"], news_res["tier1_cnt"], len(gov_risks), whale_anom["summary"], upside_str, lab_note, api_k, lab_deep_ctx, in_style, memo_nonce)
 
-        st.markdown(f"""<div class="dd-hero-card" style="border-left-color:{aura_col};"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;"><div style="min-width:0;flex:1;"><div><span class="pill-badge">{html.escape(fc)}</span><span class="pill-badge"><span class="dd-led-dot" style="background:#38bdf8;"></span>{html.escape(in_style)}</span><span class="pill-badge"><span class="dd-led-dot" style="background:{mkt_regime['color']};"></span>{mkt_regime['label']}・{traj['weights_evolution']['active_cluster']}</span>{earn_badge}</div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-top:2px;word-break:break-word;">{html.escape(corp_name)}</div><div style="font-size:9.3px;color:#64748b;">{html.escape(sector)} / {html.escape(industry)}</div></div><div style="text-align:right;flex-shrink:0;"><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:17px;font-weight:800;color:#fff;line-height:1.15;">{_fmt_cur(curr_px, is_jp)}</div><div style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:10.5px;font-weight:700;color:{chg_col};margin-bottom:2px;">{chg_pct:+.2f}%</div>{_build_spark_svg(df_1d["Close"].tail(20).values)}</div></div><div style="margin-top:3px;"><div style="display:flex;justify-content:space-between;font-size:8.6px;color:#64748b;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;"><span>52W安 {_fmt_cur(lo_52, is_jp)}</span><span style="color:#94a3b8;">52W位置 {pos_52:.0f}%</span><span>52W高 {_fmt_cur(hi_52, is_jp)}</span></div><div class="dd-range-track"><div class="dd-range-dot" style="left:{pos_52:.1f}%;"></div></div></div><div class="dd-winrate-bar"><div><div class="dd-metric-lbl">{top_close_lbl}</div><div class="dd-metric-val" style="color:{aura_col};">{_fmt_cur(active_close_px, is_jp)} ({active_close_chg:+.2f}%)</div></div><div><div class="dd-metric-lbl">アナリスト乖離</div><div class="dd-metric-val" style="color:#fde047;">{upside_str}</div></div><div><div class="dd-metric-lbl">上値しこり玉</div><div class="dd-metric-val" style="color:#cbd5e1;">{vp['overhead_pct']}%</div></div><div><div class="dd-metric-lbl">72h報道リスク</div><div class="dd-metric-val" style="color:{r_col};">{r_stat}</div></div></div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="dd-hero-card" id="dd-hero-card" style="border-left-color:{aura_col};"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;"><div style="min-width:0;flex:1;"><div><span class="pill-badge">{html.escape(fc)}</span><span class="pill-badge"><span class="dd-led-dot" style="background:#38bdf8;"></span>{html.escape(in_style)}</span><span class="pill-badge"><span class="dd-led-dot" style="background:{mkt_regime['color']};"></span>{mkt_regime['label']}・{traj['weights_evolution']['active_cluster']}</span>{earn_badge}</div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-top:2px;word-break:break-word;">{html.escape(corp_name)}</div><div style="font-size:9.3px;color:#64748b;">{html.escape(sector)} / {html.escape(industry)}</div></div><div style="text-align:right;flex-shrink:0;"><div id="dd-live-px" style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:17px;font-weight:800;color:#fff;line-height:1.15;">{_fmt_cur(curr_px, is_jp)}</div><div id="dd-live-chg" style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:10.5px;font-weight:700;color:{chg_col};margin-bottom:2px;">{chg_pct:+.2f}%</div>{_build_spark_svg(df_1d["Close"].tail(20).values)}</div></div><div style="margin-top:3px;"><div style="display:flex;justify-content:space-between;font-size:8.6px;color:#64748b;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;"><span>52W安 {_fmt_cur(lo_52, is_jp)}</span><span style="color:#94a3b8;">52W位置 {pos_52:.0f}%</span><span>52W高 {_fmt_cur(hi_52, is_jp)}</span></div><div class="dd-range-track"><div class="dd-range-dot" style="left:{pos_52:.1f}%;"></div></div></div><div class="dd-winrate-bar"><div><div class="dd-metric-lbl">{top_close_lbl}</div><div class="dd-metric-val" id="dd-live-close" style="color:{aura_col};">{_fmt_cur(active_close_px, is_jp)} ({active_close_chg:+.2f}%)</div></div><div><div class="dd-metric-lbl">アナリスト乖離</div><div class="dd-metric-val" style="color:#fde047;">{upside_str}</div></div><div><div class="dd-metric-lbl">上値しこり玉</div><div class="dd-metric-val" style="color:#cbd5e1;">{vp['overhead_pct']}%</div></div><div><div class="dd-metric-lbl">72h報道リスク</div><div class="dd-metric-val" style="color:{r_col};">{r_stat}</div></div></div></div>""", unsafe_allow_html=True)
 
         t1, t2, t3, t4 = st.tabs(["翌営業日 1日軌道", "マクロβ・曜日", "財務・大口株主", "リスク・AIメモ"])
 
@@ -3834,13 +3867,13 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 ed_sgn = "+" if ev_pulse["edge_pct"] >= 0 else ""
                 b_note = html.escape(ev_pulse.get("basis_note", "現在値・成行基準"))
                 st.markdown(
-                    f'<div id="dd-ev-wrap" class="dd-ev-pulse" style="border-left-color:{e_col};">'
+                    f'<div class="dd-ev-pulse" id="dd-ev-card" style="border-left-color:{e_col};">'
                     f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
                     f'<span style="font-size:9.8px;font-weight:900;color:#cbd5e1;">EV PULSE // {b_note}（{"LONG" if ev_is_long else "SHORT"}）</span>'
-                    f'<span id="dd-ev-status" style="font-family:JetBrains Mono,monospace;font-size:9.8px;font-weight:800;color:{e_col};">{html.escape(ev_pulse["status"])}</span>'
+                    f'<span id="dd-ev-st" style="font-family:JetBrains Mono,monospace;font-size:9.8px;font-weight:800;color:{e_col};">{html.escape(ev_pulse["status"])}</span>'
                     f'</div>'
                     f'<div class="dd-ev-pulse-grid">'
-                    f'<div class="dd-ev-cell"><div class="dd-metric-lbl">二壁FPT勝率</div><div id="dd-ev-tbfpt" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:{e_col};">{ev_pulse["tb_fpt"]:.1f}%</div></div>'
+                    f'<div class="dd-ev-cell"><div class="dd-metric-lbl">二壁FPT勝率</div><div id="dd-ev-fpt" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:{e_col};">{ev_pulse["tb_fpt"]:.1f}%</div></div>'
                     f'<div class="dd-ev-cell"><div class="dd-metric-lbl">損益分岐勝率</div><div id="dd-ev-bewr" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:#cbd5e1;">{ev_pulse["be_wr"]:.1f}%</div></div>'
                     f'<div class="dd-ev-cell"><div class="dd-metric-lbl">成行 RR比</div><div id="dd-ev-rr" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:#fde047;">1:{ev_pulse["rr"]:.2f}</div></div>'
                     f'<div class="dd-ev-cell"><div class="dd-metric-lbl">物理期待値エッジ</div><div id="dd-ev-edge" style="font-family:JetBrains Mono,monospace;font-size:11.2px;font-weight:800;color:{e_col};">{ed_sgn}{ev_pulse["edge_pct"]:.1f}%</div></div>'
@@ -4011,6 +4044,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 with cfg_col:
                     with (st.popover("設定", use_container_width=True) if hasattr(st, "popover") else st.expander("設定")):
                         chart_mode = st.radio("軌道モード", modes, index=pmi, key="dd_chart_mode")
+                        st.toggle("紫線を始値に合わせる", value=True, key="dd_anchor_locked_open", help="ONで朝ロック予測の紫線を当日最初の実測始値へ平行移動して波形比較しやすくします")
                         opt_lines = st.multiselect("表示レイヤー", line_opts, default=[x for x in prl if x in line_opts], key="dd_opt_lines")
                         if not is_jp:
                             st.text_input("Finnhub APIキー (米国株WS用)", type="password", key="dd_finnhub_key_input", placeholder="secrets未設定時に一時入力")
@@ -4066,11 +4100,12 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                         height=chart_h, use_hud_tooltip=True, is_jp=is_jp, enable_fullscreen=True, is_dual_grid=True, chart_key=f"dd_1m_{fc}",
                         finnhub_key=finnhub_k_now, live_symbol=ws_live_sym, is_1m_mode=True, pos_ctx=pos_state, alert_ctx=alert_payload,
                     )
-                    st.markdown(f'<div class="dd-3way-strip"><span style="color:#7dd3fc;font-weight:800;">1分足・直近10分3分岐:</span><span><span style="color:#6ee7b7;font-weight:800;">▲上昇 {z1["p_up"]}%</span> / <span style="color:#cbd5e1;font-weight:800;">▶横ばい {z1["p_flat"]}%</span> / <span style="color:#fca5a5;font-weight:800;">▼下落 {z1["p_down"]}%</span></span></div>', unsafe_allow_html=True)
-                    _render_chart_legend_panel(traj, chart_mode, opt_lines, short_3way, exp_reg, active_dip_time, active_peak_time, cur_vwap_now, curr_px, is_jp, active_lab, True, z1, lvn_zones)
+                    st.markdown(f'<div class="dd-3way-strip"><span style="color:#7dd3fc;font-weight:800;">1分足・直近10分3分岐:</span><span><span id="dd-3w-up" style="color:#6ee7b7;font-weight:800;">▲上昇 {z1["p_up"]}%</span> / <span id="dd-3w-fl" style="color:#cbd5e1;font-weight:800;">▶横ばい {z1["p_flat"]}%</span> / <span id="dd-3w-dn" style="color:#fca5a5;font-weight:800;">▼下落 {z1["p_down"]}%</span></span></div>', unsafe_allow_html=True)
+                    _render_chart_legend_panel(traj, chart_mode, opt_lines, short_3way, exp_reg, active_dip_time, active_peak_time, cur_vwap_now, curr_px, is_jp, active_lab, True, z1, lvn_zones, open_anchor_info)
                 else:
                     med_info = traj.get("medoid_analog")
                     med_cap = f" ｜ 最類似実測: {med_info['date']} (Gap {med_info['gap_pct']:+.2f}% / ATR補正×{med_info.get('amp_scale',1.0):.2f})" if ("類似実測波形（Top-1）" in opt_lines and isinstance(med_info, dict) and med_info.get("date")) else ""
+                    oa_cap = f" ｜ 紫線始値合わせON (寄付Gap誤差 {open_anchor_info['gap_err_pct']:+.2f}%)" if (open_anchor_info.get("applied") and chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね")) else ""
                     ml_data = _ref_ml(ref_levels, curr_px)
                     if traj["lunch_idx"] is not None: ml_data.append({"xAxis": traj["slots"][traj["lunch_idx"]], "lineStyle": {"color": "rgba(148,163,184,.30)", "type": "dashed", "width": 1.0}, "label": _vb("昼休", "#94a3b8")})
                     if "転換時間帯ガイド" in opt_lines:
@@ -4105,7 +4140,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                     cdi, cpi = (traj["live_dip_idx"], traj["live_peak_idx"]) if use_live_basis else (traj["locked_dip_idx"], traj["locked_peak_idx"])
                     ml_cfg = {"symbol": ["none", "none"], "data": _declutter_marklines(ml_data, curr_px, 0.45, bool(cdi <= 6 or cpi <= 6))} if ml_data else {}
                     pdesc = {"📈 今の予測": "ライブ修正軌道（固有波動合成）＋ 分位点ファン ＋ 場中30分3分岐 ＋ 下段CVD同期", "🔍 朝の答え合わせ": "寄り前ロック予測 vs 当日実測 ＋ 寄り30分高安 ＋ 下段CVD同期", "🏦 大口・節目": "VWAP±σ ＋ PDH/PDL/HOD/LOD ＋ キリ番 ＋ 出来高急増 ＋ 下段CVD"}
-                    st.caption(f"表示中: {pdesc.get(sel_preset, '')}{med_cap}{' ※LAB TP/SLの一部は現在値±12%外のため非表示' if lab_tpsl_hidden else ''}")
+                    st.caption(f"表示中: {pdesc.get(sel_preset, '')}{med_cap}{oa_cap}{' ※LAB TP/SLの一部は現在値±12%外のため非表示' if lab_tpsl_hidden else ''}")
 
                     if chart_mode in ("🔒 朝ロック検証", "⚡ 両方重ね"):
                         if traj["verify"]["has_verify"]:
@@ -4186,12 +4221,12 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
 
                     if show_3w:
                         mlb = f' <span style="background:#111827;border:1px solid rgba(168,85,247,.38);color:#cbd5e1;padding:1px 5px;border-radius:4px;font-size:8.8px;">ML学習(N={short_3way["ml_samples"]})</span>' if short_3way.get("ml_used") else ""
-                        st.markdown(f'<div class="dd-3way-strip"><span style="color:#7dd3fc;font-weight:800;">短期{short_3way["horizon"]*5}分3分岐:{mlb}</span><span><span style="color:#6ee7b7;font-weight:800;">▲上昇 {short_3way["p_up"]}%</span> / <span style="color:#cbd5e1;font-weight:800;">▶横ばい {short_3way["p_flat"]}%</span> / <span style="color:#fca5a5;font-weight:800;">▼下落 {short_3way["p_down"]}%</span></span></div>', unsafe_allow_html=True)
-                    _render_chart_legend_panel(traj, chart_mode, opt_lines, short_3way, exp_reg, active_dip_time, active_peak_time, cur_vwap_now, curr_px, is_jp, active_lab, False, None, lvn_zones)
+                        st.markdown(f'<div class="dd-3way-strip"><span style="color:#7dd3fc;font-weight:800;">短期{short_3way["horizon"]*5}分3分岐:{mlb}</span><span><span id="dd-3w-up" style="color:#6ee7b7;font-weight:800;">▲上昇 {short_3way["p_up"]}%</span> / <span id="dd-3w-fl" style="color:#cbd5e1;font-weight:800;">▶横ばい {short_3way["p_flat"]}%</span> / <span id="dd-3w-dn" style="color:#fca5a5;font-weight:800;">▼下落 {short_3way["p_down"]}%</span></span></div>', unsafe_allow_html=True)
+                    _render_chart_legend_panel(traj, chart_mode, opt_lines, short_3way, exp_reg, active_dip_time, active_peak_time, cur_vwap_now, curr_px, is_jp, active_lab, False, None, lvn_zones, open_anchor_info)
 
                 basis_txt = "ライブ連動" if use_live_basis else "朝ロック基準"
                 shk_txt = f" / 衝撃波{shock_ext_pct:+.2f}%" if abs(shock_ext_pct) > 0.01 else ""
-                st.markdown(f'<div class="dd-prob-meter"><div style="display:flex;justify-content:space-between;align-items:center;font-size:9.5px;"><span style="font-weight:800;color:#94a3b8;">SCENARIO ALLOCATION // リアルタイム・シナリオ配分（スコア比）</span><span style="font-family:JetBrains Mono,monospace;color:#64748b;font-size:8.8px;">{basis_txt}{shk_txt}</span></div><div class="dd-prob-stack"><div id="dd-prob-bar-bull" style="width:{scen_probs["bull"]}%;background:#10b981;"></div><div id="dd-prob-bar-range" style="width:{scen_probs["range"]}%;background:#38bdf8;"></div><div id="dd-prob-bar-fade" style="width:{scen_probs["fade"]}%;background:#f59e0b;"></div><div id="dd-prob-bar-bear" style="width:{scen_probs["bear"]}%;background:#ef4444;"></div></div><div class="dd-prob-legend"><div style="color:#6ee7b7;">● 上振れ突破 <b id="dd-prob-val-bull">{scen_probs["bull"]:.1f}%</b></div><div style="color:#7dd3fc;">● 標準レンジ <b id="dd-prob-val-range">{scen_probs["range"]:.1f}%</b></div><div style="color:#fde047;">● 窓埋め反転 <b id="dd-prob-val-fade">{scen_probs["fade"]:.1f}%</b></div><div style="color:#fca5a5;">● 下振れ崩壊 <b id="dd-prob-val-bear">{scen_probs["bear"]:.1f}%</b></div></div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="dd-prob-meter"><div style="display:flex;justify-content:space-between;align-items:center;font-size:9.5px;"><span style="font-weight:800;color:#94a3b8;">SCENARIO ALLOCATION // リアルタイム・シナリオ配分（スコア比）</span><span style="font-family:JetBrains Mono,monospace;color:#64748b;font-size:8.8px;">{basis_txt}{shk_txt}</span></div><div class="dd-prob-stack"><div style="width:{scen_probs["bull"]}%;background:#10b981;"></div><div style="width:{scen_probs["range"]}%;background:#38bdf8;"></div><div style="width:{scen_probs["fade"]}%;background:#f59e0b;"></div><div style="width:{scen_probs["bear"]}%;background:#ef4444;"></div></div><div class="dd-prob-legend"><div style="color:#6ee7b7;">● 上振れ突破 <b>{scen_probs["bull"]:.1f}%</b></div><div style="color:#7dd3fc;">● 標準レンジ <b>{scen_probs["range"]:.1f}%</b></div><div style="color:#fde047;">● 窓埋め反転 <b>{scen_probs["fade"]:.1f}%</b></div><div style="color:#fca5a5;">● 下振れ崩壊 <b>{scen_probs["bear"]:.1f}%</b></div></div></div>', unsafe_allow_html=True)
 
             if pc_cockpit:
                 left_col, right_col = st.columns([1.85, 1.0], gap="medium")
@@ -4308,7 +4343,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         we_out = traj["weights_evolution"]
         dd_result = {
             "full_code": fc, "style": in_style, "comp_score": int(comp_score), "meter_lbl": str(meter_lbl), "mkt_regime": mkt_regime, "expansion_regime": exp_reg, "mtf_alignment": mtf_res, "pro_ref_levels": ref_levels,
-            "ev_pulse": ev_pulse, "lead_lag_canary": canary_res, "lvn_zones": lvn_zones,
+            "ev_pulse": ev_pulse, "lead_lag_canary": canary_res, "lvn_zones": lvn_zones, "open_anchor_info": open_anchor_info,
             "fusion_score": float(fusion["fusion_score"]) if fusion.get("has_lab") else float(comp_score), "sync_state": str(fusion["sync_state"]) if fusion.get("has_lab") else "単体解析",
             "fusion_entry_px": float(fusion["fusion_entry_px"]) if fusion.get("has_lab") else float(active_dip_px), "fusion_half_r_px": float(fusion["fusion_half_r_px"]) if fusion.get("has_lab") else float(curr_px),
             "fusion_tp_px": float(fusion["fusion_tp_px"]) if fusion.get("has_lab") else float(active_bull_tgt), "fusion_sl_px": float(fusion["fusion_sl_px"]) if fusion.get("has_lab") else float(active_bear_trig),
@@ -4340,14 +4375,37 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
         _dd_db_set("shared_ticker_intel", db_shared)
 
     def _send_non_destructive_patch(snap: dict):
-        """15s自動更新時の2回目以降：DOM・フルスクリーンを一切破棄せず既存チャート＆親DOMへ最新値のみ注入"""
+        """10s自動更新時の2回目以降：DOM・フルスクリーンを一切破棄せず既存チャートと親画面主要数値のみ注入"""
         traj = snap["traj"]
         curr_px = float(snap["curr_px"])
         chg_pct = float(snap["chg_pct"])
         short_3way = snap["short_3way"]
         z1 = snap["z1_pay"]
+        evp = snap["ev_pulse"]
         sel_tf = st.session_state.get("dd_tf_mode", "5分足(1日全体)")
         use_1m = bool(sel_tf == "1分足(直近90分ズーム)" and z1.get("valid"))
+        chart_mode_now = st.session_state.get("dd_chart_mode", "⚡ 両方重ね")
+
+        aura_c = "#10b981" if snap["active_close_chg"] >= 0 else "#ef4444"
+        chg_c = "#10b981" if chg_pct >= 0 else "#ef4444"
+        ev_c = evp["color"]
+        ed_sgn = "+" if evp["edge_pct"] >= 0 else ""
+
+        dom_updates = {
+            "dd-live-px": {"text": _fmt_cur(curr_px, is_jp)},
+            "dd-live-chg": {"text": f"{chg_pct:+.2f}%", "color": chg_c},
+            "dd-live-close": {"text": f"{_fmt_cur(snap['active_close_px'], is_jp)} ({snap['active_close_chg']:+.2f}%)", "color": aura_c},
+            "dd-hero-card": {"borderColor": aura_c},
+            "dd-ev-card": {"borderColor": ev_c},
+            "dd-ev-st": {"text": evp["status"], "color": ev_c},
+            "dd-ev-fpt": {"text": f"{evp['tb_fpt']:.1f}%", "color": ev_c},
+            "dd-ev-bewr": {"text": f"{evp['be_wr']:.1f}%"},
+            "dd-ev-rr": {"text": f"1:{evp['rr']:.2f}"},
+            "dd-ev-edge": {"text": f"{ed_sgn}{evp['edge_pct']:.1f}%", "color": ev_c},
+            "dd-3w-up": {"text": f"▲上昇 {z1['p_up'] if use_1m else short_3way['p_up']}%"},
+            "dd-3w-fl": {"text": f"▶横ばい {z1['p_flat'] if use_1m else short_3way['p_flat']}%"},
+            "dd-3w-dn": {"text": f"▼下落 {z1['p_down'] if use_1m else short_3way['p_down']}%"},
+        }
 
         alert_payload = {
             "symbol": short_code, "curr_px": curr_px, "is_long": snap["ev_is_long"],
@@ -4356,16 +4414,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             "half_r": snap["fusion"]["fusion_half_r_px"] if snap["fusion"].get("has_lab") else round((curr_px + snap["ev_tp_ref"]) * 0.5, 2),
             "tp": snap["ev_tp_ref"], "sl": snap["ev_sl_ref"], "cvd_state": traj["cvd_div"].get("state", "NEUTRAL"), "exp_dir": snap["exp_dir"],
         }
-
-        dom_patch = {"texts": {}, "styles": {}, "classes": {}}
-
-        evp = snap["ev_pulse"]
-        dom_patch["styles"]["dd-ev-wrap"] = {"borderLeftColor": evp["color"]}
-        dom_patch["texts"]["dd-ev-status"] = {"text": evp["status"], "color": evp["color"]}
-        dom_patch["texts"]["dd-ev-tbfpt"] = {"text": f"{evp['tb_fpt']:.1f}%", "color": evp["color"]}
-        dom_patch["texts"]["dd-ev-bewr"] = {"text": f"{evp['be_wr']:.1f}%"}
-        dom_patch["texts"]["dd-ev-rr"] = {"text": f"1:{evp['rr']:.2f}"}
-        dom_patch["texts"]["dd-ev-edge"] = {"text": f"{'+' if evp['edge_pct'] >= 0 else ''}{evp['edge_pct']:.1f}%", "color": evp["color"]}
 
         pos_ctx = {"active": False}
         if st.session_state.get(f"dd_pos_active_{fc}", False):
@@ -4377,27 +4425,6 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
             sd = str(st.session_state.get(f"dd_pos_side_{fc}", def_side) or def_side)
             pm = _compute_position_metrics(curr_px, ep, sh, sl, sd, snap["cur_vwap_now"], z1.get("last_ema9") if z1.get("valid") else None)
             pos_ctx = {"active": True, "side": pm["side"], "entry": pm["entry"], "shares": pm["shares"], "sl": pm["init_sl"], "trail_sl": pm["trail_sl"]}
-
-            dom_patch["classes"]["dd-pos-hud-wrap"] = "dd-pos-hud loss" if pm["pnl"] < 0 else "dd-pos-hud"
-            dom_patch["texts"]["dd-pos-badge"] = {"text": pm["status_badge"], "color": pm["badge_col"]}
-            dom_patch["texts"]["dd-pos-pnl"] = {"text": f"{'+' if pm['pnl'] >= 0 else ''}{_fmt_cur(pm['pnl'], is_jp)} ({pm['pnl_pct']:+.2f}%)", "color": "#10b981" if pm["pnl"] >= 0 else "#ef4444"}
-            dom_patch["texts"]["dd-pos-rmult"] = {"text": f"{pm['r_mult']:+.2f}R", "color": "#fde047" if pm["r_mult"] >= 1.0 else ("#10b981" if pm["r_mult"] >= 0 else "#ef4444")}
-            dom_patch["texts"]["dd-pos-sldist"] = {"text": f"{pm['sl_dist_pct']:+.2f}%"}
-            dom_patch["texts"]["dd-pos-trailsl"] = {"text": _fmt_cur(pm["trail_sl"], is_jp)}
-            dom_patch["texts"]["dd-pos-remloss"] = {"text": _fmt_cur(pm["rem_loss"], is_jp)}
-            dom_patch["texts"]["dd-pos-trailnote"] = {"text": pm["trail_note"]}
-
-        mtf_p = snap["mtf_res"]
-        for tf, _, ar, c in mtf_p["items"]:
-            dom_patch["styles"][f"dd-mtf-led-{tf}"] = {"color": c}
-            dom_patch["styles"][f"dd-mtf-dot-{tf}"] = {"background": c}
-            dom_patch["texts"][f"dd-mtf-txt-{tf}"] = {"text": f"{tf} {ar}"}
-        dom_patch["texts"]["dd-mtf-sum"] = {"text": mtf_p["summary"], "color": mtf_p["color"]}
-
-        sp = snap["scen_probs"]
-        for k in ("bull", "range", "fade", "bear"):
-            dom_patch["styles"][f"dd-prob-bar-{k}"] = {"width": f"{sp[k]}%"}
-            dom_patch["texts"][f"dd-prob-val-{k}"] = {"text": f"{sp[k]:.1f}%"}
 
         if use_1m:
             s_map = {
@@ -4416,7 +4443,7 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 "横ばい分岐": f"▶ {z1['p_flat']}%",
                 "下落分岐": f"▼ {z1['p_down']}%",
             }
-            _dispatch_live_patch(f"dd_1m_{fc}", {"curr_px": curr_px, "chg_pct": chg_pct, "x_times": z1["times"], "series_map": s_map, "end_labels": el_map, "pos_ctx": pos_ctx, "alert_ctx": alert_payload, "dom_patch": dom_patch})
+            _dispatch_live_patch(f"dd_1m_{fc}", {"curr_px": curr_px, "chg_pct": chg_pct, "x_times": z1["times"], "series_map": s_map, "end_labels": el_map, "pos_ctx": pos_ctx, "alert_ctx": alert_payload, "dom_updates": dom_updates})
         else:
             la_i = snap["la_idx"]
             rpts = [{"name": "押目", "value": [snap["active_dip_time"], snap["active_dip_px"]], "itemStyle": {"color": "#10b981"}}, {"name": "高値", "value": [snap["active_peak_time"], snap["active_peak_px"]], "itemStyle": {"color": "#f43f5e"}}]
@@ -4426,9 +4453,18 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 rpts.append({"name": traj["cvd_div"]["marker"]["name"], "value": [traj["cvd_div"]["marker"]["time"], traj["cvd_div"]["marker"]["price"]], "itemStyle": {"color": traj["cvd_div"]["marker"]["color"]}})
             vbars = [{"value": 0, "itemStyle": {"color": "transparent"}} if vi is None else {"value": vi, "itemStyle": {"color": "rgba(16,185,129,.52)" if di > 0 else "rgba(239,68,68,.52)"}} for vi, di in zip(traj["actual_vols"], traj["actual_dirs"])]
 
+            ilv_fan = chart_mode_now in ("🔴 ライブ修正", "⚡ 両方重ね") and traj["has_actual"]
+            f_c15, f_cbd, f_c32, f_cbdi = (snap["disp_live_p15"], snap["disp_live_bdiff"], snap["disp_live_p32"], snap["disp_live_bdiff_in"]) if ilv_fan else (snap["disp_locked_p15"], snap["disp_locked_bdiff"], snap["disp_locked_p32"], snap["disp_locked_bdiff_in"])
+
             s_map = {
                 "当日実測": traj["actual"],
                 "ライブ修正": snap["disp_live_p50"],
+                "朝ロック": snap["disp_locked_p50"],
+                "朝ロック(無効化済)": snap["disp_locked_p50"],
+                "outer_base": f_c15,
+                "10-90%分位帯": f_cbd,
+                "inner_base": f_c32,
+                "コア帯": f_cbdi,
                 "VWAP": traj["vwap"],
                 "VWAP+1σ": traj["vwap_p1"],
                 "VWAP-1σ": traj["vwap_m1"],
@@ -4446,19 +4482,19 @@ def render_deep_dive_page(init_code: str = "NVDA", init_style: str = "デイト�
                 "横ばい分岐": f"▶ {short_3way['p_flat']}%",
                 "下落分岐": f"▼ {short_3way['p_down']}%",
             }
-            _dispatch_live_patch(f"dd_5m_{fc}", {"curr_px": curr_px, "chg_pct": chg_pct, "series_map": s_map, "end_labels": el_map, "pos_ctx": pos_ctx, "alert_ctx": alert_payload, "dom_patch": dom_patch})
+            _dispatch_live_patch(f"dd_5m_{fc}", {"curr_px": curr_px, "chg_pct": chg_pct, "series_map": s_map, "end_labels": el_map, "pos_ctx": pos_ctx, "alert_ctx": alert_payload, "dom_updates": dom_updates})
 
-    # 初回フル描画 ＋ 15秒自動更新時は非破壊差分パッチ送信（フルスクリーン・画面維持）
-    snap_init = _compute_live_snapshot()
+    # 初回フル描画 ＋ 10秒自動更新時は非破壊差分パッチ送信（フルスクリーン・画面維持）
+    snap_init = _compute_live_snapshot(is_patch_tick=False)
     _render_full_ui(snap_init)
 
     if hasattr(st, "fragment") and auto_sync:
-        @st.fragment(run_every="15s")
+        @st.fragment(run_every="10s")
         def _live_patch_runner():
             runs = int(st.session_state.get(frag_run_key, 0)) + 1
             st.session_state[frag_run_key] = runs
             if runs <= 1:
                 return
-            snap_tick = _compute_live_snapshot()
+            snap_tick = _compute_live_snapshot(is_patch_tick=True)
             _send_non_destructive_patch(snap_tick)
         _live_patch_runner()
