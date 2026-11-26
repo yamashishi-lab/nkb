@@ -9,7 +9,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from email.mime.text import MIMEText
 from email.utils import parsedate_to_datetime
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+JST = timezone(timedelta(hours=9))
+def now_jst() -> datetime:
+    return datetime.now(JST)
 
 _ERROR_LOCK, _IN_ERROR_LOGGING, _FALLBACK_ERROR_LOGS, MAX_ERROR_LOGS = threading.RLock(), threading.local(), [], 300
 
@@ -17,7 +21,7 @@ def record_system_error(mod: str, err: Exception, ctx: str = ""):
     if getattr(_IN_ERROR_LOGGING, "active", False): return
     _IN_ERROR_LOGGING.active = True
     try:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = now_jst().strftime("%Y-%m-%d %H:%M:%S")
         e = {"id": hashlib.md5(f"{now}_{mod}_{err}_{time.time_ns()}".encode()).hexdigest()[:8], "time": now, "module": mod, "error_type": type(err).__name__, "message": str(err), "context": ctx, "traceback": traceback.format_exc()}
         with _ERROR_LOCK:
             _FALLBACK_ERROR_LOGS.insert(0, e); del _FALLBACK_ERROR_LOGS[MAX_ERROR_LOGS:]
@@ -68,8 +72,8 @@ def _safe_get_env_or_secret(k: str) -> str:
     return ""
 
 SECRET_KEY = _get_sec_val("SECRET_KEY", ".yamashishi_sys_seed.key", lambda: hashlib.sha3_512(f"{secrets.token_hex(64)}:{time.time_ns()}".encode()).hexdigest())
-ADMIN_EMAIL = (_safe_get_env_or_secret("ADMIN_EMAIL") or "nthbh399@ybb.ne.jp").strip().lower()
-ADMIN_PASS = _get_sec_val("ADMIN_PASS", ".yamashishi_cred.lock", lambda: "ADMIN777").strip()
+ADMIN_EMAIL = _safe_get_env_or_secret("ADMIN_EMAIL").strip().lower()
+ADMIN_PASS = (_safe_get_env_or_secret("ADMIN_PASS") or secrets.token_hex(16)).strip()
 DB_SQLITE_PATH = "yamashishi_core.db"
 
 def _get_supabase_config() -> tuple:
@@ -374,7 +378,7 @@ def fmt_px(val: float, is_jp: bool, full_code: str = "") -> str:
     return f"{r_val:,.1f}円" if r_val % 1 != 0 else f"{int(r_val):,}円"
 
 def get_tse_session_regime() -> dict:
-    now_dt = datetime.now()
+    now_dt = now_jst()
     if now_dt.weekday() >= 5: return {"label": "休場（週末）：翌営業日シナリオ準備期", "advice": "休場中のため、先物・SOX動向と前日VWAP・日足MA25・週足10年POCを確認し、翌朝9:05以降の確定足待ち指値シナリオを準備してください。"}
     mins = now_dt.hour * 60 + now_dt.minute
     if 9 * 60 <= mins < 9 * 60 + 30: return {"label": "初動ORB期 (9:00-9:30)", "advice": "寄付き直後の乱高下に飛びつかず、9:05以降の初動レンジ(OR15)と平均約定価格(VWAP)への押し目引きつけを確認してから執行してください。"}
@@ -565,8 +569,8 @@ def load_mem():
     db = db_get("mem", {})
     if not isinstance(db, dict): db = {}
     adm = ADMIN_EMAIL.strip().lower()
-    if adm not in db:
-        ns = datetime.now().strftime("%Y-%m-%d %H:%M")
+    if adm and adm not in db:
+        ns = now_jst().strftime("%Y-%m-%d %H:%M")
         db[adm] = {"name": "管理者", "email": adm, "status": "approved", "passcode": gen_code(adm), "pin_hash": hash_pin("0000", adm), "applied_at": ns, "approved_at": ns, "last_seen_ts": 0, "last_seen_str": "-", "fp": "-", "bio_enabled": False, "deep_dive_status": "approved", "deep_dive_allowed": True}
         db_set("mem", db)
     return db
@@ -616,7 +620,7 @@ def sync_lab_intel_to_shared(r: dict, council_turns: list = None, rel_news_list:
     fc = str(r["full_code"]).strip().upper()
     intel_map = load_shared_ticker_intel()
     prev = intel_map.get(fc) if isinstance(intel_map.get(fc), dict) else {}
-    now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_s = now_jst().strftime("%Y-%m-%d %H:%M:%S")
     existing_dd_res = prev.get("dd_result") if isinstance(prev.get("dd_result"), dict) else None
     existing_dd_ts = str(prev.get("dd_updated_at") or "")
     entry = {
@@ -650,7 +654,7 @@ def sync_dd_intel_from_session(fc: str):
         updated_dd = dd_in_hub
     if updated_dd is not None:
         prev["dd_result"] = updated_dd
-        prev["dd_updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        prev["dd_updated_at"] = now_jst().strftime("%Y-%m-%d %H:%M:%S")
         intel_map[fc_u] = prev
         st.session_state["shared_ticker_intel"] = intel_map
         db_set("shared_ticker_intel", intel_map)
@@ -681,7 +685,7 @@ def load_quant_auditors() -> dict:
 
 def check_and_log_ban_spoof(em: str, nm: str, cfp: str, rhfp: str, p_h: str = "", act: str = "アクセス") -> tuple:
     em_c = em.strip().lower()
-    if em_c == ADMIN_EMAIL.strip().lower(): return False, ""
+    if ADMIN_EMAIL and em_c == ADMIN_EMAIL.strip().lower(): return False, ""
     sec, db = load_sec(), load_mem()
     bf, be, bp, urec = sec.get("banned_fps", {}), sec.get("banned_emails", {}), sec.get("banned_pins", {}), db.get(em_c, {})
     rs, tgt = [], ""
@@ -690,7 +694,7 @@ def check_and_log_ban_spoof(em: str, nm: str, cfp: str, rhfp: str, p_h: str = ""
     if rhfp and rhfp != "-" and rhfp in bf: rs.append(f"永久BAN環境ヘッダハッシュ(HFP:{rhfp})一致"); tgt = tgt or bf[rhfp].get("email", "不明")
     if p_h and p_h in bp and em_c != bp[p_h]: rs.append(f"永久BAN会員({bp[p_h]})と同一PINハッシュ一致"); tgt = tgt or bp[p_h]
     if rs:
-        now, r_str, is_sp = datetime.now().strftime("%Y-%m-%d %H:%M:%S"), " / ".join(rs), bool(tgt and em_c and em_c != tgt)
+        now, r_str, is_sp = now_jst().strftime("%Y-%m-%d %H:%M:%S"), " / ".join(rs), bool(tgt and em_c and em_c != tgt)
         log = {"time": now, "action": f"🚨 なりすまし{act}検知（※HTTPヘッダー環境ハッシュ＆日次HMACトークン照合）" if is_sp else f"🚫 永久BAN遮断({act})", "input_email": em_c or "未入力", "input_name": nm.strip() or urec.get("name", "不明"), "orig_banned_email": tgt or em_c, "fp": cfp, "raw_hfp": rhfp, "reason": r_str}
         logs = sec.get("spoof_logs", [])
         if not logs or logs[0].get("input_email") != log["input_email"] or logs[0].get("action") != log["action"] or (logs[0].get("time", "")[:16] != now[:16]):
@@ -703,7 +707,7 @@ def check_and_log_ban_spoof(em: str, nm: str, cfp: str, rhfp: str, p_h: str = ""
     return False, ""
 
 def send_mail(to_em: str, subj: str, body: str, cat: str = "自動通知") -> bool:
-    to_c, now, route, c = to_em.strip().lower(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "アプリ内暗号化メールBOX", load_smtp()
+    to_c, now, route, c = to_em.strip().lower(), now_jst().strftime("%Y-%m-%d %H:%M:%S"), "アプリ内暗号化メールBOX", load_smtp()
     u, p, srv, port = c.get("smtp_user", "").strip(), c.get("smtp_pass", "").strip(), c.get("smtp_server", "").strip(), int(c.get("smtp_port", 465))
     if u and p:
         try:
@@ -827,7 +831,7 @@ def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tup
 def register_biometric_device_db(user_email: str, bio_token: str = ""):
     em_c = user_email.strip().lower()
     if not em_c: return
-    db, sec, rhfp, cfp, now_ts, now_str = load_mem(), load_sec(), get_raw_header_fp(), get_client_fp(), int(time.time()), datetime.now().strftime("%Y-%m-%d %H:%M")
+    db, sec, rhfp, cfp, now_ts, now_str = load_mem(), load_sec(), get_raw_header_fp(), get_client_fp(), int(time.time()), now_jst().strftime("%Y-%m-%d %H:%M")
     tok = bio_token or gen_tok(em_c, "session_keep")
     if em_c in db: db[em_c].update({"bio_enabled": True, "fp": cfp, "raw_hfp": rhfp, "last_seen_ts": now_ts, "last_seen_str": now_str}); db_set("mem", db)
     dev_entry = {"email": em_c, "token": tok, "fp": cfp, "raw_hfp": rhfp, "updated_ts": now_ts}
@@ -851,9 +855,9 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
             is_b, _ = check_and_log_ban_spoof(tem, urec.get("name", ""), cfp, rhfp, urec.get("pin_hash", ""), "ワンタップログイン")
             if is_b or urec.get("status") == "banned": st.error("💀 このアカウントまたは端末は永久BAN（アクセス禁止）されています。")
             elif urec.get("status") == "suspended": st.error("🚫 アカウント一時停止中です。")
-            elif (cfp in sec.get("banned_fps", {}) or rhfp in sec.get("banned_fps", {})) and tem != ADMIN_EMAIL.strip().lower(): st.error("🚫 端末制限中です。")
+            elif (cfp in sec.get("banned_fps", {}) or rhfp in sec.get("banned_fps", {})) and (not ADMIN_EMAIL or tem != ADMIN_EMAIL.strip().lower()): st.error("🚫 端末制限中です。")
             elif not fp_matched or not tok_valid: st.warning("⚠️ 端末トークンの有効期限切れ、またはHTTPヘッダー環境ハッシュが一致しません。下のフォームから専用コードで再認証してください。")
-            elif (urec and urec.get("status") == "approved" and urec.get("bio_enabled")) or tem == ADMIN_EMAIL.strip().lower():
+            elif (urec and urec.get("status") == "approved" and urec.get("bio_enabled")) or (ADMIN_EMAIL and tem == ADMIN_EMAIL.strip().lower()):
                 kt = gen_tok(tem, "session_keep"); register_biometric_device_db(tem, kt)
                 st.session_state["authenticated_user"] = tem; st.query_params["u"], st.query_params["t"] = tem, kt; st.rerun()
             else: st.warning("⚠️ この端末は未登録です。初回は下のフォームから専用コードでログインしてください。")
@@ -949,11 +953,12 @@ def check_auth():
     qu, qt = st.query_params.get("u", "").strip().lower(), st.query_params.get("t", "").strip()
     if "authenticated_user" not in st.session_state: st.session_state["authenticated_user"] = None
     db, cfp, rhfp = load_mem(), get_client_fp(), get_raw_header_fp()
+    adm_c = ADMIN_EMAIL.strip().lower()
     if not st.session_state["authenticated_user"] and qu and qt:
-        if hmac.compare_digest(qt, gen_tok(qu, "session_keep")) and ((db.get(qu) and db[qu].get("status") == "approved") or qu == ADMIN_EMAIL.strip().lower()): st.session_state["authenticated_user"] = qu
+        if hmac.compare_digest(qt, gen_tok(qu, "session_keep")) and ((db.get(qu) and db[qu].get("status") == "approved") or (adm_c and qu == adm_c)): st.session_state["authenticated_user"] = qu
     if st.session_state["authenticated_user"]:
         cu = st.session_state["authenticated_user"]; urec = db.get(cu, {})
-        if cu != ADMIN_EMAIL.strip().lower():
+        if not adm_c or cu != adm_c:
             is_b, _ = check_and_log_ban_spoof(cu, urec.get("name", ""), cfp, rhfp, urec.get("pin_hash", ""), "セッション維持")
             if is_b or urec.get("status") == "banned": st.session_state["authenticated_user"] = None; st.query_params.clear(); st.error("💀 このアカウントまたは端末は永久BANされています。"); st.stop()
             if not urec or urec.get("status") != "approved": st.session_state["authenticated_user"] = None; st.query_params.clear(); st.error("🚫 アカウント一時停止中、または削除されています。"); st.stop()
@@ -968,8 +973,10 @@ def check_auth():
         with st.form("login"):
             ie, ic = st.text_input("📧 登録メールアドレス", placeholder="your@email.com"), st.text_input("🔑 専用アクセスコード", type="password", placeholder="8桁の専用コード")
             if st.form_submit_button("🔓 認証してターミナルを起動", use_container_width=True):
-                cm, adm_c = ie.strip().lower(), ADMIN_EMAIL.strip().lower(); rec = db.get(cm)
-                if (rec and rec.get("status") == "approved" or cm == adm_c) and ((cm == adm_c and hmac.compare_digest(ic.strip(), ADMIN_PASS)) or (rec and rec.get("status") == "approved" and hmac.compare_digest(ic.strip().upper(), gen_code(cm)))):
+                cm = ie.strip().lower(); rec = db.get(cm)
+                is_admin_match = bool(adm_c and cm == adm_c and hmac.compare_digest(ic.strip(), ADMIN_PASS))
+                is_member_match = bool(rec and rec.get("status") == "approved" and hmac.compare_digest(ic.strip().upper(), gen_code(cm)))
+                if is_admin_match or is_member_match:
                     kt = gen_tok(cm, "session_keep"); register_biometric_device_db(cm, kt); st.session_state["authenticated_user"] = cm; st.query_params["u"], st.query_params["t"] = cm, kt; st.rerun()
                 else: st.warning("⚠️ 未承認または専用アクセスコードが異なります。")
     with tab_apply:
@@ -979,7 +986,7 @@ def check_auth():
             if st.form_submit_button("📨 セキュア会員登録を申請する", use_container_width=True):
                 if "@" not in am or len(apin.strip()) < 4 or not apin.strip().isdigit(): st.warning("⚠️ 正しいメールアドレスと数字4桁の暗証番号(PIN)を入力してください。")
                 else:
-                    cm, ns = am.strip().lower(), datetime.now().strftime("%Y-%m-%d %H:%M"); nm, ph = an.strip() or "未入力", hash_pin(apin, cm)
+                    cm, ns = am.strip().lower(), now_jst().strftime("%Y-%m-%d %H:%M"); nm, ph = an.strip() or "未入力", hash_pin(apin, cm)
                     is_b, _ = check_and_log_ban_spoof(cm, nm, cfp, rhfp, ph, "新規登録申請")
                     if is_b or (db.get(cm) and db[cm].get("status") == "banned"): st.error("💀 セキュリティ監視システムにより、申請は永久ブロックされました。")
                     else:
@@ -1004,7 +1011,6 @@ def check_auth():
     st.stop()
 
 check_auth()
-
 saved_agents = load_quant_auditors()
 cu_active = st.session_state.get("authenticated_user", "")
 user_saved_prefs, user_saved_watchlist = load_user_prefs(cu_active), load_watchlist(cu_active)
@@ -1154,7 +1160,8 @@ def render_user_manual_page():
 
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
-    is_admin_user = (cu == ADMIN_EMAIL.strip().lower())
+    adm_c_sb = ADMIN_EMAIL.strip().lower()
+    is_admin_user = bool(adm_c_sb and cu == adm_c_sb)
     if cu:
         role_badge = "👑 MASTER ADMIN" if is_admin_user else "⚛️ MEMBER SESSION ACTIVE"
         st.markdown(f'<div class="sidebar-section-card"><div class="sidebar-header-badge">{role_badge}</div><div style="color:#f8fafc;font-size:12px;font-weight:700;">会員: {html.escape(cu)}</div></div>', unsafe_allow_html=True)
@@ -1207,7 +1214,8 @@ if st.session_state.get("navigation_page") == "DEEP_DIVE":
     db_dd = load_mem()
     u_dd = db_dd.get(cu_dd, {})
     dd_st = u_dd.get("deep_dive_status", "approved" if u_dd.get("deep_dive_allowed") else "none")
-    is_dd_ok = (cu_dd == ADMIN_EMAIL.strip().lower()) or (dd_st == "approved")
+    adm_c_dd = ADMIN_EMAIL.strip().lower()
+    is_dd_ok = bool(adm_c_dd and cu_dd == adm_c_dd) or (dd_st == "approved")
 
     if not is_dd_ok:
         st.markdown(
@@ -1225,7 +1233,7 @@ if st.session_state.get("navigation_page") == "DEEP_DIVE":
             if st.button("📩 管理者へディープサーチ利用権限を申請する", use_container_width=True, type="primary"):
                 if cu_dd in db_dd:
                     db_dd[cu_dd]["deep_dive_status"] = "pending"
-                    db_dd[cu_dd]["deep_dive_applied_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    db_dd[cu_dd]["deep_dive_applied_at"] = now_jst().strftime("%Y-%m-%d %H:%M")
                     db_set("mem", db_dd)
                     st.success("✅ 利用権限を申請しました！管理者の承認をお待ちください。")
                     st.rerun()
@@ -1246,7 +1254,8 @@ if st.session_state.get("navigation_page") == "DEEP_DIVE":
     sync_dd_intel_from_session(dd_tgt_fc)
     st.stop()
 
-if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.strip().lower():
+adm_c_page = ADMIN_EMAIL.strip().lower()
+if st.session_state.get("navigation_page") == "ADMIN" and adm_c_page and cu == adm_c_page:
     st.markdown("### 👑 統合管理コントロールセンター (MASTER TERMINAL)")
     if st.button("⬅️ メイン画面に戻る", use_container_width=True, type="primary"):
         st.session_state["navigation_page"] = "TOP"; st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000); st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
@@ -1296,7 +1305,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
         db_m, sec_m = load_mem(), load_sec()
         rows = ""
         for em, u in list(db_m.items())[:200]:
-            dd_ok_u = (em == ADMIN_EMAIL.strip().lower()) or (u.get("deep_dive_status") == "approved") or bool(u.get("deep_dive_allowed", False))
+            dd_ok_u = (adm_c_page and em == adm_c_page) or (u.get("deep_dive_status") == "approved") or bool(u.get("deep_dive_allowed", False))
             dd_lbl = "<span style='color:#10b981;font-weight:800;'>🔥 許可済</span>" if dd_ok_u else ("<span style='color:#fde047;font-weight:800;'>⏳ 申請中</span>" if u.get("deep_dive_status") == "pending" else "<span style='color:#64748b;'>🔒 未許可</span>")
             rows += f"<tr><td><b>{html.escape(u.get('name',''))}</b></td><td>{html.escape(em)}</td><td style='color:#38bdf8;font-family:monospace;'>{html.escape(u.get('passcode','-'))}</td><td>{dd_lbl}</td><td style='color:#fde047;font-family:monospace;'>{html.escape(u.get('fp','-'))}</td><td>{html.escape(u.get('applied_at','-'))}</td><td><span style='color:{'#10b981' if u.get('status')=='approved' else ('#ef4444' if u.get('status')=='banned' else '#f59e0b')}'><b>{html.escape(u.get('status',''))}</b></span></td></tr>"
         st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>お名前</th><th>メールアドレス</th><th>専用パスコード</th><th>DD権限</th><th>環境ハッシュ(FP)</th><th>登録日</th><th>状態</th></tr></thead><tbody>{rows}</tbody></table></div>', unsafe_allow_html=True)
@@ -1306,13 +1315,13 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
             s_rows = "".join([f"<tr><td>{html.escape(sl.get('time','-'))}</td><td>{html.escape(sl.get('action','-'))}</td><td>{html.escape(sl.get('input_email','-'))}</td><td style='font-family:monospace;color:#fde047;'>{html.escape(sl.get('fp','-'))}</td><td>{html.escape(sl.get('reason','-'))}</td></tr>" for sl in spoof_logs[:30]])
             st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>日時</th><th>検知種別（※HTTPヘッダー環境ハッシュ＆日次HMACトークン照合）</th><th>入力メール</th><th>環境ハッシュ(FP)</th><th>詳細理由</th></tr></thead><tbody>{s_rows}</tbody></table></div>', unsafe_allow_html=True)
         target_em = st.selectbox("操作対象会員を選択", list(db_m.keys()))
-        if target_em and target_em != ADMIN_EMAIL.strip().lower():
+        if target_em and (not adm_c_page or target_em != adm_c_page):
             u_status = db_m[target_em].get("status", ""); b1, b2, b3, b4 = st.columns(4)
             if u_status == "approved":
                 if b1.button("⏸️ 一時停止", use_container_width=True): db_m[target_em]["status"] = "suspended"; db_set("mem", db_m); st.rerun()
             elif b1.button("▶️ 利用再開", use_container_width=True): db_m[target_em]["status"] = "approved"; db_set("mem", db_m); st.rerun()
             if b2.button("🚫 永久BAN", use_container_width=True):
-                db_m[target_em]["status"] = "banned"; now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                db_m[target_em]["status"] = "banned"; now_s = now_jst().strftime("%Y-%m-%d %H:%M:%S")
                 for f_k in ("fp", "raw_hfp"):
                     val = db_m[target_em].get(f_k)
                     if val and val != "-": sec_m.setdefault("banned_fps", {})[val] = {"email": target_em, "banned_at": now_s, "reason": "管理者強制永久BAN（※HTTPヘッダー環境ハッシュ＆日次HMACトークン照合）"}
@@ -1339,7 +1348,7 @@ if st.session_state.get("navigation_page") == "ADMIN" and cu == ADMIN_EMAIL.stri
                 st.markdown(f'<div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 14px;margin-bottom:8px;"><b>{html.escape(pu.get("name","未入力"))}</b> ({html.escape(pem)})</div>', unsafe_allow_html=True)
                 cb1, cb2 = st.columns([1, 1])
                 if cb1.button(f"✅ 承認 ({pu.get('name','')})", key=f"appr_{pem}", use_container_width=True):
-                    db_all[pem]["status"], db_all[pem]["approved_at"] = "approved", datetime.now().strftime("%Y-%m-%d %H:%M"); db_set("mem", db_all)
+                    db_all[pem]["status"], db_all[pem]["approved_at"] = "approved", now_jst().strftime("%Y-%m-%d %H:%M"); db_set("mem", db_all)
                     send_mail(pem, "【YAMASHISHI LAB】会員登録承認", f"{pu.get('name','')} 様\n専用アクセスコードは【 {db_all[pem]['passcode']} 】です。"); st.rerun()
                 if cb2.button(f"🚫 却下 ({pu.get('name','')})", key=f"rej_{pem}", use_container_width=True): del db_all[pem]; db_set("mem", db_all); st.rerun()
         else: st.info("承認待ちの新規申請はありません。")
@@ -1597,7 +1606,7 @@ def fetch_single_news_rss(cat: str, q: str, stream_tag: str = "broad") -> list:
                 src_txt = (it.findtext("source") or ("Yahoo Finance US" if stream_tag == "us_semi" else "Market Wire")).strip()
                 if t:
                     extracted = [x[0] for x in _extract_tickers_from_text(f"{t} {desc}")]
-                    out.append({"id": hashlib.md5(f"{stream_tag}_{t}".encode()).hexdigest()[:8], "cat": cat, "title": t, "summary": desc, "link": it.findtext("link") or "https://jp.reuters.com/", "source": src_txt, "stream_tag": stream_tag, "age_hours": round(age_h, 1), "pub_date": (pub_raw or datetime.now().strftime("%Y-%m-%d %H:%M"))[:25], "extracted_codes": extracted, "impact_score": _compute_news_impact_score(t, desc, src_txt, age_h, stream_tag)})
+                    out.append({"id": hashlib.md5(f"{stream_tag}_{t}".encode()).hexdigest()[:8], "cat": cat, "title": t, "summary": desc, "link": it.findtext("link") or "https://jp.reuters.com/", "source": src_txt, "stream_tag": stream_tag, "age_hours": round(age_h, 1), "pub_date": (pub_raw or now_jst().strftime("%Y-%m-%d %H:%M"))[:25], "extracted_codes": extracted, "impact_score": _compute_news_impact_score(t, desc, src_txt, age_h, stream_tag)})
     except Exception as e: record_system_error(f"fetch_single_news_rss:{stream_tag}", e, f"Query: {q}")
     return out
 
@@ -1709,8 +1718,8 @@ def _resolve_dynamic_ipo_listing_info(full_code: str) -> dict:
     yf_first_open = float(df_max["Open"].iloc[0]) if (df_max is not None and not df_max.empty and float(df_max["Open"].iloc[0]) > 0) else None
     yf_first_dt = df_max.index[0].strftime("%Y-%m-%d") if (df_max is not None and not df_max.empty and hasattr(df_max.index[0], "strftime")) else ""
     if yf_first_open is not None:
-        return {"listing_date": yf_first_dt or datetime.now().strftime("%Y-%m-%d"), "offer_price": None, "initial_price": round(yf_first_open, 1), "lead_underwriter": "東証新規上場（実測履歴特定）", "absorption_scale": "市場データ自動検出", "note": "※公開価格は非公表/未登録のため初日始値を初値（実測）として表示"}
-    return {"listing_date": datetime.now().strftime("%Y-%m-%d"), "offer_price": None, "initial_price": None, "lead_underwriter": "東証グロース/新規発掘", "absorption_scale": "市場データ自動検出", "note": ""}
+        return {"listing_date": yf_first_dt or now_jst().strftime("%Y-%m-%d"), "offer_price": None, "initial_price": round(yf_first_open, 1), "lead_underwriter": "東証新規上場（実測履歴特定）", "absorption_scale": "市場データ自動検出", "note": "※公開価格は非公表/未登録のため初日始値を初値（実測）として表示"}
+    return {"listing_date": now_jst().strftime("%Y-%m-%d"), "offer_price": None, "initial_price": None, "lead_underwriter": "東証グロース/新規発掘", "absorption_scale": "市場データ自動検出", "note": ""}
 
 def _extract_ticker_df(raw_df, code: str, total_codes: int):
     if raw_df is None or raw_df.empty: return None
@@ -1733,7 +1742,7 @@ def fetch_real_ipo_growth_analysis() -> dict:
         if nm_k not in seen_up_names and len(combined_upcoming) < 6:
             seen_up_names.add(nm_k); combined_upcoming.append(dict(w_it))
 
-    today_tag = datetime.now().strftime("%d %b %Y")
+    today_tag = now_jst().strftime("%d %b %Y")
     def _enrich_upcoming_card(card_obj: dict) -> dict:
         hits = search_single_query(card_obj.get("query", f'"{card_obj["name"]}" IPO'), 6, trusted_only=False, max_age_hours=720.0)
         headline = re.sub(r"\(.*?\)|\[.*?\]", "", hits[0]).strip() if hits else card_obj.get("latest_headline", "上場準備・需給動向を継続モニタリング中")
@@ -1772,7 +1781,7 @@ def fetch_real_ipo_growth_analysis() -> dict:
     raw = None
     try: raw = yf.download(codes, period="1mo", interval="1d", group_by="ticker", threads=True, progress=False, timeout=10.0)
     except Exception as e: record_system_error("fetch_real_ipo_growth_analysis:download", e); raw = None
-    all_evaluated, today_dt = [], datetime.now()
+    all_evaluated, today_dt = [], now_jst().replace(tzinfo=None)
 
     def _analyze_ipo_item(item):
         c, name, mkt, theme = item
@@ -1829,7 +1838,6 @@ def fetch_real_ipo_growth_analysis() -> dict:
     survivors, eliminated = all_evaluated[:6], all_evaluated[6:]
     for idx, r in enumerate(survivors, 1): r["rank"] = idx
     return {"upcoming_ipos": upcoming_cards, "survivors": survivors, "eliminated": eliminated, "total_scanned": len(all_evaluated)}
-
 def search_web_knowledge_parallel(q1: str, q2: str) -> list:
     res = []
     with ThreadPoolExecutor(max_workers=2) as ex:
@@ -2086,7 +2094,7 @@ def fetch_earnings_days_left(full_code: str):
         elif hasattr(cal, "loc") and "Earnings Date" in cal.index:
             row = cal.loc["Earnings Date"]
             dates_found.extend(row.tolist() if hasattr(row, "tolist") else [row])
-        today_d = datetime.now().date()
+        today_d = now_jst().date()
         future_days = []
         for d_item in dates_found:
             if d_item is None: continue
@@ -2100,11 +2108,41 @@ def fetch_earnings_days_left(full_code: str):
     except Exception:
         return None
 
+def _is_market_open_now(is_jp: bool) -> bool:
+    now_dt = now_jst()
+    if is_jp:
+        if now_dt.weekday() >= 5: return False
+        mins = now_dt.hour * 60 + now_dt.minute
+        return (9 * 60) <= mins <= (15 * 60 + 30)
+    now_utc = datetime.now(timezone.utc)
+    if now_utc.weekday() >= 5: return False
+    utc_mins = now_utc.hour * 60 + now_utc.minute
+    return (13 * 60 + 30) <= utc_mins <= (21 * 60)
+
+def _u_curve_vol_factor(mins_jst: int) -> float:
+    if 9 * 60 <= mins_jst <= 9 * 60 + 30:
+        return 1.25
+    if 14 * 60 + 30 <= mins_jst <= 15 * 60 + 30:
+        return 1.25
+    if 10 * 60 + 30 <= mins_jst <= 14 * 60:
+        return 0.75
+    return 1.0
+
+def _apply_key_level_damping(px: float, ref_px: float, levels: list) -> float:
+    if px <= 0 or ref_px <= 0:
+        return px
+    res = px
+    for lv in levels:
+        if lv and lv > 0:
+            if abs(res - lv) / lv <= 0.003:
+                res = lv + (res - lv) * 0.65
+    return res
+
 def build_tomorrow_forecast_svg(r: dict) -> str:
     try:
         r_m = _merge_dd_intel_into_lab_item(r)
-        is_jp = ".T" in str(r_m.get("full_code", ""))
         fc = str(r_m.get("full_code", ""))
+        is_jp = ".T" in fc
         cv = float(r_m.get("raw_close", 0.0))
         tp = float(r_m.get("raw_tp", cv * 1.03))
         sl = float(r_m.get("raw_sl", cv * 0.985))
@@ -2112,112 +2150,189 @@ def build_tomorrow_forecast_svg(r: dict) -> str:
         is_short = (r_m.get("strat", {}).get("side") == "SHORT")
         if cv <= 0: return ""
 
+        d2y = r_m.get("daily_2y") or {}
+        daily_atr = float(d2y.get("daily_atr14", 0.0))
+        if daily_atr <= 0:
+            daily_atr = max(abs(tp - sl) * 0.65, cv * 0.015)
+
+        hvn_wall = float(d2y.get("hvn_wall_price", 0.0))
+        pdh_val = float(r_m.get("pdh", 0.0))
+        ob_sup = float(r_m.get("ob_support_px", 0.0))
+        key_levels = [x for x in (hvn_wall, pdh_val, ob_sup, vwap) if x and x > 0]
+
+        pgap = float(r_m.get("pts_gap_pct", 0.0))
+        if pgap >= 1.5:
+            gap_bias_mult = -0.35
+            gap_tag = f"GU+{pgap:.1f}%利食い押し目反映"
+        elif pgap <= -1.5:
+            gap_bias_mult = 0.35
+            gap_tag = f"GD{pgap:.1f}%自律反発戻り反映"
+        else:
+            gap_bias_mult = 0.0
+            gap_tag = f"GAP{pgap:+.1f}%"
+
+        is_live = _is_market_open_now(is_jp)
+        now_dt = now_jst()
+        cur_mins = now_dt.hour * 60 + now_dt.minute
+        u_now = _u_curve_vol_factor(cur_mins) if is_live else 1.0
+        live_tag = " ｜ 🟢 場中リアルタイム補正中" if is_live else ""
+
         has_dd = bool(r_m.get("has_dd_intel"))
         dd_i = r_m.get("dd_intel", {})
 
         if has_dd and float(dd_i.get("est_close_px", 0.0)) > 0:
-            dd_open = float(dd_i.get("est_open_px", cv)) or cv
-            dd_dip_px = float(dd_i.get("dip_px", 0.0)) or min(cv, vwap)
+            raw_open = float(dd_i.get("est_open_px", cv)) or cv
+            raw_dip = float(dd_i.get("dip_px", 0.0)) or min(cv, vwap)
             dd_dip_tm = str(dd_i.get("dip_time") or "押目")
-            dd_peak_px = float(dd_i.get("peak_px", 0.0)) or max(cv, tp)
+            raw_peak = float(dd_i.get("peak_px", 0.0)) or max(cv, tp)
             dd_peak_tm = str(dd_i.get("peak_time") or "高値")
-            dd_close = float(dd_i.get("est_close_px", cv))
-            s3 = dd_i.get("short_3way", {})
-            header_sub = (
-                f"⚡ DD連動: 30分3分岐 ▲{s3.get('p_up',33)}% / ▶{s3.get('p_flat',34)}% / ▼{s3.get('p_down',33)}% ｜ "
-                f"CVD: {html.escape(dd_i.get('cvd_label','-'))}"
-            )
+            raw_close_est = float(dd_i.get("est_close_px", cv))
+
+            anchor_shift = (cv - raw_open) if is_live else 0.0
+            dd_open = cv if is_live else raw_open
+            gap_shift_px = cv * (gap_bias_mult * 0.01) * _u_curve_vol_factor(9 * 60 + 15)
+
             if is_short:
+                dd_peak_px = _apply_key_level_damping(raw_peak + anchor_shift + gap_shift_px, cv, key_levels)
+                dd_dip_px = _apply_key_level_damping(raw_dip + anchor_shift * 0.7, cv, key_levels)
+                dd_close = _apply_key_level_damping(raw_close_est + anchor_shift * 0.5, cv, key_levels)
                 entry_pt = round_to_tse_tick(float(dd_i.get("fusion_entry_px") or dd_peak_px), fc, "nearest")
                 half_pt = round_to_tse_tick(float(dd_i.get("fusion_half_r_px") or (entry_pt - abs(sl - entry_pt))), fc, "floor")
-                all_p = [cv, dd_open, dd_peak_px, dd_dip_px, dd_close, entry_pt, half_pt, tp, sl]
-                p_min, p_max = min(all_p) * 0.996, max(all_p) * 1.004
-                span = max(p_max - p_min, 1e-4)
-                def to_y(val): return round(155.0 - ((val - p_min) / span) * 125.0, 1)
-                y_cur, y_op, y_pk, y_dp, y_cl = to_y(cv), to_y(dd_open), to_y(dd_peak_px), to_y(dd_dip_px), to_y(dd_close)
-                y_tp, y_sl, y_half = to_y(tp), to_y(sl), to_y(half_pt)
-                path_d = f"M 40 {y_cur} L 95 {y_op} Q 130 {y_pk}, 165 {y_pk} Q 215 {round((y_pk+y_dp)/2,1)}, 250 {y_dp} L 315 {y_cl}"
+                xs = [40.0, 95.0, 165.0, 250.0, 315.0]
+                ys_px = [cv, dd_open, dd_peak_px, dd_dip_px, dd_close]
+                u_weights = [0.15 * u_now, 1.25, 1.05, 0.85, 1.25]
                 entry_lbl = f"📉 戻り売り {dd_peak_tm} ({fmt_px(dd_peak_px, is_jp, fc)})"
                 path_col = "#fb7185"
-                mid_cx, mid_cy = 165, y_pk
+                mid_idx = 2
             else:
+                dd_dip_px = _apply_key_level_damping(raw_dip + anchor_shift + gap_shift_px, cv, key_levels)
+                dd_peak_px = _apply_key_level_damping(raw_peak + anchor_shift * 0.7, cv, key_levels)
+                dd_close = _apply_key_level_damping(raw_close_est + anchor_shift * 0.5, cv, key_levels)
                 entry_pt = round_to_tse_tick(float(dd_i.get("fusion_entry_px") or dd_dip_px), fc, "nearest")
                 half_pt = round_to_tse_tick(float(dd_i.get("fusion_half_r_px") or (entry_pt + abs(entry_pt - sl))), fc, "ceil")
-                all_p = [cv, dd_open, dd_dip_px, dd_peak_px, dd_close, entry_pt, half_pt, tp, sl]
-                p_min, p_max = min(all_p) * 0.996, max(all_p) * 1.004
-                span = max(p_max - p_min, 1e-4)
-                def to_y(val): return round(155.0 - ((val - p_min) / span) * 125.0, 1)
-                y_cur, y_op, y_dp, y_pk, y_cl = to_y(cv), to_y(dd_open), to_y(dd_dip_px), to_y(dd_peak_px), to_y(dd_close)
-                y_tp, y_sl, y_half = to_y(tp), to_y(sl), to_y(half_pt)
-                path_d = f"M 40 {y_cur} L 95 {y_op} Q 130 {y_dp}, 165 {y_dp} Q 215 {round((y_dp+y_pk)/2,1)}, 250 {y_pk} L 315 {y_cl}"
+                xs = [40.0, 95.0, 165.0, 250.0, 315.0]
+                ys_px = [cv, dd_open, dd_dip_px, dd_peak_px, dd_close]
+                u_weights = [0.15 * u_now, 1.25, 1.05, 0.85, 1.25]
                 entry_lbl = f"🛒 押目買い {dd_dip_tm} ({fmt_px(dd_dip_px, is_jp, fc)})"
                 path_col = "#34d399"
-                mid_cx, mid_cy = 165, y_dp
+                mid_idx = 2
 
-            return (
-                f'<div class="svg-chart-wrap" style="border-color:rgba(249,115,22,0.5);margin-top:8px;">'
-                f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;font-size:10.5px;font-weight:800;color:#fdba74;margin-bottom:4px;">'
-                f'<span>🗺️ LAB × DEEP DIVE 統合軌道ナビ（実測5分足予測座標）</span>'
-                f'<span style="font-family:JetBrains Mono,monospace;font-size:9.8px;color:#7dd3fc;">{header_sub}</span></div>'
-                f'<svg viewBox="0 0 360 182" width="100%" style="max-height:188px;display:block;">'
-                f'<line x1="35" y1="{y_tp}" x2="345" y2="{y_tp}" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3"/>'
-                f'<text x="342" y="{max(12.0, y_tp-3)}" fill="#6ee7b7" font-size="9" font-weight="bold" text-anchor="end">🎯 TP ({fmt_px(tp, is_jp, fc)})</text>'
-                f'<line x1="35" y1="{y_half}" x2="345" y2="{y_half}" stroke="#facc15" stroke-width="1" stroke-dasharray="3,3"/>'
-                f'<text x="342" y="{max(22.0, y_half-3)}" fill="#fde047" font-size="8.8" font-weight="bold" text-anchor="end">💰 +1.0R ({fmt_px(half_pt, is_jp, fc)})</text>'
-                f'<line x1="35" y1="{y_sl}" x2="345" y2="{y_sl}" stroke="#ef4444" stroke-width="1.4" stroke-dasharray="4,2"/>'
-                f'<text x="342" y="{min(176.0, y_sl+11)}" fill="#fca5a5" font-size="9" font-weight="bold" text-anchor="end">🛡️ SL ({fmt_px(sl, is_jp, fc)})</text>'
-                f'<path d="{path_d}" fill="none" stroke="{path_col}" stroke-width="2.6" stroke-dasharray="5,3"/>'
-                f'<circle cx="40" cy="{y_cur}" r="4" fill="#94a3b8"/><text x="40" y="{max(12.0, y_cur-6)}" fill="#cbd5e1" font-size="8.5" text-anchor="middle">現在</text>'
-                f'<circle cx="95" cy="{y_op}" r="3.8" fill="#c084fc"/><text x="95" y="{max(12.0, y_op-6)}" fill="#e9d5ff" font-size="8.5" text-anchor="middle">始値想定</text>'
-                f'<circle cx="{mid_cx}" cy="{mid_cy}" r="5.5" fill="#38bdf8" stroke="#fff" stroke-width="1.2"/>'
-                f'<rect x="92" y="{min(158.0, max(18.0, mid_cy+7))}" width="146" height="15" rx="4" fill="rgba(7,11,20,0.92)" stroke="#38bdf8" stroke-width="1"/>'
-                f'<text x="165" y="{min(168.5, max(28.5, mid_cy+17.5))}" fill="#7dd3fc" font-size="8.8" font-weight="bold" text-anchor="middle">{html.escape(entry_lbl)}</text>'
-                f'<circle cx="250" cy="{y_dp if is_short else y_pk}" r="4.2" fill="#facc15"/><text x="250" y="{max(12.0, (y_dp if is_short else y_pk)-6)}" fill="#fde047" font-size="8.5" text-anchor="middle">{html.escape(dd_dip_tm if is_short else dd_peak_tm)}</text>'
-                f'<circle cx="315" cy="{y_cl}" r="5.2" fill="#f97316" stroke="#fff" stroke-width="1.2"/><text x="315" y="{min(176.0, y_cl+12)}" fill="#fdba74" font-size="8.8" font-weight="bold" text-anchor="middle">大引け {fmt_px(dd_close, is_jp, fc)}</text>'
-                f'</svg></div>'
+            s3 = dd_i.get("short_3way", {})
+            header_sub = (
+                f"⚡ DD連動({gap_tag}): ▲{s3.get('p_up',33)}%/▶{s3.get('p_flat',34)}%/▼{s3.get('p_down',33)}% ｜ "
+                f"CVD:{html.escape(dd_i.get('cvd_label','-'))}"
             )
-
-        if is_short:
-            entry_pt = round_to_tse_tick(max(cv, vwap), fc, "nearest")
-            half_pt = round_to_tse_tick(entry_pt - abs(sl - entry_pt), fc, "floor")
-            all_p = [cv, entry_pt, half_pt, tp, sl]
-            p_min, p_max = min(all_p) * 0.996, max(all_p) * 1.004
-            span = max(p_max - p_min, 1e-4)
-            def to_y(val): return round(155.0 - ((val - p_min) / span) * 125.0, 1)
-            y_cur, y_ent, y_half, y_tp, y_sl = to_y(cv), to_y(entry_pt), to_y(half_pt), to_y(tp), to_y(sl)
-            path_d = f"M 45 {y_cur} Q 95 {round((y_cur+y_ent)/2 - 6,1)}, 135 {y_ent} Q 185 {round((y_ent+y_half)/2,1)}, 225 {y_half} T 305 {y_tp}"
-            entry_lbl = f"📉 ここで空売り ({fmt_px(entry_pt, is_jp, fc)})"
-            path_col = "#fb7185"
+            title_txt = f"🗺️ LAB × DEEP DIVE 統合軌道ナビ（P10-90確率コーン{live_tag}）"
         else:
-            entry_pt = round_to_tse_tick(min(cv, vwap) if vwap > 0 else cv * 0.995, fc, "nearest")
-            if entry_pt <= sl: entry_pt = round_to_tse_tick(cv * 0.997, fc, "nearest")
-            half_pt = round_to_tse_tick(entry_pt + abs(entry_pt - sl), fc, "ceil")
-            all_p = [cv, entry_pt, half_pt, tp, sl]
-            p_min, p_max = min(all_p) * 0.996, max(all_p) * 1.004
-            span = max(p_max - p_min, 1e-4)
-            def to_y(val): return round(155.0 - ((val - p_min) / span) * 125.0, 1)
-            y_cur, y_ent, y_half, y_tp, y_sl = to_y(cv), to_y(entry_pt), to_y(half_pt), to_y(tp), to_y(sl)
-            path_d = f"M 45 {y_cur} Q 95 {round(max(y_cur, y_ent)+8,1)}, 135 {y_ent} Q 185 {round((y_ent+y_half)/2,1)}, 225 {y_half} T 305 {y_tp}"
-            entry_lbl = f"🛒 ここで買う ({fmt_px(entry_pt, is_jp, fc)})"
-            path_col = "#34d399"
+            gap_shift_px = cv * (gap_bias_mult * 0.01) * _u_curve_vol_factor(9 * 60 + 15)
+            if is_short:
+                base_ent = max(cv, vwap) if vwap > 0 else cv
+                if is_live:
+                    base_ent = cv + (base_ent - cv) * 0.5
+                entry_pt = round_to_tse_tick(_apply_key_level_damping(base_ent + gap_shift_px, cv, key_levels), fc, "nearest")
+                half_pt = round_to_tse_tick(_apply_key_level_damping(entry_pt - abs(sl - entry_pt), cv, key_levels), fc, "floor")
+                tp_damped = _apply_key_level_damping(tp, cv, key_levels)
+                xs = [45.0, 135.0, 225.0, 305.0]
+                ys_px = [cv, entry_pt, half_pt, tp_damped]
+                u_weights = [0.15 * u_now, 1.25, 0.85, 1.25]
+                entry_lbl = f"📉 空売り ({fmt_px(entry_pt, is_jp, fc)})"
+                path_col = "#fb7185"
+                mid_idx = 1
+            else:
+                base_ent = (min(cv, vwap) if vwap > 0 else cv * 0.995)
+                if is_live:
+                    base_ent = cv + (base_ent - cv) * 0.5
+                entry_pt = round_to_tse_tick(_apply_key_level_damping(base_ent + gap_shift_px, cv, key_levels), fc, "nearest")
+                if entry_pt <= sl:
+                    entry_pt = round_to_tse_tick(cv * 0.997, fc, "nearest")
+                half_pt = round_to_tse_tick(_apply_key_level_damping(entry_pt + abs(entry_pt - sl), cv, key_levels), fc, "ceil")
+                tp_damped = _apply_key_level_damping(tp, cv, key_levels)
+                xs = [45.0, 135.0, 225.0, 305.0]
+                ys_px = [cv, entry_pt, half_pt, tp_damped]
+                u_weights = [0.15 * u_now, 1.25, 0.85, 1.25]
+                entry_lbl = f"🛒 買い ({fmt_px(entry_pt, is_jp, fc)})"
+                path_col = "#34d399"
+                mid_idx = 1
+
+            header_sub = f"ATR14基準コーン ｜ {gap_tag}"
+            title_txt = f"🗺️ 明日の想定値動きナビ（P10-90確率コーン＆節目ガード{live_tag}）"
+
+        # 時間帯U字カーブ係数×ATR14による P25-P75 / P10-P90 確率コーンバンド算出
+        n_pts = len(xs)
+        p75_arr, p25_arr, p90_arr, p10_arr = [], [], [], []
+        for idx_p in range(n_pts):
+            t_frac = (idx_p + 0.25) / float(n_pts)
+            sigma_t = daily_atr * 0.42 * math.sqrt(t_frac) * u_weights[idx_p]
+            p75_arr.append(ys_px[idx_p] + 0.675 * sigma_t)
+            p25_arr.append(max(ys_px[idx_p] - 0.675 * sigma_t, cv * 0.5))
+            p90_arr.append(ys_px[idx_p] + 1.282 * sigma_t)
+            p10_arr.append(max(ys_px[idx_p] - 1.282 * sigma_t, cv * 0.5))
+
+        all_p = list(ys_px) + p90_arr + p10_arr + [tp, sl, entry_pt, half_pt]
+        p_min, p_max = min(all_p) * 0.9965, max(all_p) * 1.0035
+        span = max(p_max - p_min, 1e-4)
+        def to_y(val): return round(158.0 - ((val - p_min) / span) * 130.0, 1)
+
+        poly_90_pts = " ".join([f"{xs[i]},{to_y(p90_arr[i])}" for i in range(n_pts)] + [f"{xs[i]},{to_y(p10_arr[i])}" for i in range(n_pts - 1, -1, -1)])
+        poly_75_pts = " ".join([f"{xs[i]},{to_y(p75_arr[i])}" for i in range(n_pts)] + [f"{xs[i]},{to_y(p25_arr[i])}" for i in range(n_pts - 1, -1, -1)])
+        cone_fill_90 = "rgba(251,113,133,0.10)" if is_short else "rgba(52,211,153,0.10)"
+        cone_fill_75 = "rgba(251,113,133,0.20)" if is_short else "rgba(52,211,153,0.20)"
+
+        # 節目ライン（HVNしこり壁・PDH・機関OB支持帯）が描画範囲内なら重ね描画
+        extra_levels_svg = ""
+        if hvn_wall > 0 and p_min <= hvn_wall <= p_max:
+            yhvn = to_y(hvn_wall)
+            extra_levels_svg += f'<line x1="35" y1="{yhvn}" x2="345" y2="{yhvn}" stroke="#f59e0b" stroke-width="1.1" stroke-dasharray="3,2"/><text x="38" y="{max(12.0, yhvn-2)}" fill="#fde047" font-size="8.2" font-weight="bold">🧱 HVN壁 ({fmt_px(hvn_wall, is_jp, fc)})</text>'
+        if pdh_val > 0 and p_min <= pdh_val <= p_max:
+            ypdh = to_y(pdh_val)
+            extra_levels_svg += f'<line x1="35" y1="{ypdh}" x2="345" y2="{ypdh}" stroke="#facc15" stroke-width="1.0" stroke-dasharray="4,3"/><text x="38" y="{max(12.0, ypdh-2)}" fill="#fef08a" font-size="8.2" font-weight="bold">📍 PDH ({fmt_px(pdh_val, is_jp, fc)})</text>'
+        if ob_sup > 0 and p_min <= ob_sup <= p_max:
+            yob = to_y(ob_sup)
+            extra_levels_svg += f'<line x1="35" y1="{yob}" x2="345" y2="{yob}" stroke="#10b981" stroke-width="1.0" stroke-dasharray="3,2"/><text x="38" y="{min(176.0, yob+9)}" fill="#6ee7b7" font-size="8.2" font-weight="bold">🏛️ OB支持 ({fmt_px(ob_sup, is_jp, fc)})</text>'
+
+        y_tp, y_sl, y_half = to_y(tp), to_y(sl), to_y(half_pt)
+        ys_svg = [to_y(v) for v in ys_px]
+        if n_pts == 5:
+            path_d = f"M {xs[0]} {ys_svg[0]} L {xs[1]} {ys_svg[1]} Q {round((xs[1]+xs[2])/2,1)} {ys_svg[2]}, {xs[2]} {ys_svg[2]} Q {round((xs[2]+xs[3])/2,1)} {round((ys_svg[2]+ys_svg[3])/2,1)}, {xs[3]} {ys_svg[3]} L {xs[4]} {ys_svg[4]}"
+            end_lbl = f"大引け {fmt_px(ys_px[4], is_jp, fc)}"
+            sub_pt_x, sub_pt_y = xs[3], ys_svg[3]
+            sub_pt_lbl = str(dd_i.get("dip_time") if is_short else dd_i.get("peak_time") or "")
+            open_pt_svg = f'<circle cx="{xs[1]}" cy="{ys_svg[1]}" r="3.6" fill="#c084fc"/><text x="{xs[1]}" y="{max(12.0, ys_svg[1]-6)}" fill="#e9d5ff" font-size="8.2" text-anchor="middle">{"現在/始" if is_live else "始値想定"}</text>'
+        else:
+            path_d = f"M {xs[0]} {ys_svg[0]} Q {round((xs[0]+xs[1])/2,1)} {round((ys_svg[0]+ys_svg[1])/2,1)}, {xs[1]} {ys_svg[1]} Q {round((xs[1]+xs[2])/2,1)} {round((ys_svg[1]+ys_svg[2])/2,1)}, {xs[2]} {ys_svg[2]} T {xs[3]} {ys_svg[3]}"
+            end_lbl = f"TP到達 {fmt_px(ys_px[3], is_jp, fc)}"
+            sub_pt_x, sub_pt_y = xs[2], ys_svg[2]
+            sub_pt_lbl = "+1.0R"
+            open_pt_svg = ""
+
+        mid_cx, mid_cy = xs[mid_idx], ys_svg[mid_idx]
+        rect_x = round(min(max(mid_cx - 72.0, 42.0), 198.0), 1)
+        rect_y = round(min(158.0, max(18.0, mid_cy + 7.0)), 1)
 
         return (
-            f'<div class="svg-chart-wrap" style="border-color:rgba(16,185,129,0.45);margin-top:8px;">'
-            f'<div style="font-size:11px;font-weight:800;color:#6ee7b7;margin-bottom:4px;">🗺️ 初心者向け・明日の想定値動きナビゲーション図（売買ポイント可視化）</div>'
-            f'<svg viewBox="0 0 360 180" width="100%" style="max-height:185px;display:block;">'
+            f'<div class="svg-chart-wrap" style="border-color:{"rgba(249,115,22,0.5)" if has_dd else "rgba(16,185,129,0.45)"};margin-top:8px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;font-size:10.5px;font-weight:800;color:{"#fdba74" if has_dd else "#6ee7b7"};margin-bottom:4px;">'
+            f'<span>{title_txt}</span>'
+            f'<span style="font-family:JetBrains Mono,monospace;font-size:9.5px;color:#7dd3fc;">{header_sub}</span></div>'
+            f'<svg viewBox="0 0 360 184" width="100%" style="max-height:190px;display:block;">'
+            f'<polygon points="{poly_90_pts}" fill="{cone_fill_90}" stroke="none"/>'
+            f'<polygon points="{poly_75_pts}" fill="{cone_fill_75}" stroke="none"/>'
+            f'{extra_levels_svg}'
             f'<line x1="35" y1="{y_tp}" x2="345" y2="{y_tp}" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3"/>'
-            f'<text x="342" y="{max(12.0, y_tp-3)}" fill="#6ee7b7" font-size="9.5" font-weight="bold" text-anchor="end">🎯 最終利確 ({fmt_px(tp, is_jp, fc)})</text>'
+            f'<text x="342" y="{max(12.0, y_tp-3)}" fill="#6ee7b7" font-size="8.8" font-weight="bold" text-anchor="end">🎯 TP ({fmt_px(tp, is_jp, fc)})</text>'
             f'<line x1="35" y1="{y_half}" x2="345" y2="{y_half}" stroke="#facc15" stroke-width="1" stroke-dasharray="3,3"/>'
-            f'<text x="342" y="{max(22.0, y_half-3)}" fill="#fde047" font-size="9" font-weight="bold" text-anchor="end">💰 半分利確 +1.0R ({fmt_px(half_pt, is_jp, fc)})</text>'
+            f'<text x="342" y="{max(22.0, y_half-3)}" fill="#fde047" font-size="8.5" font-weight="bold" text-anchor="end">💰 +1.0R ({fmt_px(half_pt, is_jp, fc)})</text>'
             f'<line x1="35" y1="{y_sl}" x2="345" y2="{y_sl}" stroke="#ef4444" stroke-width="1.4" stroke-dasharray="4,2"/>'
-            f'<text x="342" y="{min(174.0, y_sl+11)}" fill="#fca5a5" font-size="9.5" font-weight="bold" text-anchor="end">🛡️ 損切りライン ({fmt_px(sl, is_jp, fc)})</text>'
+            f'<text x="342" y="{min(178.0, y_sl+11)}" fill="#fca5a5" font-size="8.8" font-weight="bold" text-anchor="end">🛡️ SL ({fmt_px(sl, is_jp, fc)})</text>'
             f'<path d="{path_d}" fill="none" stroke="{path_col}" stroke-width="2.6" stroke-dasharray="5,3"/>'
-            f'<circle cx="45" cy="{y_cur}" r="4" fill="#94a3b8"/><text x="45" y="{max(12.0, y_cur-7)}" fill="#cbd5e1" font-size="9" text-anchor="middle">現在値</text>'
-            f'<circle cx="135" cy="{y_ent}" r="5.5" fill="#38bdf8" stroke="#fff" stroke-width="1.2"/>'
-            f'<rect x="70" y="{min(156.0, max(18.0, y_ent+7))}" width="132" height="16" rx="4" fill="rgba(15,23,42,0.92)" stroke="#38bdf8" stroke-width="1"/>'
-            f'<text x="136" y="{min(167.0, max(29.0, y_ent+18))}" fill="#7dd3fc" font-size="9" font-weight="bold" text-anchor="middle">{html.escape(entry_lbl)}</text>'
-            f'<circle cx="225" cy="{y_half}" r="4.5" fill="#facc15"/>'
-            f'<circle cx="305" cy="{y_tp}" r="5.5" fill="#10b981" stroke="#fff" stroke-width="1.2"/>'
+            f'<circle cx="{xs[0]}" cy="{ys_svg[0]}" r="4" fill="#94a3b8"/><text x="{xs[0]}" y="{max(12.0, ys_svg[0]-6)}" fill="#cbd5e1" font-size="8.5" text-anchor="middle">現在値</text>'
+            f'{open_pt_svg}'
+            f'<circle cx="{mid_cx}" cy="{mid_cy}" r="5.5" fill="#38bdf8" stroke="#fff" stroke-width="1.2"/>'
+            f'<rect x="{rect_x}" y="{rect_y}" width="144" height="15" rx="4" fill="rgba(7,11,20,0.92)" stroke="#38bdf8" stroke-width="1"/>'
+            f'<text x="{round(rect_x + 72.0, 1)}" y="{round(rect_y + 10.5, 1)}" fill="#7dd3fc" font-size="8.6" font-weight="bold" text-anchor="middle">{html.escape(entry_lbl)}</text>'
+            f'<circle cx="{sub_pt_x}" cy="{sub_pt_y}" r="4.2" fill="#facc15"/><text x="{sub_pt_x}" y="{max(12.0, sub_pt_y-6)}" fill="#fde047" font-size="8.2" text-anchor="middle">{html.escape(sub_pt_lbl)}</text>'
+            f'<circle cx="{xs[-1]}" cy="{ys_svg[-1]}" r="5.2" fill="{"#f97316" if has_dd else "#10b981"}" stroke="#fff" stroke-width="1.2"/>'
+            f'<text x="{xs[-1]}" y="{min(178.0, ys_svg[-1]+12)}" fill="{"#fdba74" if has_dd else "#6ee7b7"}" font-size="8.6" font-weight="bold" text-anchor="middle">{html.escape(end_lbl)}</text>'
             f'</svg></div>'
         )
     except Exception:
@@ -2648,7 +2763,6 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     spec = get_style_spec(st_info.get("style_name", "デイトレード"))
     is_long_only_guard = (not spec["allow_short"]) or is_jp_tier3_short_restricted(fc_card, r_m.get("genre", ""))
 
-    # 上段コアバッジ（最大4〜5個の重要バッジのみ表示）
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;font-weight:900;">#{rank}</span>' if rank else ""
     side_badge = '<span class="pill-badge" style="background:rgba(225,29,72,0.25);border-color:#fb7185;color:#fecdd3;font-weight:900;">SHORT</span>' if is_short_card else '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#34d399;color:#a7f3d0;font-weight:900;">LONG</span>'
     exec_grade = str(r_m.get("exec_grade", "🔵 Grade-B: 標準執行（基準厳守）"))
@@ -2658,7 +2772,6 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     dd_badge_html = '<span class="pill-badge" style="background:rgba(249,115,22,0.25);border-color:#f97316;color:#fdba74;font-weight:900;">🔥 DD統合済</span>' if has_dd else ""
     new_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#10b981;color:#6ee7b7;font-weight:800;">🆕 NEW</span>' if r_m.get("is_new_challenger") else ""
 
-    # 警告系バッジ（発火時のみ簡潔表示）
     warn_badges = ""
     earnings_days = r_m.get("earnings_days_left")
     if earnings_days is not None and 0 <= int(earnings_days) <= 3:
@@ -2668,12 +2781,10 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     if bool(r_m.get("limit_up_tight", False)) and not is_short_card:
         warn_badges += '<span class="pill-badge" style="background:rgba(245,158,11,0.28);border-color:#f59e0b;color:#fde047;font-weight:900;">⚠️S高接近</span>'
 
-    # 期待度表示（DD統合時は Fusion XX%、未統合時は LAB XX%）
     disp_expect = r_m["fusion_expect_pct"] if has_dd else r_m["expect_pct"]
     expect_lbl_top = "FUSION EXPECT" if has_dd else "LAB EXPECT"
     sync_sub_html = f'<div style="font-size:9.5px;font-weight:800;color:{"#6ee7b7" if r_m.get("dd_sync_ok") else "#fde047"};margin-top:2px;">{html.escape(r_m.get("dd_sync_label",""))}</div>' if has_dd else ""
 
-    # エントリー目安（DD押し目/戻り時刻があれば併記）
     cv = float(r_m.get("raw_close", 0.0))
     vwap_v = float(r_m.get("raw_vwap", cv))
     if has_dd:
@@ -2687,7 +2798,6 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     tp_sign_c = "+" if r_m["tp_pct"] > 0 else ""; sl_sign_c = "+" if r_m["sl_pct"] > 0 else ""
     odd_lot_tag = " (S株)" if lot.get("is_odd_lot") else ""
 
-    # リークフリー検証1行バー
     ft = r_m.get("forward_test", {})
     w_cnt, l_cnt, t_days = int(ft.get("win_count", 0)), int(ft.get("lose_count", 0)), int(ft.get("total_days", 0))
     pf_val = float(ft.get("profit_factor", 0.0)); pf_str = f"{pf_val:.2f}" if pf_val < 99.0 else "∞"
@@ -2696,7 +2806,6 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     tot_p_str = f"{'+' if tot_p >= 0 else ''}{tot_p:,.0f}円" if is_jp else f"{'+' if tot_p >= 0 else ''}${tot_p:,.2f}"
     tot_p_col = "#10b981" if tot_p >= 0 else "#ef4444"
 
-    # 詳細ドロワー内用データ
     m10 = r_m.get("macro_10y", {}); d2y = r_m.get("daily_2y", {})
     vp_struct_lbl = str(d2y.get("vp_struct_label", "⚖️ 標準出来高分布"))
     rs_30m_v = float(r_m.get("intraday_rs_30m", 0.0))
@@ -2763,7 +2872,6 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
         unsafe_allow_html=True
     )
 
-    # 横並びコンパクト・アクションバー（2×2グリッド配置で縦幅を圧縮）
     uk_card = f"foc_{r_m['code']}" if (is_focused or is_custom) else f"{kp}_{r_m['code']}"
     is_open_now = bool(is_focused or is_custom or st.session_state["active_debates"].get(uk_card, False))
     b_col1, b_col2 = st.columns(2)
@@ -2811,6 +2919,8 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
                 "tp": float(r_m.get("raw_tp", 0.0)),
                 "sl": float(r_m.get("raw_sl", 0.0)),
                 "vwap": float(r_m.get("raw_vwap", 0.0)),
+                "pts_gap_pct": float(r_m.get("pts_gap_pct", 0.0)),
+                "daily_atr14": float((r_m.get("daily_2y") or {}).get("daily_atr14", 0.0)),
                 "lab_full": r_m,
                 "lab_council": synced_entry.get("lab_council", []),
                 "lab_related_news": synced_entry.get("lab_related_news", rel_news_list),
@@ -2828,7 +2938,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
                 j_list = load_trade_journal(cu_j)
                 j_entry = {
                     "id": hashlib.md5(f"{r_m['full_code']}_{time.time_ns()}".encode()).hexdigest()[:10],
-                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "created_at": now_jst().strftime("%Y-%m-%d %H:%M"),
                     "full_code": r_m["full_code"],
                     "code": r_m["code"],
                     "name": r_m["name"],
@@ -3391,16 +3501,17 @@ def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cv
         "beginner_html": _build_beginner_guide_html(disp_name, spec["beg_title"], q1, q2, q3, q4)
     }
 
-def _is_market_open_now(is_jp: bool) -> bool:
-    now_dt = datetime.now()
-    if is_jp:
-        if now_dt.weekday() >= 5: return False
-        mins = now_dt.hour * 60 + now_dt.minute
-        return (9 * 60) <= mins <= (15 * 60 + 30)
-    now_utc = datetime.now(timezone.utc)
-    if now_utc.weekday() >= 5: return False
-    utc_mins = now_utc.hour * 60 + now_utc.minute
-    return (13 * 60 + 30) <= utc_mins <= (21 * 60)
+def _parse_hhmm_to_minutes(hm_str: str):
+    if not hm_str or ":" not in str(hm_str):
+        return None
+    try:
+        parts = str(hm_str).strip().split(":")
+        hh, mm = int(parts[0]), int(parts[1])
+        if 0 <= hh <= 23 and 0 <= mm <= 59:
+            return hh * 60 + mm
+    except Exception:
+        pass
+    return None
 
 def _build_historical_daily_slice_ctx(df_daily_clean: pd.DataFrame, prev_d: str, fallback_close: float, full_code: str = "", df_weekly_clean: pd.DataFrame = None) -> dict:
     default_ctx = {"ma5": fallback_close, "ma25": fallback_close, "ma75": fallback_close, "ma200": fallback_close, "ma25_slope_up": True, "bull_po": False, "bear_po": False, "macd_hist": 0.0, "pos_52w_pct": 50.0, "daily_atr14": fallback_close * 0.015, "prev_trend_weak": False, "poc_10y_price": 0.0, "pos_10y_pct": 50.0, "ma200w_dev_pct": 0.0, "has_data": False}
@@ -3440,7 +3551,7 @@ def _build_historical_daily_slice_ctx(df_daily_clean: pd.DataFrame, prev_d: str,
     return {"ma5": ma5, "ma25": ma25, "ma75": ma75, "ma200": ma200, "ma25_slope_up": ma25_slope_up, "bull_po": bull_po, "bear_po": bear_po, "macd_hist": macd_hist, "pos_52w_pct": pos_52w_pct, "daily_atr14": daily_atr14, "prev_trend_weak": prev_trend_weak, "poc_10y_price": poc_10y_price, "pos_10y_pct": pos_10y_pct, "ma200w_dev_pct": ma200w_dev_pct, "has_data": True}
 
 def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat: dict, pest: float, vwap20: float, tpv: float, slv: float, shares: int, style: str, total_capital: float = 1000000.0, risk_tolerance_pct: float = 2.0, shared_ledger: dict = None, save_db: bool = True, genre: str = "", daily_2y: dict = None, macro_10y: dict = None, active_boosts: tuple = ("core_inst", "core_mom", "core_vol")) -> dict:
-    is_jp = ".T" in full_code; now_dt = datetime.now(); today_str = now_dt.strftime("%Y-%m-%d"); today_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%d"); is_market_open = _is_market_open_now(is_jp)
+    is_jp = ".T" in full_code; now_dt = now_jst(); today_str = now_dt.strftime("%Y-%m-%d"); today_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%d"); is_market_open = _is_market_open_now(is_jp)
     combat_prof = get_ticker_combat_profile(full_code, genre)
     BASE_COST_RATE, max_gu_limit = float(combat_prof["cost_rate"]), float(combat_prof["max_gu_limit"])
     is_tier3_small = is_jp_tier3_short_restricted(full_code, genre, combat_prof)
@@ -3458,7 +3569,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
         existing_sl = ledger.get(ledger_key)
         stock_ledger = {"signals": dict(existing_sl.get("signals", {})), "verified": dict(existing_sl.get("verified", {})), "algo_ver": existing_sl.get("algo_ver", "")} if isinstance(existing_sl, dict) else {"signals": {}, "verified": {}, "algo_ver": ""}
 
-    ALGO_VERSION_TAG = "QWM27_VWAP2S_LIMITUP_OB"
+    ALGO_VERSION_TAG = "QWM28_JST_REALTIME_BAR_GATE"
     if stock_ledger.get("algo_ver") != ALGO_VERSION_TAG:
         stock_ledger["verified"], stock_ledger["algo_ver"] = {}, ALGO_VERSION_TAG
 
@@ -3670,7 +3781,17 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                             curr_vwap_std = math.sqrt(max((cum_pv2 / cum_v) - (curr_vwap ** 2), 0.0))
                             curr_vwap_p2 = curr_vwap + 2.0 * curr_vwap_std
                             ema5 = bc if b_i == 0 else (bc * alpha_ema5 + ema5 * (1.0 - alpha_ema5))
-                            is_afternoon_protect = (b_i >= int(total_span_bars * 0.65)); is_late_session = (b_i >= int(total_span_bars * 0.80))
+
+                            bar_mins = _parse_hhmm_to_minutes(n_hms[b_i]) if is_jp else None
+                            if bar_mins is not None:
+                                is_afternoon_protect = (bar_mins >= 13 * 60)
+                                is_late_session = (bar_mins >= 14 * 60 + 15)
+                                in_entry_window = ((9 * 60 + 5) <= bar_mins <= (11 * 60)) if st_p == "スキャルピング" else ((9 * 60 + 5) <= bar_mins <= (13 * 60 + 30))
+                            else:
+                                is_afternoon_protect = (b_i >= int(total_span_bars * 0.65))
+                                is_late_session = (b_i >= int(total_span_bars * 0.80))
+                                max_entry_bar = max(7, int(total_span_bars * (0.45 if st_p == "スキャルピング" else 0.72)))
+                                in_entry_window = (1 <= b_i <= max_entry_bar)
 
                             def _finalize_split_exit(rem_exit_px: float) -> tuple:
                                 rem_clean = round_to_tse_tick(rem_exit_px, full_code, "nearest")
@@ -3743,8 +3864,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                     elif is_late_session and bc >= avg_entry_px * (1.0 + trip_cost_cur + 0.0020): pending_exit_reason = "TIME"
                                     elif is_afternoon_protect and bc >= avg_entry_px * (1.0 + trip_cost_cur + 0.0015): pending_be_sl = max(pending_be_sl if pending_be_sl is not None else eff_sl, round_to_tse_tick(avg_entry_px * (1.0 + trip_cost_cur + 0.0005), full_code, "ceil"))
 
-                            max_entry_bar = max(7, int(total_span_bars * (0.45 if st_p == "スキャルピング" else 0.72)))
-                            if (not entered) and (not pending_entry_side) and (exec_score_p >= 4) and (1 <= b_i <= max_entry_bar) and (b_i + 1 < total_span_bars):
+                            if (not entered) and (not pending_entry_side) and (exec_score_p >= 4) and in_entry_window and (b_i >= 1) and (b_i + 1 < total_span_bars):
                                 prev_close_bar, prev_high_bar = float(n_bc[b_i - 1]), float(n_bh[b_i - 1])
                                 rec_lows, rec_highs = n_bl[max(0, b_i - 4):b_i + 1], n_bh[max(0, b_i - 4):b_i + 1]
                                 if is_short_sig:
@@ -4209,11 +4329,6 @@ def _fetch_pool_batch_core(macro_sig: tuple, style: str, core_vol: bool, core_in
             except Exception as e: record_system_error("_fetch_pool_batch_core:future", e)
     db_set("daily_forward_ledger", shared_ledger)
 
-    for ev_r in evaluated_all:
-        rel_n_ev = [n for n in all_impact_news if ev_r.get("full_code") in n.get("detail", {}).get("related_codes", [])]
-        sync_lab_intel_to_shared(ev_r, rel_news_list=rel_n_ev, persist=False)
-    db_set("shared_ticker_intel", load_shared_ticker_intel())
-
     def _is_combat_eligible(item: dict) -> int:
         ft_d = item.get("forward_test", {})
         t_days = int(ft_d.get("total_days", 0))
@@ -4243,7 +4358,7 @@ def _fetch_pool_batch_core(macro_sig: tuple, style: str, core_vol: bool, core_in
         promoted, purged = [x for x in survivors if x["full_code"] not in prev_codes_set], [it for it in base_roster if it[0] not in survivor_codes]
         db_set("active_market_roster", [[x["full_code"], x["name"], x["genre"], x["theme"]] for x in survivors])
         if promoted or purged:
-            now_s = datetime.now().strftime("%Y-%m-%d %H:%M"); s_logs = db_get("market_survival_logs", [])
+            now_s = now_jst().strftime("%Y-%m-%d %H:%M"); s_logs = db_get("market_survival_logs", [])
             if not isinstance(s_logs, list): s_logs = []
             for p_it in promoted[:5]:
                 msg_p = f"🟢 [新規昇格] {p_it['name']}({p_it['code']}) が期待度 {p_it['expect_pct']}% / RVOL {p_it['rvol']}倍 でロスター奪取！"
@@ -4323,6 +4438,10 @@ def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True,
         sc_item = _merge_dd_intel_into_lab_item(_scale_stock_item_for_user(item, style, float(total_cap), float(risk_pct)))
         scaled_map[sc_item["full_code"]] = sc_item
         scaled_all.append(sc_item)
+        rel_n_ev = [n for n in all_impact_news if sc_item.get("full_code") in n.get("detail", {}).get("related_codes", [])]
+        sync_lab_intel_to_shared(sc_item, rel_news_list=rel_n_ev, persist=False)
+    if scaled_all:
+        db_set("shared_ticker_intel", load_shared_ticker_intel())
     scaled_gmap = {g: [scaled_map[x["full_code"]] for x in items if x["full_code"] in scaled_map] for g, items in core_gmap.items()}
     return scaled_gmap, scaled_all
 
@@ -4559,7 +4678,6 @@ if st.session_state.get("custom_search_code"):
         st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
     st.stop()
 
-# サバイバル戦況バー（1行横スクロール極薄リボン ＋ 詳細折りたたみ）
 surv_logs_top = db_get("market_survival_logs", [])
 if isinstance(surv_logs_top, list) and surv_logs_top:
     prom_items = [x for x in surv_logs_top if "[新規昇格]" in x.get("msg", "")][:5]
@@ -4579,7 +4697,6 @@ if isinstance(surv_logs_top, list) and surv_logs_top:
         for sl in surv_logs_top[:12]:
             st.markdown(f'<div style="font-size:11px;color:#cbd5e1;padding:3px 0;border-bottom:1px solid rgba(148,163,184,0.12);"><span style="color:#94a3b8;font-family:JetBrains Mono,monospace;">{html.escape(sl.get("time",""))}</span> {html.escape(sl.get("msg",""))}</div>', unsafe_allow_html=True)
 
-# 5大セクター資金ローテーションバー（1行横スクロール極薄リボン ＋ 詳細折りたたみ）
 sec_rot_stats = compute_sector_rotation_stats(all_res)
 if sec_rot_stats:
     sec_ribbon = "".join([
@@ -4766,7 +4883,7 @@ elif sel_cat == "📓 トレード日誌＆AI監査":
                 if jc_b.button("💰 決済確定＆AI監査", key=f"j_close_{jid}", use_container_width=True, type="primary"):
                     pnl_rate = ((exit_in - ep_j) / max(ep_j, 1e-4)) if side_j == "LONG" else ((ep_j - exit_in) / max(ep_j, 1e-4))
                     je["exit_price"] = float(exit_in)
-                    je["closed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    je["closed_at"] = now_jst().strftime("%Y-%m-%d %H:%M")
                     je["status"] = "CLOSED"
                     je["pnl_pct"] = round(pnl_rate * 100.0, 2)
                     je["pnl_yen"] = round(ep_j * sh_j * pnl_rate, 2)
