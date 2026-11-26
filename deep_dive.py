@@ -3027,7 +3027,7 @@ def _build_dual_5m_trajectory(fc_code: str, curr_px: float, prev_px: float, df_1
             for _, r in sub_td.iterrows():
                 hm = r["_hm"]
                 if hm not in slots: continue
-                ov, hv, lv, cv_px, vv = float(r.get("Open", r["Close"])), float(r["High", r["Close"]]), float(r.get("Low", r["Close"])), float(r["Close"]), max(float(r.get("Volume", 0.0)), 0.0)
+                ov, hv, lv, cv_px, vv = float(r.get("Open", r["Close"])), float(r.get["High", r["Close"]]), float(r.get("Low", r["Close"])), float(r["Close"]), max(float(r.get("Volume", 0.0)), 0.0)
                 tp = (hv + lv + cv_px) / 3.0
                 cpv += tp * vv; cpv2 += (tp ** 2) * vv; cv += vv
                 vw = (cpv / cv) if cv > 0 else cv_px
