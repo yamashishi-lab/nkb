@@ -4,7 +4,7 @@ import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, threading, queue, sqlite3, uuid, traceback, secrets, html, random, math
+import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, threading, sqlite3, uuid, traceback, secrets, html, random, math
 import urllib.parse, urllib.request, urllib.error, xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
@@ -497,47 +497,13 @@ def get_db_cursor():
     except Exception as e: conn.rollback(); record_system_error("db_transaction_error", e); raise
     finally: conn.close()
 
-@st.cache_resource
-def _init_sqlite_once():
+def init_sqlite_db():
     with _DB_LOCK:
         try:
-            with get_db_cursor() as c:
-                c.execute("CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, val TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);")
-        except Exception as e:
-            record_system_error("init_sqlite_db", e)
-    return True
-
-def init_sqlite_db():
-    _init_sqlite_once()
+            with get_db_cursor() as c: c.execute("CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, val TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);")
+        except Exception as e: record_system_error("init_sqlite_db", e)
 
 init_sqlite_db()
-
-@st.cache_resource
-def _get_db_write_queue():
-    q = queue.Queue()
-    def _writer_worker():
-        while True:
-            key, val_json, val_obj = q.get()
-            try:
-                with _DB_LOCK:
-                    with get_db_cursor() as cur:
-                        cur.execute(
-                            "INSERT INTO kv_store (key, val, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) "
-                            "ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated_at=CURRENT_TIMESTAMP;",
-                            (key, val_json)
-                        )
-            except Exception as e:
-                record_system_error(f"db_set_worker:{key}", e)
-            try:
-                if _get_supabase_config()[0]:
-                    _supabase_rest_upsert(key, val_obj)
-            except Exception:
-                pass
-            finally:
-                q.task_done()
-    t = threading.Thread(target=_writer_worker, name="YamashishiDbWriter", daemon=True)
-    t.start()
-    return q
 
 def db_get(key: str, default_val):
     with _DB_LOCK:
@@ -565,11 +531,14 @@ def db_get(key: str, default_val):
 def db_set(key: str, val):
     with _DB_LOCK:
         _MEM_CACHE[key] = val
-    try:
-        val_json = json.dumps(val, ensure_ascii=False)
-        _get_db_write_queue().put_nowait((key, val_json, val))
-    except Exception as e:
-        record_system_error(f"db_set:{key}", e)
+        try:
+            with get_db_cursor() as cur:
+                cur.execute("INSERT INTO kv_store (key, val, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated_at=CURRENT_TIMESTAMP;", (key, json.dumps(val, ensure_ascii=False)))
+        except Exception as e: record_system_error(f"db_set:{key}", e)
+        try:
+            if _get_supabase_config()[0]:
+                threading.Thread(target=_supabase_rest_upsert, args=(key, val), daemon=True).start()
+        except Exception: pass
 
 def _derive_crypto_key(salt: bytes) -> bytes: return hashlib.pbkdf2_hmac("sha256", SECRET_KEY.encode(), salt, 60000, 32)
 
@@ -699,9 +668,6 @@ def load_trade_journal(em: str) -> list:
 def save_trade_journal(em: str, entries: list):
     if em: db_set(_user_store_key("trade_journal", em), entries[:200])
 
-def _bump_intel_version():
-    st.session_state["_intel_ver"] = int(st.session_state.get("_intel_ver", 0)) + 1
-
 def load_shared_ticker_intel() -> dict:
     cur = st.session_state.get("shared_ticker_intel")
     if isinstance(cur, dict) and cur:
@@ -731,7 +697,6 @@ def sync_lab_intel_to_shared(r: dict, council_turns: list = None, rel_news_list:
     }
     intel_map[fc] = entry
     st.session_state["shared_ticker_intel"] = intel_map
-    _bump_intel_version()
     if persist:
         db_set("shared_ticker_intel", intel_map)
     return entry
@@ -756,7 +721,6 @@ def sync_dd_intel_from_session(fc: str):
         prev["dd_updated_at"] = now_jst().strftime("%Y-%m-%d %H:%M:%S")
         intel_map[fc_u] = prev
         st.session_state["shared_ticker_intel"] = intel_map
-        _bump_intel_version()
         db_set("shared_ticker_intel", intel_map)
 
 def load_active_market_roster() -> list:
@@ -968,8 +932,6 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
 
 def inject_css():
     css = """@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700;800&display=swap');
-[data-stale="true"],[data-stale="true"] *{transition:none!important;animation:none!important;}
-.stApp,section.main,[data-testid="stAppViewContainer"]{background-color:#070b14!important;}
 html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#070b14;color:#e2e8f0;}
 .block-container{padding-top:2.9rem!important;}
 div[data-baseweb="popover"],div[data-baseweb="menu"],div[role="listbox"],ul[role="listbox"]{z-index:2147483647!important;pointer-events:auto!important;}
@@ -983,12 +945,12 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"]{pointer-ev
 section[data-testid="stSidebar"]+div,section.main,.stApp>header+div>div{margin-left:0!important;width:100%!important;max-width:100%!important;}
 .sidebar-section-card{background:rgba(15,23,42,0.65);border:1px solid rgba(56,189,248,0.18);border-radius:10px;padding:10px 12px;margin-bottom:12px;}
 .sidebar-header-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#38bdf8;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:5px;}
-.fixed-top-nav-bar,div[data-testid="stVerticalBlock"]:has(> div .top-nav-marker):not(:has(div[data-testid="stVerticalBlock"])){position:fixed!important;top:10px!important;left:50%!important;transform:translateX(-50%)!important;z-index:999980!important;width:min(170px,calc(100vw - 4rem))!important;background:transparent!important;border:none!important;margin:0!important;padding:0!important;pointer-events:auto!important;gap:0!important;}
+.fixed-top-nav-bar{position:fixed!important;top:10px!important;left:50%!important;transform:translateX(-50%)!important;z-index:999980!important;width:min(170px,calc(100vw - 4rem))!important;background:transparent!important;border:none!important;margin:0!important;padding:0!important;pointer-events:auto!important;}
 div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}
-.fixed-top-nav-bar div[data-testid="stHorizontalBlock"],div[data-testid="stVerticalBlock"]:has(> div .top-nav-marker):not(:has(div[data-testid="stVerticalBlock"])) div[data-testid="stHorizontalBlock"]{background:transparent!important;border:none!important;width:100%!important;display:flex!important;justify-content:center!important;}
-.fixed-top-nav-bar button,div[data-testid="stVerticalBlock"]:has(> div .top-nav-marker):not(:has(div[data-testid="stVerticalBlock"])) button{width:100%!important;height:30px!important;min-height:30px!important;max-height:30px!important;background:rgba(15,23,42,0.75)!important;color:#93c5fd!important;border:1px solid rgba(56,189,248,0.35)!important;border-radius:20px!important;box-shadow:0 0 8px rgba(56,189,248,0.25)!important;font-size:11.5px!important;font-weight:700!important;letter-spacing:0.5px!important;cursor:pointer!important;transition:all 0.15s ease!important;}
-.fixed-top-nav-bar button:hover,div[data-testid="stVerticalBlock"]:has(> div .top-nav-marker):not(:has(div[data-testid="stVerticalBlock"])) button:hover{background:rgba(15,23,42,0.85)!important;border-color:rgba(56,189,248,0.55)!important;color:#ffffff!important;}
-.fixed-top-nav-bar button:active,div[data-testid="stVerticalBlock"]:has(> div .top-nav-marker):not(:has(div[data-testid="stVerticalBlock"])) button:active{background:rgba(56,189,248,0.25)!important;border-color:#38bdf8!important;color:#ffffff!important;transform:scale(0.96)!important;}
+.fixed-top-nav-bar div[data-testid="stHorizontalBlock"]{background:transparent!important;border:none!important;width:100%!important;display:flex!important;justify-content:center!important;}
+.fixed-top-nav-bar button{width:100%!important;height:30px!important;min-height:30px!important;max-height:30px!important;background:rgba(15,23,42,0.75)!important;color:#93c5fd!important;border:1px solid rgba(56,189,248,0.35)!important;border-radius:20px!important;box-shadow:0 0 8px rgba(56,189,248,0.25)!important;font-size:11.5px!important;font-weight:700!important;letter-spacing:0.5px!important;cursor:pointer!important;transition:all 0.15s ease!important;}
+.fixed-top-nav-bar button:hover{background:rgba(15,23,42,0.85)!important;border-color:rgba(56,189,248,0.55)!important;color:#ffffff!important;}
+.fixed-top-nav-bar button:active{background:rgba(56,189,248,0.25)!important;border-color:#38bdf8!important;color:#ffffff!important;transform:scale(0.96)!important;}
 .brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,23px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;display:block;width:100%;}
 .glass-header{background:radial-gradient(circle at top right,rgba(168,85,247,0.12),transparent 60%),linear-gradient(145deg,rgba(15,23,42,0.88) 0%,rgba(7,11,20,0.96) 100%);backdrop-filter:blur(12px);border:1px solid rgba(148,163,184,0.16);border-radius:12px;padding:10px 13px;margin-bottom:8px;box-shadow:0 8px 24px rgba(0,0,0,0.45);}
 .lab-thin-ribbon{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scrollbar-width:none!important;gap:6px!important;padding:3px 2px!important;margin-bottom:6px!important;white-space:nowrap!important;}
@@ -1127,44 +1089,19 @@ if "user_prefs_loaded" not in st.session_state or st.session_state.get("last_loa
     st.session_state["watchlist"] = user_saved_watchlist; st.session_state["user_prefs_loaded"] = True; st.session_state["last_loaded_user"] = cu_active
     st.session_state["_last_saved_prefs_hash"] = hashlib.md5(json.dumps({"user": cu_active, "prefs": user_saved_prefs}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
-defaults = {"active_debates": {}, "council_threads": {}, "council_meta": {}, "debate_round_seed": {}, "watchlist": user_saved_watchlist, "navigation_page": "TOP", "selected_news_item": None, "custom_search_code": "", "active_category": "🏆 総合TOP5", "last_cat": "🏆 総合TOP5", "nav_history": [], "scroll_top_trig": 0, "scroll_target_id": "", "focused_stock_item": None, "agent_roster": saved_agents, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}, "last_audit_similarity_penalty": 0, "last_working_gemini_model": "", "force_close_sidebar_trig": 0, "last_synced_style": "", "journal_audit_results": {}, "dd_lab_ctx": None, "_intel_ver": 0, "journal_toast_msg": ""}
+defaults = {"active_debates": {}, "council_threads": {}, "council_meta": {}, "debate_round_seed": {}, "watchlist": user_saved_watchlist, "navigation_page": "TOP", "selected_news_item": None, "custom_search_code": "", "active_category": "🏆 総合TOP5", "last_cat": "🏆 総合TOP5", "nav_history": [], "scroll_top_trig": 0, "scroll_target_id": "", "focused_stock_item": None, "agent_roster": saved_agents, "stock_dialogue_signatures": {}, "news_ai_deep_cache": {}, "last_audit_similarity_penalty": 0, "last_working_gemini_model": "", "force_close_sidebar_trig": 0, "last_synced_style": "", "journal_audit_results": {}, "dd_lab_ctx": None, "shared_ticker_intel": db_get("shared_ticker_intel", {})}
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
-if "shared_ticker_intel" not in st.session_state or not isinstance(st.session_state.get("shared_ticker_intel"), dict):
-    st.session_state["shared_ticker_intel"] = db_get("shared_ticker_intel", {})
-    if not isinstance(st.session_state.get("shared_ticker_intel"), dict):
-        st.session_state["shared_ticker_intel"] = {}
+if not isinstance(st.session_state.get("shared_ticker_intel"), dict):
+    st.session_state["shared_ticker_intel"] = {}
 st.session_state["agent_roster"] = dict(DEFAULT_AGENTS)
-
-def _cb_go_top():
-    ts = int(time.time() * 1000)
-    st.session_state["navigation_page"] = "TOP"
-    st.session_state["focused_stock_item"] = None
-    st.session_state["custom_search_code"] = ""
-    st.session_state["selected_news_item"] = None
-    st.session_state["active_category"] = "🏆 総合TOP5"
-    st.session_state["last_cat"] = "🏆 総合TOP5"
-    if "search_code_input" in st.session_state:
-        st.session_state["search_code_input"] = ""
-    st.session_state["scroll_top_trig"] = ts
-    st.session_state["force_close_sidebar_trig"] = ts
-
-def _cb_nav_page(page_name: str, close_sb: bool = True):
-    ts = int(time.time() * 1000)
-    st.session_state["navigation_page"] = page_name
-    st.session_state["scroll_top_trig"] = ts
-    if close_sb:
-        st.session_state["force_close_sidebar_trig"] = ts
-
-def _cb_back_to_top_from_manual():
-    ts = int(time.time() * 1000)
-    st.session_state["navigation_page"] = "TOP"
-    st.session_state["force_close_sidebar_trig"] = ts
-    st.session_state["scroll_top_trig"] = ts
 
 with st.container():
     st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
-    st.button("トップに戻る", key="top_nav_top", use_container_width=True, on_click=_cb_go_top)
+    if st.button("トップに戻る", key="top_nav_top", use_container_width=True):
+        st.session_state["navigation_page"] = "TOP"; st.session_state["focused_stock_item"] = None; st.session_state["custom_search_code"] = ""; st.session_state["selected_news_item"] = None; st.session_state["active_category"] = "🏆 総合TOP5"; st.session_state["last_cat"] = "🏆 総合TOP5"
+        if "search_code_input" in st.session_state: st.session_state["search_code_input"] = ""
+        st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000); st.rerun()
 
 scroll_target_js = f"setTimeout(function(){{try{{const el=window.parent.document.getElementById('{st.session_state.get('scroll_target_id')}');if(el){{const win=el.closest('.council-scroll-window');if(win){{win.scrollTo({{top:Math.max(0,el.offsetTop-4),behavior:'smooth'}});}}(el.closest('.ai-council-box')||el).scrollIntoView({{behavior:'smooth',block:'center'}});}}}}catch(e){{}}}},120);" if st.session_state.get("scroll_target_id") else ""
 st.session_state["scroll_target_id"] = ""
@@ -1185,7 +1122,11 @@ def _compute_real_audit_metrics() -> dict:
 
 def render_user_manual_page():
     st.markdown('<div class="glass-header" style="border-left:4px solid #38bdf8;"><div style="font-size:18px;font-weight:800;color:#f8fafc;">📖 YAMASHISHI LAB 公式説明書・用語＆アルゴリズム辞典</div><div style="font-size:11.5px;color:#94a3b8;margin-top:4px;">銘柄カードに表示される独自指標・執行グレード・3階層MTF・チャート記号・リークフリー検証の意味と実戦での使い方をわかりやすく解説します。</div></div>', unsafe_allow_html=True)
-    st.button("⬅️ メイン画面に戻る", key="manual_back_top", use_container_width=True, type="primary", on_click=_cb_back_to_top_from_manual)
+    if st.button("⬅️ メイン画面に戻る", key="manual_back_top", use_container_width=True, type="primary"):
+        st.session_state["navigation_page"] = "TOP"
+        st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000)
+        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+        st.rerun()
 
     q_kw = st.text_input("🔍 分からない用語・記号を検索 (例: Grade, VWAP, SQN, HVN, RVOL, OB, Fusion)", placeholder="キーワードを入力すると該当解説だけをリアルタイム絞り込み表示します...", key="manual_search_input").strip().lower()
 
@@ -1275,7 +1216,11 @@ def render_user_manual_page():
     if total_hits == 0:
         st.warning(f"「{html.escape(q_kw)}」に一致する用語が見つかりませんでした。別のキーワードでお試しください。")
 
-    st.button("⬅️ メイン画面に戻る", key="manual_back_bottom", use_container_width=True, type="primary", on_click=_cb_back_to_top_from_manual)
+    if st.button("⬅️ メイン画面に戻る", key="manual_back_bottom", use_container_width=True, type="primary"):
+        st.session_state["navigation_page"] = "TOP"
+        st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000)
+        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+        st.rerun()
 
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
@@ -1285,9 +1230,14 @@ with st.sidebar:
         role_badge = "👑 MASTER ADMIN" if is_admin_user else "⚛️ MEMBER SESSION ACTIVE"
         st.markdown(f'<div class="sidebar-section-card"><div class="sidebar-header-badge">{role_badge}</div><div style="color:#f8fafc;font-size:12px;font-weight:700;">会員: {html.escape(cu)}</div></div>', unsafe_allow_html=True)
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
-    st.button("📖 説明書・用語＆アルゴリズム辞典を開く", key="sidebar_open_manual_btn", use_container_width=True, type="primary", on_click=_cb_nav_page, args=("MANUAL", True))
+    if st.button("📖 説明書・用語＆アルゴリズム辞典を開く", key="sidebar_open_manual_btn", use_container_width=True, type="primary"):
+        st.session_state["navigation_page"] = "MANUAL"
+        st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000)
+        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+        st.rerun()
     if is_admin_user:
-        st.button("🖥️ 統合管理コントロールセンター起動", key="sidebar_open_admin_btn", use_container_width=True, on_click=_cb_nav_page, args=("ADMIN", True))
+        if st.button("🖥️ 統合管理コントロールセンター起動", use_container_width=True):
+            st.session_state["navigation_page"] = "ADMIN"; st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000); st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
 
     with st.expander("🎯 投資スタイル ＆ 3大コア・エンジン選択", expanded=True):
         style_list = ["⚡ デイトレード (前場・後場の波及を狙う)", "🚀 スキャルピング (秒〜分単位のモメンタム)", "📈 スイングトレード (数日〜数週間のトレンド)", "💎 バイ＆ホールド (中長期・IPO分散投資)"]
@@ -1323,11 +1273,6 @@ if st.session_state.get("navigation_page") == "MANUAL":
     render_user_manual_page()
     st.stop()
 
-@st.cache_resource
-def _load_deep_dive_module():
-    import deep_dive
-    return deep_dive
-
 if st.session_state.get("navigation_page") == "DEEP_DIVE":
     cu_dd = st.session_state.get("authenticated_user", "").strip().lower()
     db_dd = load_mem()
@@ -1356,10 +1301,13 @@ if st.session_state.get("navigation_page") == "DEEP_DIVE":
                     db_set("mem", db_dd)
                     st.success("✅ 利用権限を申請しました！管理者の承認をお待ちください。")
                     st.rerun()
-        st.button("⬅️ トップ画面に戻る", key="dd_unauth_back_top", use_container_width=True, on_click=_cb_nav_page, args=("TOP", False))
+        if st.button("⬅️ トップ画面に戻る", use_container_width=True):
+            st.session_state["navigation_page"] = "TOP"
+            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+            st.rerun()
         st.stop()
 
-    deep_dive = _load_deep_dive_module()
+    import deep_dive
     dd_tgt_fc = str(st.session_state.get("dd_target_code", "NVDA")).strip().upper()
     deep_dive.render_deep_dive_page(
         init_code=dd_tgt_fc,
@@ -1373,7 +1321,8 @@ if st.session_state.get("navigation_page") == "DEEP_DIVE":
 adm_c_page = ADMIN_EMAIL.strip().lower()
 if st.session_state.get("navigation_page") == "ADMIN" and adm_c_page and cu == adm_c_page:
     st.markdown("### 👑 統合管理コントロールセンター (MASTER TERMINAL)")
-    st.button("⬅️ メイン画面に戻る", key="admin_back_top", use_container_width=True, type="primary", on_click=_cb_back_to_top_from_manual)
+    if st.button("⬅️ メイン画面に戻る", use_container_width=True, type="primary"):
+        st.session_state["navigation_page"] = "TOP"; st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000); st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
     db_dd_chk = load_mem()
     dd_wait_cnt = sum(1 for u in db_dd_chk.values() if u.get("deep_dive_status") == "pending")
     tab_gemini_sys, tab_users, tab_employment, tab_apply_wait, tab_dd_wait, tab_error_logs = st.tabs([
@@ -3355,106 +3304,6 @@ def _app_rerun():
     except TypeError:
         st.rerun()
 
-def _cb_focus_stock(item_dict: dict):
-    st.session_state["focused_stock_item"] = item_dict
-    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-
-def _cb_unfocus_stock():
-    st.session_state["focused_stock_item"] = None
-    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-
-def _cb_open_news_detail(news_obj: dict):
-    st.session_state["selected_news_item"] = news_obj
-    st.session_state["navigation_page"] = "NEWS_DETAIL"
-    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-
-def _cb_toggle_watchlist(item_dict: dict):
-    code_k = str(item_dict.get("code", ""))
-    if not code_k:
-        return
-    wl = st.session_state.setdefault("watchlist", {})
-    if code_k in wl:
-        del wl[code_k]
-    else:
-        wl[code_k] = item_dict
-    cu_w = st.session_state.get("authenticated_user", "")
-    if cu_w:
-        save_watchlist(cu_w, wl)
-
-def _cb_open_deep_dive(r_m: dict, rel_news_list: list):
-    st_info = r_m.get("strat") or {}
-    lot = r_m.get("lot_info") or {}
-    st_name_cur = st_info.get("style_name", "default")
-    st.session_state["dd_target_code"] = r_m["full_code"]
-    st.session_state["dd_target_style"] = st_info.get("style_name", "デイトレード")
-    st.session_state["dd_code_in"] = r_m["full_code"]
-    st.session_state["dd_style_in"] = st_info.get("style_name", "デイトレード")
-    matched_council = []
-    for c_key_cand, c_val_cand in st.session_state.get("council_threads", {}).items():
-        if r_m["code"] in str(c_key_cand) and st_name_cur in str(c_key_cand) and isinstance(c_val_cand, list):
-            matched_council = c_val_cand
-            break
-    synced_entry = sync_lab_intel_to_shared(
-        r_m,
-        council_turns=matched_council if matched_council else None,
-        rel_news_list=rel_news_list,
-        persist=True
-    )
-    st.session_state["dd_lab_ctx"] = {
-        "full_code": r_m["full_code"],
-        "side": st_info.get("side", "LONG"),
-        "expect_pct": float(r_m.get("expect_pct", 50.0)),
-        "exec_grade": str(r_m.get("exec_grade", "")),
-        "tp": float(r_m.get("raw_tp", 0.0)),
-        "sl": float(r_m.get("raw_sl", 0.0)),
-        "vwap": float(r_m.get("raw_vwap", 0.0)),
-        "pts_gap_pct": float(r_m.get("pts_gap_pct", 0.0)),
-        "daily_atr14": float((r_m.get("daily_2y") or {}).get("daily_atr14", 0.0)),
-        "lab_full": r_m,
-        "lab_council": synced_entry.get("lab_council", []),
-        "lab_related_news": synced_entry.get("lab_related_news", rel_news_list),
-        "lab_updated_at": synced_entry.get("lab_updated_at", ""),
-        "dd_result": synced_entry.get("dd_result"),
-        "dd_updated_at": synced_entry.get("dd_updated_at", ""),
-    }
-    st.session_state["navigation_page"] = "DEEP_DIVE"
-    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-
-def _cb_add_journal_entry(r_m: dict):
-    cu_j = st.session_state.get("authenticated_user", "")
-    if not cu_j:
-        return
-    st_info = r_m.get("strat") or {}
-    lot = r_m.get("lot_info") or {}
-    exec_grade = str(r_m.get("exec_grade", "🔵 Grade-B: 標準執行（基準厳守）"))
-    j_list = load_trade_journal(cu_j)
-    j_entry = {
-        "id": hashlib.md5(f"{r_m['full_code']}_{time.time_ns()}".encode()).hexdigest()[:10],
-        "created_at": now_jst().strftime("%Y-%m-%d %H:%M"),
-        "full_code": r_m["full_code"],
-        "code": r_m["code"],
-        "name": r_m["name"],
-        "genre": r_m["genre"],
-        "style": st_info.get("style_name", "デイトレード"),
-        "side": st_info.get("side", "LONG"),
-        "tactic_type": st_info.get("tactic_type", "Type-E"),
-        "exec_grade": exec_grade,
-        "entry_price": float(r_m.get("raw_close", 0.0)),
-        "tp_price": float(r_m.get("raw_tp", 0.0)),
-        "sl_price": float(r_m.get("raw_sl", 0.0)),
-        "vwap_price": float(r_m.get("raw_vwap", 0.0)),
-        "shares": int(lot.get("shares", 100)),
-        "status": "OPEN",
-        "exit_price": None,
-        "closed_at": None,
-        "pnl_yen": 0.0,
-        "pnl_pct": 0.0,
-        "ai_feedback": ""
-    }
-    j_list.insert(0, j_entry)
-    save_trade_journal(cu_j, j_list)
-    st.session_state["journal_toast_msg"] = f"✅ 『{r_m['name']} ({r_m['code']})』をトレード日誌に記録しました！"
-
 def _render_council_sec_impl(r, uk, auto_open=False):
     is_open = auto_open or st.session_state["active_debates"].get(uk, False)
     if not is_open: return
@@ -3486,7 +3335,8 @@ def _render_council_sec_impl(r, uk, auto_open=False):
 
     if auto_open and not st.session_state.get("custom_search_code"):
         st.markdown("<br>", unsafe_allow_html=True)
-        st.button("⬅️ 一覧に戻る (他の銘柄を見る)", key=f"btn_back_bottom_{uk}", use_container_width=True, type="primary", on_click=_cb_unfocus_stock)
+        if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", key=f"btn_back_bottom_{uk}", use_container_width=True, type="primary"):
+            st.session_state["focused_stock_item"] = None; st.session_state["scroll_top_trig"] = int(time.time() * 1000); _app_rerun()
 
 if hasattr(st, "fragment"):
     render_council_sec = st.fragment(_render_council_sec_impl)
@@ -3624,24 +3474,94 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     with b_col1:
         if not (is_focused or is_custom):
             g_lbl = "🔼 ガイドを閉じる" if is_open_now else ("🔴 空売りガイド・合議" if is_short_card else "🔵 売買ガイド・合議")
-            st.button(g_lbl, key=f"btn_open_{uk_card}", use_container_width=True, type="primary", on_click=_cb_focus_stock, args=(r_m,))
+            if st.button(g_lbl, key=f"btn_open_{uk_card}", use_container_width=True, type="primary"):
+                st.session_state["focused_stock_item"] = r_m
+                st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+                _app_rerun()
         else:
-            if rel_news:
-                st.button("🚨 速報ニュース解説", key=f"nb_{kp}_{r_m['code']}", use_container_width=True, on_click=_cb_open_news_detail, args=(rel_news,))
+            if rel_news and st.button("🚨 速報ニュース解説", key=f"nb_{kp}_{r_m['code']}", use_container_width=True):
+                st.session_state["selected_news_item"] = rel_news
+                st.session_state["navigation_page"] = "NEWS_DETAIL"
+                st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+                st.rerun()
         w_lbl = "✅ 監視解除" if r_m["code"] in st.session_state["watchlist"] else "⭐ 監視追加"
-        st.button(w_lbl, key=f"btn_watch_{uk_card}", use_container_width=True, on_click=_cb_toggle_watchlist, args=(r_m,))
+        if st.button(w_lbl, key=f"btn_watch_{uk_card}", use_container_width=True):
+            if r_m["code"] in st.session_state["watchlist"]:
+                del st.session_state["watchlist"][r_m["code"]]
+            else:
+                st.session_state["watchlist"][r_m["code"]] = r_m
+            cu = st.session_state.get("authenticated_user", "")
+            if cu: save_watchlist(cu, st.session_state["watchlist"])
+            st.rerun()
 
     with b_col2:
-        st.button(f"🔥 DEEP DIVE ({r_m['code']})", key=f"btn_dd_{kp}_{r_m['code']}", use_container_width=True, on_click=_cb_open_deep_dive, args=(r_m, rel_news_list))
-        st.button(f"🎯 日誌記録 ({r_m['code']})", key=f"btn_journal_add_{kp}_{r_m['code']}", use_container_width=True, on_click=_cb_add_journal_entry, args=(r_m,))
+        if st.button(f"🔥 DEEP DIVE ({r_m['code']})", key=f"btn_dd_{kp}_{r_m['code']}", use_container_width=True):
+            st.session_state["dd_target_code"] = r_m["full_code"]
+            st.session_state["dd_target_style"] = st_info.get("style_name", "デイトレード")
+            st.session_state["dd_code_in"] = r_m["full_code"]
+            st.session_state["dd_style_in"] = st_info.get("style_name", "デイトレード")
+            st_name_cur = st_info.get("style_name", "default")
+            matched_council = []
+            for c_key_cand, c_val_cand in st.session_state.get("council_threads", {}).items():
+                if r_m["code"] in str(c_key_cand) and st_name_cur in str(c_key_cand) and isinstance(c_val_cand, list):
+                    matched_council = c_val_cand
+                    break
+            synced_entry = sync_lab_intel_to_shared(r_m, council_turns=matched_council if matched_council else None, rel_news_list=rel_news_list, persist=True)
+            st.session_state["dd_lab_ctx"] = {
+                "full_code": r_m["full_code"],
+                "side": st_info.get("side", "LONG"),
+                "expect_pct": float(r_m.get("expect_pct", 50.0)),
+                "exec_grade": str(r_m.get("exec_grade", "")),
+                "tp": float(r_m.get("raw_tp", 0.0)),
+                "sl": float(r_m.get("raw_sl", 0.0)),
+                "vwap": float(r_m.get("raw_vwap", 0.0)),
+                "pts_gap_pct": float(r_m.get("pts_gap_pct", 0.0)),
+                "daily_atr14": float((r_m.get("daily_2y") or {}).get("daily_atr14", 0.0)),
+                "lab_full": r_m,
+                "lab_council": synced_entry.get("lab_council", []),
+                "lab_related_news": synced_entry.get("lab_related_news", rel_news_list),
+                "lab_updated_at": synced_entry.get("lab_updated_at", ""),
+                "dd_result": synced_entry.get("dd_result"),
+                "dd_updated_at": synced_entry.get("dd_updated_at", ""),
+            }
+            st.session_state["navigation_page"] = "DEEP_DIVE"
+            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+            st.rerun()
 
-    if st.session_state.get("journal_toast_msg"):
-        st.success(st.session_state["journal_toast_msg"])
-        st.session_state["journal_toast_msg"] = ""
+        if st.button(f"🎯 日誌記録 ({r_m['code']})", key=f"btn_journal_add_{kp}_{r_m['code']}", use_container_width=True):
+            cu_j = st.session_state.get("authenticated_user", "")
+            if cu_j:
+                j_list = load_trade_journal(cu_j)
+                j_entry = {
+                    "id": hashlib.md5(f"{r_m['full_code']}_{time.time_ns()}".encode()).hexdigest()[:10],
+                    "created_at": now_jst().strftime("%Y-%m-%d %H:%M"),
+                    "full_code": r_m["full_code"],
+                    "code": r_m["code"],
+                    "name": r_m["name"],
+                    "genre": r_m["genre"],
+                    "style": st_info.get("style_name", "デイトレード"),
+                    "side": st_info.get("side", "LONG"),
+                    "tactic_type": st_info.get("tactic_type", "Type-E"),
+                    "exec_grade": exec_grade,
+                    "entry_price": float(r_m.get("raw_close", 0.0)),
+                    "tp_price": float(r_m.get("raw_tp", 0.0)),
+                    "sl_price": float(r_m.get("raw_sl", 0.0)),
+                    "vwap_price": float(r_m.get("raw_vwap", 0.0)),
+                    "shares": int(lot.get("shares", 100)),
+                    "status": "OPEN",
+                    "exit_price": None,
+                    "closed_at": None,
+                    "pnl_yen": 0.0,
+                    "pnl_pct": 0.0,
+                    "ai_feedback": ""
+                }
+                j_list.insert(0, j_entry)
+                save_trade_journal(cu_j, j_list)
+                st.success(f"✅ 『{r_m['name']} ({r_m['code']})』をトレード日誌に記録しました！")
 
     render_council_sec(r_m, uk_card, auto_open=bool(is_focused or is_custom))
 # === PART 3/5 END ===
-# === PART 4/5 (1/2) START ===
+# === PART 4/5 START ===
 def _compute_single_10y_metrics(df_w: pd.DataFrame, full_code: str) -> dict:
     is_jp = ".T" in str(full_code)
     default_res = {"cagr_10y": 0.0, "pos_10y_pct": 50.0, "poc_10y_price": 0.0, "poc_10y_str": "-", "low_10y_str": "-", "high_10y_str": "-", "ma200w_dev_pct": 0.0, "ma200w_slope_up": True, "long_10y_score": 50, "regime_10y_label": "📊 10年大局データ標準評価", "poc_relation_note": "データ蓄積中", "years_span": "10Y", "df_weekly_clean": None, "has_data": False}
@@ -4228,8 +4148,7 @@ def _build_historical_daily_slice_ctx(df_daily_clean: pd.DataFrame, prev_d: str,
         poc_10y_price = round_to_tse_tick(poc_raw, full_code, "nearest") if full_code else poc_raw
         ma200w_dev_pct = float(((px - ma200) / max(ma200, 1e-4)) * 100.0)
     return {"ma5": ma5, "ma25": ma25, "ma75": ma75, "ma200": ma200, "ma25_slope_up": ma25_slope_up, "bull_po": bull_po, "bear_po": bear_po, "macd_hist": macd_hist, "pos_52w_pct": pos_52w_pct, "daily_atr14": daily_atr14, "prev_trend_weak": prev_trend_weak, "poc_10y_price": poc_10y_price, "pos_10y_pct": pos_10y_pct, "ma200w_dev_pct": ma200w_dev_pct, "has_data": True}
-# === PART 4/5 (1/2) END ===
-# === PART 4/5 (2/2) START ===
+
 def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat: dict, pest: float, vwap20: float, tpv: float, slv: float, shares: int, style: str, total_capital: float = 1000000.0, risk_tolerance_pct: float = 2.0, shared_ledger: dict = None, save_db: bool = True, genre: str = "", daily_2y: dict = None, macro_10y: dict = None, active_boosts: tuple = ("core_inst", "core_mom", "core_vol")) -> dict:
     is_jp = ".T" in full_code; now_dt = now_jst(); today_str = now_dt.strftime("%Y-%m-%d"); today_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%d"); is_market_open = _is_market_open_now(is_jp)
     combat_prof = get_ticker_combat_profile(full_code, genre)
@@ -4873,7 +4792,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
         daily_2y_serializable = {k: v for k, v in daily_2y.items() if k not in ("df_daily_clean", "daily_rs_alpha_map")}
         return {"full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, "combat_tier": combat_prof["tier_class"], "combat_cost_pct": round(combat_prof["cost_rate"] * 100, 2), "exec_grade": exec_grade, "exec_score": exec_score, "exec_detail": exec_detail, "earnings_days_left": earnings_days_left, "rs_alpha": rs_alpha, "intraday_rs_30m": intraday_rs_30m, "or15_low": or15_low_today, "or15_high": or15_high_today, "pdh": pdh_val, "pdl": pdl_val, "ob_support_px": ob_support_px, "ob_high_px": ob_high_px, "limit_up_px": limit_up_px, "limit_down_px": limit_down_px, "limit_up_tight": limit_up_tight, "vwap_p1": vwap_p1, "vwap_p2": vwap_p2, "vwap_m1": vwap_m1, "vwap_m2": vwap_m2, "vwap_over_2sigma": vwap_over_2sigma, "style_fit_bonus": round(style_fit_bonus, 1), "macro_10y": macro_10y_serializable, "daily_2y": daily_2y_serializable, "price": fmt_px(cv, is_jp, code), "raw_close": cv, "raw_tp": tpv, "raw_sl": slv, "raw_vwap": vwap_rounded, "tp_price": fmt_px(tpv, is_jp, code), "tp_pct": tp_pct_disp, "sl_price": fmt_px(slv, is_jp, code), "sl_pct": sl_pct_disp, "vwap_price": fmt_px(vwap_rounded, is_jp, code), "inst_score": int(np.clip(round((ms["ms_score"] + inst_flow_score) * 0.5), 10, 99)), "vpin": q_adv["vpin"], "ofi_z": round(ofi_z, 2), "yz_vol": q_adv["yz_vol"], "cvar95": q_adv["cvar95"], "eff_pct": q_adv["eff_pct"], "kelly_pct": kelly_pct, "bb_exp_ratio": q_adv["bb_exp_ratio"], "vol_spike_bull_pct": q_adv["vol_spike_bull_pct"], "upper_wick_pressure": u_wick_now, "lower_wick_support": l_wick_now, "bull_edge": bull_edge, "bear_edge": bear_edge, "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"], "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_lambda": ms["kyle_lambda"], "kyle_stealth": ms["kyle_stealth"], "ms_regime": ms["ms_regime"], "expect_pct": round(expect_pct, 1), "surge_attention_score": q_adv["surge_attention_score"], "rvol": q_adv["rvol"], "news_hits": news_hits, "pts_est_price": fmt_px(pest, is_jp, code), "pts_gap_pct": pgap, "pts_label_title": pts_label_title, "diff": round(day_ret, 2), "prob": gu_prob_pct, "intraday_win_rate": intraday_bull_pct, "total_win_rate": round(tot_win, 1), "rsi": q_adv["rsi"], "payoff": q_adv["payoff"], "edge": edge, "ai_score": int(np.clip(round(expect_pct * 0.92 + 4), 10, 99)), "tier_num": t_num, "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg, "lot_info": lot_info, "strat": strat, "forward_test": forward_test}
     except Exception as e: record_system_error("analyze_df", e, f"Code: {code}"); return None
-# === PART 4/5 (2/2) END ===
+# === PART 4/5 END ===
 # === PART 5/5 START ===
 def _download_5m_pool(codes: list):
     for p_str in ("60d", "1mo", "15d"):
@@ -5239,16 +5158,6 @@ def evaluate_journal_trade_audit(entry: dict, all_stocks: list) -> str:
     tp_comment = "🎯 計画通りの利確執行で期待値通りのトレードです。+1.0Rでの半分利確習慣を継続しましょう。" if pnl_pct >= 1.0 else ("⚖️ 微損・微益での撤退です。方向感が崩れた際の早期撤退は資金防衛として有効です。" if pnl_pct > -1.0 else "🛡️ 損切り後のドテンやリベンジ売買を控え、次のGrade-A銘柄を待ちましょう。")
     return f"【AEGIS＆SENTINEL 規律監査スコア: {score}点】\n・損益結果: {pnl_pct:+.2f}%（{pnl_yen:+,.0f}円）｜執行グレード: {exec_g}\n・リスク監査(SENTINEL): {sl_comment}\n・資金管理講評(AEGIS): {tp_comment}"
 
-def _cb_clear_custom_search():
-    st.session_state["custom_search_code"] = ""
-    if "search_code_input" in st.session_state:
-        st.session_state["search_code_input"] = ""
-    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-
-def _cb_set_custom_search(target_code: str):
-    st.session_state["custom_search_code"] = target_code
-    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-
 macro_info = fetch_macro()
 ribbon_chips = "".join([
     f'<div class="lab-ribbon-chip">'
@@ -5269,24 +5178,14 @@ st.markdown(
 )
 
 _cache_pool_key = f"pool_v28_full_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
-_cur_intel_ver = int(st.session_state.get("_intel_ver", 0))
-_merged_cache_key = f"{_cache_pool_key}__iv{_cur_intel_ver}"
-
 if _cache_pool_key not in st.session_state:
     with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】週足10年×日足2年×5分足60日 3階層MTFスコアリングを実行中..."):
         g_res, all_res = fetch_pool_batch(macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
         st.session_state[_cache_pool_key] = (g_res, all_res)
-        st.session_state["_merged_pool_cache"] = {"key": _merged_cache_key, "g_res": g_res, "all_res": all_res}
 else:
-    merged_cache = st.session_state.get("_merged_pool_cache")
-    if isinstance(merged_cache, dict) and merged_cache.get("key") == _merged_cache_key:
-        g_res = merged_cache["g_res"]
-        all_res = merged_cache["all_res"]
-    else:
-        raw_g_res, raw_all_res = st.session_state[_cache_pool_key]
-        all_res = [_merge_dd_intel_into_lab_item(x) for x in raw_all_res]
-        g_res = {gk: [_merge_dd_intel_into_lab_item(x) for x in gl] for gk, gl in raw_g_res.items()}
-        st.session_state["_merged_pool_cache"] = {"key": _merged_cache_key, "g_res": g_res, "all_res": all_res}
+    raw_g_res, raw_all_res = st.session_state[_cache_pool_key]
+    all_res = [_merge_dd_intel_into_lab_item(x) for x in raw_all_res]
+    g_res = {gk: [_merge_dd_intel_into_lab_item(x) for x in gl] for gk, gl in raw_g_res.items()}
 
 if st.session_state.get("last_synced_style") != investment_style:
     st.session_state["last_synced_style"] = investment_style
@@ -5329,7 +5228,7 @@ if focused_item:
 if st.session_state.get("navigation_page") == "NEWS_DETAIL":
     if not all_impact_news:
         st.info("現在、新規の重大ヘッドラインは検出されていません。")
-        st.button("⬅️ 戻る", key="news_empty_back_btn", use_container_width=True, type="primary", on_click=_cb_nav_page, args=("TOP", False))
+        if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
         st.stop()
     tn = st.session_state.get("selected_news_item") or all_impact_news[0]
     det = tn.get("detail") or analyze_news_impact_and_links(tn.get("title", ""), tn.get("cat", ""), tn.get("summary", ""))
@@ -5368,7 +5267,7 @@ if st.session_state.get("navigation_page") == "NEWS_DETAIL":
         origin_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.28);border-color:#10b981;color:#6ee7b7;font-weight:900;">🎯 記事内直接言及</span>' if is_direct_mention else '<span class="pill-badge" style="background:rgba(148,163,184,0.22);border-color:#94a3b8;color:#e2e8f0;font-weight:800;">📂 セクター代表</span>'
         render_card(r_item, rank=idx, kp=f"nr_{tn['id']}", extra_origin_badge=origin_badge)
 
-    st.button("⬅️ 戻る", key="news_detail_back_btn", use_container_width=True, type="primary", on_click=_cb_nav_page, args=("TOP", False))
+    if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
     st.stop()
 
 c1, c2 = st.columns([3.4, 1])
@@ -5382,7 +5281,10 @@ if st.session_state.get("custom_search_code"):
         cr, cr_df = fetch_one_with_df(st.session_state["custom_search_code"], macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
     if cr: render_card(cr, is_custom=True, kp="custom", intraday_df=cr_df)
     else: st.warning("⚠️ 指定された銘柄コードのデータが取得できないか、上場廃止・無効な銘柄です。")
-    st.button("⬅️ トップ画面（ランキング一覧）に戻る", key="btn_back_from_custom_diag", use_container_width=True, type="primary", on_click=_cb_clear_custom_search)
+    if st.button("⬅️ トップ画面（ランキング一覧）に戻る", key="btn_back_from_custom_diag", use_container_width=True, type="primary"):
+        st.session_state["custom_search_code"] = ""
+        if "search_code_input" in st.session_state: st.session_state["search_code_input"] = ""
+        st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
     st.stop()
 
 surv_logs_top = db_get("market_survival_logs", [])
@@ -5474,7 +5376,7 @@ elif sel_cat == "🚨 重大ニュース＆連動株":
         for n in all_impact_news:
             cross_tag = '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#10b981;color:#6ee7b7;font-weight:800;">✅ クロス検証済</span>' if n.get("cross_verified") else ""
             st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;"><div><span style="font-size:11px;color:#f87171;font-weight:800;">🚨 {html.escape(n["cat"])}</span> {cross_tag}</div><div><span style="font-size:10.5px;color:#94a3b8;margin-right:6px;">{html.escape(n.get("source",""))} ({n.get("age_hours",0)}h前)</span><span class="pill-badge" style="color:#fde047;border-color:#fde047;">実測重要度: {n.get("impact_score", 70)}点</span></div></div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-top:4px;margin-bottom:4px;">{html.escape(n["title"])}</div></div>', unsafe_allow_html=True)
-            st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True, on_click=_cb_open_news_detail, args=(n,))
+            if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True): st.session_state["selected_news_item"] = n; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
 elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
     st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 2階建てIPO・グロース市場 マルチソース実測サバイバルターミナル</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;">① 未上場・新規承認IPO監視候補 ＋ ② 既上場IPO・グロース実測サバイバルTOP10（取引所一次情報・実約定データ・金融ポータル・日英報道4系統クロス検証自動振り分け）</div><div style="margin-top:8px;"><a href="https://www.jpx.co.jp/listing/stocks/new/index.html" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">🏛️ 日本取引所グループ(JPX) 新規上場会社情報</a><a href="https://www.sec.gov/edgar/searchedgar/companysearch" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#a855f7;color:#e9d5ff;">🇺🇸 SEC EDGAR (S-1 / 424B4検索)</a></div></div>', unsafe_allow_html=True)
     with st.spinner("📡 取引所一次情報(JPX/SEC)・実市場データ・金融ポータル・日英報道の4系統クロス検証を実行中..."): ipo_bundle = fetch_real_ipo_growth_analysis()
@@ -5522,7 +5424,8 @@ elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
             unsafe_allow_html=True
         )
         if re.match(r"^[1-9][0-9]{2}[0-9A-Z]$", c_raw_u):
-            st.button(f"🔵 {u_ipo['name']} ({c_raw_u}) の3階層MTF＆売買戦略を診断する", key=f"up_ipo_diag_{idx_u}_{c_raw_u}", use_container_width=True, on_click=_cb_set_custom_search, args=(f"{c_raw_u}.T",))
+            if st.button(f"🔵 {u_ipo['name']} ({c_raw_u}) の3階層MTF＆売買戦略を診断する", key=f"up_ipo_diag_{idx_u}_{c_raw_u}", use_container_width=True):
+                st.session_state["custom_search_code"] = f"{c_raw_u}.T"; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
 
     st.markdown("### ② 既上場IPO・グロース実測サバイバルTOP10（上場確認済・日米統合）")
     survivors_ipo = ipo_bundle.get("survivors", []) if isinstance(ipo_bundle, dict) else []
@@ -5565,7 +5468,7 @@ elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
             f'</div>',
             unsafe_allow_html=True
         )
-        st.button(f"🔵 {ipo['name']} ({ipo['code']}) の実戦検証と売買戦略詳細を見る", key=f"ipo_diag_{ipo['code']}", use_container_width=True, on_click=_cb_set_custom_search, args=(ipo["full_code"],))
+        if st.button(f"🔵 {ipo['name']} ({ipo['code']}) の実戦検証と売買戦略詳細を見る", key=f"ipo_diag_{ipo['code']}", use_container_width=True): st.session_state["custom_search_code"] = ipo["full_code"]; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
 elif sel_cat == "🏦 BVC-VPIN・CLV資金フロー":
     for i, r in enumerate(sorted(surv, key=lambda x: x["inst_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
 elif sel_cat == "🔥 出来高サージ＆市場注目度":
