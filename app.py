@@ -1,3 +1,4 @@
+# === PART 1/5 START ===
 import streamlit as st
 import streamlit.components.v1 as components
 import yfinance as yf
@@ -199,112 +200,128 @@ STOCK_METADATA_CACHE = {c: {"name": n, "genre": g, "theme": t} for c, n, g, t in
 UPCOMING_IPO_WATCHLIST = [
     {
         "code": "未定",
-        "stage_label": "🟣 米国メガIPO観測（生成AI・フロンティアモデル）",
+        "en_name": "Anthropic",
+        "is_us": True,
+        "stage_label": "🟣 米国メガIPO監視候補（生成AI・フロンティアモデル）",
         "name": "Anthropic（アンソロピック）",
-        "market": "米国NASDAQ / NYSE（メガIPO観測中）",
-        "listing_date_disp": "2026年後半〜2027年 上場観測中",
-        "offer_info": "非公開評価額 600億ドル超クラス（仮条件未公表）",
-        "bb_info": "SEC S-1登録届出書提出待ち",
+        "market": "米国NASDAQ / NYSE（マルチソース上場検証中）",
+        "listing_date_disp": "マルチソース上場実態検証中",
+        "offer_info": "市場データ・SEC登録情報照合中",
+        "bb_info": "SEC EDGAR / 市場取引ステータス照合中",
         "lead_underwriter": "モルガン・スタンレー / ゴールドマン・サックス / JPモルガン（観測）",
         "absorption_scale": "超大型メガIPO（グローバルAI機関投資家集中）",
         "theme": "次世代AIモデル『Claude』・AI安全基盤・Amazon/Google巨額出資パートナー",
-        "business_desc": "フロンティアAI『Claude』シリーズを開発する世界トップクラスのAI安全性・基盤モデル企業。Amazon（AWS）およびAlphabet（Google）から巨額の戦略出資とクラウド計算資源供給を受け、エンタープライズ向けAI実装で急成長。IPO観測報道が出るたびにNVIDIA・Broadcom・データセンター電力株（VST/CEG/フジクラ等）へ強力な連想資金を波及させます。",
-        "supply_outlook": "SECへのS-1申請観測や大型資金調達報道が出るたびに、日米のAI半導体・データセンター電力インフラ銘柄への連れ高トリガーとなります。上場時は機関投資家の指数組み入れ需要が集中する大型案件として注目されます。",
-        "query": '("Anthropic" OR "アンソロピック") ("IPO" OR "上場" OR "S-1")'
+        "business_desc": "フロンティアAI『Claude』シリーズを開発する世界トップクラスのAI安全性・基盤モデル企業。Amazon（AWS）およびAlphabet（Google）から巨額の戦略出資とクラウド計算資源供給を受け、エンタープライズ向けAI実装で急成長。NVIDIA・Broadcom・データセンター電力株（VST/CEG/フジクラ等）へ強力な連想資金を波及させます。",
+        "supply_outlook": "SEC提出書類や上場取引開始が確認され次第、既上場IPOサバイバルプールへ自動昇格し、日米のAI半導体・データセンター電力インフラ銘柄との連動需給をリアルタイム追跡します。",
+        "query": '("Anthropic" OR "アンソロピック") ("IPO" OR "上場" OR "S-1" OR "NASDAQ" OR "NYSE")'
     },
     {
         "code": "未定",
-        "stage_label": "🟣 米国メガIPO観測（生成AI・AGIインフラ）",
+        "en_name": "OpenAI",
+        "is_us": True,
+        "stage_label": "🟣 米国メガIPO監視候補（生成AI・AGIインフラ）",
         "name": "OpenAI（オープンAI）",
-        "market": "米国NASDAQ / NYSE（歴史的メガIPO観測中）",
-        "listing_date_disp": "2026年後半〜2027年 上場観測中",
-        "offer_info": "非公開評価額 3,000億ドル超規模（未公表）",
-        "bb_info": "営利法人再編・SEC S-1登録届出書待ち",
+        "market": "米国NASDAQ / NYSE（マルチソース上場検証中）",
+        "listing_date_disp": "マルチソース上場実態検証中",
+        "offer_info": "市場データ・SEC登録情報照合中",
+        "bb_info": "SEC EDGAR / 市場取引ステータス照合中",
         "lead_underwriter": "ゴールドマン・サックス / モルガン・スタンレー（観測）",
         "absorption_scale": "世界最大級メガIPO（AIインフラ・半導体セクター中核）",
         "theme": "ChatGPT・推論モデル群・Stargate超巨大AIデータセンター構想",
         "business_desc": "生成AIブームを牽引する世界最大のAI開発企業。営利法人への組織再編と『Stargate』超大型AIデータセンター建設計画を進めており、ソフトバンクG・Microsoft・NVIDIA・Oracle等と巨大なAIエコシステムを形成しています。",
-        "supply_outlook": "上場準備・再編ニュースが出るたびにソフトバンクG（9984）や半導体前工程・検査装置株（アドバンテスト・東京エレクトロン）のボラティリティが急拡大する最重要カタリストです。",
-        "query": '("OpenAI" OR "オープンAI") ("IPO" OR "上場" OR "S-1")'
+        "supply_outlook": "上場準備・再編ニュースやSEC登録進展が出るたびにソフトバンクG（9984）や半導体前工程・検査装置株（アドバンテスト・東京エレクトロン）のボラティリティが急拡大する最重要カタリストです。",
+        "query": '("OpenAI" OR "オープンAI") ("IPO" OR "上場" OR "S-1" OR "NASDAQ" OR "NYSE")'
     },
     {
         "code": "未定",
-        "stage_label": "🟣 米国大型IPO観測（エンタープライズAI・データ基盤）",
+        "en_name": "Databricks",
+        "is_us": True,
+        "stage_label": "🟣 米国大型IPO監視候補（エンタープライズAI・データ基盤）",
         "name": "Databricks（データブリックス）",
-        "market": "米国NASDAQ（大型テックIPO観測中）",
-        "listing_date_disp": "2026年〜2027年 上場準備・観測中",
-        "offer_info": "非公開評価額 620億ドル超規模（未公表）",
-        "bb_info": "SEC S-1登録届出書提出待ち",
+        "market": "米国NASDAQ（マルチソース上場検証中）",
+        "listing_date_disp": "マルチソース上場実態検証中",
+        "offer_info": "市場データ・SEC登録情報照合中",
+        "bb_info": "SEC EDGAR / 市場取引ステータス照合中",
         "lead_underwriter": "モルガン・スタンレー / ゴールドマン・サックス（観測）",
         "absorption_scale": "超大型テックIPO（クラウド・AIソフトウェア中核）",
         "theme": "データレイクハウス基盤・企業向け生成AIエージェント統合プラットフォーム",
         "business_desc": "企業の膨大なデータを統合管理し、独自の生成AIモデル構築・運用を可能にする『データレイクハウス』のパイオニア。SnowflakeやPalantirと並ぶエンタープライズAIインフラの筆頭格であり、上場時期が常にウォール街で注目されています。",
         "supply_outlook": "AIソフトウェア・クラウド銘柄（Palantir・CrowdStrike・日本のDX/AI関連株）のバリュエーション再評価を促す大型IPO候補です。",
-        "query": '("Databricks" OR "データブリックス") ("IPO" OR "上場" OR "S-1")'
+        "query": '("Databricks" OR "データブリックス") ("IPO" OR "上場" OR "S-1" OR "NASDAQ" OR "NYSE")'
     },
     {
         "code": "未定",
-        "stage_label": "🟠 上場準備・承認観測（大型フィンテック）",
+        "en_name": "PayPay",
+        "is_us": False,
+        "stage_label": "🟠 上場準備・承認監視候補（大型フィンテック）",
         "name": "PayPay（ペイペイ）",
-        "market": "東証プライム / 米国NASDAQ（デュアル上場観測）",
-        "listing_date_disp": "2026年〜2027年 上場準備・観測中",
-        "offer_info": "想定時価総額 1兆〜1.5兆円規模（仮条件未公表）",
-        "bb_info": "承認後スケジュール公表予定",
+        "market": "東証プライム / 米国NASDAQ（マルチソース上場検証中）",
+        "listing_date_disp": "マルチソース上場実態検証中",
+        "offer_info": "JPX/SEC/市場データ照合中",
+        "bb_info": "JPX・Yahoo!ファイナンスIPO照合中",
         "lead_underwriter": "野村證券 / 三菱UFJモルガン・スタンレー / ゴールドマン・サックス（観測）",
         "absorption_scale": "超大型（1,000億円超・機関投資家主導型）",
         "theme": "国内QRコード決済シェア圧倒的首位・金融スーパーアプリ基盤",
         "business_desc": "登録ユーザー6,500万人超を抱える国内最大のキャッシュレス決済プラットフォーム。PayPay銀行・PayPay証券・PayPayカードとの金融エコシステム統合により黒字化と高収益化を実現。ソフトバンクグループ・LYグループの中核フィンテック資産として国内外の機関投資家から最注目されています。",
         "supply_outlook": "超大型案件のため初値急騰（2倍超）よりも、公開価格近辺での落ち着いた初値形成後に海外パッシブ資金・指数組み入れ需要でじわじわ上昇する『セカンダリー順張り型』の需給構造が想定されます。",
-        "query": '"PayPay" ("上場" OR "IPO")'
+        "query": '"PayPay" ("上場" OR "IPO" OR "新規上場")'
     },
     {
         "code": "未定",
-        "stage_label": "🟣 米国メガIPO観測（宇宙・衛星通信）",
+        "en_name": "SpaceX",
+        "is_us": True,
+        "stage_label": "🟣 米国メガIPO監視候補（宇宙・衛星通信）",
         "name": "SpaceX / Starlink（スペースX・スターリンク）",
-        "market": "米国NASDAQ / NYSE（スピンオフIPO観測）",
-        "listing_date_disp": "2026年後半〜2027年 上場観測中",
-        "offer_info": "未公表（非公開評価額 3,500億ドル超規模）",
-        "bb_info": "SEC S-1登録届出書提出待ち",
+        "market": "米国NASDAQ / NYSE（マルチソース上場検証中）",
+        "listing_date_disp": "マルチソース上場実態検証中",
+        "offer_info": "市場データ・SEC登録情報照合中",
+        "bb_info": "SEC EDGAR / 市場取引ステータス照合中",
         "lead_underwriter": "モルガン・スタンレー / ゴールドマン・サックス（観測）",
         "absorption_scale": "世界最大級メガIPO（グローバル機関投資家集中）",
         "theme": "低軌道衛星ブロードバンド網Starlink・再使用型ロケットStarship世界独占",
         "business_desc": "世界の軌道上打ち上げ重量の8割以上を独占する宇宙輸送インフラ企業であり、衛星通信事業『Starlink』は世界100ヶ国以上で契約数を急拡大中。日本の宇宙関連株（QPS研究所・アストロスケール・ispace）や通信株への連想買いを直接引き起こす最重要グローバルIPO候補です。",
-        "supply_outlook": "上場承認報道が出た瞬間から国内の宇宙・衛星関連セクターへ強力なテーマ資金が波及します。本体上場時は米国市場での流動性爆発と初動ボラティリティ拡大に要注目です。",
-        "query": '("SpaceX" OR "Starlink") ("IPO" OR "上場")'
+        "supply_outlook": "上場承認報道が出た瞬間から国内の宇宙・衛星関連セクターへ強力なテーマ資金が波及します。本体またはStarlink上場時は米国市場での流動性爆発と初動ボラティリティ拡大に要注目です。",
+        "query": '("SpaceX" OR "Starlink") ("IPO" OR "上場" OR "S-1" OR "NASDAQ" OR "NYSE")'
     },
     {
         "code": "未定",
-        "stage_label": "🟠 上場準備・承認観測（AI・クラウド）",
+        "en_name": "Sakana AI",
+        "is_us": False,
+        "stage_label": "🟠 上場準備・承認監視候補（AI・クラウド）",
         "name": "Sakana AI（サカナAI）",
-        "market": "東証プライム / グロース（ユニコーン大型上場候補）",
-        "listing_date_disp": "上場準備・観測段階（承認待ち）",
-        "offer_info": "想定時価総額 2,000億円超クラス（未公表）",
-        "bb_info": "承認後スケジュール公表予定",
+        "market": "東証プライム / グロース（マルチソース上場検証中）",
+        "listing_date_disp": "マルチソース上場実態検証中",
+        "offer_info": "JPX/市場データ照合中",
+        "bb_info": "JPX・Yahoo!ファイナンスIPO照合中",
         "lead_underwriter": "野村證券 / SMBC日興証券 / モルガン・スタンレー（観測）",
         "absorption_scale": "大型グロース〜プライム（機関・海外勢参入型）",
         "theme": "進化的モデルマージ技術・日本発の次世代生成AIユニコーン",
         "business_desc": "元Google Brainのトップ研究者らが東京で創業した日本発のAIユニコーン企業。少量の計算資源で複数のAIモデルを自動融合させる独自技術を持ち、NVIDIAや国内メガバンク・大手通信各社が出資参画。日本の国策AI・ソブリンAI開発の中核を担う存在です。",
         "supply_outlook": "AI・半導体テーマとの親和性が極めて高く、上場承認が発表されれば国内AI関連株（さくらインターネット・PKSHA等）の連れ高トリガーになりやすい注目案件です。",
-        "query": '"Sakana AI" ("上場" OR "IPO" OR "資金調達")'
+        "query": '"Sakana AI" ("上場" OR "IPO" OR "資金調達" OR "新規上場")'
     },
     {
         "code": "未定",
-        "stage_label": "🟠 上場準備・承認観測（半導体・メモリ）",
+        "en_name": "JSR",
+        "is_us": False,
+        "stage_label": "🟠 上場準備・承認監視候補（半導体・メモリ）",
         "name": "JSR（次世代半導体フォトレジスト再上場観測）",
-        "market": "東証プライム（再上場・大型案件観測）",
-        "listing_date_disp": "産業革新投資機構(JIC)傘下での再編後・再上場観測",
-        "offer_info": "未公表（大型プライム案件）",
-        "bb_info": "再上場承認スケジュール待ち",
+        "market": "東証プライム（マルチソース再上場検証中）",
+        "listing_date_disp": "マルチソース上場実態検証中",
+        "offer_info": "JPX/市場データ照合中",
+        "bb_info": "JPX・Yahoo!ファイナンスIPO照合中",
         "lead_underwriter": "野村證券 / 大和証券 / みずほ証券（観測）",
         "absorption_scale": "超大型プライム（半導体セクター中核）",
         "theme": "EUVフォトレジスト世界首位級・最先端半導体材料インフラ",
         "business_desc": "最先端半導体製造に不可欠なEUV（極端紫外線）露光用フォトレジストで世界トップシェアを誇る化学材料メーカー。JICによる非公開化を経て業界再編と研究開発投資を加速させており、半導体前工程セクターのバリュエーション基準となる大型再上場候補です。",
         "supply_outlook": "東京エレクトロン・SCREEN・トリケミカル研究所など半導体材料・装置株と強い相関を持ち、再上場観測報道が出るたびに材料セクター全体の再評価買いを誘発します。",
-        "query": '"JSR" ("再上場" OR "IPO" OR "半導体")'
+        "query": '"JSR" ("再上場" OR "IPO" OR "新規上場" OR "半導体")'
     },
     {
         "code": "285A",
-        "stage_label": "🟢 既上場大型IPO（セカンダリー監視中）",
+        "en_name": "Kioxia Holdings",
+        "is_us": False,
+        "stage_label": "🟢 既上場大型IPO（マルチソース検証対象）",
         "name": "キオクシアホールディングス",
         "market": "東証プライム（2024年12月18日上場）",
         "listing_date_disp": "2024-12-18 上場済（プライム大型）",
@@ -319,7 +336,9 @@ UPCOMING_IPO_WATCHLIST = [
     },
     {
         "code": "290A",
-        "stage_label": "🟢 既上場グロースIPO（宇宙・衛星監視中）",
+        "en_name": "Synspective",
+        "is_us": False,
+        "stage_label": "🟢 既上場グロースIPO（マルチソース検証対象）",
         "name": "Synspective（シンスペクティブ）",
         "market": "東証グロース（2024年12月19日上場）",
         "listing_date_disp": "2024-12-19 上場済（宇宙グロース）",
@@ -1170,7 +1189,7 @@ def render_user_manual_page():
             "tab": "🏛️ 6. 5名の監査官＆各機能ガイド",
             "items": [
                 ("5名のプロフェッショナル・クオンツ監査官の役割", "🔥 IGNIS（短期モメンタム・OR15初動執行） / 📐 TECHNOS（3階層MTF・LVN/HVN・OB構造解析） / 👁️ SENTINEL（しこり壁・VWAP+2σ過熱・悪材料監査） / 🛡️ AEGIS（リークフリー検証・SQN・ケリー資金管理） / 👑 NEXUS（5条件ゲート最終裁定統括）の5名が多角的に銘柄を監査します。", "【質問投下機能】各銘柄の合議ボックス下部の入力欄から、気になる点や売買相談を直接質問できます。"),
-                ("🎟️ 直近IPO・グロース実測分析タブの使い方", "上場前の注目新規承認・メガIPO観測企業（Anthropic・OpenAI・SpaceX・PayPay・東証新規承認企業等）と、既上場IPO・グロース銘柄の公開価格比・初値比・ロックアップ期間（90日/180日）節目アラートを2階建てで一覧監視できます。", "【実戦のコツ】上場後75〜105日・165〜195日はVC等のロックアップ解除売りに注意が必要です。"),
+                ("🎟️ 直近IPO・グロース実測分析タブの使い方", "取引所一次情報(JPX/SEC EDGAR)・Yahoo Finance Search/yfinance実売買データ・金融ポータル・日英ニュースの4系統マルチソースでクロス検証し、上場予定・承認企業と既上場IPOサバイバル銘柄を自動振り分け表示します。", "【実戦のコツ】上場後75〜105日・165〜195日はVC等のロックアップ解除売りに注意が必要です。"),
                 ("📋 監視シート（相関リスク診断）＆ 📓 トレード日誌AI監査", "監視シートに2銘柄以上登録すると、直近60日の値動き相関係数とセクター集中度を自動計算し、同一テーマ偏重による同時被弾リスクを警告します。また、各銘柄カードの『🎯 日誌記録』を押すとトレード日誌に保存され、決済後にAEGIS＆SENTINELが100点満点で規律採点を行います。", "【活用法】毎日の振り返りに使うことで、高値掴みや損切り遅れの癖を客観的に改善できます。")
             ]
         }
@@ -1434,7 +1453,8 @@ if st.session_state.get("navigation_page") == "ADMIN" and adm_c_page and cu == a
             st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>日時</th><th>モジュール</th><th>例外</th><th>メッセージ</th></tr></thead><tbody>{rows_err}</tbody></table></div>', unsafe_allow_html=True)
         else: st.success("🎉 エラーはありません。")
     st.stop()
-
+# === PART 1/5 END ===
+# === PART 2/5 START ===
 def _parse_news_age_hours(pub_str: str) -> float:
     if not pub_str: return 12.0
     try:
@@ -1894,25 +1914,343 @@ def _extract_ipo_schedule_details(text_blob: str, is_unlisted_rumor: bool = Fals
         "market": m_mkt.group(1).strip() if m_mkt else "東証グロース/スタンダード"
     }
 
+@st.cache_data(ttl=1800)
+def _fetch_jpx_new_listings() -> list:
+    records, seen = [], set()
+    ctx = ssl.create_default_context()
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"}
+    urls = [
+        "https://www.jpx.co.jp/listing/stocks/new/index.html",
+        "https://finance.yahoo.co.jp/stocks/ipo"
+    ]
+    for u in urls:
+        try:
+            req = urllib.request.Request(u, headers=headers)
+            with urllib.request.urlopen(req, timeout=5.0, context=ctx) as resp:
+                html_txt = resp.read(327680).decode("utf-8", errors="ignore")
+                clean_txt = re.sub(r"<[^>]+>", " ", html.unescape(html_txt))
+                clean_txt = re.sub(r"\s+", " ", clean_txt)
+                for m in re.finditer(r"([0-9]{4}/[0-9]{1,2}/[0-9]{1,2})\s+([^\s]{2,24})\s+([1-9][0-9]{2}[0-9A-Z])", clean_txt):
+                    ld_raw, nm_raw, c4_raw = m.group(1), _clean_corp_name(m.group(2)), m.group(3).upper()
+                    if re.match(r"^202[0-9]$", c4_raw) or _is_noise_jp_etf_reit(c4_raw): continue
+                    if c4_raw in seen: continue
+                    seen.add(c4_raw)
+                    parts_d = ld_raw.split("/")
+                    ld_norm = f"{int(parts_d[0]):04d}-{int(parts_d[1]):02d}-{int(parts_d[2]):02d}"
+                    records.append({"code4": c4_raw, "full_code": f"{c4_raw}.T", "name": nm_raw, "listing_date": ld_norm, "source": "JPX/YahooIPO"})
+                for m2 in re.finditer(r"([^\s「」『』【】\(\)（）]{2,20})\s*[\(（]\s*([1-9][0-9]{2}[0-9A-Z])\s*[\)）]", clean_txt):
+                    nm_raw, c4_raw = _clean_corp_name(m2.group(1)), m2.group(2).upper()
+                    if re.match(r"^202[0-9]$", c4_raw) or _is_noise_jp_etf_reit(c4_raw) or c4_raw in seen: continue
+                    seen.add(c4_raw)
+                    records.append({"code4": c4_raw, "full_code": f"{c4_raw}.T", "name": nm_raw, "listing_date": "", "source": "JPX/YahooIPO"})
+        except Exception as e:
+            record_system_error("_fetch_jpx_new_listings:url", e, f"URL: {u}")
+    return records[:30]
+
+def _verify_ipo_status_multisource(card_obj: dict) -> dict:
+    item = dict(card_obj)
+    name_jp = str(item.get("name", "")).strip()
+    en_name = str(item.get("en_name") or name_jp.split("（")[0]).strip()
+    is_us = bool(item.get("is_us", False)) or ("米国" in str(item.get("market", ""))) or ("🟣" in str(item.get("stage_label", "")))
+    c_raw = str(item.get("code", "未定")).strip().upper()
+    ctx = ssl.create_default_context()
+    headers_web = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36", "Accept": "application/json,text/html,*/*"}
+    headers_sec = {"User-Agent": "YamashishiLabQuantResearch contact@yamashishi-lab.example.com", "Accept": "application/json"}
+
+    en_tokens = [tok.upper() for tok in re.findall(r"[A-Za-z0-9]{3,}", en_name) if tok.upper() not in {"INC", "CORP", "LTD", "HOLDINGS", "GROUP", "STARLINK"}]
+    if not en_tokens and en_name:
+        en_tokens = [en_name.upper()]
+
+    def _src_a_market() -> dict:
+        res_a = {"ok": False, "listed": False, "ticker": "", "exchange": "", "listing_date": "", "first_open": None, "curr_px": None, "chg_pct": 0.0, "rvol": 1.0, "period_range": "-", "from_high_pct": 0.0, "ann_vol": 0.0, "turnover_m": 0.0, "curr_vol": 0, "summary": "未確認"}
+        cand_syms = []
+        if re.match(r"^[1-9][0-9]{2}[0-9A-Z]$", c_raw):
+            cand_syms.append(f"{c_raw}.T")
+        elif re.match(r"^[A-Z]{1,5}$", c_raw) and c_raw not in {"未定", "IPO", "SEC", "JPX"}:
+            cand_syms.append(c_raw)
+
+        try:
+            q_url = f"https://query1.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(en_name)}&quotesCount=6&newsCount=0"
+            req = urllib.request.Request(q_url, headers=headers_web)
+            with urllib.request.urlopen(req, timeout=4.0, context=ctx) as resp:
+                data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                res_a["ok"] = True
+                for q in (data.get("quotes") or []):
+                    if not isinstance(q, dict): continue
+                    if str(q.get("quoteType", "")).upper() != "EQUITY": continue
+                    sym = str(q.get("symbol", "")).strip().upper()
+                    if not sym or sym in DELISTED_OR_INVALID_CODES: continue
+                    q_names = f"{q.get('longname', '')} {q.get('shortname', '')}".upper()
+                    if any(tk in q_names for tk in en_tokens):
+                        if sym not in cand_syms:
+                            cand_syms.append(sym)
+                        if not res_a["exchange"]:
+                            res_a["exchange"] = str(q.get("exchDisp") or q.get("exchange") or "")
+        except Exception as e_s:
+            record_system_error("_verify_ipo:market_search", e_s, en_name)
+
+        for sym in cand_syms[:3]:
+            try:
+                df_h = yf.Ticker(sym).history(period="max", interval="1d", auto_adjust=True)
+                if df_h is not None and not df_h.empty:
+                    df_c = df_h.dropna(subset=["Close", "Volume"]).sort_index()
+                    df_c = df_c[(df_c["Close"] > 0) & (df_c["Volume"] > 0)]
+                    if len(df_c) >= 1:
+                        res_a["ok"] = True
+                        res_a["listed"] = True
+                        res_a["ticker"] = sym
+                        cl = df_c["Close"].values.astype(float)
+                        op = df_c["Open"].values.astype(float)
+                        hi = df_c["High"].values.astype(float)
+                        lo = df_c["Low"].values.astype(float)
+                        vo = df_c["Volume"].values.astype(float)
+                        curr_px = float(cl[-1])
+                        prev_px = float(cl[-2]) if len(cl) >= 2 else float(op[-1])
+                        chg_pct = round(((curr_px - prev_px) / max(prev_px, 1e-4)) * 100.0, 2)
+                        first_dt = df_c.index[0].strftime("%Y-%m-%d") if hasattr(df_c.index[0], "strftime") else ""
+                        first_op = round(float(op[0]), 2) if float(op[0]) > 0 else round(float(cl[0]), 2)
+                        sub_1m = df_c.tail(22)
+                        hi_1m, lo_1m = float(sub_1m["High"].max()), float(sub_1m["Low"].min())
+                        from_hi = round(((curr_px - hi_1m) / max(hi_1m, 1e-4)) * 100.0, 2)
+                        rvol = round(float(vo[-1]) / max(float(np.mean(vo[-6:-1])) if len(vo) >= 6 else float(np.mean(vo)), 1.0), 2)
+                        rets = np.diff(cl[-30:]) / np.maximum(cl[-30:-1], 1e-4) if len(cl) >= 4 else np.array([])
+                        ann_v = round(float(np.std(rets) * np.sqrt(252) * 100.0), 1) if len(rets) >= 3 else 0.0
+                        is_jp_s = sym.endswith(".T")
+                        rng_s = f"{lo_1m:,.0f}円〜{hi_1m:,.0f}円" if is_jp_s else f"${lo_1m:,.2f}〜${hi_1m:,.2f}"
+                        res_a.update({
+                            "listing_date": first_dt,
+                            "first_open": first_op,
+                            "curr_px": curr_px,
+                            "chg_pct": chg_pct,
+                            "rvol": rvol,
+                            "period_range": rng_s,
+                            "from_high_pct": from_hi,
+                            "ann_vol": ann_v,
+                            "turnover_m": round((curr_px * float(vo[-1])) / 1_000_000.0, 1),
+                            "curr_vol": int(vo[-1]),
+                            "summary": f"上場済({sym})"
+                        })
+                        return res_a
+            except Exception as e_yf:
+                record_system_error(f"_verify_ipo:yf:{sym}", e_yf)
+        if res_a["ok"]:
+            res_a["summary"] = "未上場(売買履歴なし)"
+        return res_a
+
+    def _src_b_regulator() -> dict:
+        res_b = {"ok": False, "approved": False, "listed_doc": False, "doc_type": "", "filing_date": "", "code4": "", "summary": "未確認"}
+        if is_us:
+            try:
+                sec_url = f"https://efts.sec.gov/LATEST/search-index?q={urllib.parse.quote(en_name)}&forms=S-1,424B4,8-A12B"
+                req = urllib.request.Request(sec_url, headers=headers_sec)
+                with urllib.request.urlopen(req, timeout=4.5, context=ctx) as resp:
+                    sdata = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                    res_b["ok"] = True
+                    hits = (((sdata or {}).get("hits") or {}).get("hits") or [])
+                    matched_forms, latest_dt = [], ""
+                    for h in hits[:10]:
+                        src_d = h.get("_source") or {}
+                        disp_names = " ".join(src_d.get("display_names") or []).upper()
+                        if any(tk in disp_names for tk in en_tokens):
+                            frm = str(src_d.get("form") or "").upper()
+                            fdt = str(src_d.get("file_date") or "")
+                            if frm: matched_forms.append(frm)
+                            if fdt and fdt > latest_dt: latest_dt = fdt
+                    if matched_forms:
+                        res_b["approved"] = True
+                        res_b["filing_date"] = latest_dt
+                        if any(f in matched_forms for f in ("424B4", "8-A12B")):
+                            res_b["listed_doc"] = True
+                            res_b["doc_type"] = "424B4/8-A12B確定"
+                            res_b["summary"] = f"SEC({res_b['doc_type']}:{latest_dt})"
+                        else:
+                            res_b["doc_type"] = matched_forms[0]
+                            res_b["summary"] = f"SEC({matched_forms[0]}提出:{latest_dt})"
+                    else:
+                        res_b["summary"] = "SEC(S-1未提出)"
+            except Exception as e_sec:
+                record_system_error("_verify_ipo:sec", e_sec, en_name)
+        else:
+            try:
+                jpx_list = _fetch_jpx_new_listings()
+                res_b["ok"] = True
+                nm_clean = re.sub(r"（.*?）", "", name_jp).strip()
+                for rec in jpx_list:
+                    if (c_raw != "未定" and rec["code4"] == c_raw) or (nm_clean and nm_clean in rec["name"]) or (en_name and en_name.upper() in rec["name"].upper()):
+                        res_b["approved"] = True
+                        res_b["code4"] = rec["code4"]
+                        res_b["filing_date"] = rec["listing_date"]
+                        res_b["summary"] = f"JPX承認({rec['code4']}/{rec['listing_date'] or '予定'})"
+                        break
+                if not res_b["approved"]:
+                    res_b["summary"] = "JPX(新規承認未掲載)"
+            except Exception as e_jpx:
+                record_system_error("_verify_ipo:jpx", e_jpx, name_jp)
+        return res_b
+
+    def _src_c_portal() -> dict:
+        res_c = {"ok": False, "portal_hit": False, "summary": "未確認", "headlines": []}
+        try:
+            if is_us:
+                q_p = f'"{en_name}" (NASDAQ OR NYSE OR "IPO" OR "S-1")'
+                hits_p = search_single_query(q_p, 4, trusted_only=True, max_age_hours=720.0, lang="en")
+                res_c["ok"] = True
+                res_c["headlines"] = hits_p
+                res_c["portal_hit"] = len(hits_p) > 0
+                res_c["summary"] = f"米金融メディア({len(hits_p)}件)"
+            else:
+                q_p = f'"{name_jp.split("（")[0]}" ("新規上場" OR "公開価格" OR "初値")'
+                hits_p = search_single_query(q_p, 4, trusted_only=True, max_age_hours=720.0, lang="ja")
+                res_c["ok"] = True
+                res_c["headlines"] = hits_p
+                res_c["portal_hit"] = len(hits_p) > 0
+                res_c["summary"] = f"国内金融ポータル({len(hits_p)}件)"
+        except Exception as e_p:
+            record_system_error("_verify_ipo:portal", e_p, en_name)
+        return res_c
+
+    def _src_d_news() -> dict:
+        res_d = {"ok": False, "listed_signals": 0, "pre_signals": 0, "headlines": [], "summary": "未確認"}
+        try:
+            h_ja = search_single_query(item.get("query", f'"{name_jp.split("（")[0]}" IPO'), 5, trusted_only=False, max_age_hours=720.0, lang="ja")
+            h_en = search_single_query(f'"{en_name}" ("IPO" OR "went public" OR "began trading" OR "ticker" OR "S-1")', 5, trusted_only=False, max_age_hours=720.0, lang="en")
+            all_h = list(dict.fromkeys(h_ja + h_en))
+            res_d["ok"] = True
+            res_d["headlines"] = all_h
+            listed_kws = ["上場した", "新規上場した", "初値", "売買開始", "取引開始", "WENT PUBLIC", "BEGAN TRADING", "IPO DEBUT", "LISTS ON NASDAQ", "LISTS ON NYSE", "TRADES UNDER", "NOW TRADING"]
+            pre_kws = ["上場観測", "上場準備", "申請準備", "上場検討", "CONSIDERING IPO", "PLANS TO GO PUBLIC", "EYES IPO", "CONFIDENTIALLY FILED", "RUMORED"]
+            blob = " \n ".join(all_h).upper()
+            l_cnt = sum(1 for kw in listed_kws if kw in blob)
+            p_cnt = sum(1 for kw in pre_kws if kw in blob)
+            res_d["listed_signals"] = l_cnt
+            res_d["pre_signals"] = p_cnt
+            res_d["summary"] = f"日英報道(上場言及{l_cnt}/観測{p_cnt})"
+        except Exception as e_n:
+            record_system_error("_verify_ipo:news", e_n, en_name)
+        return res_d
+
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        fa = ex.submit(_src_a_market)
+        fb = ex.submit(_src_b_regulator)
+        fc = ex.submit(_src_c_portal)
+        fd = ex.submit(_src_d_news)
+        ra, rb, rc, rd = fa.result(), fb.result(), fc.result(), fd.result()
+
+    sources_checked = sum(1 for r_x in (ra, rb, rc, rd) if r_x.get("ok"))
+    today_dt = now_jst().replace(tzinfo=None)
+
+    # 優先順位1: 既上場確定 (LISTED)
+    if ra.get("listed") or (rb.get("listed_doc") and rd.get("listed_signals", 0) >= 2):
+        verified_status = "LISTED"
+        resolved_ticker = ra.get("ticker") or (f"{c_raw}.T" if re.match(r"^[1-9][0-9]{2}[0-9A-Z]$", c_raw) else c_raw)
+        ld_str = ra.get("listing_date") or rb.get("filing_date") or ""
+        days_since = 0
+        if ld_str:
+            try:
+                days_since = max(0, (today_dt - datetime.strptime(ld_str[:10], "%Y-%m-%d")).days)
+            except Exception: pass
+        item["verified_status"] = "LISTED"
+        item["resolved_ticker"] = resolved_ticker
+        item["listing_date"] = ld_str
+        item["days_since_listing"] = days_since
+        item["market_data"] = ra
+    # 優先順位2: 上場承認済・申請確認 (APPROVED)
+    elif rb.get("approved"):
+        verified_status = "APPROVED"
+        item["verified_status"] = "APPROVED"
+        if rb.get("code4") and c_raw == "未定":
+            item["code"] = rb["code4"]
+        if rb.get("filing_date"):
+            item["listing_date_disp"] = f"{rb['filing_date']}（{rb.get('doc_type') or '承認確認済'}）"
+        item["stage_label"] = "🔴 上場承認・申請確認済（複数ソース検証）"
+        if rb.get("doc_type"):
+            item["bb_info"] = f"{rb['doc_type']} 提出確認済（{rb.get('filing_date','-')}）"
+    # 優先順位3: 上場準備・観測中 (PRE_IPO)
+    else:
+        verified_status = "PRE_IPO"
+        item["verified_status"] = "PRE_IPO"
+        if is_us:
+            item["stage_label"] = "🟣 米国メガIPO観測（マルチソース未上場確認）"
+            item["listing_date_disp"] = "未上場・上場観測中（SEC/市場データ確認済）"
+        else:
+            item["stage_label"] = "🟠 上場準備・承認観測中（マルチソース未上場確認）"
+            item["listing_date_disp"] = "未上場・上場準備中（JPX/市場データ確認済）"
+
+    merged_headlines = list(dict.fromkeys((rc.get("headlines") or []) + (rd.get("headlines") or [])))
+    today_tag = now_jst().strftime("%d %b %Y")
+    buzz_cnt = len(merged_headlines)
+    recent_cnt = sum(1 for h in merged_headlines if today_tag in h or "時間前" in h or "分前" in h or "hours ago" in h)
+    item["heat_score"] = int(np.clip(55 + buzz_cnt * 3 + recent_cnt * 5, 50, 99))
+    if merged_headlines:
+        item["latest_headline"] = re.sub(r"\(.*?\)|\[.*?\]", "", merged_headlines[0]).strip()
+
+    item["verify_sources_count"] = max(1, sources_checked)
+    item["verify_badge_text"] = f"🔍 複数ソース検証({max(1, sources_checked)}/4): {ra['summary']} / {rb['summary']} / {rc['summary']} / {rd['summary']}"
+
+    code_for_link = str(item.get("resolved_ticker") or item.get("code") or "未定").strip()
+    if code_for_link.endswith(".T"):
+        c4_l = code_for_link.replace(".T", "")
+        item["kabutan_url"] = f"https://kabutan.jp/stock/?code={c4_l}"
+        item["yahoo_url"] = f"https://finance.yahoo.co.jp/quote/{c4_l}.T"
+        item["jpx_ipo_url"] = "https://www.jpx.co.jp/listing/stocks/new/index.html"
+    elif re.match(r"^[1-9][0-9]{2}[0-9A-Z]$", code_for_link):
+        item["kabutan_url"] = f"https://kabutan.jp/stock/?code={code_for_link}"
+        item["yahoo_url"] = f"https://finance.yahoo.co.jp/quote/{code_for_link}.T"
+        item["jpx_ipo_url"] = "https://www.jpx.co.jp/listing/stocks/new/index.html"
+    elif item.get("verified_status") == "LISTED" and re.match(r"^[A-Z]{1,5}$", code_for_link):
+        item["kabutan_url"] = f"https://www.sec.gov/edgar/searchedgar/companysearch"
+        item["yahoo_url"] = f"https://finance.yahoo.com/quote/{code_for_link}"
+        item["jpx_ipo_url"] = "https://www.sec.gov/edgar/searchedgar/companysearch"
+    else:
+        q_enc = urllib.parse.quote(en_name)
+        item["kabutan_url"] = f"https://kabutan.jp/news/?q={q_enc}"
+        item["yahoo_url"] = f"https://finance.yahoo.com/lookup?s={q_enc}" if is_us else f"https://finance.yahoo.co.jp/search/?query={q_enc}"
+        item["jpx_ipo_url"] = "https://www.sec.gov/edgar/searchedgar/companysearch" if is_us else "https://www.jpx.co.jp/listing/stocks/new/index.html"
+    return item
+
 @st.cache_data(ttl=600)
 def fetch_upcoming_jpx_ipo_schedule() -> list:
     schedule_items, seen_names = [], set()
+    for jrec in _fetch_jpx_new_listings()[:6]:
+        nm = jrec.get("name", "")
+        c4 = jrec.get("code4", "")
+        ld = jrec.get("listing_date", "")
+        if not nm or nm in seen_names: continue
+        seen_names.add(nm)
+        schedule_items.append({
+            "code": c4 or "未定",
+            "en_name": nm,
+            "is_us": False,
+            "stage_label": "🔴 東証新規上場承認・公式スケジュール抽出",
+            "name": nm,
+            "market": "東証グロース/スタンダード/プライム",
+            "listing_date_disp": ld if ld else "直近承認・スケジュール確認中（JPX公式参照）",
+            "offer_info": "JPX/目論見書参照",
+            "bb_info": "スケジュール確認中",
+            "lead_underwriter": "JPX目論見書参照",
+            "absorption_scale": "目論見書・JPX公表値参照",
+            "theme": "東証新規上場承認・IPOセカンダリー注目企業",
+            "business_desc": f"JPX新規上場会社情報・金融ポータルで確認された注目IPO企業です（証券コード: {c4}）。",
+            "supply_outlook": "上場初日は公開価格と初値の乖離率（公募比）および寄り付き後のVWAP維持が最重要ポイントです。初値高騰後の飛びつき買いは避け、OR15分レンジ形成後の押し目反発を確認してからエントリーしてください。",
+            "latest_headline": f"新規上場承認確認: {nm} ({c4})",
+            "query": f'"{nm}" IPO'
+        })
+
     queries = [
         ('("新規上場" OR "上場承認") ("東証グロース" OR "東証プライム" OR "東証スタンダード" OR "公開価格")', "ja"),
         ('site:finance.yahoo.co.jp/stocks/ipo OR site:kabutan.jp "新規上場承認"', "ja"),
-        ('("Anthropic" OR "OpenAI" OR "SpaceX" OR "Databricks" OR "Stripe") ("IPO" OR "S-1" OR "上場")', "ja"),
-        ('("Anthropic" OR "OpenAI" OR "SpaceX" OR "Databricks") ("IPO" OR "S-1 filing")', "en"),
+        ('("Anthropic" OR "OpenAI" OR "SpaceX" OR "Databricks" OR "Stripe") ("IPO" OR "S-1" OR "NASDAQ" OR "NYSE")', "en"),
     ]
     all_hits = []
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        for f in as_completed([ex.submit(search_single_query, q, 8, False, 720.0, lng) for q, lng in queries]):
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        for f in as_completed([ex.submit(search_single_query, q, 6, False, 720.0, lng) for q, lng in queries]):
             try: all_hits.extend(f.result())
             except Exception as e_q: record_system_error("fetch_upcoming_jpx_ipo_schedule:q", e_q)
 
     for h in all_hits:
         clean_h = re.sub(r"\[.*?\]", "", h).strip()
         if not clean_h: continue
-        is_us_mega = any(k in clean_h.upper() for k in ["ANTHROPIC", "OPENAI", "SPACEX", "DATABRICKS", "STRIPE", "S-1"])
+        is_us_mega = any(k in clean_h.upper() for k in ["ANTHROPIC", "OPENAI", "SPACEX", "DATABRICKS", "STRIPE", "S-1", "NASDAQ", "NYSE"])
         det = _extract_ipo_schedule_details(clean_h, is_unlisted_rumor=is_us_mega)
         codes_found = [dc for dc in dict.fromkeys(re.findall(r"(?<![0-9A-Za-z])([1-9][0-9]{2}[0-9A-Z])(?![0-9A-Za-z])", clean_h)) if not re.match(r"^202[0-9]$", dc)]
         corp_name = ""
@@ -1930,6 +2268,8 @@ def fetch_upcoming_jpx_ipo_schedule() -> list:
             code_disp = codes_found[0] if codes_found else "未定"
             schedule_items.append({
                 "code": code_disp,
+                "en_name": corp_name,
+                "is_us": is_us_mega,
                 "stage_label": "🔴 東証新規上場承認・直近スケジュール抽出",
                 "name": corp_name,
                 "market": det["market"],
@@ -1944,7 +2284,7 @@ def fetch_upcoming_jpx_ipo_schedule() -> list:
                 "latest_headline": clean_h,
                 "query": f'"{corp_name}" IPO'
             })
-        if len(schedule_items) >= 5: break
+        if len(schedule_items) >= 6: break
     return schedule_items
 
 @st.cache_data(ttl=86400)
@@ -1961,7 +2301,7 @@ def _resolve_dynamic_ipo_listing_info(full_code: str) -> dict:
     yf_first_open = float(df_max["Open"].iloc[0]) if (df_max is not None and not df_max.empty and float(df_max["Open"].iloc[0]) > 0) else None
     yf_first_dt = df_max.index[0].strftime("%Y-%m-%d") if (df_max is not None and not df_max.empty and hasattr(df_max.index[0], "strftime")) else ""
     if yf_first_open is not None:
-        return {"listing_date": yf_first_dt or now_jst().strftime("%Y-%m-%d"), "offer_price": None, "initial_price": round(yf_first_open, 1), "lead_underwriter": "東証新規上場（実測履歴特定）", "absorption_scale": "市場データ自動検出", "note": "※公開価格は非公表/未登録のため初日始値を初値（実測）として表示"}
+        return {"listing_date": yf_first_dt or now_jst().strftime("%Y-%m-%d"), "offer_price": None, "initial_price": round(yf_first_open, 2), "lead_underwriter": "取引所新規上場（実測履歴特定）", "absorption_scale": "市場データ自動検出", "note": "※公開価格は非公表/未登録のため初日始値を初値（実測）として表示"}
     return {"listing_date": now_jst().strftime("%Y-%m-%d"), "offer_price": None, "initial_price": None, "lead_underwriter": "東証グロース/新規発掘", "absorption_scale": "市場データ自動検出", "note": ""}
 
 def _extract_ticker_df(raw_df, code: str, total_codes: int):
@@ -1975,55 +2315,57 @@ def _extract_ticker_df(raw_df, code: str, total_codes: int):
 @st.cache_data(ttl=300)
 def fetch_real_ipo_growth_analysis() -> dict:
     extracted_ipo_firms = fetch_upcoming_jpx_ipo_schedule()
-    combined_upcoming, seen_up_names = [], set()
+    combined_candidates, seen_up_names = [], set()
     for it in extracted_ipo_firms:
-        nm_k = re.sub(r"\s+", "", it["name"])
+        nm_k = re.sub(r"\s+", "", it["name"].split("（")[0]).upper()
         if nm_k not in seen_up_names:
-            seen_up_names.add(nm_k); combined_upcoming.append(dict(it))
+            seen_up_names.add(nm_k); combined_candidates.append(dict(it))
     for w_it in UPCOMING_IPO_WATCHLIST:
-        nm_k = re.sub(r"\s+", "", w_it["name"].split("（")[0])
-        if nm_k not in seen_up_names and len(combined_upcoming) < 10:
-            seen_up_names.add(nm_k); combined_upcoming.append(dict(w_it))
+        nm_k = re.sub(r"\s+", "", w_it["name"].split("（")[0]).upper()
+        if nm_k not in seen_up_names and len(combined_candidates) < 12:
+            seen_up_names.add(nm_k); combined_candidates.append(dict(w_it))
 
-    today_tag = now_jst().strftime("%d %b %Y")
-    def _enrich_upcoming_card(card_obj: dict) -> dict:
-        is_us_card = ("米国" in str(card_obj.get("market", ""))) or ("🟣" in str(card_obj.get("stage_label", "")))
-        hits = search_single_query(card_obj.get("query", f'"{card_obj["name"]}" IPO'), 6, trusted_only=False, max_age_hours=720.0, lang="ja")
-        if is_us_card:
-            en_q = f'"{card_obj["name"].split("（")[0]}" ("IPO" OR "S-1" OR "valuation")'
-            hits.extend(search_single_query(en_q, 4, trusted_only=False, max_age_hours=720.0, lang="en"))
-        headline = re.sub(r"\(.*?\)|\[.*?\]", "", hits[0]).strip() if hits else card_obj.get("latest_headline", "上場準備・需給動向を継続モニタリング中")
-        buzz_cnt = len(hits)
-        recent_cnt = sum(1 for h in hits if today_tag in h or "時間前" in h or "分前" in h or "hours ago" in h)
-        card_obj["heat_score"] = int(np.clip(55 + buzz_cnt * 3 + recent_cnt * 5, 50, 99))
-        card_obj["latest_headline"] = headline
-        c_raw = str(card_obj.get("code", "未定")).strip()
-        if re.match(r"^[1-9][0-9]{2}[0-9A-Z]$", c_raw):
-            card_obj["kabutan_url"] = f"https://kabutan.jp/stock/?code={c_raw}"
-            card_obj["yahoo_url"] = f"https://finance.yahoo.co.jp/quote/{c_raw}.T"
-        else:
-            q_enc = urllib.parse.quote(card_obj["name"].split("（")[0])
-            card_obj["kabutan_url"] = f"https://kabutan.jp/news/?q={q_enc}"
-            card_obj["yahoo_url"] = f"https://finance.yahoo.com/lookup?s={q_enc}" if is_us_card else f"https://finance.yahoo.co.jp/search/?query={q_enc}"
-        card_obj["jpx_ipo_url"] = "https://www.sec.gov/edgar/searchedgar/companysearch" if is_us_card else "https://www.jpx.co.jp/listing/stocks/new/index.html"
-        return card_obj
-
-    upcoming_cards = []
+    verified_cards = []
     with ThreadPoolExecutor(max_workers=5) as ex:
-        for f in as_completed([ex.submit(_enrich_upcoming_card, c) for c in combined_upcoming]):
-            try: upcoming_cards.append(f.result())
-            except Exception as e: record_system_error("fetch_real_ipo_growth_analysis:upcoming", e)
-    upcoming_cards.sort(key=lambda x: (0 if "🔴" in x.get("stage_label", "") else (1 if "🟣" in x.get("stage_label", "") else (2 if "🟠" in x.get("stage_label", "") else 3)), -x.get("heat_score", 60)))
+        for f in as_completed([ex.submit(_verify_ipo_status_multisource, c) for c in combined_candidates]):
+            try: verified_cards.append(f.result())
+            except Exception as e: record_system_error("fetch_real_ipo_growth_analysis:verify", e)
+
+    upcoming_cards, promoted_listed_items, verify_badge_by_code = [], [], {}
+    for vc in verified_cards:
+        v_status = vc.get("verified_status", "PRE_IPO")
+        v_badge = str(vc.get("verify_badge_text", ""))
+        if v_status == "LISTED":
+            tkr_full = str(vc.get("resolved_ticker") or "").strip().upper()
+            if tkr_full:
+                verify_badge_by_code[tkr_full] = v_badge
+                promoted_listed_items.append(vc)
+        else:
+            upcoming_cards.append(vc)
+
+    upcoming_cards.sort(key=lambda x: (0 if x.get("verified_status") == "APPROVED" else (1 if "🟣" in x.get("stage_label", "") else 2), -x.get("heat_score", 60)))
 
     dynamic_ipo_pool, seen_ipo_codes = list(REAL_IPO_GROWTH_UNIVERSE), {it[0] for it in REAL_IPO_GROWTH_UNIVERSE} | DELISTED_OR_INVALID_CODES
+    promoted_meta_map = {}
+    for p_it in promoted_listed_items:
+        tkr_f = str(p_it.get("resolved_ticker") or "").strip().upper()
+        if not tkr_f or tkr_f in DELISTED_OR_INVALID_CODES: continue
+        promoted_meta_map[tkr_f] = p_it
+        if tkr_f not in seen_ipo_codes:
+            seen_ipo_codes.add(tkr_f)
+            mkt_lbl = p_it.get("market_data", {}).get("exchange") or ("米国NASDAQ/NYSE" if not tkr_f.endswith(".T") else "東証上場")
+            dynamic_ipo_pool.insert(0, (tkr_f, p_it.get("name", tkr_f), mkt_lbl, p_it.get("theme", "新規上場IPO")))
+            STOCK_METADATA_CACHE[tkr_f] = {"name": p_it.get("name", tkr_f), "genre": _infer_genre_from_text(p_it.get("theme", "")), "theme": p_it.get("theme", "新規上場IPO")}
+
     try:
         for snip in search_single_query('("IPO" OR "新規上場" OR "東証グロース") 株価 急騰', 8, trusted_only=False, max_age_hours=720.0):
             for fc, nm, _, th in _extract_tickers_from_text(snip):
                 if fc.endswith(".T") and fc not in seen_ipo_codes:
                     seen_ipo_codes.add(fc); dynamic_ipo_pool.append((fc, nm, "東証グロース/新規発掘", th))
-                    if len(dynamic_ipo_pool) >= 22: break
+                    if len(dynamic_ipo_pool) >= 24: break
     except Exception as e_disc:
         record_system_error("fetch_real_ipo_growth_analysis:discover", e_disc)
+
     codes = [c for c, _, _, _ in dynamic_ipo_pool]
     raw = None
     try: raw = yf.download(codes, period="1mo", interval="1d", group_by="ticker", threads=True, progress=False, timeout=10.0)
@@ -2032,15 +2374,18 @@ def fetch_real_ipo_growth_analysis() -> dict:
 
     def _analyze_ipo_item(item):
         c, name, mkt, theme = item
+        is_jp = c.endswith(".T")
+        code_disp = c.replace(".T", "") if is_jp else c
+        p_info = promoted_meta_map.get(c, {})
+        v_badge = verify_badge_by_code.get(c, f"🔍 複数ソース検証: Market=上場済({c}) / 取引所履歴照合済")
         try:
             df_raw_c = _extract_ticker_df(raw, c, len(codes))
             if df_raw_c is None or df_raw_c.dropna(subset=["Close"]).empty:
                 try: df_raw_c = yf.Ticker(c).history(period="1mo", interval="1d", auto_adjust=True)
                 except Exception: df_raw_c = None
             df = normalize_ohlcv_df(df_raw_c, min_rows=3)
-            code4 = c.replace(".T", "")
             hist_meta = _resolve_dynamic_ipo_listing_info(c)
-            listing_date_str = str(hist_meta.get("listing_date") or "")
+            listing_date_str = str(p_info.get("listing_date") or hist_meta.get("listing_date") or "")
             days_since_listing, lockup_alert, lockup_note = 0, False, ""
             if listing_date_str:
                 try:
@@ -2049,13 +2394,19 @@ def fetch_real_ipo_growth_analysis() -> dict:
                         lockup_alert = True
                         lockup_note = f"⚠️ ロックアップ期間（{90 if days_since_listing <= 120 else 180}日）節目チェック推奨（上場後 {days_since_listing}日経過）"
                 except Exception: pass
-            offer_px, init_px = hist_meta.get("offer_price"), hist_meta.get("initial_price")
+            offer_px = hist_meta.get("offer_price")
+            init_px = (p_info.get("market_data", {}).get("first_open") if p_info else None) or hist_meta.get("initial_price")
+
+            kabutan_u = f"https://kabutan.jp/stock/?code={code_disp}" if is_jp else "https://www.sec.gov/edgar/searchedgar/companysearch"
+            yahoo_u = f"https://finance.yahoo.co.jp/quote/{code_disp}.T" if is_jp else f"https://finance.yahoo.com/quote/{code_disp}"
+            jpx_u = "https://www.jpx.co.jp/listing/stocks/new/index.html" if is_jp else "https://www.sec.gov/edgar/searchedgar/companysearch"
 
             if df is None:
-                fallback_px = float(init_px) if (init_px is not None and float(init_px) > 0) else (float(offer_px) if (offer_px is not None and float(offer_px) > 0) else 0.0)
-                offer_str = f"{float(offer_px):,.0f}円" if (offer_px is not None and float(offer_px) > 0) else "非公表 / 市場実測"
-                init_str = f"{float(init_px):,.0f}円 ({round(((float(init_px) - float(offer_px)) / float(offer_px)) * 100.0, 1):+.1f}%)" if (offer_px and init_px and float(offer_px) > 0 and float(init_px) > 0) else (f"{float(init_px):,.0f}円" if init_px else "実測中")
-                return {"code": code4, "full_code": c, "name": name, "market": mkt, "theme": theme, "listing_date": listing_date_str, "days_since_listing": days_since_listing, "lockup_alert": lockup_alert, "lockup_note": lockup_note, "offer_price_str": offer_str, "initial_price_str": init_str, "curr_vs_init_str": "0.0%", "lead_underwriter": hist_meta.get("lead_underwriter", "-"), "absorption_scale": hist_meta.get("absorption_scale", "-"), "ipo_meta_note": hist_meta.get("note", "※相場データ取得待機中・基本メタデータ表示"), "price": f"{fallback_px:,.0f}円" if fallback_px > 0 else "データ取得中", "chg_pct": 0.0, "period_range": "-", "from_high_pct": 0.0, "curr_vol": 0, "rvol": 1.0, "ann_vol": 0.0, "turnover_m_yen": 0.0, "score": 55, "tier": "🛡️ B級残留：基準メタデータ監視モード", "latest_headline": "直近の特段の悪材料なし・需給推移中", "kabutan_url": f"https://kabutan.jp/stock/?code={code4}", "yahoo_url": f"https://finance.yahoo.co.jp/quote/{code4}.T", "jpx_ipo_url": "https://www.jpx.co.jp/listing/stocks/new/index.html"}
+                m_d = p_info.get("market_data", {}) if p_info else {}
+                fallback_px = float(m_d.get("curr_px") or init_px or offer_px or 0.0)
+                offer_str = fmt_px(float(offer_px), is_jp, c) if (offer_px is not None and float(offer_px) > 0) else "非公表 / 市場実測"
+                init_str = f"{fmt_px(float(init_px), is_jp, c)} ({round(((float(init_px) - float(offer_px)) / float(offer_px)) * 100.0, 1):+.1f}%)" if (offer_px and init_px and float(offer_px) > 0 and float(init_px) > 0) else (f"{fmt_px(float(init_px), is_jp, c)} (初日始値実測)" if init_px else "実測中")
+                return {"code": code_disp, "full_code": c, "name": name, "market": mkt, "theme": theme, "listing_date": listing_date_str, "days_since_listing": days_since_listing, "lockup_alert": lockup_alert, "lockup_note": lockup_note, "offer_price_str": offer_str, "initial_price_str": init_str, "curr_vs_init_str": "0.0%", "lead_underwriter": p_info.get("lead_underwriter") or hist_meta.get("lead_underwriter", "-"), "absorption_scale": p_info.get("absorption_scale") or hist_meta.get("absorption_scale", "-"), "ipo_meta_note": hist_meta.get("note", ""), "verify_badge_text": v_badge, "price": fmt_px(fallback_px, is_jp, c) if fallback_px > 0 else "データ取得中", "chg_pct": float(m_d.get("chg_pct", 0.0)), "period_range": str(m_d.get("period_range", "-")), "from_high_pct": float(m_d.get("from_high_pct", 0.0)), "curr_vol": int(m_d.get("curr_vol", 0)), "rvol": float(m_d.get("rvol", 1.0)), "ann_vol": float(m_d.get("ann_vol", 0.0)), "turnover_m_yen": float(m_d.get("turnover_m", 0.0)), "turnover_unit": "百万円" if is_jp else "M$", "score": 68 if p_info else 55, "tier": "⚡ A級昇格：マルチソース上場確認・実測監視中" if p_info else "🛡️ B級残留：基準メタデータ監視モード", "latest_headline": p_info.get("latest_headline") or "直近の特段の悪材料なし・需給推移中", "kabutan_url": kabutan_u, "yahoo_url": yahoo_u, "jpx_ipo_url": jpx_u}
 
             cl, hi, lo, vo = [df[col].values.astype(float) for col in ["Close", "High", "Low", "Volume"]]
             curr_px, prev_px = float(cl[-1]), float(cl[-2]) if len(cl) >= 2 else float(cl[-1])
@@ -2065,26 +2416,30 @@ def fetch_real_ipo_growth_analysis() -> dict:
             rvol = round(float(vo[-1]) / max(float(np.mean(vo[-6:-1])) if len(vo) >= 6 else float(np.mean(vo)), 1.0), 2)
             rets = np.diff(cl) / np.maximum(cl[:-1], 1e-4)
             ann_vol = round(float(np.std(rets) * np.sqrt(252) * 100.0), 1) if len(rets) >= 3 else 0.0
-            news_items = search_single_query(f"{name} 株価", 4, trusted_only=False, max_age_hours=168.0)
-            score = int(np.clip(50 + chg_pct * 3.5 + (rvol - 1.0) * 18.0 + (20.0 + from_high_pct) * 0.6 + len(news_items) * 2.0, 15, 99))
+            news_items = search_single_query(f"{name} 株価" if is_jp else f'"{name}" OR "{code_disp}" stock', 4, trusted_only=False, max_age_hours=168.0, lang="ja" if is_jp else "en")
+            promo_bonus = 8.0 if p_info else 0.0
+            score = int(np.clip(50 + promo_bonus + chg_pct * 3.5 + (rvol - 1.0) * 18.0 + (20.0 + from_high_pct) * 0.6 + len(news_items) * 2.0, 15, 99))
             tier = "🔥 S級サバイバー：出来高急増・高値圏ブレイク態勢" if score >= 80 else ("⚡ A級サバイバー：順張り・押し目需給良好" if score >= 65 else ("🛡️ B級残留：底値固め・出来高待ちフェーズ" if score >= 52 else "💀 C級脱落圏：モメンタム低下・圏外淘汰候補"))
             if offer_px is not None and float(offer_px) > 0:
-                offer_str = f"{float(offer_px):,.0f}円"
-                init_str = f"{float(init_px):,.0f}円 ({round(((float(init_px) - float(offer_px)) / float(offer_px)) * 100.0, 1):+.1f}%)" if (init_px is not None and float(init_px) > 0) else "算出中"
+                offer_str = fmt_px(float(offer_px), is_jp, c)
+                init_str = f"{fmt_px(float(init_px), is_jp, c)} ({round(((float(init_px) - float(offer_px)) / float(offer_px)) * 100.0, 1):+.1f}%)" if (init_px is not None and float(init_px) > 0) else "算出中"
             else:
                 offer_str = "非公表 / 市場実測"
-                init_str = f"{float(init_px):,.0f}円 (初日始値実測)" if (init_px is not None and float(init_px) > 0) else "実測中"
+                init_str = f"{fmt_px(float(init_px), is_jp, c)} (初日始値実測)" if (init_px is not None and float(init_px) > 0) else "実測中"
             curr_vs_init_str = f"{round(((curr_px - float(init_px)) / float(init_px)) * 100.0, 1):+.1f}%" if (init_px is not None and float(init_px) > 0) else "-"
-            return {"code": code4, "full_code": c, "name": name, "market": mkt, "theme": theme, "listing_date": listing_date_str, "days_since_listing": days_since_listing, "lockup_alert": lockup_alert, "lockup_note": lockup_note, "offer_price_str": offer_str, "initial_price_str": init_str, "curr_vs_init_str": curr_vs_init_str, "lead_underwriter": hist_meta.get("lead_underwriter", "-"), "absorption_scale": hist_meta.get("absorption_scale", "-"), "ipo_meta_note": hist_meta.get("note", ""), "price": f"{curr_px:,.0f}円", "chg_pct": chg_pct, "period_range": f"{period_low:,.0f}円 〜 {period_high:,.0f}円", "from_high_pct": from_high_pct, "curr_vol": int(vo[-1]), "rvol": rvol, "ann_vol": ann_vol, "turnover_m_yen": round((curr_px * float(vo[-1])) / 1_000_000.0, 1), "score": score, "tier": tier, "latest_headline": re.sub(r"\[.*?\]", "", news_items[0]).strip() if news_items else "直近の特段の悪材料なし・需給推移中", "kabutan_url": f"https://kabutan.jp/stock/?code={code4}", "yahoo_url": f"https://finance.yahoo.co.jp/quote/{code4}.T", "jpx_ipo_url": "https://www.jpx.co.jp/listing/stocks/new/index.html"}
+            range_str = f"{fmt_px(period_low, is_jp, c)} 〜 {fmt_px(period_high, is_jp, c)}"
+            return {"code": code_disp, "full_code": c, "name": name, "market": mkt, "theme": theme, "listing_date": listing_date_str, "days_since_listing": days_since_listing, "lockup_alert": lockup_alert, "lockup_note": lockup_note, "offer_price_str": offer_str, "initial_price_str": init_str, "curr_vs_init_str": curr_vs_init_str, "lead_underwriter": p_info.get("lead_underwriter") or hist_meta.get("lead_underwriter", "-"), "absorption_scale": p_info.get("absorption_scale") or hist_meta.get("absorption_scale", "-"), "ipo_meta_note": hist_meta.get("note", ""), "verify_badge_text": v_badge, "price": fmt_px(curr_px, is_jp, c), "chg_pct": chg_pct, "period_range": range_str, "from_high_pct": from_high_pct, "curr_vol": int(vo[-1]), "rvol": rvol, "ann_vol": ann_vol, "turnover_m_yen": round((curr_px * float(vo[-1])) / 1_000_000.0, 1), "turnover_unit": "百万円" if is_jp else "M$", "score": score, "tier": tier, "latest_headline": re.sub(r"\[.*?\]", "", news_items[0]).strip() if news_items else (p_info.get("latest_headline") or "直近の特段の悪材料なし・需給推移中"), "kabutan_url": kabutan_u, "yahoo_url": yahoo_u, "jpx_ipo_url": jpx_u}
         except Exception as e_item: record_system_error(f"fetch_real_ipo_growth_analysis:{c}", e_item); return None
+
     with ThreadPoolExecutor(max_workers=6) as ex:
         for f in as_completed([ex.submit(_analyze_ipo_item, it) for it in dynamic_ipo_pool]):
             res_it = f.result()
             if res_it: all_evaluated.append(res_it)
     all_evaluated.sort(key=lambda x: x["score"], reverse=True)
-    survivors, eliminated = all_evaluated[:6], all_evaluated[6:]
+    survivors, eliminated = all_evaluated[:10], all_evaluated[10:]
     for idx, r in enumerate(survivors, 1): r["rank"] = idx
-    return {"upcoming_ipos": upcoming_cards, "survivors": survivors, "eliminated": eliminated, "total_scanned": len(all_evaluated)}
+    return {"upcoming_ipos": upcoming_cards, "survivors": survivors, "eliminated": eliminated, "total_scanned": len(all_evaluated), "promoted_count": len(promoted_listed_items)}
+
 def search_web_knowledge_parallel(q1: str, q2: str) -> list:
     res = []
     with ThreadPoolExecutor(max_workers=2) as ex:
@@ -2747,7 +3102,8 @@ def _build_equity_and_session_html(hist_rows: list, is_jp: bool) -> str:
         f'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:5px;">{sess_pills}</div>'
         f'</div>'
     )
-
+# === PART 2/5 END ===
+# === PART 3/5 START ===
 def build_instant_verdict_html(r: dict) -> str:
     r_m = _merge_dd_intel_into_lab_item(r)
     has_dd = bool(r_m.get("has_dd_intel"))
@@ -3204,6 +3560,8 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
                 st.success(f"✅ 『{r_m['name']} ({r_m['code']})』をトレード日誌に記録しました！")
 
     render_council_sec(r_m, uk_card, auto_open=bool(is_focused or is_custom))
+# === PART 3/5 END ===
+# === PART 4/5 START ===
 def _compute_single_10y_metrics(df_w: pd.DataFrame, full_code: str) -> dict:
     is_jp = ".T" in str(full_code)
     default_res = {"cagr_10y": 0.0, "pos_10y_pct": 50.0, "poc_10y_price": 0.0, "poc_10y_str": "-", "low_10y_str": "-", "high_10y_str": "-", "ma200w_dev_pct": 0.0, "ma200w_slope_up": True, "long_10y_score": 50, "regime_10y_label": "📊 10年大局データ標準評価", "poc_relation_note": "データ蓄積中", "years_span": "10Y", "df_weekly_clean": None, "has_data": False}
@@ -4434,6 +4792,8 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
         daily_2y_serializable = {k: v for k, v in daily_2y.items() if k not in ("df_daily_clean", "daily_rs_alpha_map")}
         return {"full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, "combat_tier": combat_prof["tier_class"], "combat_cost_pct": round(combat_prof["cost_rate"] * 100, 2), "exec_grade": exec_grade, "exec_score": exec_score, "exec_detail": exec_detail, "earnings_days_left": earnings_days_left, "rs_alpha": rs_alpha, "intraday_rs_30m": intraday_rs_30m, "or15_low": or15_low_today, "or15_high": or15_high_today, "pdh": pdh_val, "pdl": pdl_val, "ob_support_px": ob_support_px, "ob_high_px": ob_high_px, "limit_up_px": limit_up_px, "limit_down_px": limit_down_px, "limit_up_tight": limit_up_tight, "vwap_p1": vwap_p1, "vwap_p2": vwap_p2, "vwap_m1": vwap_m1, "vwap_m2": vwap_m2, "vwap_over_2sigma": vwap_over_2sigma, "style_fit_bonus": round(style_fit_bonus, 1), "macro_10y": macro_10y_serializable, "daily_2y": daily_2y_serializable, "price": fmt_px(cv, is_jp, code), "raw_close": cv, "raw_tp": tpv, "raw_sl": slv, "raw_vwap": vwap_rounded, "tp_price": fmt_px(tpv, is_jp, code), "tp_pct": tp_pct_disp, "sl_price": fmt_px(slv, is_jp, code), "sl_pct": sl_pct_disp, "vwap_price": fmt_px(vwap_rounded, is_jp, code), "inst_score": int(np.clip(round((ms["ms_score"] + inst_flow_score) * 0.5), 10, 99)), "vpin": q_adv["vpin"], "ofi_z": round(ofi_z, 2), "yz_vol": q_adv["yz_vol"], "cvar95": q_adv["cvar95"], "eff_pct": q_adv["eff_pct"], "kelly_pct": kelly_pct, "bb_exp_ratio": q_adv["bb_exp_ratio"], "vol_spike_bull_pct": q_adv["vol_spike_bull_pct"], "upper_wick_pressure": u_wick_now, "lower_wick_support": l_wick_now, "bull_edge": bull_edge, "bear_edge": bear_edge, "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"], "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_lambda": ms["kyle_lambda"], "kyle_stealth": ms["kyle_stealth"], "ms_regime": ms["ms_regime"], "expect_pct": round(expect_pct, 1), "surge_attention_score": q_adv["surge_attention_score"], "rvol": q_adv["rvol"], "news_hits": news_hits, "pts_est_price": fmt_px(pest, is_jp, code), "pts_gap_pct": pgap, "pts_label_title": pts_label_title, "diff": round(day_ret, 2), "prob": gu_prob_pct, "intraday_win_rate": intraday_bull_pct, "total_win_rate": round(tot_win, 1), "rsi": q_adv["rsi"], "payoff": q_adv["payoff"], "edge": edge, "ai_score": int(np.clip(round(expect_pct * 0.92 + 4), 10, 99)), "tier_num": t_num, "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg, "lot_info": lot_info, "strat": strat, "forward_test": forward_test}
     except Exception as e: record_system_error("analyze_df", e, f"Code: {code}"); return None
+# === PART 4/5 END ===
+# === PART 5/5 START ===
 def _download_5m_pool(codes: list):
     for p_str in ("60d", "1mo", "15d"):
         try:
@@ -5018,27 +5378,35 @@ elif sel_cat == "🚨 重大ニュース＆連動株":
             st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;"><div><span style="font-size:11px;color:#f87171;font-weight:800;">🚨 {html.escape(n["cat"])}</span> {cross_tag}</div><div><span style="font-size:10.5px;color:#94a3b8;margin-right:6px;">{html.escape(n.get("source",""))} ({n.get("age_hours",0)}h前)</span><span class="pill-badge" style="color:#fde047;border-color:#fde047;">実測重要度: {n.get("impact_score", 70)}点</span></div></div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-top:4px;margin-bottom:4px;">{html.escape(n["title"])}</div></div>', unsafe_allow_html=True)
             if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True): st.session_state["selected_news_item"] = n; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
 elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
-    st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 2階建てIPO・グロース市場 実測サバイバルターミナル</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;">① 上場予定・新規承認IPO注目企業（Anthropic・OpenAI・SpaceX・PayPay・東証新規承認企業等） ＋ ② 既上場IPO・グロース実測サバイバルTOP6</div><div style="margin-top:8px;"><a href="https://www.jpx.co.jp/listing/stocks/new/index.html" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">🏛️ 日本取引所グループ(JPX) 新規上場会社情報公式ページを開く</a></div></div>', unsafe_allow_html=True)
-    with st.spinner("📡 上場予定・新規承認IPO企業＆既上場グロース広域プールを実測スキャン中..."): ipo_bundle = fetch_real_ipo_growth_analysis()
+    st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 2階建てIPO・グロース市場 マルチソース実測サバイバルターミナル</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;">① 未上場・新規承認IPO監視候補 ＋ ② 既上場IPO・グロース実測サバイバルTOP10（取引所一次情報・実約定データ・金融ポータル・日英報道4系統クロス検証自動振り分け）</div><div style="margin-top:8px;"><a href="https://www.jpx.co.jp/listing/stocks/new/index.html" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">🏛️ 日本取引所グループ(JPX) 新規上場会社情報</a><a href="https://www.sec.gov/edgar/searchedgar/companysearch" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#a855f7;color:#e9d5ff;">🇺🇸 SEC EDGAR (S-1 / 424B4検索)</a></div></div>', unsafe_allow_html=True)
+    with st.spinner("📡 取引所一次情報(JPX/SEC)・実市場データ・金融ポータル・日英報道の4系統クロス検証を実行中..."): ipo_bundle = fetch_real_ipo_growth_analysis()
 
-    st.markdown("### ① 上場予定・新規承認IPO 注目企業一覧")
+    promoted_cnt = int(ipo_bundle.get("promoted_count", 0)) if isinstance(ipo_bundle, dict) else 0
+    if promoted_cnt > 0:
+        st.info(f"⚡ マルチソース実態検証により、監視候補のうち **{promoted_cnt}銘柄** の市場上場・実約定データを確認したため、自動的に「② 既上場IPO・グロース実測サバイバル」へ昇格移動しました。")
+
+    st.markdown("### ① 上場予定・新規承認IPO 監視候補一覧（未上場確認済）")
     upcoming_ipos = ipo_bundle.get("upcoming_ipos", []) if isinstance(ipo_bundle, dict) else []
+    if not upcoming_ipos:
+        st.info("現在、未上場の監視候補はすべて上場済へ昇格したか、新規承認待機中です。")
     for idx_u, u_ipo in enumerate(upcoming_ipos, 1):
         c_raw_u = str(u_ipo.get("code", "未定")).strip()
-        code_badge_u = f"証券コード: {c_raw_u}" if c_raw_u != "未定" else "コード未定（上場準備・承認待ち）"
-        ld_disp = str(u_ipo.get("listing_date_disp", "上場準備・観測中"))
+        code_badge_u = f"証券コード: {c_raw_u}" if c_raw_u != "未定" else "コード未定（未上場・承認待ち）"
+        ld_disp = str(u_ipo.get("listing_date_disp", "マルチソース上場検証中"))
+        v_badge_u = str(u_ipo.get("verify_badge_text", "🔍 複数ソース検証済"))
         st.markdown(
             f'<div class="rank-card" style="border-left-color:#a855f7;background:linear-gradient(180deg,#160d2b 0%,#090d16 100%)!important;">'
             f'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;">'
-            f'<span class="pill-badge" style="background:rgba(16,185,129,0.24);border-color:#10b981;color:#6ee7b7;font-weight:900;font-size:11.5px;">📅 上場予定日/時期: {html.escape(ld_disp)}</span>'
+            f'<span class="pill-badge" style="background:rgba(16,185,129,0.24);border-color:#10b981;color:#6ee7b7;font-weight:900;font-size:11.5px;">📅 ステータス/予定日: {html.escape(ld_disp)}</span>'
             f'<span class="pill-badge" style="background:#a855f7;color:#fff;font-weight:800;">{html.escape(str(u_ipo.get("stage_label", "上場注目企業")))}</span>'
             f'<span class="quantum-badge">報道熱量 {int(u_ipo.get("heat_score", 60))}点</span>'
             f'</div>'
+            f'<div style="background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.35);border-radius:5px;padding:4px 8px;margin-bottom:6px;font-size:10.5px;color:#7dd3fc;font-family:\'JetBrains Mono\',monospace;">{html.escape(v_badge_u)}</div>'
             f'<div style="font-size:17.5px;font-weight:800;color:#f8fafc;">🏷️ {html.escape(str(u_ipo.get("name", "")))} <span style="font-size:12px;color:#38bdf8;font-family:\'JetBrains Mono\',monospace;">[{html.escape(code_badge_u)}]</span></div>'
             f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;">🏛️ <b>上場市場:</b> {html.escape(str(u_ipo.get("market", "-")))} ｜ 🏦 <b>主幹事証券:</b> {html.escape(str(u_ipo.get("lead_underwriter", "-")))}</div>'
             f'<div class="winrate-bar" style="margin-top:8px;text-align:left;padding:8px 10px;">'
             f'<div><div style="font-size:9.5px;color:#fde047;">💰 想定価格 / 公開価格（仮条件）</div><div style="font-size:11.5px;font-weight:800;color:#f8fafc;">{html.escape(str(u_ipo.get("offer_info", "未公表 / 観測中")))}</div></div>'
-            f'<div><div style="font-size:9.5px;color:#38bdf8;">🗓️ ブックビルディング(BB)期間</div><div style="font-size:11.5px;font-weight:800;color:#e0f2fe;">{html.escape(str(u_ipo.get("bb_info", "スケジュール確認中")))}</div></div>'
+            f'<div><div style="font-size:9.5px;color:#38bdf8;">🗓️ ブックビルディング(BB) / 登録書類</div><div style="font-size:11.5px;font-weight:800;color:#e0f2fe;">{html.escape(str(u_ipo.get("bb_info", "スケジュール確認中")))}</div></div>'
             f'<div><div style="font-size:9.5px;color:#c084fc;">📦 吸収金額規模・需給タイプ</div><div style="font-size:11.5px;font-weight:800;color:#f3e8ff;">{html.escape(str(u_ipo.get("absorption_scale", "-")))}</div></div>'
             f'</div>'
             f'<div style="background:rgba(15,23,42,0.88);border:1px solid rgba(56,189,248,0.28);border-radius:7px;padding:8px 10px;margin-top:7px;font-size:11.5px;line-height:1.65;color:#e2e8f0;">'
@@ -5051,7 +5419,7 @@ elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
             f'<div style="margin-top:8px;">'
             f'<a href="{html.escape(str(u_ipo.get("jpx_ipo_url", "https://www.jpx.co.jp/listing/stocks/new/index.html")))}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#10b981;color:#6ee7b7;">🏛️ JPX/SEC公式</a>'
             f'<a href="{html.escape(str(u_ipo.get("yahoo_url", "https://finance.yahoo.co.jp/stocks/ipo")))}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">💹 Yahoo!ファイナンスIPO</a>'
-            f'<a href="{html.escape(str(u_ipo.get("kabutan_url", "https://kabutan.jp/")))}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📊 株探リンク</a>'
+            f'<a href="{html.escape(str(u_ipo.get("kabutan_url", "https://kabutan.jp/")))}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📊 株探/EDGARリンク</a>'
             f'</div></div>',
             unsafe_allow_html=True
         )
@@ -5059,7 +5427,7 @@ elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
             if st.button(f"🔵 {u_ipo['name']} ({c_raw_u}) の3階層MTF＆売買戦略を診断する", key=f"up_ipo_diag_{idx_u}_{c_raw_u}", use_container_width=True):
                 st.session_state["custom_search_code"] = f"{c_raw_u}.T"; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
 
-    st.markdown("### ② 既上場IPO・グロース実測サバイバルTOP6")
+    st.markdown("### ② 既上場IPO・グロース実測サバイバルTOP10（上場確認済・日米統合）")
     survivors_ipo = ipo_bundle.get("survivors", []) if isinstance(ipo_bundle, dict) else []
     if not survivors_ipo:
         st.info("📡 現在既上場IPO銘柄の相場データを再取得中です。数秒後に再度お試しください。")
@@ -5067,7 +5435,39 @@ elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
         chg_col = "#10b981" if ipo["chg_pct"] >= 0 else "#ef4444"
         lockup_badge = f'<span class="pill-badge" style="background:rgba(245,158,11,0.25);border-color:#f59e0b;color:#fde047;font-weight:900;">{html.escape(ipo.get("lockup_note", ""))}</span>' if ipo.get("lockup_alert") else ""
         meta_note_html = f'<div style="font-size:10px;color:#6ee7b7;margin-top:3px;">{html.escape(ipo.get("ipo_meta_note", ""))}</div>' if ipo.get("ipo_meta_note") else ""
-        st.markdown(f'<div class="rank-card" style="border-left-color:#f59e0b;"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;"><span class="pill-badge" style="background:rgba(16,185,129,0.24);border-color:#10b981;color:#6ee7b7;font-weight:900;font-size:11.5px;">📅 上場日: {html.escape(str(ipo.get("listing_date") or "実測特定済"))}（上場後 {int(ipo.get("days_since_listing", 0)):,}日経過）</span>{lockup_badge}</div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px;"><div><span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 生存 第{ipo["rank"]}位</span><span class="pill-badge" style="background:rgba(250,204,21,0.2);color:#fde047;border-color:#facc15;">スコア {ipo["score"]}点</span></div><div style="font-size:11px;color:#38bdf8;font-weight:700;">{html.escape(ipo["tier"])}</div></div><div><span style="font-size:18px;font-weight:800;color:#f8fafc;">{html.escape(ipo["name"])}</span> <span style="font-size:12px;color:#94a3b8;">({ipo["code"]} / {html.escape(ipo["market"])})</span></div><div style="font-size:11px;color:#cbd5e1;margin-top:3px;">🎯 {html.escape(ipo["theme"])} ｜ 🏦 主幹事: {html.escape(str(ipo.get("lead_underwriter", "-")))} ｜ 📦 吸収規模: {html.escape(str(ipo.get("absorption_scale", "-")))}</div><div class="winrate-bar" style="margin-top:8px;"><div><div style="font-size:9.5px;color:#94a3b8;">🏷️ 公開価格</div><div style="font-size:12px;font-weight:800;color:#e2e8f0;">{html.escape(str(ipo.get("offer_price_str", "-")))}</div></div><div><div style="font-size:9.5px;color:#fde047;">🚀 初値 (公募比)</div><div style="font-size:12px;font-weight:800;color:#fde047;">{html.escape(str(ipo.get("initial_price_str", "-")))}</div></div><div><div style="font-size:9.5px;color:#38bdf8;">💰 現在値 (前日比 / 初値比)</div><div style="font-size:12px;font-weight:800;">{ipo["price"]} (<span style="color:{chg_col};">{ipo["chg_pct"]:+.2f}%</span> / 初値比 <b style="color:#6ee7b7;">{html.escape(str(ipo.get("curr_vs_init_str", "-")))}</b>)</div></div></div><div class="trade-plan-box" style="margin-top:6px;"><div><div style="font-size:9.5px;color:#94a3b8;">📊 当日RVOL</div><div style="font-size:12px;font-weight:800;color:#fde047;">{ipo["rvol"]}倍</div></div><div><div style="font-size:9.5px;color:#94a3b8;">📏 1ヶ月高安レンジ (高値乖離)</div><div style="font-size:11.5px;font-weight:700;">{html.escape(ipo["period_range"])} ({ipo["from_high_pct"]}%)</div></div><div><div style="font-size:9.5px;color:#94a3b8;">💴 直近売買代金 / 年率Vol</div><div style="font-size:11.5px;font-weight:700;">{ipo["turnover_m_yen"]:,.1f}百万円 / {ipo["ann_vol"]}%</div></div></div>{meta_note_html}<div style="background:rgba(2,6,23,0.75);border:1px solid rgba(245,158,11,0.28);border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11.5px;color:#fef3c7;">📰 <b>最新ヘッドライン:</b> {html.escape(ipo["latest_headline"])}</div><div style="margin-top:8px;"><a href="{ipo["kabutan_url"]}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📊 株探詳細</a><a href="{ipo["yahoo_url"]}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">💹 Yahoo!ファイナンス</a><a href="{ipo["jpx_ipo_url"]}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#10b981;color:#6ee7b7;">🏛️ JPX新規上場情報</a></div></div>', unsafe_allow_html=True)
+        v_badge_s = str(ipo.get("verify_badge_text", "🔍 複数ソース検証済"))
+        t_unit = str(ipo.get("turnover_unit", "百万円"))
+        is_jp_s = str(ipo.get("full_code", "")).endswith(".T")
+        btn_lbl_1 = "📊 株探詳細" if is_jp_s else "🏛️ SEC EDGAR"
+        btn_lbl_3 = "🏛️ JPX新規上場情報" if is_jp_s else "🇺🇸 SEC提出書類検索"
+        st.markdown(
+            f'<div class="rank-card" style="border-left-color:#f59e0b;">'
+            f'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;">'
+            f'<span class="pill-badge" style="background:rgba(16,185,129,0.24);border-color:#10b981;color:#6ee7b7;font-weight:900;font-size:11.5px;">📅 上場日: {html.escape(str(ipo.get("listing_date") or "実測特定済"))}（上場後 {int(ipo.get("days_since_listing", 0)):,}日経過）</span>'
+            f'{lockup_badge}'
+            f'</div>'
+            f'<div style="background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.32);border-radius:5px;padding:4px 8px;margin-bottom:6px;font-size:10.5px;color:#6ee7b7;font-family:\'JetBrains Mono\',monospace;">{html.escape(v_badge_s)}</div>'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px;">'
+            f'<div><span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 生存 第{ipo["rank"]}位</span><span class="pill-badge" style="background:rgba(250,204,21,0.2);color:#fde047;border-color:#facc15;">スコア {ipo["score"]}点</span></div>'
+            f'<div style="font-size:11px;color:#38bdf8;font-weight:700;">{html.escape(ipo["tier"])}</div>'
+            f'</div>'
+            f'<div><span style="font-size:18px;font-weight:800;color:#f8fafc;">{html.escape(ipo["name"])}</span> <span style="font-size:12px;color:#94a3b8;">({html.escape(str(ipo["code"]))} / {html.escape(ipo["market"])})</span></div>'
+            f'<div style="font-size:11px;color:#cbd5e1;margin-top:3px;">🎯 {html.escape(ipo["theme"])} ｜ 🏦 主幹事: {html.escape(str(ipo.get("lead_underwriter", "-")))} ｜ 📦 吸収規模: {html.escape(str(ipo.get("absorption_scale", "-")))}</div>'
+            f'<div class="winrate-bar" style="margin-top:8px;">'
+            f'<div><div style="font-size:9.5px;color:#94a3b8;">🏷️ 公開価格</div><div style="font-size:12px;font-weight:800;color:#e2e8f0;">{html.escape(str(ipo.get("offer_price_str", "-")))}</div></div>'
+            f'<div><div style="font-size:9.5px;color:#fde047;">🚀 初値 (公募比)</div><div style="font-size:12px;font-weight:800;color:#fde047;">{html.escape(str(ipo.get("initial_price_str", "-")))}</div></div>'
+            f'<div><div style="font-size:9.5px;color:#38bdf8;">💰 現在値 (前日比 / 初値比)</div><div style="font-size:12px;font-weight:800;">{html.escape(str(ipo["price"]))} (<span style="color:{chg_col};">{ipo["chg_pct"]:+.2f}%</span> / 初値比 <b style="color:#6ee7b7;">{html.escape(str(ipo.get("curr_vs_init_str", "-")))}</b>)</div></div>'
+            f'</div>'
+            f'<div class="trade-plan-box" style="margin-top:6px;">'
+            f'<div><div style="font-size:9.5px;color:#94a3b8;">📊 当日RVOL</div><div style="font-size:12px;font-weight:800;color:#fde047;">{ipo["rvol"]}倍</div></div>'
+            f'<div><div style="font-size:9.5px;color:#94a3b8;">📏 1ヶ月高安レンジ (高値乖離)</div><div style="font-size:11.5px;font-weight:700;">{html.escape(ipo["period_range"])} ({ipo["from_high_pct"]}%)</div></div>'
+            f'<div><div style="font-size:9.5px;color:#94a3b8;">💴 直近売買代金 / 年率Vol</div><div style="font-size:11.5px;font-weight:700;">{ipo["turnover_m_yen"]:,.1f}{html.escape(t_unit)} / {ipo["ann_vol"]}%</div></div>'
+            f'</div>{meta_note_html}'
+            f'<div style="background:rgba(2,6,23,0.75);border:1px solid rgba(245,158,11,0.28);border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11.5px;color:#fef3c7;">📰 <b>最新ヘッドライン:</b> {html.escape(ipo["latest_headline"])}</div>'
+            f'<div style="margin-top:8px;"><a href="{html.escape(ipo["kabutan_url"])}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">{btn_lbl_1}</a><a href="{html.escape(ipo["yahoo_url"])}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">💹 Yahoo!ファイナンス</a><a href="{html.escape(ipo["jpx_ipo_url"])}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#10b981;color:#6ee7b7;">{btn_lbl_3}</a></div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
         if st.button(f"🔵 {ipo['name']} ({ipo['code']}) の実戦検証と売買戦略詳細を見る", key=f"ipo_diag_{ipo['code']}", use_container_width=True): st.session_state["custom_search_code"] = ipo["full_code"]; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
 elif sel_cat == "🏦 BVC-VPIN・CLV資金フロー":
     for i, r in enumerate(sorted(surv, key=lambda x: x["inst_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
@@ -5176,3 +5576,4 @@ elif sel_cat.startswith("📂 "):
     for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), survival_cut_pct), 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
 
 st.markdown('<div class="disclaimer-banner"><b>⚖️ 重要免責事項・法的表示</b><br>本システム「YAMASHISHI LAB」が提供するすべての指標（ボラティリティ突破指数・WKB統計近似モデル、5分足60日OHLCV需給ミクロ構造近似、日足2年中期トレンド・MAパーフェクトオーダー・MACD・52週位置・日足ATR14・価格帯別出来高Volume Profile(LVN上値真空/HVNしこり壁)・対ベンチマークRSα・30分イントラデイRS先行度、過去10年週足大局アルゴリズム・10年POC価格帯別出来高解析、BVC-VPIN・Kyle-λ統計近似、WRVヒゲ拒絶ベクトル、OR15分初動レンジ判定・時間帯補正RVOL・3階層MTF5条件執行品質ゲート、VWAP±1σ/2σ動的バンド過熱判定・PDH/PDL前日高値安値・機関オーダーブロック(OB)支持帯検出・東証値幅制限(ストップ高/ストップ安)自動キャップ、決算跨ぎリスク遮断ゲート、監視ポートフォリオ相関＆セクター集中リスク診断、5大セクター資金ローテーション・ヒートマップ、当日実測寄付きギャップ／理論寄付き試算値、期待度パーセンテージ、LAB×DEEP DIVE双方向統合予測・同期判定、リークフリー検証統計(勝率/PF/SQN/平均R/最大DD/エクイティカーブ/時間帯別勝率)、スマホ即発注用OCOオーダーチケットBOX、Geminiクオンツ監査合議ログ、トレード日誌AI監査、および買い・空売り双方の売買プラン）は、過去の5分足・日足・週足四本値および出来高(OHLCV)データと数理アルゴリズムに基づく研究シミュレーション・情報提供を目的としたものであり、実際の板情報（Tick）やPTS実勢値に基づくものではなく、特定の有価証券の売買推奨や投資助言（投資助言・代理業等）を行うものではありません。株式投資（特に信用取引・空売り）には元本割れや元本超過損・市場変動のリスクが伴います。最終的な投資判断および資金配分は、必ず利用者ご自身の自己責任にて行っていただけますようお願い申し上げます。</div>', unsafe_allow_html=True)
+# === PART 5/5 END ===
