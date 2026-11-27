@@ -4,7 +4,7 @@ import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, threading, sqlite3, uuid, traceback, secrets, html, random, math
+import unicodedata, hashlib, hmac, json, os, re, ssl, smtplib, time, threading, sqlite3, uuid, traceback, secrets, html, random, math, copy
 import urllib.parse, urllib.request, urllib.error, xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
@@ -256,7 +256,7 @@ UPCOMING_IPO_WATCHLIST = [
         "stage_label": "🟠 上場準備・承認監視候補（大型フィンテック）",
         "name": "PayPay（ペイペイ）",
         "market": "東証プライム / 米国NASDAQ（マルチソース上場検証中）",
-        "listing_date_disp": "マルチソース上場検証中",
+        "listing_date_disp": "マルチソース上場実態検証中",
         "offer_info": "JPX/SEC/市場データ照合中",
         "bb_info": "JPX・Yahoo!ファイナンスIPO照合中",
         "lead_underwriter": "野村證券 / 三菱UFJモルガン・スタンレー / ゴールドマン・サックス（観測）",
@@ -507,30 +507,33 @@ init_sqlite_db()
 
 def db_get(key: str, default_val):
     with _DB_LOCK:
-        if key in _MEM_CACHE: return _MEM_CACHE[key]
+        if key in _MEM_CACHE:
+            return copy.deepcopy(_MEM_CACHE[key])
         sb_ok, sb_val = _supabase_rest_get(key)
         if sb_ok:
-            _MEM_CACHE[key] = sb_val
+            _MEM_CACHE[key] = copy.deepcopy(sb_val)
             try:
                 with get_db_cursor() as cur:
                     cur.execute("INSERT INTO kv_store (key, val, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated_at=CURRENT_TIMESTAMP;", (key, json.dumps(sb_val, ensure_ascii=False)))
             except Exception: pass
-            return sb_val
+            return copy.deepcopy(sb_val)
         try:
             with get_db_cursor() as cur:
                 cur.execute("SELECT val FROM kv_store WHERE key = ?", (key,))
                 row = cur.fetchone()
                 if row:
-                    val = json.loads(row[0]); _MEM_CACHE[key] = val
+                    val = json.loads(row[0])
+                    _MEM_CACHE[key] = copy.deepcopy(val)
                     if _get_supabase_config()[0]:
                         threading.Thread(target=_supabase_rest_upsert, args=(key, val), daemon=True).start()
-                    return val
+                    return copy.deepcopy(val)
         except Exception as e: record_system_error(f"db_get:{key}", e)
-        return default_val
+        _MEM_CACHE[key] = copy.deepcopy(default_val)
+        return copy.deepcopy(default_val)
 
 def db_set(key: str, val):
     with _DB_LOCK:
-        _MEM_CACHE[key] = val
+        _MEM_CACHE[key] = copy.deepcopy(val)
         try:
             with get_db_cursor() as cur:
                 cur.execute("INSERT INTO kv_store (key, val, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated_at=CURRENT_TIMESTAMP;", (key, json.dumps(val, ensure_ascii=False)))
@@ -934,88 +937,192 @@ def inject_css():
     css = """@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700;800&display=swap');
 html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#070b14;color:#e2e8f0;}
 [data-stale="true"], .stApp, [data-testid="stAppViewContainer"], section.main, [data-testid="stVerticalBlock"] { opacity: 1 !important; transition: none !important; filter: none !important; }
-.block-container{padding-top:2.9rem!important;}
+.block-container{padding-top:2.85rem!important;}
 div[data-baseweb="popover"],div[data-baseweb="menu"],div[role="listbox"],ul[role="listbox"]{z-index:2147483647!important;pointer-events:auto!important;}
-header[data-testid="stHeader"]{background:transparent!important;pointer-events:none!important;height:3.5rem!important;z-index:999980!important;}
+header[data-testid="stHeader"]{background:transparent!important;pointer-events:none!important;height:3.2rem!important;z-index:999980!important;}
 header[data-testid="stHeader"] [data-testid="stToolbar"],header[data-testid="stHeader"] [data-testid="stActionButtons"]{display:none!important;}
-section[data-testid="stSidebar"]{position:fixed!important;top:0!important;left:0!important;height:100vh!important;z-index:999995!important;width:330px!important;max-width:88vw!important;min-width:320px!important;background:rgba(7,11,20,0.98)!important;backdrop-filter:blur(25px)!important;border-right:1px solid rgba(56,189,248,0.35)!important;visibility:visible!important;transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)!important;}
+section[data-testid="stSidebar"]{position:fixed!important;top:0!important;left:0!important;height:100vh!important;z-index:999995!important;width:330px!important;max-width:88vw!important;min-width:320px!important;background:rgba(7,11,20,0.98)!important;backdrop-filter:blur(22px)!important;border-right:1px solid rgba(56,189,248,0.35)!important;visibility:visible!important;transition:transform 0.24s cubic-bezier(0.4,0,0.2,1)!important;}
 section[data-testid="stSidebar"]:not([aria-expanded="true"]){transform:translateX(-120%)!important;pointer-events:none!important;}
 section[data-testid="stSidebar"][aria-expanded="true"]{transform:translateX(0)!important;pointer-events:auto!important;}
 section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"]{pointer-events:auto!important;}
 [data-testid="collapsedControl"],[data-testid="stSidebarCollapsedControl"],[data-testid="stSidebarCollapseButton"],header button[kind="headerNoPadding"],section[data-testid="stSidebar"] button[aria-label*="Close"],section[data-testid="stSidebar"] button[aria-label*="閉じる"],section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]{display:none!important;opacity:0!important;position:absolute!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none!important;z-index:-1!important;}
 section[data-testid="stSidebar"]+div,section.main,.stApp>header+div>div{margin-left:0!important;width:100%!important;max-width:100%!important;}
-.sidebar-section-card{background:rgba(15,23,42,0.65);border:1px solid rgba(56,189,248,0.18);border-radius:10px;padding:10px 12px;margin-bottom:12px;}
+.sidebar-section-card{background:rgba(15,23,42,0.72);border:1px solid rgba(56,189,248,0.22);border-radius:10px;padding:10px 12px;margin-bottom:12px;}
 .sidebar-header-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#38bdf8;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:5px;}
-.fixed-top-nav-bar{position:fixed!important;top:10px!important;left:50%!important;transform:translateX(-50%)!important;z-index:999980!important;width:min(170px,calc(100vw - 4rem))!important;background:transparent!important;border:none!important;margin:0!important;padding:0!important;pointer-events:auto!important;}
+.stButton > button, .stFormSubmitButton > button{transition:transform 0.12s ease, border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease!important;-webkit-tap-highlight-color:transparent!important;}
+.stButton > button:active, .stFormSubmitButton > button:active{transform:scale(0.97)!important;}
+.fixed-top-nav-bar{position:fixed!important;top:8px!important;left:50%!important;transform:translateX(-50%)!important;z-index:999980!important;width:min(168px,calc(100vw - 8.5rem))!important;background:transparent!important;border:none!important;margin:0!important;padding:0!important;pointer-events:auto!important;}
 div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-container:has(div.top-nav-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;border:none!important;}
 .fixed-top-nav-bar div[data-testid="stHorizontalBlock"]{background:transparent!important;border:none!important;width:100%!important;display:flex!important;justify-content:center!important;}
-.fixed-top-nav-bar button{width:100%!important;height:30px!important;min-height:30px!important;max-height:30px!important;background:rgba(15,23,42,0.75)!important;color:#93c5fd!important;border:1px solid rgba(56,189,248,0.35)!important;border-radius:20px!important;box-shadow:0 0 8px rgba(56,189,248,0.25)!important;font-size:11.5px!important;font-weight:700!important;letter-spacing:0.5px!important;cursor:pointer!important;transition:all 0.15s ease!important;}
-.fixed-top-nav-bar button:hover{background:rgba(15,23,42,0.85)!important;border-color:rgba(56,189,248,0.55)!important;color:#ffffff!important;}
-.fixed-top-nav-bar button:active{background:rgba(56,189,248,0.25)!important;border-color:#38bdf8!important;color:#ffffff!important;transform:scale(0.96)!important;}
-div[data-testid="stElementContainer"]:has(div.news-banner-btn-marker),div.element-container:has(div.news-banner-btn-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;}
-div[data-testid="stElementContainer"]:has(div.news-banner-btn-marker) + div[data-testid="stElementContainer"] button,
-div.element-container:has(div.news-banner-btn-marker) + div.element-container button{
-    background:linear-gradient(90deg,#b91c1c 0%,#ef4444 50%,#b91c1c 100%)!important;
+.fixed-top-nav-bar button{width:100%!important;height:28px!important;min-height:28px!important;max-height:28px!important;padding:0 12px!important;background:rgba(11,15,25,0.92)!important;color:#7dd3fc!important;border:1.5px solid rgba(56,189,248,0.55)!important;border-radius:8px!important;box-shadow:0 4px 14px rgba(0,0,0,0.65),0 0 10px rgba(56,189,248,0.2)!important;font-family:'JetBrains Mono',monospace!important;font-size:11px!important;font-weight:800!important;letter-spacing:0.6px!important;cursor:pointer!important;transition:all 0.12s ease!important;}
+.fixed-top-nav-bar button:hover{background:rgba(15,23,42,0.98)!important;border-color:#38bdf8!important;color:#ffffff!important;box-shadow:0 4px 16px rgba(56,189,248,0.35)!important;}
+.fixed-top-nav-bar button:active{background:rgba(56,189,248,0.22)!important;border-color:#fde047!important;color:#fde047!important;transform:scale(0.96)!important;}
+div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker),div.element-container:has(div.top-breaking-news-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;}
+div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"]{gap:6px!important;margin-top:2px!important;margin-bottom:6px!important;align-items:stretch!important;}
+div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"] [data-testid="column"]:first-child button{
+    background:linear-gradient(90deg,rgba(127,29,29,0.95) 0%,rgba(185,28,28,0.95) 55%,rgba(127,29,29,0.95) 100%)!important;
     color:#ffffff!important;
     font-weight:800!important;
     font-size:11.5px!important;
-    border:1px solid #fca5a5!important;
-    border-radius:7px!important;
+    border:1px solid rgba(252,165,165,0.75)!important;
+    border-left:4px solid #fde047!important;
+    border-radius:8px!important;
     padding:5px 10px!important;
     min-height:32px!important;
-    box-shadow:0 2px 10px rgba(239,68,68,0.45)!important;
-    animation:alert-pulse 2.4s infinite!important;
-    text-align:center!important;
-    transition:transform 0.12s ease, filter 0.12s ease!important;
+    height:32px!important;
+    box-shadow:0 3px 12px rgba(220,38,38,0.35)!important;
+    text-align:left!important;
+    justify-content:flex-start!important;
+    overflow:hidden!important;
+    white-space:nowrap!important;
+    text-overflow:ellipsis!important;
+}
+div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"] [data-testid="column"]:first-child button:hover{
+    border-color:#ffffff!important;
+    filter:brightness(1.1)!important;
+}
+div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"] [data-testid="column"]:nth-child(2) button{
+    background:rgba(15,23,42,0.92)!important;
+    color:#fca5a5!important;
+    font-weight:800!important;
+    font-size:10.5px!important;
+    border:1px solid rgba(239,68,68,0.5)!important;
+    border-radius:8px!important;
+    padding:4px 6px!important;
+    min-height:32px!important;
+    height:32px!important;
+    white-space:nowrap!important;
+}
+div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"] [data-testid="column"]:nth-child(2) button:hover{
+    border-color:#f87171!important;
+    color:#ffffff!important;
+    background:rgba(127,29,29,0.45)!important;
+}
+div[data-testid="stElementContainer"]:has(div.news-banner-btn-marker),div.element-container:has(div.news-banner-btn-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;}
+div[data-testid="stElementContainer"]:has(div.news-banner-btn-marker) + div[data-testid="stElementContainer"] button,
+div.element-container:has(div.news-banner-btn-marker) + div.element-container button{
+    background:linear-gradient(90deg,rgba(127,29,29,0.88) 0%,rgba(153,27,27,0.88) 100%)!important;
+    color:#fef2f2!important;
+    font-weight:700!important;
+    font-size:11px!important;
+    border:1px solid rgba(248,113,113,0.55)!important;
+    border-left:3px solid #ef4444!important;
+    border-radius:7px!important;
+    padding:3px 10px!important;
+    min-height:27px!important;
+    height:27px!important;
+    margin-bottom:2px!important;
+    box-shadow:0 2px 8px rgba(0,0,0,0.35)!important;
+    text-align:left!important;
+    justify-content:flex-start!important;
 }
 div[data-testid="stElementContainer"]:has(div.news-banner-btn-marker) + div[data-testid="stElementContainer"] button:hover,
 div.element-container:has(div.news-banner-btn-marker) + div.element-container button:hover{
     filter:brightness(1.12)!important;
-    border-color:#ffffff!important;
+    border-color:#fca5a5!important;
 }
-div[data-testid="stElementContainer"]:has(div.news-banner-btn-marker) + div[data-testid="stElementContainer"] button:active,
-div.element-container:has(div.news-banner-btn-marker) + div.element-container button:active{
-    transform:scale(0.98)!important;
+div[data-testid="stElementContainer"]:has(div.card-action-dock-marker),div.element-container:has(div.card-action-dock-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;}
+div[data-testid="stElementContainer"]:has(div.card-action-dock-marker) + div[data-testid="stHorizontalBlock"]{
+    gap:6px!important;
+    margin-top:2px!important;
+    margin-bottom:8px!important;
+    background:rgba(7,11,20,0.75)!important;
+    border:1px solid rgba(148,163,184,0.16)!important;
+    border-radius:9px!important;
+    padding:5px!important;
+}
+div[data-testid="stElementContainer"]:has(div.card-action-dock-marker) + div[data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]{
+    gap:4px!important;
+}
+div[data-testid="stElementContainer"]:has(div.card-action-dock-marker) + div[data-testid="stHorizontalBlock"] button{
+    height:30px!important;
+    min-height:30px!important;
+    max-height:30px!important;
+    padding:2px 8px!important;
+    font-family:'Plus Jakarta Sans','JetBrains Mono',sans-serif!important;
+    font-size:11px!important;
+    font-weight:700!important;
+    letter-spacing:0.2px!important;
+    border-radius:7px!important;
+    background:linear-gradient(180deg,rgba(30,41,59,0.88) 0%,rgba(15,23,42,0.96) 100%)!important;
+    color:#e2e8f0!important;
+    border:1px solid rgba(148,163,184,0.28)!important;
+    box-shadow:0 2px 6px rgba(0,0,0,0.4)!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+}
+div[data-testid="stElementContainer"]:has(div.card-action-dock-marker) + div[data-testid="stHorizontalBlock"] button:hover{
+    background:linear-gradient(180deg,rgba(51,65,85,0.92) 0%,rgba(30,41,59,0.98) 100%)!important;
+    border-color:rgba(56,189,248,0.65)!important;
+    color:#ffffff!important;
+    box-shadow:0 0 10px rgba(56,189,248,0.22)!important;
+}
+div[data-testid="stElementContainer"]:has(div.card-action-dock-marker) + div[data-testid="stHorizontalBlock"] button[kind="primary"]{
+    background:linear-gradient(135deg,rgba(14,116,144,0.42) 0%,rgba(30,58,138,0.52) 100%)!important;
+    border:1px solid rgba(56,189,248,0.68)!important;
+    color:#7dd3fc!important;
+    box-shadow:0 0 12px rgba(56,189,248,0.18)!important;
+}
+div[data-testid="stElementContainer"]:has(div.card-action-dock-marker) + div[data-testid="stHorizontalBlock"] button[kind="primary"]:hover{
+    background:linear-gradient(135deg,rgba(14,116,144,0.65) 0%,rgba(30,58,138,0.75) 100%)!important;
+    border-color:#38bdf8!important;
+    color:#ffffff!important;
+    box-shadow:0 0 14px rgba(56,189,248,0.35)!important;
+}
+div[data-testid="stElementContainer"]:has(div.card-action-dock-short) + div[data-testid="stHorizontalBlock"] button[kind="primary"]{
+    background:linear-gradient(135deg,rgba(159,18,57,0.45) 0%,rgba(136,19,55,0.55) 100%)!important;
+    border:1px solid rgba(251,113,133,0.72)!important;
+    color:#fecdd3!important;
+    box-shadow:0 0 12px rgba(244,63,94,0.2)!important;
+}
+div[data-testid="stElementContainer"]:has(div.card-action-dock-short) + div[data-testid="stHorizontalBlock"] button[kind="primary"]:hover{
+    background:linear-gradient(135deg,rgba(190,18,60,0.68) 0%,rgba(159,18,57,0.78) 100%)!important;
+    border-color:#fb7185!important;
+    color:#ffffff!important;
+    box-shadow:0 0 14px rgba(244,63,94,0.35)!important;
 }
 .brand-luxury{font-family:'Cinzel',serif!important;font-size:clamp(16px,4.2vw,23px)!important;font-weight:800!important;letter-spacing:clamp(1px,0.5vw,3px)!important;background:linear-gradient(90deg,#f8fafc 0%,#38bdf8 50%,#a855f7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.25;white-space:nowrap!important;display:block;width:100%;}
-.glass-header{background:radial-gradient(circle at top right,rgba(168,85,247,0.12),transparent 60%),linear-gradient(145deg,rgba(15,23,42,0.88) 0%,rgba(7,11,20,0.96) 100%);backdrop-filter:blur(12px);border:1px solid rgba(148,163,184,0.16);border-radius:12px;padding:10px 13px;margin-bottom:8px;box-shadow:0 8px 24px rgba(0,0,0,0.45);}
+.glass-header{background:radial-gradient(circle at top right,rgba(168,85,247,0.14),transparent 60%),linear-gradient(145deg,#0f172a 0%,#070b14 100%);border:1px solid rgba(148,163,184,0.2);border-radius:12px;padding:10px 13px;margin-bottom:6px;box-shadow:0 8px 24px rgba(0,0,0,0.5);}
 .lab-thin-ribbon{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scrollbar-width:none!important;gap:6px!important;padding:3px 2px!important;margin-bottom:6px!important;white-space:nowrap!important;}
 .lab-thin-ribbon::-webkit-scrollbar{display:none!important;}
-.lab-ribbon-chip{display:inline-flex;align-items:center;gap:4px;background:rgba(15,23,42,0.78);border:1px solid rgba(148,163,184,0.18);border-radius:6px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:10.5px;flex-shrink:0;}
-.rank-card,.search-result-card{background:linear-gradient(180deg,rgba(15,23,42,0.92) 0%,rgba(7,11,20,0.98) 100%)!important;backdrop-filter:blur(10px);color:#f8fafc!important;border-radius:14px;padding:13px 15px;margin-top:8px;margin-bottom:10px;box-shadow:0 10px 28px rgba(0,0,0,0.55);border:1px solid rgba(148,163,184,0.18);border-left:4px solid #38bdf8;font-variant-numeric:tabular-nums;}
+.lab-ribbon-chip{display:inline-flex;align-items:center;gap:4px;background:rgba(15,23,42,0.88);border:1px solid rgba(148,163,184,0.2);border-radius:6px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:10.5px;flex-shrink:0;}
+.rank-card,.search-result-card{background:linear-gradient(180deg,#0f172a 0%,#070b14 100%)!important;color:#f8fafc!important;border-radius:13px;padding:12px 14px;margin-top:8px;margin-bottom:4px;box-shadow:0 8px 22px rgba(0,0,0,0.55);border:1px solid rgba(148,163,184,0.2);border-left:4px solid #10b981;font-variant-numeric:tabular-nums;}
+.rank-card.card-short{border-left-color:#f43f5e;}
+.rank-card.card-dd-fused{border-left-color:#f97316;box-shadow:0 8px 24px rgba(0,0,0,0.58),inset 0 1px 0 rgba(249,115,22,0.22);}
 .search-result-card{border-left-color:#f59e0b;}
 .card-top-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
 .card-hero-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
-.card-kpi-right{text-align:right;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+.card-kpi-right{text-align:right;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;background:rgba(2,6,23,0.65);border:1px solid rgba(148,163,184,0.16);border-radius:8px;padding:5px 8px;}
 .prob-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(13.5px,3.6vw,15.5px);font-weight:800;color:#38bdf8!important;}
-.expect-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(15px,4vw,18px);font-weight:900;color:#fde047!important;}
-.card-action-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:rgba(2,6,23,0.72);border:1px solid rgba(148,163,184,0.16);border-radius:9px;padding:7px 6px;margin-top:8px;text-align:center;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+.expect-badge{font-family:'JetBrains Mono',monospace;font-size:clamp(16px,4.2vw,19px);font-weight:900;color:#fde047!important;line-height:1.15;}
+.card-action-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:rgba(2,6,23,0.82);border:1px solid rgba(148,163,184,0.18);border-radius:9px;padding:7px 6px;margin-top:8px;text-align:center;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
 @media (max-width:640px){.card-action-grid{grid-template-columns:repeat(2,1fr);}}
-.card-action-cell{padding:2px 4px;}
+.card-action-cell{padding:3px 4px;background:rgba(15,23,42,0.45);border-radius:6px;}
 .card-action-lbl{font-size:9.3px;color:#94a3b8;font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;}
 .card-action-val{font-size:12px;font-weight:800;margin-top:1px;}
-.card-perf-strip{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;background:rgba(15,23,42,0.72);border:1px solid rgba(56,189,248,0.22);border-radius:7px;padding:5px 9px;margin-top:6px;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:10.5px;color:#cbd5e1;}
-.winrate-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(65px,1fr));gap:6px;background:rgba(15,23,42,0.85)!important;border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:7px 6px;margin-top:6px!important;text-align:center;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
-.trade-plan-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:6px;margin-top:6px!important;background:rgba(2,6,23,0.7)!important;padding:7px 6px;border-radius:8px;border:1px solid rgba(148,163,184,0.18);text-align:center;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
-.order-ticket-box{background:linear-gradient(135deg,rgba(15,23,42,0.96) 0%,rgba(8,47,73,0.92) 100%);border:1.5px solid #38bdf8;border-radius:10px;padding:10px 12px;margin-bottom:10px;box-shadow:0 4px 16px rgba(56,189,248,0.18);font-variant-numeric:tabular-nums;}
+.card-perf-strip{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;background:rgba(15,23,42,0.82);border:1px solid rgba(56,189,248,0.22);border-radius:7px;padding:5px 9px;margin-top:6px;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:10.5px;color:#cbd5e1;}
+.winrate-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(65px,1fr));gap:6px;background:rgba(15,23,42,0.88)!important;border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:7px 6px;margin-top:6px!important;text-align:center;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+.trade-plan-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:6px;margin-top:6px!important;background:rgba(2,6,23,0.78)!important;padding:7px 6px;border-radius:8px;border:1px solid rgba(148,163,184,0.18);text-align:center;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+.order-ticket-box{background:linear-gradient(135deg,#0f172a 0%,#082f49 100%);border:1.5px solid #38bdf8;border-radius:10px;padding:10px 12px;margin-bottom:10px;box-shadow:0 4px 16px rgba(56,189,248,0.18);font-variant-numeric:tabular-nums;}
 .order-ticket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-top:6px;}
-.order-ticket-cell{background:rgba(2,6,23,0.78);border:1px solid rgba(148,163,184,0.22);border-radius:6px;padding:6px 8px;font-family:'JetBrains Mono',monospace;}
+.order-ticket-cell{background:rgba(2,6,23,0.82);border:1px solid rgba(148,163,184,0.22);border-radius:6px;padding:6px 8px;font-family:'JetBrains Mono',monospace;}
 .admin-table-container{width:100%;overflow-x:auto;background:#0b0f19;border:1px solid rgba(56,189,248,0.25);border-radius:10px;margin-top:10px;}
 .admin-table{width:100%;border-collapse:collapse;font-size:11.5px;text-align:left;color:#e2e8f0;}
 .admin-table th{background:#1e293b;color:#38bdf8;padding:8px 10px;border-bottom:1px solid rgba(56,189,248,0.3);font-weight:700;white-space:nowrap;}
 .admin-table td{padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.1);white-space:nowrap;}
 .admin-table tr:hover{background:rgba(56,189,248,0.05);}
-.ai-council-box{background:rgba(8,12,22,0.98);border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-top:10px;}
+.ai-council-box{background:#080c16;border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-top:10px;}
 .ai-engine-status-pill{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:6px;margin-bottom:8px;display:block;}
 .council-scroll-window{max-height:440px!important;height:400px!important;overflow-y:auto!important;overflow-x:hidden!important;padding-right:8px;padding-top:4px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth;will-change:scroll-position;}
 .council-scroll-window::-webkit-scrollbar{width:6px;}
 .council-scroll-window::-webkit-scrollbar-track{background:rgba(15,23,42,0.6);border-radius:4px;}
 .council-scroll-window::-webkit-scrollbar-thumb{background:#38bdf8;border-radius:4px;}
 .chat-bubble-ai,.chat-bubble-user,.chat-bubble-agree,.chat-bubble-doubt,.chat-bubble-rage{padding:9px 12px;border-radius:8px;margin-bottom:4px;font-size:12px;line-height:1.5;word-break:break-word;}
-.chat-bubble-ai{background:rgba(15,23,42,0.85);border-left:3px solid #38bdf8;}
-.chat-bubble-agree{background:rgba(6,78,59,0.65);border-left:3px solid #10b981;}
-.chat-bubble-doubt{background:rgba(120,53,15,0.65);border-left:3px solid #f59e0b;}
-.chat-bubble-rage{background:rgba(127,29,29,0.65);border-left:3px solid #ef4444;}
+.chat-bubble-ai{background:rgba(15,23,42,0.9);border-left:3px solid #38bdf8;}
+.chat-bubble-agree{background:rgba(6,78,59,0.68);border-left:3px solid #10b981;}
+.chat-bubble-doubt{background:rgba(120,53,15,0.68);border-left:3px solid #f59e0b;}
+.chat-bubble-rage{background:rgba(127,29,29,0.68);border-left:3px solid #ef4444;}
 .chat-bubble-user{background:rgba(56,189,248,0.24);border-left:4px solid #38bdf8;border-right:2px solid rgba(56,189,248,0.4);text-align:left;padding:10px 14px;margin-bottom:6px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.4);scroll-margin-top:6px!important;}
 .round-divider{font-size:11px;font-weight:800;color:#94a3b8;text-align:center;margin:6px 0;letter-spacing:1px;}
 .beginner-action-box{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;color:#d1fae5;}
@@ -1023,7 +1130,7 @@ div.element-container:has(div.news-banner-btn-marker) + div.element-container bu
 .macro10y-box{background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.32);padding:7px 10px;border-radius:6px;margin-top:6px;font-size:10.8px;color:#e9d5ff;line-height:1.55;}
 .daily2y-box{background:rgba(14,165,233,0.10);border:1px solid rgba(14,165,233,0.34);padding:7px 10px;border-radius:6px;margin-top:6px;font-size:10.8px;color:#bae6fd;line-height:1.55;}
 .forward-verify-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px;background:linear-gradient(90deg,rgba(16,185,129,0.14),rgba(56,189,248,0.14));border:1px solid rgba(56,189,248,0.35);padding:6px 10px;border-radius:6px;margin-top:6px;font-size:11px;color:#e2e8f0;font-variant-numeric:tabular-nums;}
-.quant-detail-drawer{margin-top:8px;background:rgba(2,6,23,0.62);border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:7px 10px;font-size:11.5px;cursor:pointer;}
+.quant-detail-drawer{margin-top:8px;background:rgba(2,6,23,0.72);border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:6px 10px;font-size:11.5px;cursor:pointer;}
 .quant-detail-drawer summary{font-weight:800;color:#7dd3fc;outline:none;}
 .pill-badge{font-size:clamp(9.5px,2.4vw,10.5px);padding:2px 6px;border-radius:5px;border:1px solid rgba(148,163,184,0.28);margin-right:3px;display:inline-block;white-space:nowrap!important;font-family:'JetBrains Mono',monospace;}
 .ipo-status-pill{display:inline-block!important;max-width:100%!important;box-sizing:border-box!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;font-size:clamp(9.5px,2.7vw,11px)!important;padding:2px 7px!important;border-radius:5px!important;vertical-align:middle!important;}
@@ -1031,10 +1138,10 @@ div.element-container:has(div.news-banner-btn-marker) + div.element-container bu
 .inst-badge{font-size:clamp(9.5px,2.4vw,10.5px);padding:2px 6px;border-radius:5px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;margin-right:3px;display:inline-block;white-space:nowrap!important;font-family:'JetBrains Mono',monospace;}
 .compact-bar-label{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#38bdf8;letter-spacing:0.6px;margin:4px 0 4px 2px;}
 .ipo-link-btn{display:inline-block;padding:5px 12px;background:rgba(245,158,11,0.2);border:1px solid #f59e0b;border-radius:6px;color:#fde047;text-decoration:none;font-size:11.5px;font-weight:700;margin-right:6px;margin-top:4px;}
-.consensus-banner{background:rgba(15,23,42,0.95);border:1px solid rgba(250,204,21,0.4);border-radius:10px;padding:12px;margin-top:10px;}
-.disclaimer-banner{background:rgba(15,23,42,0.6);border:1px solid rgba(148,163,184,0.15);border-radius:8px;padding:10px 14px;margin-top:25px;margin-bottom:15px;font-size:11px;line-height:1.6;color:#94a3b8;}
-.svg-chart-wrap{background:rgba(2,6,23,0.88);border:1px solid rgba(56,189,248,0.32);border-radius:10px;padding:8px 10px;margin-top:8px;margin-bottom:8px;overflow-x:auto;}
-.manual-card{background:rgba(15,23,42,0.92);border:1px solid rgba(56,189,248,0.28);border-left:4px solid #38bdf8;border-radius:10px;padding:12px 14px;margin-bottom:10px;}
+.consensus-banner{background:#0f172a;border:1px solid rgba(250,204,21,0.4);border-radius:10px;padding:12px;margin-top:10px;}
+.disclaimer-banner{background:rgba(15,23,42,0.65);border:1px solid rgba(148,163,184,0.15);border-radius:8px;padding:10px 14px;margin-top:25px;margin-bottom:15px;font-size:11px;line-height:1.6;color:#94a3b8;}
+.svg-chart-wrap{background:#020617;border:1px solid rgba(56,189,248,0.32);border-radius:10px;padding:8px 10px;margin-top:8px;margin-bottom:8px;overflow-x:auto;}
+.manual-card{background:#0f172a;border:1px solid rgba(56,189,248,0.28);border-left:4px solid #38bdf8;border-radius:10px;padding:12px 14px;margin-bottom:10px;}
 @keyframes alert-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,0.8);}70%{box-shadow:0 0 0 10px rgba(239,68,68,0);}100%{box-shadow:0 0 0 0 rgba(239,68,68,0);}}"""
     st.markdown(f'<div id="page_top_anchor"></div><style>{css}</style>', unsafe_allow_html=True)
 
@@ -1123,13 +1230,30 @@ if not isinstance(st.session_state.get("shared_ticker_intel"), dict):
     st.session_state["shared_ticker_intel"] = {}
 st.session_state["agent_roster"] = dict(DEFAULT_AGENTS)
 
+def _cb_reset_to_top():
+    st.session_state["navigation_page"] = "TOP"
+    st.session_state["focused_stock_item"] = None
+    st.session_state["prev_focused_stock_item"] = None
+    st.session_state["custom_search_code"] = ""
+    st.session_state["selected_news_item"] = None
+    st.session_state["active_category"] = "🏆 総合TOP5"
+    st.session_state["last_cat"] = "🏆 総合TOP5"
+    if "search_code_input" in st.session_state:
+        st.session_state["search_code_input"] = ""
+    now_ms = int(time.time() * 1000)
+    st.session_state["scroll_top_trig"] = now_ms
+    st.session_state["force_close_sidebar_trig"] = now_ms
+
+def _cb_open_page(page_name: str):
+    st.session_state["navigation_page"] = page_name
+    now_ms = int(time.time() * 1000)
+    st.session_state["force_close_sidebar_trig"] = now_ms
+    st.session_state["scroll_top_trig"] = now_ms
+
 if st.session_state.get("navigation_page") != "DEEP_DIVE":
     with st.container():
         st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
-        if st.button("トップに戻る", key="top_nav_top", use_container_width=True):
-            st.session_state["navigation_page"] = "TOP"; st.session_state["focused_stock_item"] = None; st.session_state["prev_focused_stock_item"] = None; st.session_state["custom_search_code"] = ""; st.session_state["selected_news_item"] = None; st.session_state["active_category"] = "🏆 総合TOP5"; st.session_state["last_cat"] = "🏆 総合TOP5"
-            if "search_code_input" in st.session_state: st.session_state["search_code_input"] = ""
-            st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000); st.rerun()
+        st.button("トップに戻る", key="top_nav_top", use_container_width=True, on_click=_cb_reset_to_top)
 
 scroll_target_js = f"setTimeout(function(){{try{{const el=window.parent.document.getElementById('{st.session_state.get('scroll_target_id')}');if(el){{const win=el.closest('.council-scroll-window');if(win){{win.scrollTo({{top:Math.max(0,el.offsetTop-4),behavior:'smooth'}});}}(el.closest('.ai-council-box')||el).scrollIntoView({{behavior:'smooth',block:'center'}});}}}}catch(e){{}}}},120);" if st.session_state.get("scroll_target_id") else ""
 st.session_state["scroll_target_id"] = ""
@@ -1138,7 +1262,7 @@ is_overlay_page_active = (st.session_state.get("navigation_page") in ("ADMIN", "
 force_close_trig = int(st.session_state.get("force_close_sidebar_trig", 0))
 force_close_js = "window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');closeCustomSidebar();" if is_overlay_page_active else (f"if(window.parent._lastForceCloseTrig!=={force_close_trig}){{window.parent._lastForceCloseTrig={force_close_trig};window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');closeCustomSidebar();}}" if force_close_trig > 0 else "")
 
-components.html(f"""<script>(function(){{const doc=window.parent.document;function closeCustomSidebar(){{try{{const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');if(sb){{sb.setAttribute('aria-expanded','false');sb.style.setProperty('transform','translateX(-120%)','important');sb.style.setProperty('pointer-events','none','important');}}if(o){{o.style.setProperty('display','none','important');o.style.setProperty('pointer-events','none','important');}}window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');}}catch(e){{}}}}function openCustomSidebar(){{try{{const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');if(sb){{sb.setAttribute('aria-expanded','true');sb.style.setProperty('transform','translateX(0)','important');sb.style.setProperty('pointer-events','auto','important');}}if(o){{o.style.setProperty('display','block','important');o.style.setProperty('pointer-events','auto','important');}}window.parent.sessionStorage.setItem('yamashishi_sb_state','open');}}catch(e){{}}}}window.parent._yamashishiCloseSidebar=closeCustomSidebar;window.parent._yamashishiOpenSidebar=openCustomSidebar;function setupCustomSidebar(){{try{{if(!doc.getElementById('yamashishi-custom-sidebar-styles')){{const s=doc.createElement('style');s.id='yamashishi-custom-sidebar-styles';s.textContent=`#yamashishi-floating-sidebar-btn{{position:fixed!important;top:8px!important;left:10px!important;z-index:2147483647!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:4px!important;height:28px!important;padding:0 10px 0 8px!important;background:rgba(11,15,25,0.95)!important;backdrop-filter:blur(16px)!important;border:1.5px solid rgba(56,189,248,0.7)!important;border-radius:8px!important;cursor:pointer!important;box-shadow:0 4px 18px rgba(0,0,0,0.75),0 0 12px rgba(56,189,248,0.3)!important;user-select:none!important;transition:transform 0.1s ease!important;color:#38bdf8!important;pointer-events:auto!important;outline:none!important;-webkit-tap-highlight-color:transparent!important;}}#yamashishi-floating-sidebar-btn:active{{border-color:#fde047!important;color:#fde047!important;transform:scale(0.95)!important;}}#yamashishi-floating-sidebar-btn svg{{width:15px!important;height:15px!important;}}#yamashishi-floating-sidebar-btn span{{font-family:'JetBrains Mono',monospace!important;font-size:11px!important;font-weight:800!important;}}#yamashishi-sidebar-backdrop{{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;background:rgba(0,0,0,0.45)!important;backdrop-filter:blur(2px)!important;z-index:999990!important;display:none;pointer-events:auto!important;cursor:pointer!important;}}`;doc.head.appendChild(s);}}let o=doc.getElementById('yamashishi-sidebar-backdrop');if(!o){{o=doc.createElement('div');o.id='yamashishi-sidebar-backdrop';doc.body.appendChild(o);}}o.onclick=function(e){{e.preventDefault();e.stopPropagation();window.parent._yamashishiCloseSidebar();}};let b=doc.getElementById('yamashishi-floating-sidebar-btn');if(!b){{b=doc.createElement('div');b.id='yamashishi-floating-sidebar-btn';b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span>MENU</span>';doc.body.appendChild(b);}}b.onclick=function(e){{e.preventDefault();e.stopPropagation();const sb=doc.querySelector('section[data-testid="stSidebar"]');const isOpen=sb&&(sb.getAttribute('aria-expanded')==='true'||window.parent.sessionStorage.getItem('yamashishi_sb_state')==='open');if(isOpen){{window.parent._yamashishiCloseSidebar();}}else{{window.parent._yamashishiOpenSidebar();}}}};if(doc._yamashishiOutsideHandler){{doc.removeEventListener('pointerdown',doc._yamashishiOutsideHandler,true);doc.removeEventListener('click',doc._yamashishiOutsideHandler,true);}}doc._yamashishiOutsideHandler=function(e){{const sb=doc.querySelector('section[data-testid="stSidebar"]'),btn=doc.getElementById('yamashishi-floating-sidebar-btn');const isOpen=sb&&(sb.getAttribute('aria-expanded')==='true'||window.parent.sessionStorage.getItem('yamashishi_sb_state')==='open');if(!isOpen)return;const t=e.target;if((sb&&sb.contains(t))||(btn&&btn.contains(t))||(t&&t.closest&&t.closest('[data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"],ul[role="listbox"]')))return;window.parent._yamashishiCloseSidebar();}};doc.addEventListener('pointerdown',doc._yamashishiOutsideHandler,true);doc.addEventListener('click',doc._yamashishiOutsideHandler,true);{force_close_js}if(window.parent.sessionStorage.getItem('yamashishi_sb_state')==='open'){{openCustomSidebar();}}else{{closeCustomSidebar();}}}}catch(e){{}}}}function fixTopNav(){{try{{const m=doc.querySelector('.top-nav-marker');if(!m)return;let bx=m.closest('[data-testid="stVerticalBlockBorderWrapper"]')||m.closest('[data-testid="stVerticalBlock"]');if(bx&&bx.querySelector('button'))bx.classList.add('fixed-top-nav-bar');}}catch(e){{}}}}setupCustomSidebar();fixTopNav();function scrollToTopAbsolute(){{try{{window.parent.scrollTo(0,0);}}catch(e){{}}[doc.documentElement,doc.body,doc.querySelector('section.main'),doc.querySelector('[data-testid="stAppViewContainer"]')].forEach(el=>{{if(el){{try{{el.scrollTop=0;}}catch(e){{}}}}}});const ta=doc.getElementById('page_top_anchor');if(ta&&typeof ta.scrollIntoView==='function')try{{ta.scrollIntoView({{behavior:'instant',block:'start'}});}}catch(e){{}}}}if({st.session_state['scroll_top_trig']}>0&&window.parent._lastScrollTrig!=={st.session_state['scroll_top_trig']}){{window.parent._lastScrollTrig={st.session_state['scroll_top_trig']};scrollToTopAbsolute();}}{scroll_target_js}}})();</script>""", height=0)
+components.html(f"""<script>(function(){{const doc=window.parent.document;function closeCustomSidebar(){{try{{const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');if(sb){{sb.setAttribute('aria-expanded','false');sb.style.setProperty('transform','translateX(-120%)','important');sb.style.setProperty('pointer-events','none','important');}}if(o){{o.style.setProperty('display','none','important');o.style.setProperty('pointer-events','none','important');}}window.parent.sessionStorage.setItem('yamashishi_sb_state','closed');}}catch(e){{}}}}function openCustomSidebar(){{try{{const sb=doc.querySelector('section[data-testid="stSidebar"]'),o=doc.getElementById('yamashishi-sidebar-backdrop');if(sb){{sb.setAttribute('aria-expanded','true');sb.style.setProperty('transform','translateX(0)','important');sb.style.setProperty('pointer-events','auto','important');}}if(o){{o.style.setProperty('display','block','important');o.style.setProperty('pointer-events','auto','important');}}window.parent.sessionStorage.setItem('yamashishi_sb_state','open');}}catch(e){{}}}}window.parent._yamashishiCloseSidebar=closeCustomSidebar;window.parent._yamashishiOpenSidebar=openCustomSidebar;function setupCustomSidebar(){{try{{if(!doc.getElementById('yamashishi-custom-sidebar-styles')){{const s=doc.createElement('style');s.id='yamashishi-custom-sidebar-styles';s.textContent=`#yamashishi-floating-sidebar-btn{{position:fixed!important;top:8px!important;left:10px!important;z-index:2147483647!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:4px!important;height:28px!important;padding:0 10px 0 8px!important;background:rgba(11,15,25,0.92)!important;border:1.5px solid rgba(56,189,248,0.55)!important;border-radius:8px!important;cursor:pointer!important;box-shadow:0 4px 14px rgba(0,0,0,0.65),0 0 10px rgba(56,189,248,0.2)!important;user-select:none!important;transition:all 0.12s ease!important;color:#7dd3fc!important;pointer-events:auto!important;outline:none!important;-webkit-tap-highlight-color:transparent!important;}}#yamashishi-floating-sidebar-btn:hover{{border-color:#38bdf8!important;color:#ffffff!important;}}#yamashishi-floating-sidebar-btn:active{{border-color:#fde047!important;color:#fde047!important;transform:scale(0.96)!important;}}#yamashishi-floating-sidebar-btn svg{{width:15px!important;height:15px!important;}}#yamashishi-floating-sidebar-btn span{{font-family:'JetBrains Mono',monospace!important;font-size:11px!important;font-weight:800!important;letter-spacing:0.6px!important;}}#yamashishi-sidebar-backdrop{{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;background:rgba(0,0,0,0.45)!important;backdrop-filter:blur(2px)!important;z-index:999990!important;display:none;pointer-events:auto!important;cursor:pointer!important;}}`;doc.head.appendChild(s);}}let o=doc.getElementById('yamashishi-sidebar-backdrop');if(!o){{o=doc.createElement('div');o.id='yamashishi-sidebar-backdrop';doc.body.appendChild(o);}}o.onclick=function(e){{e.preventDefault();e.stopPropagation();window.parent._yamashishiCloseSidebar();}};let b=doc.getElementById('yamashishi-floating-sidebar-btn');if(!b){{b=doc.createElement('div');b.id='yamashishi-floating-sidebar-btn';b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg><span>MENU</span>';doc.body.appendChild(b);}}b.onclick=function(e){{e.preventDefault();e.stopPropagation();const sb=doc.querySelector('section[data-testid="stSidebar"]');const isOpen=sb&&(sb.getAttribute('aria-expanded')==='true'||window.parent.sessionStorage.getItem('yamashishi_sb_state')==='open');if(isOpen){{window.parent._yamashishiCloseSidebar();}}else{{window.parent._yamashishiOpenSidebar();}}}};if(doc._yamashishiOutsideHandler){{doc.removeEventListener('pointerdown',doc._yamashishiOutsideHandler,true);doc.removeEventListener('click',doc._yamashishiOutsideHandler,true);}}doc._yamashishiOutsideHandler=function(e){{const sb=doc.querySelector('section[data-testid="stSidebar"]'),btn=doc.getElementById('yamashishi-floating-sidebar-btn');const isOpen=sb&&(sb.getAttribute('aria-expanded')==='true'||window.parent.sessionStorage.getItem('yamashishi_sb_state')==='open');if(!isOpen)return;const t=e.target;if((sb&&sb.contains(t))||(btn&&btn.contains(t))||(t&&t.closest&&t.closest('[data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"],ul[role="listbox"]')))return;window.parent._yamashishiCloseSidebar();}};doc.addEventListener('pointerdown',doc._yamashishiOutsideHandler,true);doc.addEventListener('click',doc._yamashishiOutsideHandler,true);{force_close_js}if(window.parent.sessionStorage.getItem('yamashishi_sb_state')==='open'){{openCustomSidebar();}}else{{closeCustomSidebar();}}}}catch(e){{}}}}function fixTopNav(){{try{{const m=doc.querySelector('.top-nav-marker');if(!m)return;let bx=m.closest('[data-testid="stVerticalBlockBorderWrapper"]')||m.closest('[data-testid="stVerticalBlock"]');if(bx&&bx.querySelector('button'))bx.classList.add('fixed-top-nav-bar');}}catch(e){{}}}}setupCustomSidebar();fixTopNav();function scrollToTopAbsolute(){{try{{window.parent.scrollTo(0,0);}}catch(e){{}}[doc.documentElement,doc.body,doc.querySelector('section.main'),doc.querySelector('[data-testid="stAppViewContainer"]')].forEach(el=>{{if(el){{try{{el.scrollTop=0;}}catch(e){{}}}}}});const ta=doc.getElementById('page_top_anchor');if(ta&&typeof ta.scrollIntoView==='function')try{{ta.scrollIntoView({{behavior:'instant',block:'start'}});}}catch(e){{}}}}if({st.session_state['scroll_top_trig']}>0&&window.parent._lastScrollTrig!=={st.session_state['scroll_top_trig']}){{window.parent._lastScrollTrig={st.session_state['scroll_top_trig']};scrollToTopAbsolute();}}{scroll_target_js}}})();</script>""", height=0)
 
 def _compute_real_audit_metrics() -> dict:
     err_cnt = len(get_system_error_logs())
@@ -1150,11 +1274,7 @@ def _compute_real_audit_metrics() -> dict:
 
 def render_user_manual_page():
     st.markdown('<div class="glass-header" style="border-left:4px solid #38bdf8;"><div style="font-size:18px;font-weight:800;color:#f8fafc;">📖 YAMASHISHI LAB 公式説明書・用語＆アルゴリズム辞典</div><div style="font-size:11.5px;color:#94a3b8;margin-top:4px;">銘柄カードに表示される独自指標・執行グレード・3階層MTF・チャート記号・リークフリー検証の意味と実戦での使い方をわかりやすく解説します。</div></div>', unsafe_allow_html=True)
-    if st.button("⬅️ メイン画面に戻る", key="manual_back_top", use_container_width=True, type="primary"):
-        st.session_state["navigation_page"] = "TOP"
-        st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000)
-        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-        st.rerun()
+    st.button("⬅️ メイン画面に戻る", key="manual_back_top", use_container_width=True, type="primary", on_click=_cb_open_page, args=("TOP",))
 
     q_kw = st.text_input("🔍 分からない用語・記号を検索 (例: Grade, VWAP, SQN, HVN, RVOL, OB, Fusion)", placeholder="キーワードを入力すると該当解説だけをリアルタイム絞り込み表示します...", key="manual_search_input").strip().lower()
 
@@ -1218,7 +1338,7 @@ def render_user_manual_page():
             "items": [
                 ("5名のプロフェッショナル・クオンツ監査官の役割", "🔥 IGNIS（短期モメンタム・OR15初動執行） / 📐 TECHNOS（3階層MTF・LVN/HVN・OB構造解析） / 👁️ SENTINEL（しこり壁・VWAP+2σ過熱・悪材料監査） / 🛡️ AEGIS（リークフリー検証・SQN・ケリー資金管理） / 👑 NEXUS（5条件ゲート最終裁定統括）の5名が多角的に銘柄を監査します。", "【質問投下機能】各銘柄の合議ボックス下部の入力欄から、気になる点や売買相談を直接質問できます。"),
                 ("🎟️ 直近IPO・グロース実測分析タブの使い方", "取引所一次情報(JPX/SEC EDGAR)・Yahoo Finance Search/yfinance実売買データ・金融ポータル・日英ニュースの4系統マルチソースでクロス検証し、上場予定・承認企業と既上場IPOサバイバル銘柄を自動振り分け表示します。", "【実戦のコツ】上場後75〜105日・165〜195日はVC等のロックアップ解除売りに注意が必要です。"),
-                ("📋 監視シート（相関リスク診断）＆ 📓 トレード日誌AI監査", "監視シートに2銘柄以上登録すると、直近60日の値動き相関係数とセクター集中度を自動計算し、同一テーマ偏重による同時被弾リスクを警告します。また、各銘柄カードの『🎯 日誌記録』を押すとトレード日誌に保存され、決済後にAEGIS＆SENTINELが100点満点で規律採点を行います。", "【活用法】毎日の振り返りに使うことで、高値掴みや損切り遅れの癖を客観的に改善できます。")
+                ("📋 監視シート（相関リスク診断）＆ 📓 トレード日誌AI監査", "監視シートに2銘柄以上登録すると、直近60日の値動き相関係数とセクター集中度を自動計算し、同一テーマ偏重による同時被弾リスクを警告します。また、各銘柄カードの『📓 日誌』を押すとトレード日誌に保存され、決済後にAEGIS＆SENTINELが100点満点で規律採点を行います。", "【活用法】毎日の振り返りに使うことで、高値掴みや損切り遅れの癖を客観的に改善できます。")
             ]
         }
     ]
@@ -1244,11 +1364,7 @@ def render_user_manual_page():
     if total_hits == 0:
         st.warning(f"「{html.escape(q_kw)}」に一致する用語が見つかりませんでした。別のキーワードでお試しください。")
 
-    if st.button("⬅️ メイン画面に戻る", key="manual_back_bottom", use_container_width=True, type="primary"):
-        st.session_state["navigation_page"] = "TOP"
-        st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000)
-        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-        st.rerun()
+    st.button("⬅️ メイン画面に戻る", key="manual_back_bottom", use_container_width=True, type="primary", on_click=_cb_open_page, args=("TOP",))
 
 with st.sidebar:
     cu = st.session_state.get("authenticated_user", "")
@@ -1258,14 +1374,9 @@ with st.sidebar:
         role_badge = "👑 MASTER ADMIN" if is_admin_user else "⚛️ MEMBER SESSION ACTIVE"
         st.markdown(f'<div class="sidebar-section-card"><div class="sidebar-header-badge">{role_badge}</div><div style="color:#f8fafc;font-size:12px;font-weight:700;">会員: {html.escape(cu)}</div></div>', unsafe_allow_html=True)
         render_biometric_bridge(mode="register", user_email=cu, bio_token=st.query_params.get("t", ""))
-    if st.button("📖 説明書・用語＆アルゴリズム辞典を開く", key="sidebar_open_manual_btn", use_container_width=True, type="primary"):
-        st.session_state["navigation_page"] = "MANUAL"
-        st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000)
-        st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-        st.rerun()
+    st.button("📖 説明書・用語＆アルゴリズム辞典を開く", key="sidebar_open_manual_btn", use_container_width=True, type="primary", on_click=_cb_open_page, args=("MANUAL",))
     if is_admin_user:
-        if st.button("🖥️ 統合管理コントロールセンター起動", use_container_width=True):
-            st.session_state["navigation_page"] = "ADMIN"; st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000); st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
+        st.button("🖥️ 統合管理コントロールセンター起動", use_container_width=True, on_click=_cb_open_page, args=("ADMIN",))
 
     with st.expander("🎯 投資スタイル ＆ 3大コア・エンジン選択", expanded=True):
         style_list = ["⚡ デイトレード (前場・後場の波及を狙う)", "🚀 スキャルピング (秒〜分単位のモメンタム)", "📈 スイングトレード (数日〜数週間のトレンド)", "💎 バイ＆ホールド (中長期・IPO分散投資)"]
@@ -1300,8 +1411,7 @@ with st.sidebar:
 def render_admin_control_center():
     adm_c_page = ADMIN_EMAIL.strip().lower()
     st.markdown("### 👑 統合管理コントロールセンター (MASTER TERMINAL)")
-    if st.button("⬅️ メイン画面に戻る", use_container_width=True, type="primary"):
-        st.session_state["navigation_page"] = "TOP"; st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000); st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
+    st.button("⬅️ メイン画面に戻る", use_container_width=True, type="primary", on_click=_cb_open_page, args=("TOP",))
     db_dd_chk = load_mem()
     dd_wait_cnt = sum(1 for u in db_dd_chk.values() if u.get("deep_dive_status") == "pending")
     tab_gemini_sys, tab_users, tab_employment, tab_apply_wait, tab_dd_wait, tab_error_logs = st.tabs([
@@ -2049,7 +2159,10 @@ def fetch_global_impact_news() -> list:
     out_all.sort(key=lambda x: (1 if x.get("is_breaking") else 0, x.get("impact_score", 70), -float(x.get("age_hours", 12.0))), reverse=True)
     return out_all[:12]
 
-all_impact_news = fetch_global_impact_news()
+def get_cached_impact_news() -> list:
+    if st.session_state.get("navigation_page") in ("MANUAL", "ADMIN", "DEEP_DIVE"):
+        return []
+    return fetch_global_impact_news()
 
 def _extract_ipo_schedule_details(text_blob: str, is_unlisted_rumor: bool = False) -> dict:
     txt = str(text_blob or "")
@@ -2649,12 +2762,13 @@ def sanitize_and_verify_dialogue(turns: list, r: dict, uq: str = "") -> list:
     st.session_state["last_audit_similarity_penalty"] = int(max(0, round((max_sim - 0.25) * 30)))
     return sanitized
 
-def _merge_dd_intel_into_lab_item(r: dict) -> dict:
+def _merge_dd_intel_into_lab_item(r: dict, intel_map_override: dict = None) -> dict:
     if not isinstance(r, dict):
         return r
     out = dict(r)
     fc = str(out.get("full_code", "")).strip().upper()
-    intel_entry = load_shared_ticker_intel().get(fc, {}) if fc else {}
+    intel_hub = intel_map_override if isinstance(intel_map_override, dict) else load_shared_ticker_intel()
+    intel_entry = intel_hub.get(fc, {}) if fc else {}
     dd_res = intel_entry.get("dd_result") if isinstance(intel_entry, dict) else None
     dd_updated = str(intel_entry.get("dd_updated_at") or "") if isinstance(intel_entry, dict) else ""
 
@@ -2667,7 +2781,6 @@ def _merge_dd_intel_into_lab_item(r: dict) -> dict:
         out["dd_intel"] = {}
         return out
 
-    is_jp = ".T" in fc
     side = str((out.get("strat") or {}).get("side", "LONG")).upper()
     is_long = (side != "SHORT")
 
@@ -3441,7 +3554,8 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> t
         turns.append({"round": f"{header_tag} 【{r_m['code']}】{r_m['name']} ｜ {st_style} 3階層MTF＋DD統合監査"})
     turns.extend(llm_turns if llm_turns else _build_natural_fallback_dialogue(uq, r_m, st_style, web_hits, ig, tc, sn, nx, ae, dd_summary=dd_summary_txt))
     turns = sanitize_and_verify_dialogue(turns, r_m, uq=uq)
-    rel_news_for_sync = [n for n in all_impact_news if r_m.get("full_code") in n.get("detail", {}).get("related_codes", [])]
+    news_pool = get_cached_impact_news()
+    rel_news_for_sync = [n for n in news_pool if r_m.get("full_code") in n.get("detail", {}).get("related_codes", [])]
     sync_lab_intel_to_shared(r_m, council_turns=turns, rel_news_list=rel_news_for_sync, persist=True)
     return turns, engine_status
 
@@ -3464,7 +3578,7 @@ def _app_rerun():
     except TypeError:
         st.rerun()
 
-def _navigate_to_news_detail(news_obj: dict):
+def _set_news_detail_state(news_obj: dict):
     cur_foc = st.session_state.get("focused_stock_item")
     if isinstance(cur_foc, dict) and cur_foc:
         st.session_state["prev_focused_stock_item"] = cur_foc
@@ -3473,7 +3587,106 @@ def _navigate_to_news_detail(news_obj: dict):
     st.session_state["focused_stock_item"] = None
     st.session_state["custom_search_code"] = ""
     st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+
+def _navigate_to_news_detail(news_obj: dict):
+    _set_news_detail_state(news_obj)
     _app_rerun()
+
+def _cb_open_news_category():
+    st.session_state["nav_history"].append(st.session_state.get("active_category", "🏆 総合TOP5"))
+    st.session_state["active_category"] = "🚨 重大ニュース＆連動株"
+    st.session_state["last_cat"] = "🚨 重大ニュース＆連動株"
+    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+
+def _cb_focus_stock(r_obj: dict):
+    st.session_state["focused_stock_item"] = r_obj
+    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+
+def _cb_unfocus_stock():
+    st.session_state["focused_stock_item"] = None
+    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+
+def _cb_toggle_watchlist(r_obj: dict):
+    code_k = r_obj["code"]
+    wl = st.session_state["watchlist"]
+    if code_k in wl:
+        del wl[code_k]
+        st.toast(f"🗑️ 『{r_obj['name']}』を監視リストから解除しました")
+    else:
+        wl[code_k] = r_obj
+        st.toast(f"⭐ 『{r_obj['name']}』を監視リストに追加しました")
+    cu = st.session_state.get("authenticated_user", "")
+    if cu:
+        save_watchlist(cu, wl)
+
+def _cb_open_deep_dive_card(r_obj: dict, rel_news_list: list):
+    st_info = r_obj.get("strat", {})
+    st.session_state["dd_target_code"] = r_obj["full_code"]
+    st.session_state["dd_target_style"] = st_info.get("style_name", "デイトレード")
+    st.session_state["dd_code_in"] = r_obj["full_code"]
+    st.session_state["dd_style_in"] = st_info.get("style_name", "デイトレード")
+    st_name_cur = st_info.get("style_name", "default")
+    matched_council = []
+    for c_key_cand, c_val_cand in st.session_state.get("council_threads", {}).items():
+        if r_obj["code"] in str(c_key_cand) and st_name_cur in str(c_key_cand) and isinstance(c_val_cand, list):
+            matched_council = c_val_cand
+            break
+    synced_entry = sync_lab_intel_to_shared(r_obj, council_turns=matched_council if matched_council else None, rel_news_list=rel_news_list, persist=True)
+    st.session_state["dd_lab_ctx"] = {
+        "full_code": r_obj["full_code"],
+        "side": st_info.get("side", "LONG"),
+        "expect_pct": float(r_obj.get("expect_pct", 50.0)),
+        "exec_grade": str(r_obj.get("exec_grade", "")),
+        "tp": float(r_obj.get("raw_tp", 0.0)),
+        "sl": float(r_obj.get("raw_sl", 0.0)),
+        "vwap": float(r_obj.get("raw_vwap", 0.0)),
+        "pts_gap_pct": float(r_obj.get("pts_gap_pct", 0.0)),
+        "daily_atr14": float((r_obj.get("daily_2y") or {}).get("daily_atr14", 0.0)),
+        "lab_full": r_obj,
+        "lab_council": synced_entry.get("lab_council", []),
+        "lab_related_news": synced_entry.get("lab_related_news", rel_news_list),
+        "lab_updated_at": synced_entry.get("lab_updated_at", ""),
+        "dd_result": synced_entry.get("dd_result"),
+        "dd_updated_at": synced_entry.get("dd_updated_at", ""),
+    }
+    st.session_state["focused_stock_item"] = None
+    st.session_state["active_debates"] = {}
+    st.session_state["navigation_page"] = "DEEP_DIVE"
+    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+
+def _cb_add_trade_journal(r_obj: dict):
+    cu_j = st.session_state.get("authenticated_user", "")
+    if not cu_j:
+        return
+    st_info = r_obj.get("strat", {})
+    lot = r_obj.get("lot_info", {})
+    j_list = load_trade_journal(cu_j)
+    j_entry = {
+        "id": hashlib.md5(f"{r_obj['full_code']}_{time.time_ns()}".encode()).hexdigest()[:10],
+        "created_at": now_jst().strftime("%Y-%m-%d %H:%M"),
+        "full_code": r_obj["full_code"],
+        "code": r_obj["code"],
+        "name": r_obj["name"],
+        "genre": r_obj["genre"],
+        "style": st_info.get("style_name", "デイトレード"),
+        "side": st_info.get("side", "LONG"),
+        "tactic_type": st_info.get("tactic_type", "Type-E"),
+        "exec_grade": str(r_obj.get("exec_grade", "")),
+        "entry_price": float(r_obj.get("raw_close", 0.0)),
+        "tp_price": float(r_obj.get("raw_tp", 0.0)),
+        "sl_price": float(r_obj.get("raw_sl", 0.0)),
+        "vwap_price": float(r_obj.get("raw_vwap", 0.0)),
+        "shares": int(lot.get("shares", 100)),
+        "status": "OPEN",
+        "exit_price": None,
+        "closed_at": None,
+        "pnl_yen": 0.0,
+        "pnl_pct": 0.0,
+        "ai_feedback": ""
+    }
+    j_list.insert(0, j_entry)
+    save_trade_journal(cu_j, j_list)
+    st.toast(f"✅ 『{r_obj['name']}』をトレード日誌に記録しました")
 
 def _render_council_sec_impl(r, uk, auto_open=False):
     if st.session_state.get("navigation_page") != "TOP":
@@ -3508,28 +3721,29 @@ def _render_council_sec_impl(r, uk, auto_open=False):
 
     if auto_open and not st.session_state.get("custom_search_code"):
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("⬅️ 一覧に戻る (他の銘柄を見る)", key=f"btn_back_bottom_{uk}", use_container_width=True, type="primary"):
-            st.session_state["focused_stock_item"] = None; st.session_state["scroll_top_trig"] = int(time.time() * 1000); _app_rerun()
+        st.button("⬅️ 一覧に戻る (他の銘柄を見る)", key=f"btn_back_bottom_{uk}", use_container_width=True, type="primary", on_click=_cb_unfocus_stock)
 
 if hasattr(st, "fragment"):
     render_council_sec = st.fragment(_render_council_sec_impl)
 else:
     render_council_sec = _render_council_sec_impl
 
-def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extra_origin_badge: str = "", intraday_df: pd.DataFrame = None):
-    r_m = _merge_dd_intel_into_lab_item(r)
+def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extra_origin_badge: str = "", intraday_df: pd.DataFrame = None, shared_intel_map: dict = None, news_by_code_map: dict = None):
+    intel_hub = shared_intel_map if isinstance(shared_intel_map, dict) else load_shared_ticker_intel()
+    r_m = r if ("has_dd_intel" in r and shared_intel_map is None) else _merge_dd_intel_into_lab_item(r, intel_map_override=intel_hub)
     has_dd = bool(r_m.get("has_dd_intel"))
     dd_i = r_m.get("dd_intel", {})
-    rel_news_list = [n for n in all_impact_news if r_m["full_code"] in n["detail"]["related_codes"]]
-    rel_news = rel_news_list[0] if rel_news_list else None
     fc_card = str(r_m.get("full_code", "")).strip().upper()
+    if isinstance(news_by_code_map, dict):
+        rel_news_list = news_by_code_map.get(fc_card, [])
+    else:
+        rel_news_list = [n for n in get_cached_impact_news() if fc_card in n.get("detail", {}).get("related_codes", [])]
+    rel_news = rel_news_list[0] if rel_news_list else None
     is_jp = ".T" in fc_card
 
     dc, ds = ("#10b981" if r_m["diff"] >= 0 else "#ef4444"), ("+" if r_m["diff"] > 0 else "")
     lot, st_info = r_m["lot_info"], r_m["strat"]
     is_short_card = (st_info.get("side") == "SHORT")
-    spec = get_style_spec(st_info.get("style_name", "デイトレード"))
-    is_long_only_guard = (not spec["allow_short"]) or is_jp_tier3_short_restricted(fc_card, r_m.get("genre", ""))
 
     rk_h = f'<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border:none;font-weight:900;">#{rank}</span>' if rank else ""
     side_badge = '<span class="pill-badge" style="background:rgba(225,29,72,0.25);border-color:#fb7185;color:#fecdd3;font-weight:900;">SHORT</span>' if is_short_card else '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#34d399;color:#a7f3d0;font-weight:900;">LONG</span>'
@@ -3568,7 +3782,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     odd_lot_tag = " (S株)" if lot.get("is_odd_lot") else ""
 
     ft = r_m.get("forward_test", {})
-    w_cnt, l_cnt, t_days = int(ft.get("win_count", 0)), int(ft.get("lose_count", 0)), int(ft.get("total_days", 0))
+    w_cnt, l_cnt = int(ft.get("win_count", 0)), int(ft.get("lose_count", 0))
     pf_val = float(ft.get("profit_factor", 0.0)); pf_str = f"{pf_val:.2f}" if pf_val < 99.0 else "∞"
     sqn_val = float(ft.get("sqn", 0.0))
     tot_p = float(ft.get("total_profit_yen", 0.0))
@@ -3600,9 +3814,10 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
 
     disp_name = html.escape(str(r_m.get("name", r_m["code"])))
     disp_code = html.escape(str(r_m["code"]))
+    card_cls = "search-result-card" if is_custom else ("rank-card card-short" if is_short_card else ("rank-card card-dd-fused" if has_dd else "rank-card"))
 
     st.markdown(
-        f'<div class="{"search-result-card" if is_custom else "rank-card"}">'
+        f'<div class="{card_cls}">'
         f'<div class="card-top-meta">'
         f'<div>{rk_h}{side_badge}{exec_badge_html}{dd_badge_html}{extra_origin_badge}{new_badge}{warn_badges}</div>'
         f'<span style="font-size:10px;color:#94a3b8;font-family:\'JetBrains Mono\',monospace;">{html.escape(r_m["genre"])} ｜ {html.escape(st_info["tactic_type"])}</span>'
@@ -3646,102 +3861,28 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     if rel_news:
         st.markdown('<div class="news-banner-btn-marker"></div>', unsafe_allow_html=True)
         brk_prefix = "⚡超速報 " if rel_news.get("is_breaking") else ""
-        banner_lbl = f"🚨【{brk_prefix}速報】{rel_news['title'][:32]}… ▶ 記事解説を開く"
-        if st.button(banner_lbl, key=f"nb_banner_{kp}_{r_m['code']}_{rel_news.get('id','')}", use_container_width=True):
-            _navigate_to_news_detail(rel_news)
+        banner_lbl = f"🚨 {brk_prefix}{rel_news['title'][:34]}… ▶ 解説"
+        st.button(banner_lbl, key=f"nb_banner_{kp}_{r_m['code']}_{rel_news.get('id','')}", use_container_width=True, on_click=_set_news_detail_state, args=(rel_news,))
 
     uk_card = f"foc_{r_m['code']}" if (is_focused or is_custom) else f"{kp}_{r_m['code']}"
-    is_open_now = bool(is_focused or is_custom or st.session_state["active_debates"].get(uk_card, False))
+    dock_cls = "card-action-dock-marker card-action-dock-short" if is_short_card else "card-action-dock-marker"
+    st.markdown(f'<div class="{dock_cls}"></div>', unsafe_allow_html=True)
     b_col1, b_col2 = st.columns(2)
     with b_col1:
         if not (is_focused or is_custom):
-            g_lbl = "🔼 ガイドを閉じる" if is_open_now else ("🔴 空売りガイド・合議" if is_short_card else "🔵 売買ガイド・合議")
-            if st.button(g_lbl, key=f"btn_open_{uk_card}", use_container_width=True, type="primary"):
-                st.session_state["focused_stock_item"] = r_m
-                st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-                _app_rerun()
+            g_lbl = "📉 空売りガイド・合議" if is_short_card else "📊 ガイド・合議"
+            st.button(g_lbl, key=f"btn_open_{uk_card}", use_container_width=True, type="primary", on_click=_cb_focus_stock, args=(r_m,))
         else:
-            if rel_news and st.button("🚨 速報ニュース解説", key=f"nb_{kp}_{r_m['code']}", use_container_width=True):
-                _navigate_to_news_detail(rel_news)
-        w_lbl = "✅ 監視解除" if r_m["code"] in st.session_state["watchlist"] else "⭐ 監視追加"
-        if st.button(w_lbl, key=f"btn_watch_{uk_card}", use_container_width=True):
-            if r_m["code"] in st.session_state["watchlist"]:
-                del st.session_state["watchlist"][r_m["code"]]
-                st.toast(f"🗑️ 『{r_m['name']}』を監視リストから解除しました")
+            if rel_news:
+                st.button("🚨 速報解説", key=f"nb_{kp}_{r_m['code']}", use_container_width=True, type="primary", on_click=_set_news_detail_state, args=(rel_news,))
             else:
-                st.session_state["watchlist"][r_m["code"]] = r_m
-                st.toast(f"⭐ 『{r_m['name']}』を監視リストに追加しました")
-            cu = st.session_state.get("authenticated_user", "")
-            if cu: save_watchlist(cu, st.session_state["watchlist"])
-            if st.session_state.get("active_category") == "📋 監視シート":
-                st.rerun()
+                st.button("⬅️ 一覧へ戻る", key=f"btn_back_top_dock_{uk_card}", use_container_width=True, type="primary", on_click=_cb_unfocus_stock)
+        w_lbl = "✅ 監視中" if r_m["code"] in st.session_state["watchlist"] else "⭐ 監視"
+        st.button(w_lbl, key=f"btn_watch_{uk_card}", use_container_width=True, on_click=_cb_toggle_watchlist, args=(r_m,))
 
     with b_col2:
-        if st.button(f"🔥 DEEP DIVE ({r_m['code']})", key=f"btn_dd_{kp}_{r_m['code']}", use_container_width=True):
-            st.session_state["dd_target_code"] = r_m["full_code"]
-            st.session_state["dd_target_style"] = st_info.get("style_name", "デイトレード")
-            st.session_state["dd_code_in"] = r_m["full_code"]
-            st.session_state["dd_style_in"] = st_info.get("style_name", "デイトレード")
-            st_name_cur = st_info.get("style_name", "default")
-            matched_council = []
-            for c_key_cand, c_val_cand in st.session_state.get("council_threads", {}).items():
-                if r_m["code"] in str(c_key_cand) and st_name_cur in str(c_key_cand) and isinstance(c_val_cand, list):
-                    matched_council = c_val_cand
-                    break
-            synced_entry = sync_lab_intel_to_shared(r_m, council_turns=matched_council if matched_council else None, rel_news_list=rel_news_list, persist=True)
-            st.session_state["dd_lab_ctx"] = {
-                "full_code": r_m["full_code"],
-                "side": st_info.get("side", "LONG"),
-                "expect_pct": float(r_m.get("expect_pct", 50.0)),
-                "exec_grade": str(r_m.get("exec_grade", "")),
-                "tp": float(r_m.get("raw_tp", 0.0)),
-                "sl": float(r_m.get("raw_sl", 0.0)),
-                "vwap": float(r_m.get("raw_vwap", 0.0)),
-                "pts_gap_pct": float(r_m.get("pts_gap_pct", 0.0)),
-                "daily_atr14": float((r_m.get("daily_2y") or {}).get("daily_atr14", 0.0)),
-                "lab_full": r_m,
-                "lab_council": synced_entry.get("lab_council", []),
-                "lab_related_news": synced_entry.get("lab_related_news", rel_news_list),
-                "lab_updated_at": synced_entry.get("lab_updated_at", ""),
-                "dd_result": synced_entry.get("dd_result"),
-                "dd_updated_at": synced_entry.get("dd_updated_at", ""),
-            }
-            st.session_state["focused_stock_item"] = None
-            st.session_state["active_debates"] = {}
-            st.session_state["navigation_page"] = "DEEP_DIVE"
-            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-            _app_rerun()
-
-        if st.button(f"🎯 日誌記録 ({r_m['code']})", key=f"btn_journal_add_{kp}_{r_m['code']}", use_container_width=True):
-            cu_j = st.session_state.get("authenticated_user", "")
-            if cu_j:
-                j_list = load_trade_journal(cu_j)
-                j_entry = {
-                    "id": hashlib.md5(f"{r_m['full_code']}_{time.time_ns()}".encode()).hexdigest()[:10],
-                    "created_at": now_jst().strftime("%Y-%m-%d %H:%M"),
-                    "full_code": r_m["full_code"],
-                    "code": r_m["code"],
-                    "name": r_m["name"],
-                    "genre": r_m["genre"],
-                    "style": st_info.get("style_name", "デイトレード"),
-                    "side": st_info.get("side", "LONG"),
-                    "tactic_type": st_info.get("tactic_type", "Type-E"),
-                    "exec_grade": exec_grade,
-                    "entry_price": float(r_m.get("raw_close", 0.0)),
-                    "tp_price": float(r_m.get("raw_tp", 0.0)),
-                    "sl_price": float(r_m.get("raw_sl", 0.0)),
-                    "vwap_price": float(r_m.get("raw_vwap", 0.0)),
-                    "shares": int(lot.get("shares", 100)),
-                    "status": "OPEN",
-                    "exit_price": None,
-                    "closed_at": None,
-                    "pnl_yen": 0.0,
-                    "pnl_pct": 0.0,
-                    "ai_feedback": ""
-                }
-                j_list.insert(0, j_entry)
-                save_trade_journal(cu_j, j_list)
-                st.toast(f"✅ 『{r_m['name']}』をトレード日誌に記録しました")
+        st.button("🔥 DEEP DIVE", key=f"btn_dd_{kp}_{r_m['code']}", use_container_width=True, on_click=_cb_open_deep_dive_card, args=(r_m, rel_news_list))
+        st.button("📓 日誌", key=f"btn_journal_add_{kp}_{r_m['code']}", use_container_width=True, on_click=_cb_add_trade_journal, args=(r_m,))
 
     render_council_sec(r_m, uk_card, auto_open=bool(is_focused or is_custom))
 # === PART 3/5 END ===
@@ -4210,7 +4351,7 @@ def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cv
     disp_name = name or code; part_sh = max(1, int(round(sh * 0.50))); rem_sh = max(0, sh - part_sh)
     m10, d2y = macro_10y or {}, daily_2y or {}
     m10_lbl, m10_poc_s, m10_cagr = str(m10.get("regime_10y_label", "10年大局中立")), str(m10.get("poc_10y_str", "-")), float(m10.get("cagr_10y", 0.0))
-    d2y_lbl, d2y_ma, d2y_ma5_s, d2y_ma25_s, d2y_ma75_s, d2y_ma200_s = str(d2y.get("regime_1d_label", "日足中立")), str(d2y.get("ma_align_label", "MA均衡")), str(d2y.get("ma5_str", "-")), str(d2y.get("ma25_str", "-")), str(d2y.get("ma75_str", "-")), str(d2y.get("ma200_str", "-"))
+    d2y_lbl, d2y_ma5_s, d2y_ma25_s, d2y_ma75_s, d2y_ma200_s = str(d2y.get("regime_1d_label", "日足中立")), str(d2y.get("ma5_str", "-")), str(d2y.get("ma25_str", "-")), str(d2y.get("ma75_str", "-")), str(d2y.get("ma200_str", "-"))
     fc_eval = full_code or (f"{code}.T" if re.match(r"^[0-9]{3}[0-9A-Z]$", str(code)) else str(code))
     tactic_type = determine_tactic_classification(fc_eval, genre, ofi_z, vpin, rsi, pgap, expect_pct, prev_trend_weak, qm, ms, rel_news_title=rel_news_title, style=style, upper_wick_pressure=upper_wick_pressure, lower_wick_support=lower_wick_support, cv=cv, vwap_today=vwap_today, rs_alpha=rs_alpha, daily_ctx=d2y, macro_10y=m10)
 
@@ -4949,7 +5090,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
 
         ma25_now, ma75_now = float(daily_2y.get("ma25", 0.0)), float(daily_2y.get("ma75", 0.0))
         prev_trend_weak = (cv < ma25_now * 0.992) if ma25_now > 0 else ((cv < float(np.mean(daily_df_5m["Close"].values[-5:].astype(float))) * 0.992) if len(daily_df_5m) >= 5 else False)
-        rel_news_obj = next((n for n in all_impact_news if code in n.get("detail", {}).get("related_codes", [])), None)
+        rel_news_obj = next((n for n in get_cached_impact_news() if code in n.get("detail", {}).get("related_codes", [])), None)
         rel_news_title = rel_news_obj["title"] if rel_news_obj else ""
 
         u_wick_now, l_wick_now = float(q_adv.get("upper_wick_pressure", 0.0)), float(q_adv.get("lower_wick_support", 0.0))
@@ -5333,16 +5474,26 @@ def _scale_stock_item_for_user(item: dict, style: str, total_cap: float, risk_pc
         r["forward_test"] = ft_copy
     return r
 
+def _build_news_by_code_map(news_list: list) -> dict:
+    by_code = {}
+    for n in (news_list or []):
+        rel_codes = n.get("detail", {}).get("related_codes", [])
+        for rc in rel_codes:
+            by_code.setdefault(str(rc).strip().upper(), []).append(n)
+    return by_code
+
 def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
     macro_sig = tuple(sorted((k, round(float(v.get("price", 0.0)), 4), round(float(v.get("diff", 0.0)), 2), str(v.get("label", ""))) for k, v in (macro or {}).items()))
     core_gmap, core_all = _fetch_pool_batch_core(macro_sig, style, bool(core_vol), bool(core_inst), bool(core_mom))
+    intel_hub = load_shared_ticker_intel()
+    news_by_code = _build_news_by_code_map(get_cached_impact_news())
     scaled_map = {}
     scaled_all = []
     for item in core_all:
-        sc_item = _merge_dd_intel_into_lab_item(_scale_stock_item_for_user(item, style, float(total_cap), float(risk_pct)))
+        sc_item = _merge_dd_intel_into_lab_item(_scale_stock_item_for_user(item, style, float(total_cap), float(risk_pct)), intel_map_override=intel_hub)
         scaled_map[sc_item["full_code"]] = sc_item
         scaled_all.append(sc_item)
-        rel_n_ev = [n for n in all_impact_news if sc_item.get("full_code") in n.get("detail", {}).get("related_codes", [])]
+        rel_n_ev = news_by_code.get(sc_item["full_code"], [])
         sync_lab_intel_to_shared(sc_item, rel_news_list=rel_n_ev, persist=False)
     if scaled_all:
         intel_curr = load_shared_ticker_intel()
@@ -5440,6 +5591,66 @@ def evaluate_journal_trade_audit(entry: dict, all_stocks: list) -> str:
     tp_comment = "🎯 計画通りの利確執行で期待値通りのトレードです。+1.0Rでの半分利確習慣を継続しましょう。" if pnl_pct >= 1.0 else ("⚖️ 微損・微益での撤退です。方向感が崩れた際の早期撤退は資金防衛として有効です。" if pnl_pct > -1.0 else "🛡️ 損切り後のドテンやリベンジ売買を控え、次のGrade-A銘柄を待ちましょう。")
     return f"【AEGIS＆SENTINEL 規律監査スコア: {score}点】\n・損益結果: {pnl_pct:+.2f}%（{pnl_yen:+,.0f}円）｜執行グレード: {exec_g}\n・リスク監査(SENTINEL): {sl_comment}\n・資金管理講評(AEGIS): {tp_comment}"
 
+def _cb_back_from_news_detail():
+    prev_f = st.session_state.get("prev_focused_stock_item")
+    if prev_f:
+        st.session_state["focused_stock_item"] = prev_f
+        st.session_state["prev_focused_stock_item"] = None
+    st.session_state["navigation_page"] = "TOP"
+    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+
+def _cb_clear_custom_search():
+    st.session_state["custom_search_code"] = ""
+    if "search_code_input" in st.session_state:
+        st.session_state["search_code_input"] = ""
+    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+
+def _cb_open_ipo_diag(full_c: str):
+    st.session_state["custom_search_code"] = full_c
+    st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+
+def _render_top_breaking_news_bar_impl():
+    if st.session_state.get("navigation_page") != "TOP":
+        return
+    news_items = fetch_global_impact_news()
+    if not news_items:
+        return
+    top_n = news_items[0]
+    brk_tag = "⚡超速報 " if top_n.get("is_breaking") else ""
+    age_s = f"{top_n.get('age_hours', 0)}h前"
+    headline_lbl = f"🚨 {brk_tag}[{age_s}] {top_n['title'][:42]}… ▶ 解説"
+    st.markdown('<div class="top-breaking-news-marker"></div>', unsafe_allow_html=True)
+    nc1, nc2 = st.columns([4.1, 1.15])
+    with nc1:
+        if st.button(headline_lbl, key=f"top_brk_btn_{top_n.get('id', '0')}", use_container_width=True):
+            _navigate_to_news_detail(top_n)
+    with nc2:
+        st.button(f"🚨 全{len(news_items)}件", key="top_brk_all_btn", use_container_width=True, on_click=_cb_open_news_category)
+
+if hasattr(st, "fragment"):
+    render_top_breaking_news_bar = st.fragment(run_every=45)(_render_top_breaking_news_bar_impl)
+else:
+    render_top_breaking_news_bar = _render_top_breaking_news_bar_impl
+
+def _render_news_category_list_impl():
+    if st.session_state.get("navigation_page") != "TOP":
+        return
+    news_items = fetch_global_impact_news()
+    if not news_items:
+        st.info("現在、新規の重大ヘッドラインは検出されていません。")
+        return
+    for n in news_items:
+        breaking_tag = '<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border-color:#fde047;font-weight:900;">⚡超速報</span> ' if n.get("is_breaking") else ""
+        cross_tag = '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#10b981;color:#6ee7b7;font-weight:800;">✅ クロス検証済</span>' if n.get("cross_verified") else ""
+        st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;"><div>{breaking_tag}<span style="font-size:11px;color:#f87171;font-weight:800;">🚨 {html.escape(n["cat"])}</span> {cross_tag}</div><div><span style="font-size:10.5px;color:#94a3b8;margin-right:6px;">{html.escape(n.get("source",""))} ({n.get("age_hours",0)}h前)</span><span class="pill-badge" style="color:#fde047;border-color:#fde047;">実測重要度: {n.get("impact_score", 70)}点</span></div></div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-top:4px;margin-bottom:4px;">{html.escape(n["title"])}</div></div>', unsafe_allow_html=True)
+        if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True):
+            _navigate_to_news_detail(n)
+
+if hasattr(st, "fragment"):
+    render_news_category_list = st.fragment(run_every=45)(_render_news_category_list_impl)
+else:
+    render_news_category_list = _render_news_category_list_impl
+
 active_nav_page = st.session_state.get("navigation_page", "TOP")
 page_root = st.empty()
 
@@ -5476,10 +5687,7 @@ with page_root.container():
                         db_set("mem", db_dd)
                         st.success("✅ 利用権限を申請しました！管理者の承認をお待ちください。")
                         st.rerun()
-            if st.button("⬅️ トップ画面に戻る", use_container_width=True):
-                st.session_state["navigation_page"] = "TOP"
-                st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-                st.rerun()
+            st.button("⬅️ トップ画面に戻る", use_container_width=True, on_click=_cb_open_page, args=("TOP",))
             st.stop()
 
         import deep_dive
@@ -5497,6 +5705,10 @@ with page_root.container():
     if active_nav_page == "ADMIN" and adm_c_page and cu == adm_c_page:
         render_admin_control_center()
         st.stop()
+
+    all_impact_news = get_cached_impact_news()
+    shared_intel_snapshot = load_shared_ticker_intel()
+    news_by_code_snapshot = _build_news_by_code_map(all_impact_news)
 
     macro_info = fetch_macro()
     ribbon_chips = "".join([
@@ -5517,6 +5729,9 @@ with page_root.container():
         unsafe_allow_html=True
     )
 
+    if active_nav_page == "TOP":
+        render_top_breaking_news_bar()
+
     _cache_pool_key = f"pool_v28_full_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
     if _cache_pool_key not in st.session_state:
         with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】週足10年×日足2年×5分足60日 3階層MTFスコアリングを実行中..."):
@@ -5532,15 +5747,15 @@ with page_root.container():
         if isinstance(foc_cur, dict) and foc_cur.get("full_code"):
             fc_f = foc_cur["full_code"]
             refreshed_f = res_by_fc.get(fc_f) or fetch_one(fc_f, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-            if refreshed_f: st.session_state["focused_stock_item"] = _merge_dd_intel_into_lab_item(refreshed_f)
+            if refreshed_f: st.session_state["focused_stock_item"] = _merge_dd_intel_into_lab_item(refreshed_f, intel_map_override=shared_intel_snapshot)
         wl_cur = st.session_state.get("watchlist", {})
         if isinstance(wl_cur, dict) and wl_cur:
             updated_wl, changed_wl = {}, False
             for w_k, w_v in wl_cur.items():
                 fc_w = w_v.get("full_code") or (f"{w_k}.T" if re.match(r"^[0-9]{3}[0-9A-Z]$", str(w_k)) else str(w_k))
                 refreshed_w = res_by_fc.get(fc_w) or fetch_one(fc_w, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-                if refreshed_w: updated_wl[w_k] = _merge_dd_intel_into_lab_item(refreshed_w); changed_wl = True
-                else: updated_wl[w_k] = _merge_dd_intel_into_lab_item(w_v)
+                if refreshed_w: updated_wl[w_k] = _merge_dd_intel_into_lab_item(refreshed_w, intel_map_override=shared_intel_snapshot); changed_wl = True
+                else: updated_wl[w_k] = _merge_dd_intel_into_lab_item(w_v, intel_map_override=shared_intel_snapshot)
             if changed_wl:
                 st.session_state["watchlist"] = updated_wl
                 if cu: save_watchlist(cu, updated_wl)
@@ -5548,12 +5763,7 @@ with page_root.container():
     if active_nav_page == "NEWS_DETAIL":
         if not all_impact_news:
             st.info("現在、新規の重大ヘッドラインは検出されていません。")
-            if st.button("⬅️ 戻る", use_container_width=True, type="primary"):
-                prev_f = st.session_state.get("prev_focused_stock_item")
-                if prev_f:
-                    st.session_state["focused_stock_item"] = prev_f
-                    st.session_state["prev_focused_stock_item"] = None
-                st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
+            st.button("⬅️ 戻る", use_container_width=True, type="primary", on_click=_cb_back_from_news_detail)
             st.stop()
         tn = st.session_state.get("selected_news_item") or all_impact_news[0]
         det = tn.get("detail") or analyze_news_impact_and_links(tn.get("title", ""), tn.get("cat", ""), tn.get("summary", ""))
@@ -5580,7 +5790,7 @@ with page_root.container():
                 if len(out_items) >= limit: break
                 if rc in seen_fc: continue
                 found = next((r_it for r_it in all_res if r_it["full_code"] == rc or r_it["code"] == rc.replace(".T", "")), None) or fetch_one(rc, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-                if found and found["full_code"] not in seen_fc: out_items.append(_merge_dd_intel_into_lab_item(found)); seen_fc.add(found["full_code"])
+                if found and found["full_code"] not in seen_fc: out_items.append(_merge_dd_intel_into_lab_item(found, intel_map_override=shared_intel_snapshot)); seen_fc.add(found["full_code"])
             return out_items
 
         extracted_items = sorted(_resolve_stock_items(extracted_codes_list, 3), key=lambda x: x["fusion_expect_pct"], reverse=True)
@@ -5591,19 +5801,14 @@ with page_root.container():
         for idx, r_item in enumerate(combined_news_stocks, 1):
             is_direct_mention = (r_item["full_code"] in extracted_codes_set) or (r_item["code"] in {c.replace(".T", "") for c in extracted_codes_set})
             origin_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.28);border-color:#10b981;color:#6ee7b7;font-weight:900;">🎯 記事内直接言及</span>' if is_direct_mention else '<span class="pill-badge" style="background:rgba(148,163,184,0.22);border-color:#94a3b8;color:#e2e8f0;font-weight:800;">📂 セクター代表</span>'
-            render_card(r_item, rank=idx, kp=f"nr_{tn['id']}", extra_origin_badge=origin_badge)
+            render_card(r_item, rank=idx, kp=f"nr_{tn['id']}", extra_origin_badge=origin_badge, shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot)
 
-        if st.button("⬅️ 戻る", use_container_width=True, type="primary"):
-            prev_f = st.session_state.get("prev_focused_stock_item")
-            if prev_f:
-                st.session_state["focused_stock_item"] = prev_f
-                st.session_state["prev_focused_stock_item"] = None
-            st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
+        st.button("⬅️ 戻る", use_container_width=True, type="primary", on_click=_cb_back_from_news_detail)
         st.stop()
 
     focused_item = st.session_state.get("focused_stock_item")
     if focused_item:
-        focused_item = _merge_dd_intel_into_lab_item(focused_item)
+        focused_item = _merge_dd_intel_into_lab_item(focused_item, intel_map_override=shared_intel_snapshot)
         st.markdown("### 🔵 銘柄詳細・売買合議フォーカスモード")
         foc_fc = str(focused_item.get("full_code", "")).strip().upper()
         foc_df = None
@@ -5617,27 +5822,20 @@ with page_root.container():
             foc_df = normalize_ohlcv_df(df_cand_f, min_rows=25)
         if foc_df is None:
             _, foc_df = fetch_one_with_df(foc_fc, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-        render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True, intraday_df=foc_df); st.stop()
+        render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True, intraday_df=foc_df, shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot); st.stop()
 
-    c1, c2, c3 = st.columns([2.7, 0.9, 1.2])
+    c1, c2 = st.columns([3.8, 1.0])
     cin = c1.text_input("🔍 銘柄検索", placeholder="コード入力 (例: 6920 / 7203 / AAPL)", label_visibility="collapsed", key="search_code_input")
     if c2.button("🔍 診断", use_container_width=True) and cin:
         st.session_state["custom_search_code"] = clean_k(cin); st.session_state["focused_stock_item"] = None; st.session_state["prev_focused_stock_item"] = None; st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
-    if c3.button("🔄 速報ニュース即時更新", key="btn_refresh_news_top", use_container_width=True):
-        fetch_global_impact_news.clear()
-        search_single_query.clear()
-        st.rerun()
 
     if st.session_state.get("custom_search_code"):
         st.markdown("### 🎯 個別銘柄・精密3階層MTFクオンツ診断モード")
         with st.spinner("📡 銘柄正式名称・週足10年・日足2年・5分足60日波形を解析中..."):
             cr, cr_df = fetch_one_with_df(st.session_state["custom_search_code"], macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-        if cr: render_card(cr, is_custom=True, kp="custom", intraday_df=cr_df)
+        if cr: render_card(cr, is_custom=True, kp="custom", intraday_df=cr_df, shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot)
         else: st.warning("⚠️ 指定された銘柄コードのデータが取得できないか、上場廃止・無効な銘柄です。")
-        if st.button("⬅️ トップ画面（ランキング一覧）に戻る", key="btn_back_from_custom_diag", use_container_width=True, type="primary"):
-            st.session_state["custom_search_code"] = ""
-            if "search_code_input" in st.session_state: st.session_state["search_code_input"] = ""
-            st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
+        st.button("⬅️ トップ画面（ランキング一覧）に戻る", key="btn_back_from_custom_diag", use_container_width=True, type="primary", on_click=_cb_clear_custom_search)
         st.stop()
 
     surv_logs_top = db_get("market_survival_logs", [])
@@ -5718,24 +5916,13 @@ with page_root.container():
 
     if sel_cat == "🏆 総合TOP5":
         top5_sorted = sorted(surv, key=_top5_eligibility_key, reverse=True)[:5]
-        for i, r in enumerate(top5_sorted, 1): render_card(r, rank=i, kp="top5")
+        for i, r in enumerate(top5_sorted, 1): render_card(r, rank=i, kp="top5", shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot)
     elif sel_cat == "⚛️ ボラティリティ突破TOP10":
-        for i, r in enumerate(sorted(surv, key=lambda x: x["q_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="qtop")
+        for i, r in enumerate(sorted(surv, key=lambda x: x["q_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="qtop", shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot)
     elif sel_cat == "🏛️ 5分足需給ミクロTOP10":
-        for i, r in enumerate(sorted(surv, key=lambda x: x["ms_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mstop")
+        for i, r in enumerate(sorted(surv, key=lambda x: x["ms_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mstop", shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot)
     elif sel_cat == "🚨 重大ニュース＆連動株":
-        if st.button("🔄 速報ニュース即時更新", key="btn_refresh_news_tab", use_container_width=True, type="primary"):
-            fetch_global_impact_news.clear()
-            search_single_query.clear()
-            st.rerun()
-        if not all_impact_news: st.info("現在、新規の重大ヘッドラインは検出されていません。")
-        else:
-            for n in all_impact_news:
-                breaking_tag = '<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border-color:#fde047;font-weight:900;">⚡超速報</span> ' if n.get("is_breaking") else ""
-                cross_tag = '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#10b981;color:#6ee7b7;font-weight:800;">✅ クロス検証済</span>' if n.get("cross_verified") else ""
-                st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;"><div>{breaking_tag}<span style="font-size:11px;color:#f87171;font-weight:800;">🚨 {html.escape(n["cat"])}</span> {cross_tag}</div><div><span style="font-size:10.5px;color:#94a3b8;margin-right:6px;">{html.escape(n.get("source",""))} ({n.get("age_hours",0)}h前)</span><span class="pill-badge" style="color:#fde047;border-color:#fde047;">実測重要度: {n.get("impact_score", 70)}点</span></div></div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-top:4px;margin-bottom:4px;">{html.escape(n["title"])}</div></div>', unsafe_allow_html=True)
-                if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True):
-                    _navigate_to_news_detail(n)
+        render_news_category_list()
     elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
         st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 2階建てIPO・グロース市場 マルチソース実測サバイバルターミナル</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;">① 未上場・新規承認IPO監視候補 ＋ ② 既上場IPO・グロース実測サバイバルTOP10（取引所一次情報・実約定データ・金融ポータル・日英報道4系統クロス検証自動振り分け）</div><div style="margin-top:8px;"><a href="https://www.jpx.co.jp/listing/stocks/new/index.html" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">🏛️ 日本取引所グループ(JPX) 新規上場会社情報</a><a href="https://www.sec.gov/edgar/searchedgar/companysearch" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#a855f7;color:#e9d5ff;">🇺🇸 SEC EDGAR (S-1 / 424B4検索)</a></div></div>', unsafe_allow_html=True)
         with st.spinner("📡 取引所一次情報(JPX/SEC)・実市場データ・金融ポータル・日英報道の4系統クロス検証を実行中..."): ipo_bundle = fetch_real_ipo_growth_analysis()
@@ -5783,8 +5970,7 @@ with page_root.container():
                 unsafe_allow_html=True
             )
             if re.match(r"^[1-9][0-9]{2}[0-9A-Z]$", c_raw_u):
-                if st.button(f"🔵 {u_ipo['name']} ({c_raw_u}) の3階層MTF＆売買戦略を診断する", key=f"up_ipo_diag_{idx_u}_{c_raw_u}", use_container_width=True):
-                    st.session_state["custom_search_code"] = f"{c_raw_u}.T"; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
+                st.button(f"🔵 {u_ipo['name']} ({c_raw_u}) の3階層MTF＆売買戦略を診断する", key=f"up_ipo_diag_{idx_u}_{c_raw_u}", use_container_width=True, on_click=_cb_open_ipo_diag, args=(f"{c_raw_u}.T",))
 
         st.markdown("### ② 既上場IPO・グロース実測サバイバルTOP10（上場確認済・日米統合）")
         survivors_ipo = ipo_bundle.get("survivors", []) if isinstance(ipo_bundle, dict) else []
@@ -5828,11 +6014,11 @@ with page_root.container():
                 f'</div>',
                 unsafe_allow_html=True
             )
-            if st.button(f"🔵 {ipo['name']} ({ipo['code']}) の実戦検証と売買戦略詳細を見る", key=f"ipo_diag_{ipo['code']}", use_container_width=True): st.session_state["custom_search_code"] = ipo["full_code"]; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
+            st.button(f"🔵 {ipo['name']} ({ipo['code']}) の実戦検証と売買戦略詳細を見る", key=f"ipo_diag_{ipo['code']}", use_container_width=True, on_click=_cb_open_ipo_diag, args=(ipo["full_code"],))
     elif sel_cat == "🏦 BVC-VPIN・CLV資金フロー":
-        for i, r in enumerate(sorted(surv, key=lambda x: x["inst_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
+        for i, r in enumerate(sorted(surv, key=lambda x: x["inst_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="inst", shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot)
     elif sel_cat == "🔥 出来高サージ＆市場注目度":
-        for i, r in enumerate(sorted(surv, key=lambda x: x["surge_attention_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
+        for i, r in enumerate(sorted(surv, key=lambda x: x["surge_attention_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mom", shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot)
     elif sel_cat == "📋 監視シート":
         wl = st.session_state["watchlist"]
         if len(wl) >= 2:
@@ -5857,18 +6043,22 @@ with page_root.container():
                         f'</div>',
                         unsafe_allow_html=True
                     )
-        if st.button("⚡ 総合TOP3を一括登録", use_container_width=True):
-            for it in surv[:3]: wl[it["code"]] = _merge_dd_intel_into_lab_item(it)
-            cu = st.session_state.get("authenticated_user", "")
-            if cu: save_watchlist(cu, wl)
-            st.rerun()
-        for wc, wi in list(wl.items()): render_card(wi, kp=f"wl_{wc}")
+        def _cb_register_top3_watchlist():
+            wl_cur_b = st.session_state["watchlist"]
+            for it in surv[:3]:
+                wl_cur_b[it["code"]] = _merge_dd_intel_into_lab_item(it, intel_map_override=shared_intel_snapshot)
+            cu_w = st.session_state.get("authenticated_user", "")
+            if cu_w:
+                save_watchlist(cu_w, wl_cur_b)
+            st.toast("⚡ 総合TOP3を監視シートへ一括登録しました")
+        st.button("⚡ 総合TOP3を一括登録", use_container_width=True, on_click=_cb_register_top3_watchlist)
+        for wc, wi in list(wl.items()): render_card(wi, kp=f"wl_{wc}", shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot)
     elif sel_cat == "📓 トレード日誌＆AI監査":
         st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">📓 実戦トレード日誌 ＆ クオンツ監査官（AEGIS・SENTINEL）振り返り採点</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;">銘柄カードから記録したエントリープランの決済確定・損益集計・AI規律監査を実行します</div></div>', unsafe_allow_html=True)
         cu_j = st.session_state.get("authenticated_user", "")
         j_entries = load_trade_journal(cu_j)
         if not j_entries:
-            st.info("まだトレード日誌に記録がありません。各銘柄カードの『🎯 日誌記録』ボタンから登録してください。")
+            st.info("まだトレード日誌に記録がありません。各銘柄カードの『📓 日誌』ボタンから登録してください。")
         else:
             closed_j = [x for x in j_entries if x.get("status") == "CLOSED"]
             tot_j_pnl = sum(float(x.get("pnl_yen", 0.0)) for x in closed_j)
@@ -5933,7 +6123,7 @@ with page_root.container():
                         save_trade_journal(cu_j, j_entries)
                         st.rerun()
     elif sel_cat.startswith("📂 "):
-        for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), survival_cut_pct), 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
+        for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), survival_cut_pct), 1): render_card(r, rank=i, kp=f"g_{sel_cat}", shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot)
 
     st.markdown('<div class="disclaimer-banner"><b>⚖️ 重要免責事項・法的表示</b><br>本システム「YAMASHISHI LAB」が提供するすべての指標（ボラティリティ突破指数・WKB統計近似モデル、5分足60日OHLCV需給ミクロ構造近似、日足2年中期トレンド・MAパーフェクトオーダー・MACD・52週位置・日足ATR14・価格帯別出来高Volume Profile(LVN上値真空/HVNしこり壁)・対ベンチマークRSα・30分イントラデイRS先行度、過去10年週足大局アルゴリズム・10年POC価格帯別出来高解析、BVC-VPIN・Kyle-λ統計近似、WRVヒゲ拒絶ベクトル、OR15分初動レンジ判定・時間帯補正RVOL・3階層MTF5条件執行品質ゲート、VWAP±1σ/2σ動的バンド過熱判定・PDH/PDL前日高値安値・機関オーダーブロック(OB)支持帯検出・東証値幅制限(ストップ高/ストップ安)自動キャップ、決算跨ぎリスク遮断ゲート、監視ポートフォリオ相関＆セクター集中リスク診断、5大セクター資金ローテーション・ヒートマップ、当日実測寄付きギャップ／理論寄付き試算値、期待度パーセンテージ、LAB×DEEP DIVE双方向統合予測・同期判定、リークフリー検証統計(勝率/PF/SQN/平均R/最大DD/エクイティカーブ/時間帯別勝率)、スマホ即発注用OCOオーダーチケットBOX、Geminiクオンツ監査合議ログ、トレード日誌AI監査、および買い・空売り双方の売買プラン）は、過去の5分足・日足・週足四本値および出来高(OHLCV)データと数理アルゴリズムに基づく研究シミュレーション・情報提供を目的としたものであり、実際の板情報（Tick）やPTS実勢値に基づくものではなく、特定の有価証券の売買推奨や投資助言（投資助言・代理業等）を行うものではありません。株式投資（特に信用取引・空売り）には元本割れや元本超過損・市場変動のリスクが伴います。最終的な投資判断および資金配分は、必ず利用者ご自身の自己責任にて行っていただけますようお願い申し上げます。</div>', unsafe_allow_html=True)
 # === PART 5/5 END ===
