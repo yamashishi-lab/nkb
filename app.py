@@ -290,7 +290,7 @@ UPCOMING_IPO_WATCHLIST = [
         "stage_label": "🟠 上場準備・承認監視候補（AI・クラウド）",
         "name": "Sakana AI（サカナAI）",
         "market": "東証プライム / グロース（マルチソース上場検証中）",
-        "listing_date_disp": "マルチソース上場実態検証中",
+        "listing_date_disp": "マルチソース上場検証中",
         "offer_info": "JPX/市場データ照合中",
         "bb_info": "JPX・Yahoo!ファイナンスIPO照合中",
         "lead_underwriter": "野村證券 / SMBC日興証券 / モルガン・スタンレー（観測）",
@@ -307,7 +307,7 @@ UPCOMING_IPO_WATCHLIST = [
         "stage_label": "🟠 上場準備・承認監視候補（半導体・メモリ）",
         "name": "JSR（次世代半導体フォトレジスト再上場観測）",
         "market": "東証プライム（マルチソース再上場検証中）",
-        "listing_date_disp": "マルチソース上場実態検証中",
+        "listing_date_disp": "マルチソース上場検証中",
         "offer_info": "JPX/市場データ照合中",
         "bb_info": "JPX・Yahoo!ファイナンスIPO照合中",
         "lead_underwriter": "野村證券 / 大和証券 / みずほ証券（観測）",
@@ -933,6 +933,7 @@ def render_biometric_bridge(mode="login", user_email="", bio_token=""):
 def inject_css():
     css = """@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700;800&display=swap');
 html,body,[class*="css"]{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;background-color:#070b14;color:#e2e8f0;}
+[data-stale="true"], .stApp, [data-testid="stAppViewContainer"], section.main, [data-testid="stVerticalBlock"] { opacity: 1 !important; transition: none !important; filter: none !important; }
 .block-container{padding-top:2.9rem!important;}
 div[data-baseweb="popover"],div[data-baseweb="menu"],div[role="listbox"],ul[role="listbox"]{z-index:2147483647!important;pointer-events:auto!important;}
 header[data-testid="stHeader"]{background:transparent!important;pointer-events:none!important;height:3.5rem!important;z-index:999980!important;}
@@ -1000,6 +1001,7 @@ div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-contai
 .quant-detail-drawer{margin-top:8px;background:rgba(2,6,23,0.62);border:1px solid rgba(148,163,184,0.18);border-radius:8px;padding:7px 10px;font-size:11.5px;cursor:pointer;}
 .quant-detail-drawer summary{font-weight:800;color:#7dd3fc;outline:none;}
 .pill-badge{font-size:clamp(9.5px,2.4vw,10.5px);padding:2px 6px;border-radius:5px;border:1px solid rgba(148,163,184,0.28);margin-right:3px;display:inline-block;white-space:nowrap!important;font-family:'JetBrains Mono',monospace;}
+.ipo-status-pill{display:inline-block!important;max-width:100%!important;box-sizing:border-box!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;font-size:clamp(9.5px,2.7vw,11px)!important;padding:2px 7px!important;border-radius:5px!important;vertical-align:middle!important;}
 .quantum-badge{font-size:clamp(9.5px,2.4vw,10.5px);padding:2px 6px;border-radius:5px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);color:#c084fc;margin-right:3px;display:inline-block;white-space:nowrap!important;font-family:'JetBrains Mono',monospace;}
 .inst-badge{font-size:clamp(9.5px,2.4vw,10.5px);padding:2px 6px;border-radius:5px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;margin-right:3px;display:inline-block;white-space:nowrap!important;font-family:'JetBrains Mono',monospace;}
 .compact-bar-label{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#38bdf8;letter-spacing:0.6px;margin:4px 0 4px 2px;}
@@ -1096,12 +1098,13 @@ if not isinstance(st.session_state.get("shared_ticker_intel"), dict):
     st.session_state["shared_ticker_intel"] = {}
 st.session_state["agent_roster"] = dict(DEFAULT_AGENTS)
 
-with st.container():
-    st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
-    if st.button("トップに戻る", key="top_nav_top", use_container_width=True):
-        st.session_state["navigation_page"] = "TOP"; st.session_state["focused_stock_item"] = None; st.session_state["custom_search_code"] = ""; st.session_state["selected_news_item"] = None; st.session_state["active_category"] = "🏆 総合TOP5"; st.session_state["last_cat"] = "🏆 総合TOP5"
-        if "search_code_input" in st.session_state: st.session_state["search_code_input"] = ""
-        st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000); st.rerun()
+if st.session_state.get("navigation_page") != "DEEP_DIVE":
+    with st.container():
+        st.markdown('<div class="top-nav-marker"></div>', unsafe_allow_html=True)
+        if st.button("トップに戻る", key="top_nav_top", use_container_width=True):
+            st.session_state["navigation_page"] = "TOP"; st.session_state["focused_stock_item"] = None; st.session_state["custom_search_code"] = ""; st.session_state["selected_news_item"] = None; st.session_state["active_category"] = "🏆 総合TOP5"; st.session_state["last_cat"] = "🏆 総合TOP5"
+            if "search_code_input" in st.session_state: st.session_state["search_code_input"] = ""
+            st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000); st.rerun()
 
 scroll_target_js = f"setTimeout(function(){{try{{const el=window.parent.document.getElementById('{st.session_state.get('scroll_target_id')}');if(el){{const win=el.closest('.council-scroll-window');if(win){{win.scrollTo({{top:Math.max(0,el.offsetTop-4),behavior:'smooth'}});}}(el.closest('.ai-council-box')||el).scrollIntoView({{behavior:'smooth',block:'center'}});}}}}catch(e){{}}}},120);" if st.session_state.get("scroll_target_id") else ""
 st.session_state["scroll_target_id"] = ""
@@ -1269,57 +1272,8 @@ with st.sidebar:
         if cu_l in db_l: db_l[cu_l]["last_seen_ts"] = 0; db_set("mem", db_l)
         st.session_state["authenticated_user"] = None; st.query_params.clear(); st.rerun()
 
-if st.session_state.get("navigation_page") == "MANUAL":
-    render_user_manual_page()
-    st.stop()
-
-if st.session_state.get("navigation_page") == "DEEP_DIVE":
-    cu_dd = st.session_state.get("authenticated_user", "").strip().lower()
-    db_dd = load_mem()
-    u_dd = db_dd.get(cu_dd, {})
-    dd_st = u_dd.get("deep_dive_status", "approved" if u_dd.get("deep_dive_allowed") else "none")
-    adm_c_dd = ADMIN_EMAIL.strip().lower()
-    is_dd_ok = bool(adm_c_dd and cu_dd == adm_c_dd) or (dd_st == "approved")
-
-    if not is_dd_ok:
-        st.markdown(
-            '<div class="glass-header" style="border-left:4px solid #f59e0b;">'
-            '<div class="brand-luxury">YAMASHISHI DEEP DIVE</div>'
-            '<div style="color:#fde047;font-weight:800;font-size:14px;margin-top:8px;">🔒 アクセス権限が必要です</div>'
-            '<div style="color:#cbd5e1;font-size:12.5px;margin-top:6px;line-height:1.7;">'
-            'ディープサーチ（単一銘柄・極限解析ターミナル）を利用するには、管理者からの閲覧権限が必要です。<br>'
-            '下のボタンから利用権限を申請してください。</div></div>',
-            unsafe_allow_html=True
-        )
-        if dd_st == "pending":
-            st.info("⏳ 現在、管理者の承認審査待ちです。承認されるまでしばらくお待ちください。")
-        else:
-            if st.button("📩 管理者へディープサーチ利用権限を申請する", use_container_width=True, type="primary"):
-                if cu_dd in db_dd:
-                    db_dd[cu_dd]["deep_dive_status"] = "pending"
-                    db_dd[cu_dd]["deep_dive_applied_at"] = now_jst().strftime("%Y-%m-%d %H:%M")
-                    db_set("mem", db_dd)
-                    st.success("✅ 利用権限を申請しました！管理者の承認をお待ちください。")
-                    st.rerun()
-        if st.button("⬅️ トップ画面に戻る", use_container_width=True):
-            st.session_state["navigation_page"] = "TOP"
-            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-            st.rerun()
-        st.stop()
-
-    import deep_dive
-    dd_tgt_fc = str(st.session_state.get("dd_target_code", "NVDA")).strip().upper()
-    deep_dive.render_deep_dive_page(
-        init_code=dd_tgt_fc,
-        init_style=st.session_state.get("dd_target_style", "デイトレード"),
-        gemini_api_key=load_gemini_cfg().get("api_key", ""),
-        lab_ctx=st.session_state.get("dd_lab_ctx")
-    )
-    sync_dd_intel_from_session(dd_tgt_fc)
-    st.stop()
-
-adm_c_page = ADMIN_EMAIL.strip().lower()
-if st.session_state.get("navigation_page") == "ADMIN" and adm_c_page and cu == adm_c_page:
+def render_admin_control_center():
+    adm_c_page = ADMIN_EMAIL.strip().lower()
     st.markdown("### 👑 統合管理コントロールセンター (MASTER TERMINAL)")
     if st.button("⬅️ メイン画面に戻る", use_container_width=True, type="primary"):
         st.session_state["navigation_page"] = "TOP"; st.session_state["force_close_sidebar_trig"] = int(time.time() * 1000); st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
@@ -1452,7 +1406,6 @@ if st.session_state.get("navigation_page") == "ADMIN" and adm_c_page and cu == a
             rows_err = "".join([f"<tr><td>{html.escape(e.get('time','-'))}</td><td>{html.escape(e.get('module','-'))}</td><td>{html.escape(e.get('error_type','-'))}</td><td>{html.escape(str(e.get('message','-'))[:60])}</td></tr>" for e in err_list[:20]])
             st.markdown(f'<div class="admin-table-container"><table class="admin-table"><thead><tr><th>日時</th><th>モジュール</th><th>例外</th><th>メッセージ</th></tr></thead><tbody>{rows_err}</tbody></table></div>', unsafe_allow_html=True)
         else: st.success("🎉 エラーはありません。")
-    st.stop()
 # === PART 1/5 END ===
 # === PART 2/5 START ===
 def _parse_news_age_hours(pub_str: str) -> float:
@@ -3305,6 +3258,8 @@ def _app_rerun():
         st.rerun()
 
 def _render_council_sec_impl(r, uk, auto_open=False):
+    if st.session_state.get("navigation_page") != "TOP":
+        return
     is_open = auto_open or st.session_state["active_debates"].get(uk, False)
     if not is_open: return
 
@@ -3488,11 +3443,14 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
         if st.button(w_lbl, key=f"btn_watch_{uk_card}", use_container_width=True):
             if r_m["code"] in st.session_state["watchlist"]:
                 del st.session_state["watchlist"][r_m["code"]]
+                st.toast(f"🗑️ 『{r_m['name']}』を監視リストから解除しました")
             else:
                 st.session_state["watchlist"][r_m["code"]] = r_m
+                st.toast(f"⭐ 『{r_m['name']}』を監視リストに追加しました")
             cu = st.session_state.get("authenticated_user", "")
             if cu: save_watchlist(cu, st.session_state["watchlist"])
-            st.rerun()
+            if st.session_state.get("active_category") == "📋 監視シート":
+                st.rerun()
 
     with b_col2:
         if st.button(f"🔥 DEEP DIVE ({r_m['code']})", key=f"btn_dd_{kp}_{r_m['code']}", use_container_width=True):
@@ -3524,9 +3482,11 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
                 "dd_result": synced_entry.get("dd_result"),
                 "dd_updated_at": synced_entry.get("dd_updated_at", ""),
             }
+            st.session_state["focused_stock_item"] = None
+            st.session_state["active_debates"] = {}
             st.session_state["navigation_page"] = "DEEP_DIVE"
             st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-            st.rerun()
+            _app_rerun()
 
         if st.button(f"🎯 日誌記録 ({r_m['code']})", key=f"btn_journal_add_{kp}_{r_m['code']}", use_container_width=True):
             cu_j = st.session_state.get("authenticated_user", "")
@@ -3557,7 +3517,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
                 }
                 j_list.insert(0, j_entry)
                 save_trade_journal(cu_j, j_list)
-                st.success(f"✅ 『{r_m['name']} ({r_m['code']})』をトレード日誌に記録しました！")
+                st.toast(f"✅ 『{r_m['name']}』をトレード日誌に記録しました")
 
     render_council_sec(r_m, uk_card, auto_open=bool(is_focused or is_custom))
 # === PART 3/5 END ===
@@ -5052,7 +5012,11 @@ def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True,
         rel_n_ev = [n for n in all_impact_news if sc_item.get("full_code") in n.get("detail", {}).get("related_codes", [])]
         sync_lab_intel_to_shared(sc_item, rel_news_list=rel_n_ev, persist=False)
     if scaled_all:
-        db_set("shared_ticker_intel", load_shared_ticker_intel())
+        intel_curr = load_shared_ticker_intel()
+        intel_hash = hashlib.md5(json.dumps(intel_curr, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        if st.session_state.get("_last_shared_intel_hash") != intel_hash:
+            db_set("shared_ticker_intel", intel_curr)
+            st.session_state["_last_shared_intel_hash"] = intel_hash
     scaled_gmap = {g: [scaled_map[x["full_code"]] for x in items if x["full_code"] in scaled_map] for g, items in core_gmap.items()}
     return scaled_gmap, scaled_all
 
@@ -5158,422 +5122,479 @@ def evaluate_journal_trade_audit(entry: dict, all_stocks: list) -> str:
     tp_comment = "🎯 計画通りの利確執行で期待値通りのトレードです。+1.0Rでの半分利確習慣を継続しましょう。" if pnl_pct >= 1.0 else ("⚖️ 微損・微益での撤退です。方向感が崩れた際の早期撤退は資金防衛として有効です。" if pnl_pct > -1.0 else "🛡️ 損切り後のドテンやリベンジ売買を控え、次のGrade-A銘柄を待ちましょう。")
     return f"【AEGIS＆SENTINEL 規律監査スコア: {score}点】\n・損益結果: {pnl_pct:+.2f}%（{pnl_yen:+,.0f}円）｜執行グレード: {exec_g}\n・リスク監査(SENTINEL): {sl_comment}\n・資金管理講評(AEGIS): {tp_comment}"
 
-macro_info = fetch_macro()
-ribbon_chips = "".join([
-    f'<div class="lab-ribbon-chip">'
-    f'<span style="color:#94a3b8;">{html.escape(str(m["label"]))}</span>'
-    f'<span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:800;">{m["diff"]:+.2f}%</span>'
-    f'</div>'
-    for m in macro_info.values()
-])
-st.markdown(
-    f'<div class="glass-header">'
-    f'<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;">'
-    f'<div class="brand-luxury">YAMASHISHI LAB v28.0</div>'
-    f'<div style="font-size:10px;color:#94a3b8;font-family:\'JetBrains Mono\',monospace;">3-TIER MTF × DEEP DIVE FUSION × 5-AUDITOR COUNCIL</div>'
-    f'</div>'
-    f'<div class="lab-thin-ribbon" style="margin-top:6px;margin-bottom:0;">{ribbon_chips}</div>'
-    f'</div>',
-    unsafe_allow_html=True
-)
+active_nav_page = st.session_state.get("navigation_page", "TOP")
+page_root = st.empty()
 
-_cache_pool_key = f"pool_v28_full_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
-if _cache_pool_key not in st.session_state:
-    with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】週足10年×日足2年×5分足60日 3階層MTFスコアリングを実行中..."):
-        g_res, all_res = fetch_pool_batch(macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-        st.session_state[_cache_pool_key] = (g_res, all_res)
-else:
-    raw_g_res, raw_all_res = st.session_state[_cache_pool_key]
-    all_res = [_merge_dd_intel_into_lab_item(x) for x in raw_all_res]
-    g_res = {gk: [_merge_dd_intel_into_lab_item(x) for x in gl] for gk, gl in raw_g_res.items()}
-
-if st.session_state.get("last_synced_style") != investment_style:
-    st.session_state["last_synced_style"] = investment_style
-    res_by_fc = {it["full_code"]: it for it in all_res}
-    foc_cur = st.session_state.get("focused_stock_item")
-    if isinstance(foc_cur, dict) and foc_cur.get("full_code"):
-        fc_f = foc_cur["full_code"]
-        refreshed_f = res_by_fc.get(fc_f) or fetch_one(fc_f, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-        if refreshed_f: st.session_state["focused_stock_item"] = _merge_dd_intel_into_lab_item(refreshed_f)
-    wl_cur = st.session_state.get("watchlist", {})
-    if isinstance(wl_cur, dict) and wl_cur:
-        updated_wl, changed_wl = {}, False
-        for w_k, w_v in wl_cur.items():
-            fc_w = w_v.get("full_code") or (f"{w_k}.T" if re.match(r"^[0-9]{3}[0-9A-Z]$", str(w_k)) else str(w_k))
-            refreshed_w = res_by_fc.get(fc_w) or fetch_one(fc_w, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-            if refreshed_w: updated_wl[w_k] = _merge_dd_intel_into_lab_item(refreshed_w); changed_wl = True
-            else: updated_wl[w_k] = _merge_dd_intel_into_lab_item(w_v)
-        if changed_wl:
-            st.session_state["watchlist"] = updated_wl
-            if cu: save_watchlist(cu, updated_wl)
-
-focused_item = st.session_state.get("focused_stock_item")
-if focused_item:
-    focused_item = _merge_dd_intel_into_lab_item(focused_item)
-    st.markdown("### 🔵 銘柄詳細・売買合議フォーカスモード")
-    foc_fc = str(focused_item.get("full_code", "")).strip().upper()
-    foc_df = None
-    bg_state_f = _get_bg_market_refresher()
-    with bg_state_f["lock"]:
-        snap_f = bg_state_f.get("snapshot")
-    if isinstance(snap_f, dict) and isinstance(snap_f.get("raw_5m"), (pd.DataFrame, dict)):
-        raw_5m_snap = snap_f["raw_5m"]
-        tot_codes_snap = int(snap_f.get("total_codes") or (len(snap_f.get("universe") or ()) or 50))
-        df_cand_f = _extract_ticker_df(raw_5m_snap, foc_fc, tot_codes_snap)
-        foc_df = normalize_ohlcv_df(df_cand_f, min_rows=25)
-    if foc_df is None:
-        _, foc_df = fetch_one_with_df(foc_fc, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-    render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True, intraday_df=foc_df); st.stop()
-
-if st.session_state.get("navigation_page") == "NEWS_DETAIL":
-    if not all_impact_news:
-        st.info("現在、新規の重大ヘッドラインは検出されていません。")
-        if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
+with page_root.container():
+    if active_nav_page == "MANUAL":
+        render_user_manual_page()
         st.stop()
-    tn = st.session_state.get("selected_news_item") or all_impact_news[0]
-    det = tn.get("detail") or analyze_news_impact_and_links(tn.get("title", ""), tn.get("cat", ""), tn.get("summary", ""))
-    st_short = investment_style.split(" ")[1] if " " in investment_style else "デイトレード"
-    ai_deep_txt = generate_ai_news_deep_report(tn, st_short)
-    body_html, mech_html, time_html, risk_html, act_html = [html.escape(det.get(k, "")).replace("\n", "<br>") for k in ("news_body", "mechanism", "timeline", "risk_note", "action_guide")]
-    src_link = tn.get("link", "")
-    link_btn = f'<div style="margin-top:10px;"><a href="{html.escape(src_link)}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📰 報道元オリジナル記事を開く ({html.escape(tn.get("source", "News"))})</a></div>' if src_link else ""
-    cross_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.25);border-color:#10b981;color:#6ee7b7;font-weight:800;">✅ 複数メディア・クロス検証済</span>' if tn.get("cross_verified") else ""
-    ai_deep_block = f'<div class="rank-card" style="border-left-color:#10b981;background:linear-gradient(180deg,#06281e 0%,#090d16 100%)!important;"><div style="font-size:14px;font-weight:800;color:#10b981;margin-bottom:6px;">🧠 Gemini AI生成・個別記事深掘り解析</div><div style="font-size:12.5px;line-height:1.75;color:#ecfdf5;">{html.escape(ai_deep_txt).replace(chr(10), "<br>")}</div></div>' if ai_deep_txt else '<div class="rank-card" style="border-left-color:#f59e0b;background:linear-gradient(180deg,#1e180b 0%,#090d16 100%)!important;"><div style="font-size:13px;font-weight:800;color:#fde047;margin-bottom:4px;">⚙️ やさしいセクター＆立ち回り解説モード（Gemini API未接続時）</div><div style="font-size:12px;line-height:1.65;color:#fef3c7;">現在Gemini APIキーが未接続のため、報道要点と初心者にもわかりやすい立ち回りガイドを表示しています。</div></div>'
 
-    st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;"><div><span class="pill-badge" style="background:#ef4444;color:#fff;font-weight:800;">🚨 重大ニュース解説レポート ｜ {html.escape(tn.get("cat", "速報"))} (重要度: {tn.get("impact_score", 70)}点)</span>{cross_badge}</div><span style="font-size:11px;color:#94a3b8;">配信元: {html.escape(tn.get("source", "Market Wire"))} ｜ {html.escape(tn.get("pub_date", ""))} (経過: {tn.get("age_hours", 0)}h)</span></div><div style="font-size:17.5px;font-weight:800;color:#f8fafc;margin-top:8px;line-height:1.4;">{html.escape(tn["title"])}</div><div style="font-size:11.5px;color:#fde047;margin-top:6px;font-weight:700;">🎯 直撃テーマ領域: {html.escape(det.get("sector_focus", ""))}</div>{link_btn}</div>{ai_deep_block}<div class="rank-card" style="border-left-color:#38bdf8;"><div style="font-size:14px;font-weight:800;color:#38bdf8;margin-bottom:6px;">📰 1. ニュース要点 ＆ やさしいテーマ背景</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{body_html}</div></div><div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;font-weight:800;color:#e9d5ff;margin-bottom:6px;">🧠 2. 資金が動く仕組み（セクター波及の流れ）</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{mech_html}</div><hr style="border-color:rgba(168,85,247,0.25);margin:12px 0;"><div style="font-size:13.5px;font-weight:800;color:#fde047;margin-bottom:6px;">⏱️ 3. 時間帯別の値動きイメージ</div><div style="font-size:12px;line-height:1.75;color:#cbd5e1;">{time_html}</div><hr style="border-color:rgba(239,68,68,0.25);margin:12px 0;"><div style="font-size:13px;font-weight:800;color:#f87171;margin-bottom:4px;">⚠️ 4. 高値掴み・ダマシ警戒リスク ＆ 撤退基準</div><div style="font-size:12px;line-height:1.7;color:#fca5a5;">{risk_html}</div><div class="beginner-action-box" style="margin-top:12px;"><b>⚡ 5. 【{st_short}】初心者向け・失敗しない注文と利確・損切りガイド</b><br>{act_html}</div></div>', unsafe_allow_html=True)
+    if active_nav_page == "DEEP_DIVE":
+        cu_dd = st.session_state.get("authenticated_user", "").strip().lower()
+        db_dd = load_mem()
+        u_dd = db_dd.get(cu_dd, {})
+        dd_st = u_dd.get("deep_dive_status", "approved" if u_dd.get("deep_dive_allowed") else "none")
+        adm_c_dd = ADMIN_EMAIL.strip().lower()
+        is_dd_ok = bool(adm_c_dd and cu_dd == adm_c_dd) or (dd_st == "approved")
 
-    extracted_codes_list = list(det.get("extracted_codes") or [])
-    sector_ref_codes_list = list(det.get("sector_ref_codes") or [c for c in det.get("related_codes", []) if c not in extracted_codes_list])
-    extracted_codes_set = set(extracted_codes_list)
-    st.markdown("### 🔗 記事内直接言及銘柄 ＆ 同セクター代表・波及監視銘柄")
-    st.caption(f"🎯 記事本文・見出しから直接抽出: {len(extracted_codes_list)}銘柄 ／ 📂 抽出銘柄が3件未満のため同セクター代表銘柄で補完表示")
-
-    def _resolve_stock_items(code_list: list, limit: int) -> list:
-        out_items, seen_fc = [], set()
-        for rc in code_list:
-            if len(out_items) >= limit: break
-            if rc in seen_fc: continue
-            found = next((r_it for r_it in all_res if r_it["full_code"] == rc or r_it["code"] == rc.replace(".T", "")), None) or fetch_one(rc, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-            if found and found["full_code"] not in seen_fc: out_items.append(_merge_dd_intel_into_lab_item(found)); seen_fc.add(found["full_code"])
-        return out_items
-
-    extracted_items = sorted(_resolve_stock_items(extracted_codes_list, 3), key=lambda x: x["fusion_expect_pct"], reverse=True)
-    needed_ref = max(0, 3 - len(extracted_items))
-    ref_items = sorted(_resolve_stock_items([c for c in sector_ref_codes_list if c not in {it["full_code"] for it in extracted_items}], needed_ref), key=lambda x: x["fusion_expect_pct"], reverse=True) if needed_ref > 0 else []
-    combined_news_stocks = (extracted_items + ref_items) or sorted(all_res, key=lambda x: x["fusion_expect_pct"], reverse=True)[:3]
-
-    for idx, r_item in enumerate(combined_news_stocks, 1):
-        is_direct_mention = (r_item["full_code"] in extracted_codes_set) or (r_item["code"] in {c.replace(".T", "") for c in extracted_codes_set})
-        origin_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.28);border-color:#10b981;color:#6ee7b7;font-weight:900;">🎯 記事内直接言及</span>' if is_direct_mention else '<span class="pill-badge" style="background:rgba(148,163,184,0.22);border-color:#94a3b8;color:#e2e8f0;font-weight:800;">📂 セクター代表</span>'
-        render_card(r_item, rank=idx, kp=f"nr_{tn['id']}", extra_origin_badge=origin_badge)
-
-    if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
-    st.stop()
-
-c1, c2 = st.columns([3.4, 1])
-cin = c1.text_input("🔍 銘柄検索", placeholder="コード入力 (例: 6920 / 7203 / AAPL)", label_visibility="collapsed", key="search_code_input")
-if c2.button("🔍 診断", use_container_width=True) and cin:
-    st.session_state["custom_search_code"] = clean_k(cin); st.session_state["focused_stock_item"] = None; st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
-
-if st.session_state.get("custom_search_code"):
-    st.markdown("### 🎯 個別銘柄・精密3階層MTFクオンツ診断モード")
-    with st.spinner("📡 銘柄正式名称・週足10年・日足2年・5分足60日波形を解析中..."):
-        cr, cr_df = fetch_one_with_df(st.session_state["custom_search_code"], macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
-    if cr: render_card(cr, is_custom=True, kp="custom", intraday_df=cr_df)
-    else: st.warning("⚠️ 指定された銘柄コードのデータが取得できないか、上場廃止・無効な銘柄です。")
-    if st.button("⬅️ トップ画面（ランキング一覧）に戻る", key="btn_back_from_custom_diag", use_container_width=True, type="primary"):
-        st.session_state["custom_search_code"] = ""
-        if "search_code_input" in st.session_state: st.session_state["search_code_input"] = ""
-        st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
-    st.stop()
-
-surv_logs_top = db_get("market_survival_logs", [])
-disc_audit_top = db_get("last_discovery_audit", {})
-if isinstance(surv_logs_top, list) and surv_logs_top:
-    prom_items = [x for x in surv_logs_top if "[新規昇格" in x.get("msg", "")][:5]
-    purg_items = [x for x in surv_logs_top if "[圏外追放]" in x.get("msg", "")][:5]
-    bar_pills = "".join([
-        f'<span class="lab-ribbon-chip" style="background:{"rgba(16,185,129,0.16)" if "[新規昇格" in it.get("msg","") else "rgba(239,68,68,0.16)"};border-color:{"rgba(16,185,129,0.42)" if "[新規昇格" in it.get("msg","") else "rgba(239,68,68,0.42)"};color:{"#6ee7b7" if "[新規昇格" in it.get("msg","") else "#fca5a5"};">'
-        f'{html.escape(it.get("msg","").split(" が")[0])}</span>'
-        for it in surv_logs_top[:6]
-    ])
-    st.markdown(
-        f'<div class="lab-thin-ribbon">'
-        f'<span class="lab-ribbon-chip" style="border-color:rgba(250,204,21,0.4);color:#fde047;font-weight:800;">⚔️ 入替戦 昇格{len(prom_items)}/追放{len(purg_items)}</span>'
-        f'{bar_pills}</div>',
-        unsafe_allow_html=True
-    )
-    with st.expander("⚔️ サバイバル入れ替え戦・詳細ログ", expanded=False):
-        if isinstance(disc_audit_top, dict) and disc_audit_top:
+        if not is_dd_ok:
             st.markdown(
-                f'<div style="background:rgba(56,189,248,0.14);border:1px solid rgba(56,189,248,0.38);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:11px;color:#e0f2fe;font-family:\'JetBrains Mono\',monospace;">'
-                f'📡 <b>直近全市場スキャン実測 ({html.escape(str(disc_audit_top.get("time","-")))}):</b> '
-                f'東証ランキング <b style="color:#6ee7b7;">{int(disc_audit_top.get("jp_rank_cnt",0))}件</b> / '
-                f'米国スクリーナー <b style="color:#7dd3fc;">{int(disc_audit_top.get("us_screener_cnt",0))}件</b> / '
-                f'日米ニュース <b style="color:#fde047;">{int(disc_audit_top.get("rss_cnt",0))}件</b> / '
-                f'シード補完 <b style="color:#cbd5e1;">{int(disc_audit_top.get("seed_cnt",0))}件</b>'
-                f'</div>',
+                '<div class="glass-header" style="border-left:4px solid #f59e0b;">'
+                '<div class="brand-luxury">YAMASHISHI DEEP DIVE</div>'
+                '<div style="color:#fde047;font-weight:800;font-size:14px;margin-top:8px;">🔒 アクセス権限が必要です</div>'
+                '<div style="color:#cbd5e1;font-size:12.5px;margin-top:6px;line-height:1.7;">'
+                'ディープサーチ（単一銘柄・極限解析ターミナル）を利用するには、管理者からの閲覧権限が必要です。<br>'
+                '下のボタンから利用権限を申請してください。</div></div>',
                 unsafe_allow_html=True
             )
-        for sl in surv_logs_top[:12]:
-            st.markdown(f'<div style="font-size:11px;color:#cbd5e1;padding:3px 0;border-bottom:1px solid rgba(148,163,184,0.12);"><span style="color:#94a3b8;font-family:JetBrains Mono,monospace;">{html.escape(sl.get("time",""))}</span> {html.escape(sl.get("msg",""))}</div>', unsafe_allow_html=True)
+            if dd_st == "pending":
+                st.info("⏳ 現在、管理者の承認審査待ちです。承認されるまでしばらくお待ちください。")
+            else:
+                if st.button("📩 管理者へディープサーチ利用権限を申請する", use_container_width=True, type="primary"):
+                    if cu_dd in db_dd:
+                        db_dd[cu_dd]["deep_dive_status"] = "pending"
+                        db_dd[cu_dd]["deep_dive_applied_at"] = now_jst().strftime("%Y-%m-%d %H:%M")
+                        db_set("mem", db_dd)
+                        st.success("✅ 利用権限を申請しました！管理者の承認をお待ちください。")
+                        st.rerun()
+            if st.button("⬅️ トップ画面に戻る", use_container_width=True):
+                st.session_state["navigation_page"] = "TOP"
+                st.session_state["scroll_top_trig"] = int(time.time() * 1000)
+                st.rerun()
+            st.stop()
 
-sec_rot_stats = compute_sector_rotation_stats(all_res)
-if sec_rot_stats:
-    sec_ribbon = "".join([
-        f'<div class="lab-ribbon-chip" style="background:{"rgba(16,185,129,0.16)" if float(sr["flow_score"])>=0 else "rgba(239,68,68,0.16)"};border-color:{"rgba(16,185,129,0.42)" if float(sr["flow_score"])>=0 else "rgba(239,68,68,0.42)"};">'
-        f'<span style="color:#f8fafc;font-weight:800;">{html.escape(sr["genre"].split("・")[0])}</span>'
-        f'<span style="color:{"#6ee7b7" if float(sr["flow_score"])>=0 else "#fca5a5"};font-weight:800;">{sr["avg_rs30"]:+.2f}%</span>'
-        f'<span style="color:#94a3b8;">({sr["avg_rvol"]}x)</span></div>'
-        for sr in sec_rot_stats
+        import deep_dive
+        dd_tgt_fc = str(st.session_state.get("dd_target_code", "NVDA")).strip().upper()
+        deep_dive.render_deep_dive_page(
+            init_code=dd_tgt_fc,
+            init_style=st.session_state.get("dd_target_style", "デイトレード"),
+            gemini_api_key=load_gemini_cfg().get("api_key", ""),
+            lab_ctx=st.session_state.get("dd_lab_ctx")
+        )
+        sync_dd_intel_from_session(dd_tgt_fc)
+        st.stop()
+
+    adm_c_page = ADMIN_EMAIL.strip().lower()
+    if active_nav_page == "ADMIN" and adm_c_page and cu == adm_c_page:
+        render_admin_control_center()
+        st.stop()
+
+    macro_info = fetch_macro()
+    ribbon_chips = "".join([
+        f'<div class="lab-ribbon-chip">'
+        f'<span style="color:#94a3b8;">{html.escape(str(m["label"]))}</span>'
+        f'<span style="color:{"#10b981" if m["diff"]>=0 else "#ef4444"};font-weight:800;">{m["diff"]:+.2f}%</span>'
+        f'</div>'
+        for m in macro_info.values()
     ])
     st.markdown(
-        f'<div class="lab-thin-ribbon">'
-        f'<span class="lab-ribbon-chip" style="border-color:rgba(168,85,247,0.45);color:#e9d5ff;font-weight:800;">🧭 セクター資金流</span>'
-        f'{sec_ribbon}</div>',
+        f'<div class="glass-header">'
+        f'<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;">'
+        f'<div class="brand-luxury">YAMASHISHI LAB v28.0</div>'
+        f'<div style="font-size:10px;color:#94a3b8;font-family:\'JetBrains Mono\',monospace;">3-TIER MTF × DEEP DIVE FUSION × 5-AUDITOR COUNCIL</div>'
+        f'</div>'
+        f'<div class="lab-thin-ribbon" style="margin-top:6px;margin-bottom:0;">{ribbon_chips}</div>'
+        f'</div>',
         unsafe_allow_html=True
     )
-    with st.expander("🧭 5大セクター資金ローテーション・詳細指標", expanded=False):
-        for sr in sec_rot_stats:
-            st.markdown(f'<div style="font-size:11px;color:#cbd5e1;padding:3px 0;border-bottom:1px solid rgba(148,163,184,0.12);"><b>{html.escape(sr["genre"])}</b>（{sr["count"]}銘柄）: 30mRS <b>{sr["avg_rs30"]:+.2f}%</b> ｜ RVOL <b>{sr["avg_rvol"]}x</b> ｜ CLV <b>{sr["avg_ofi"]:+.2f}</b> ｜ FlowScore <b>{sr["flow_score"]:+.1f}</b></div>', unsafe_allow_html=True)
 
-def cut_stocks(slist, pct): return slist[:max(3, int(round(len(slist) * (pct / 100.0))))] if slist else []
-
-def _top5_eligibility_key(item: dict) -> tuple:
-    ft_d = item.get("forward_test", {})
-    t_days = int(ft_d.get("total_days", 0))
-    pf_v = float(ft_d.get("profit_factor", 0.0))
-    eligible = 1 if (int(item.get("exec_score", 0)) >= 4 and (t_days < 3 or pf_v >= 1.0)) else 0
-    exp_val = float(item.get("fusion_expect_pct", item.get("expect_pct", 0.0)))
-    return (eligible, exp_val)
-
-cats = ["🏆 総合TOP5", "⚛️ ボラティリティ突破TOP10", "🏛️ 5分足需給ミクロTOP10", "🚨 重大ニュース＆連動株", "🎟️ 直近IPO・グロース実測分析", "🏦 BVC-VPIN・CLV資金フロー", "🔥 出来高サージ＆市場注目度", "📋 監視シート", "📓 トレード日誌＆AI監査"] + [f"📂 {g}" for g in DYNAMIC_GENRES]
-st.markdown(f'<div class="compact-bar-label"><span>📂 QUANTITATIVE STRATEGY ({investment_style.split(" ")[1]})</span></div>', unsafe_allow_html=True)
-if st.session_state.get("active_category") not in cats: st.session_state["active_category"] = "🏆 総合TOP5"
-
-def _on_cat_change():
-    nw = st.session_state.get("active_category_selector")
-    if nw and nw != st.session_state.get("last_cat"):
-        st.session_state["nav_history"].append(st.session_state["last_cat"])
-        st.session_state["last_cat"] = st.session_state["active_category"] = nw
-
-cat_idx = cats.index(st.session_state["active_category"])
-if hasattr(st, "pills"): st.pills("カテゴリ", cats, default=cats[cat_idx], selection_mode="single", label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
-else: st.radio("カテゴリ", cats, index=cat_idx, horizontal=True, label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
-
-sel_cat, surv = st.session_state.get("active_category"), cut_stocks(sorted(all_res, key=_top5_eligibility_key, reverse=True), survival_cut_pct)
-
-if sel_cat == "🏆 総合TOP5":
-    top5_sorted = sorted(surv, key=_top5_eligibility_key, reverse=True)[:5]
-    for i, r in enumerate(top5_sorted, 1): render_card(r, rank=i, kp="top5")
-elif sel_cat == "⚛️ ボラティリティ突破TOP10":
-    for i, r in enumerate(sorted(surv, key=lambda x: x["q_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="qtop")
-elif sel_cat == "🏛️ 5分足需給ミクロTOP10":
-    for i, r in enumerate(sorted(surv, key=lambda x: x["ms_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mstop")
-elif sel_cat == "🚨 重大ニュース＆連動株":
-    if not all_impact_news: st.info("現在、新規の重大ヘッドラインは検出されていません。")
+    _cache_pool_key = f"pool_v28_full_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
+    if _cache_pool_key not in st.session_state:
+        with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】週足10年×日足2年×5分足60日 3階層MTFスコアリングを実行中..."):
+            g_res, all_res = fetch_pool_batch(macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+            st.session_state[_cache_pool_key] = (g_res, all_res)
     else:
-        for n in all_impact_news:
-            cross_tag = '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#10b981;color:#6ee7b7;font-weight:800;">✅ クロス検証済</span>' if n.get("cross_verified") else ""
-            st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;"><div><span style="font-size:11px;color:#f87171;font-weight:800;">🚨 {html.escape(n["cat"])}</span> {cross_tag}</div><div><span style="font-size:10.5px;color:#94a3b8;margin-right:6px;">{html.escape(n.get("source",""))} ({n.get("age_hours",0)}h前)</span><span class="pill-badge" style="color:#fde047;border-color:#fde047;">実測重要度: {n.get("impact_score", 70)}点</span></div></div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-top:4px;margin-bottom:4px;">{html.escape(n["title"])}</div></div>', unsafe_allow_html=True)
-            if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True): st.session_state["selected_news_item"] = n; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
-elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
-    st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 2階建てIPO・グロース市場 マルチソース実測サバイバルターミナル</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;">① 未上場・新規承認IPO監視候補 ＋ ② 既上場IPO・グロース実測サバイバルTOP10（取引所一次情報・実約定データ・金融ポータル・日英報道4系統クロス検証自動振り分け）</div><div style="margin-top:8px;"><a href="https://www.jpx.co.jp/listing/stocks/new/index.html" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">🏛️ 日本取引所グループ(JPX) 新規上場会社情報</a><a href="https://www.sec.gov/edgar/searchedgar/companysearch" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#a855f7;color:#e9d5ff;">🇺🇸 SEC EDGAR (S-1 / 424B4検索)</a></div></div>', unsafe_allow_html=True)
-    with st.spinner("📡 取引所一次情報(JPX/SEC)・実市場データ・金融ポータル・日英報道の4系統クロス検証を実行中..."): ipo_bundle = fetch_real_ipo_growth_analysis()
+        g_res, all_res = st.session_state[_cache_pool_key]
 
-    promoted_cnt = int(ipo_bundle.get("promoted_count", 0)) if isinstance(ipo_bundle, dict) else 0
-    if promoted_cnt > 0:
-        st.info(f"⚡ マルチソース実態検証により、監視候補のうち **{promoted_cnt}銘柄** の市場上場・実約定データを確認したため、自動的に「② 既上場IPO・グロース実測サバイバル」へ昇格移動しました。")
+    if st.session_state.get("last_synced_style") != investment_style:
+        st.session_state["last_synced_style"] = investment_style
+        res_by_fc = {it["full_code"]: it for it in all_res}
+        foc_cur = st.session_state.get("focused_stock_item")
+        if isinstance(foc_cur, dict) and foc_cur.get("full_code"):
+            fc_f = foc_cur["full_code"]
+            refreshed_f = res_by_fc.get(fc_f) or fetch_one(fc_f, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+            if refreshed_f: st.session_state["focused_stock_item"] = _merge_dd_intel_into_lab_item(refreshed_f)
+        wl_cur = st.session_state.get("watchlist", {})
+        if isinstance(wl_cur, dict) and wl_cur:
+            updated_wl, changed_wl = {}, False
+            for w_k, w_v in wl_cur.items():
+                fc_w = w_v.get("full_code") or (f"{w_k}.T" if re.match(r"^[0-9]{3}[0-9A-Z]$", str(w_k)) else str(w_k))
+                refreshed_w = res_by_fc.get(fc_w) or fetch_one(fc_w, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+                if refreshed_w: updated_wl[w_k] = _merge_dd_intel_into_lab_item(refreshed_w); changed_wl = True
+                else: updated_wl[w_k] = _merge_dd_intel_into_lab_item(w_v)
+            if changed_wl:
+                st.session_state["watchlist"] = updated_wl
+                if cu: save_watchlist(cu, updated_wl)
 
-    st.markdown("### ① 上場予定・新規承認IPO 監視候補一覧（未上場確認済）")
-    upcoming_ipos = ipo_bundle.get("upcoming_ipos", []) if isinstance(ipo_bundle, dict) else []
-    if not upcoming_ipos:
-        st.info("現在、未上場の監視候補はすべて上場済へ昇格したか、新規承認待機中です。")
-    for idx_u, u_ipo in enumerate(upcoming_ipos, 1):
-        c_raw_u = str(u_ipo.get("code", "未定")).strip()
-        code_badge_u = f"証券コード: {c_raw_u}" if c_raw_u != "未定" else "コード未定（未上場・承認待ち）"
-        ld_disp = str(u_ipo.get("listing_date_disp", "マルチソース上場検証中"))
-        v_badge_u = str(u_ipo.get("verify_badge_text", "🔍 複数ソース検証済"))
+    focused_item = st.session_state.get("focused_stock_item")
+    if focused_item:
+        focused_item = _merge_dd_intel_into_lab_item(focused_item)
+        st.markdown("### 🔵 銘柄詳細・売買合議フォーカスモード")
+        foc_fc = str(focused_item.get("full_code", "")).strip().upper()
+        foc_df = None
+        bg_state_f = _get_bg_market_refresher()
+        with bg_state_f["lock"]:
+            snap_f = bg_state_f.get("snapshot")
+        if isinstance(snap_f, dict) and isinstance(snap_f.get("raw_5m"), (pd.DataFrame, dict)):
+            raw_5m_snap = snap_f["raw_5m"]
+            tot_codes_snap = int(snap_f.get("total_codes") or (len(snap_f.get("universe") or ()) or 50))
+            df_cand_f = _extract_ticker_df(raw_5m_snap, foc_fc, tot_codes_snap)
+            foc_df = normalize_ohlcv_df(df_cand_f, min_rows=25)
+        if foc_df is None:
+            _, foc_df = fetch_one_with_df(foc_fc, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+        render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True, intraday_df=foc_df); st.stop()
+
+    if active_nav_page == "NEWS_DETAIL":
+        if not all_impact_news:
+            st.info("現在、新規の重大ヘッドラインは検出されていません。")
+            if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
+            st.stop()
+        tn = st.session_state.get("selected_news_item") or all_impact_news[0]
+        det = tn.get("detail") or analyze_news_impact_and_links(tn.get("title", ""), tn.get("cat", ""), tn.get("summary", ""))
+        st_short = investment_style.split(" ")[1] if " " in investment_style else "デイトレード"
+        ai_deep_txt = generate_ai_news_deep_report(tn, st_short)
+        body_html, mech_html, time_html, risk_html, act_html = [html.escape(det.get(k, "")).replace("\n", "<br>") for k in ("news_body", "mechanism", "timeline", "risk_note", "action_guide")]
+        src_link = tn.get("link", "")
+        link_btn = f'<div style="margin-top:10px;"><a href="{html.escape(src_link)}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📰 報道元オリジナル記事を開く ({html.escape(tn.get("source", "News"))})</a></div>' if src_link else ""
+        cross_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.25);border-color:#10b981;color:#6ee7b7;font-weight:800;">✅ 複数メディア・クロス検証済</span>' if tn.get("cross_verified") else ""
+        ai_deep_block = f'<div class="rank-card" style="border-left-color:#10b981;background:linear-gradient(180deg,#06281e 0%,#090d16 100%)!important;"><div style="font-size:14px;font-weight:800;color:#10b981;margin-bottom:6px;">🧠 Gemini AI生成・個別記事深掘り解析</div><div style="font-size:12.5px;line-height:1.75;color:#ecfdf5;">{html.escape(ai_deep_txt).replace(chr(10), "<br>")}</div></div>' if ai_deep_txt else '<div class="rank-card" style="border-left-color:#f59e0b;background:linear-gradient(180deg,#1e180b 0%,#090d16 100%)!important;"><div style="font-size:13px;font-weight:800;color:#fde047;margin-bottom:4px;">⚙️ やさしいセクター＆立ち回り解説モード（Gemini API未接続時）</div><div style="font-size:12px;line-height:1.65;color:#fef3c7;">現在Gemini APIキーが未接続のため、報道要点と初心者にもわかりやすい立ち回りガイドを表示しています。</div></div>'
+
+        st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;"><div><span class="pill-badge" style="background:#ef4444;color:#fff;font-weight:800;">🚨 重大ニュース解説レポート ｜ {html.escape(tn.get("cat", "速報"))} (重要度: {tn.get("impact_score", 70)}点)</span>{cross_badge}</div><span style="font-size:11px;color:#94a3b8;">配信元: {html.escape(tn.get("source", "Market Wire"))} ｜ {html.escape(tn.get("pub_date", ""))} (経過: {tn.get("age_hours", 0)}h)</span></div><div style="font-size:17.5px;font-weight:800;color:#f8fafc;margin-top:8px;line-height:1.4;">{html.escape(tn["title"])}</div><div style="font-size:11.5px;color:#fde047;margin-top:6px;font-weight:700;">🎯 直撃テーマ領域: {html.escape(det.get("sector_focus", ""))}</div>{link_btn}</div>{ai_deep_block}<div class="rank-card" style="border-left-color:#38bdf8;"><div style="font-size:14px;font-weight:800;color:#38bdf8;margin-bottom:6px;">📰 1. ニュース要点 ＆ やさしいテーマ背景</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{body_html}</div></div><div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;font-weight:800;color:#e9d5ff;margin-bottom:6px;">🧠 2. 資金が動く仕組み（セクター波及の流れ）</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{mech_html}</div><hr style="border-color:rgba(168,85,247,0.25);margin:12px 0;"><div style="font-size:13.5px;font-weight:800;color:#fde047;margin-bottom:6px;">⏱️ 3. 時間帯別の値動きイメージ</div><div style="font-size:12px;line-height:1.75;color:#cbd5e1;">{time_html}</div><hr style="border-color:rgba(239,68,68,0.25);margin:12px 0;"><div style="font-size:13px;font-weight:800;color:#f87171;margin-bottom:4px;">⚠️ 4. 高値掴み・ダマシ警戒リスク ＆ 撤退基準</div><div style="font-size:12px;line-height:1.7;color:#fca5a5;">{risk_html}</div><div class="beginner-action-box" style="margin-top:12px;"><b>⚡ 5. 【{st_short}】初心者向け・失敗しない注文と利確・損切りガイド</b><br>{act_html}</div></div>', unsafe_allow_html=True)
+
+        extracted_codes_list = list(det.get("extracted_codes") or [])
+        sector_ref_codes_list = list(det.get("sector_ref_codes") or [c for c in det.get("related_codes", []) if c not in extracted_codes_list])
+        extracted_codes_set = set(extracted_codes_list)
+        st.markdown("### 🔗 記事内直接言及銘柄 ＆ 同セクター代表・波及監視銘柄")
+        st.caption(f"🎯 記事本文・見出しから直接抽出: {len(extracted_codes_list)}銘柄 ／ 📂 抽出銘柄が3件未満のため同セクター代表銘柄で補完表示")
+
+        def _resolve_stock_items(code_list: list, limit: int) -> list:
+            out_items, seen_fc = [], set()
+            for rc in code_list:
+                if len(out_items) >= limit: break
+                if rc in seen_fc: continue
+                found = next((r_it for r_it in all_res if r_it["full_code"] == rc or r_it["code"] == rc.replace(".T", "")), None) or fetch_one(rc, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+                if found and found["full_code"] not in seen_fc: out_items.append(_merge_dd_intel_into_lab_item(found)); seen_fc.add(found["full_code"])
+            return out_items
+
+        extracted_items = sorted(_resolve_stock_items(extracted_codes_list, 3), key=lambda x: x["fusion_expect_pct"], reverse=True)
+        needed_ref = max(0, 3 - len(extracted_items))
+        ref_items = sorted(_resolve_stock_items([c for c in sector_ref_codes_list if c not in {it["full_code"] for it in extracted_items}], needed_ref), key=lambda x: x["fusion_expect_pct"], reverse=True) if needed_ref > 0 else []
+        combined_news_stocks = (extracted_items + ref_items) or sorted(all_res, key=lambda x: x["fusion_expect_pct"], reverse=True)[:3]
+
+        for idx, r_item in enumerate(combined_news_stocks, 1):
+            is_direct_mention = (r_item["full_code"] in extracted_codes_set) or (r_item["code"] in {c.replace(".T", "") for c in extracted_codes_set})
+            origin_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.28);border-color:#10b981;color:#6ee7b7;font-weight:900;">🎯 記事内直接言及</span>' if is_direct_mention else '<span class="pill-badge" style="background:rgba(148,163,184,0.22);border-color:#94a3b8;color:#e2e8f0;font-weight:800;">📂 セクター代表</span>'
+            render_card(r_item, rank=idx, kp=f"nr_{tn['id']}", extra_origin_badge=origin_badge)
+
+        if st.button("⬅️ 戻る", use_container_width=True, type="primary"): st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
+        st.stop()
+
+    c1, c2 = st.columns([3.4, 1])
+    cin = c1.text_input("🔍 銘柄検索", placeholder="コード入力 (例: 6920 / 7203 / AAPL)", label_visibility="collapsed", key="search_code_input")
+    if c2.button("🔍 診断", use_container_width=True) and cin:
+        st.session_state["custom_search_code"] = clean_k(cin); st.session_state["focused_stock_item"] = None; st.session_state["navigation_page"] = "TOP"; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
+
+    if st.session_state.get("custom_search_code"):
+        st.markdown("### 🎯 個別銘柄・精密3階層MTFクオンツ診断モード")
+        with st.spinner("📡 銘柄正式名称・週足10年・日足2年・5分足60日波形を解析中..."):
+            cr, cr_df = fetch_one_with_df(st.session_state["custom_search_code"], macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+        if cr: render_card(cr, is_custom=True, kp="custom", intraday_df=cr_df)
+        else: st.warning("⚠️ 指定された銘柄コードのデータが取得できないか、上場廃止・無効な銘柄です。")
+        if st.button("⬅️ トップ画面（ランキング一覧）に戻る", key="btn_back_from_custom_diag", use_container_width=True, type="primary"):
+            st.session_state["custom_search_code"] = ""
+            if "search_code_input" in st.session_state: st.session_state["search_code_input"] = ""
+            st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
+        st.stop()
+
+    surv_logs_top = db_get("market_survival_logs", [])
+    disc_audit_top = db_get("last_discovery_audit", {})
+    if isinstance(surv_logs_top, list) and surv_logs_top:
+        prom_items = [x for x in surv_logs_top if "[新規昇格" in x.get("msg", "")][:5]
+        purg_items = [x for x in surv_logs_top if "[圏外追放]" in x.get("msg", "")][:5]
+        bar_pills = "".join([
+            f'<span class="lab-ribbon-chip" style="background:{"rgba(16,185,129,0.16)" if "[新規昇格" in it.get("msg","") else "rgba(239,68,68,0.16)"};border-color:{"rgba(16,185,129,0.42)" if "[新規昇格" in it.get("msg","") else "rgba(239,68,68,0.42)"};color:{"#6ee7b7" if "[新規昇格" in it.get("msg","") else "#fca5a5"};">'
+            f'{html.escape(it.get("msg","").split(" が")[0])}</span>'
+            for it in surv_logs_top[:6]
+        ])
         st.markdown(
-            f'<div class="rank-card" style="border-left-color:#a855f7;background:linear-gradient(180deg,#160d2b 0%,#090d16 100%)!important;">'
-            f'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;">'
-            f'<span class="pill-badge" style="background:rgba(16,185,129,0.24);border-color:#10b981;color:#6ee7b7;font-weight:900;font-size:11.5px;">📅 ステータス/予定日: {html.escape(ld_disp)}</span>'
-            f'<span class="pill-badge" style="background:#a855f7;color:#fff;font-weight:800;">{html.escape(str(u_ipo.get("stage_label", "上場注目企業")))}</span>'
-            f'<span class="quantum-badge">報道熱量 {int(u_ipo.get("heat_score", 60))}点</span>'
-            f'</div>'
-            f'<div style="background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.35);border-radius:5px;padding:4px 8px;margin-bottom:6px;font-size:10.5px;color:#7dd3fc;font-family:\'JetBrains Mono\',monospace;">{html.escape(v_badge_u)}</div>'
-            f'<div style="font-size:17.5px;font-weight:800;color:#f8fafc;">🏷️ {html.escape(str(u_ipo.get("name", "")))} <span style="font-size:12px;color:#38bdf8;font-family:\'JetBrains Mono\',monospace;">[{html.escape(code_badge_u)}]</span></div>'
-            f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;">🏛️ <b>上場市場:</b> {html.escape(str(u_ipo.get("market", "-")))} ｜ 🏦 <b>主幹事証券:</b> {html.escape(str(u_ipo.get("lead_underwriter", "-")))}</div>'
-            f'<div class="winrate-bar" style="margin-top:8px;text-align:left;padding:8px 10px;">'
-            f'<div><div style="font-size:9.5px;color:#fde047;">💰 想定価格 / 公開価格（仮条件）</div><div style="font-size:11.5px;font-weight:800;color:#f8fafc;">{html.escape(str(u_ipo.get("offer_info", "未公表 / 観測中")))}</div></div>'
-            f'<div><div style="font-size:9.5px;color:#38bdf8;">🗓️ ブックビルディング(BB) / 登録書類</div><div style="font-size:11.5px;font-weight:800;color:#e0f2fe;">{html.escape(str(u_ipo.get("bb_info", "スケジュール確認中")))}</div></div>'
-            f'<div><div style="font-size:9.5px;color:#c084fc;">📦 吸収金額規模・需給タイプ</div><div style="font-size:11.5px;font-weight:800;color:#f3e8ff;">{html.escape(str(u_ipo.get("absorption_scale", "-")))}</div></div>'
-            f'</div>'
-            f'<div style="background:rgba(15,23,42,0.88);border:1px solid rgba(56,189,248,0.28);border-radius:7px;padding:8px 10px;margin-top:7px;font-size:11.5px;line-height:1.65;color:#e2e8f0;">'
-            f'<b>🎯 事業内容・強み・注目ポイント（{html.escape(str(u_ipo.get("theme", "")))}）:</b><br>{html.escape(str(u_ipo.get("business_desc", "")))}'
-            f'</div>'
-            f'<div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.38);border-radius:7px;padding:8px 10px;margin-top:6px;font-size:11.5px;line-height:1.65;color:#d1fae5;">'
-            f'<b>📊 初値・セカンダリー需給の見立て（クオンツ視点）:</b><br>{html.escape(str(u_ipo.get("supply_outlook", "")))}'
-            f'</div>'
-            f'<div style="background:rgba(2,6,23,0.75);border:1px solid rgba(168,85,247,0.3);border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11.5px;color:#e9d5ff;">📰 <b>最新関連ニュース見出し:</b> {html.escape(str(u_ipo.get("latest_headline", "")))}</div>'
-            f'<div style="margin-top:8px;">'
-            f'<a href="{html.escape(str(u_ipo.get("jpx_ipo_url", "https://www.jpx.co.jp/listing/stocks/new/index.html")))}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#10b981;color:#6ee7b7;">🏛️ JPX/SEC公式</a>'
-            f'<a href="{html.escape(str(u_ipo.get("yahoo_url", "https://finance.yahoo.co.jp/stocks/ipo")))}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">💹 Yahoo!ファイナンスIPO</a>'
-            f'<a href="{html.escape(str(u_ipo.get("kabutan_url", "https://kabutan.jp/")))}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📊 株探/EDGARリンク</a>'
-            f'</div></div>',
+            f'<div class="lab-thin-ribbon">'
+            f'<span class="lab-ribbon-chip" style="border-color:rgba(250,204,21,0.4);color:#fde047;font-weight:800;">⚔️ 入替戦 昇格{len(prom_items)}/追放{len(purg_items)}</span>'
+            f'{bar_pills}</div>',
             unsafe_allow_html=True
         )
-        if re.match(r"^[1-9][0-9]{2}[0-9A-Z]$", c_raw_u):
-            if st.button(f"🔵 {u_ipo['name']} ({c_raw_u}) の3階層MTF＆売買戦略を診断する", key=f"up_ipo_diag_{idx_u}_{c_raw_u}", use_container_width=True):
-                st.session_state["custom_search_code"] = f"{c_raw_u}.T"; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
-
-    st.markdown("### ② 既上場IPO・グロース実測サバイバルTOP10（上場確認済・日米統合）")
-    survivors_ipo = ipo_bundle.get("survivors", []) if isinstance(ipo_bundle, dict) else []
-    if not survivors_ipo:
-        st.info("📡 現在既上場IPO銘柄の相場データを再取得中です。数秒後に再度お試しください。")
-    for ipo in survivors_ipo:
-        chg_col = "#10b981" if ipo["chg_pct"] >= 0 else "#ef4444"
-        lockup_badge = f'<span class="pill-badge" style="background:rgba(245,158,11,0.25);border-color:#f59e0b;color:#fde047;font-weight:900;">{html.escape(ipo.get("lockup_note", ""))}</span>' if ipo.get("lockup_alert") else ""
-        meta_note_html = f'<div style="font-size:10px;color:#6ee7b7;margin-top:3px;">{html.escape(ipo.get("ipo_meta_note", ""))}</div>' if ipo.get("ipo_meta_note") else ""
-        v_badge_s = str(ipo.get("verify_badge_text", "🔍 複数ソース検証済"))
-        t_unit = str(ipo.get("turnover_unit", "百万円"))
-        is_jp_s = str(ipo.get("full_code", "")).endswith(".T")
-        btn_lbl_1 = "📊 株探詳細" if is_jp_s else "🏛️ SEC EDGAR"
-        btn_lbl_3 = "🏛️ JPX新規上場情報" if is_jp_s else "🇺🇸 SEC提出書類検索"
-        st.markdown(
-            f'<div class="rank-card" style="border-left-color:#f59e0b;">'
-            f'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;">'
-            f'<span class="pill-badge" style="background:rgba(16,185,129,0.24);border-color:#10b981;color:#6ee7b7;font-weight:900;font-size:11.5px;">📅 上場日: {html.escape(str(ipo.get("listing_date") or "実測特定済"))}（上場後 {int(ipo.get("days_since_listing", 0)):,}日経過）</span>'
-            f'{lockup_badge}'
-            f'</div>'
-            f'<div style="background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.32);border-radius:5px;padding:4px 8px;margin-bottom:6px;font-size:10.5px;color:#6ee7b7;font-family:\'JetBrains Mono\',monospace;">{html.escape(v_badge_s)}</div>'
-            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px;">'
-            f'<div><span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 生存 第{ipo["rank"]}位</span><span class="pill-badge" style="background:rgba(250,204,21,0.2);color:#fde047;border-color:#facc15;">スコア {ipo["score"]}点</span></div>'
-            f'<div style="font-size:11px;color:#38bdf8;font-weight:700;">{html.escape(ipo["tier"])}</div>'
-            f'</div>'
-            f'<div><span style="font-size:18px;font-weight:800;color:#f8fafc;">{html.escape(ipo["name"])}</span> <span style="font-size:12px;color:#94a3b8;">({html.escape(str(ipo["code"]))} / {html.escape(ipo["market"])})</span></div>'
-            f'<div style="font-size:11px;color:#cbd5e1;margin-top:3px;">🎯 {html.escape(ipo["theme"])} ｜ 🏦 主幹事: {html.escape(str(ipo.get("lead_underwriter", "-")))} ｜ 📦 吸収規模: {html.escape(str(ipo.get("absorption_scale", "-")))}</div>'
-            f'<div class="winrate-bar" style="margin-top:8px;">'
-            f'<div><div style="font-size:9.5px;color:#94a3b8;">🏷️ 公開価格</div><div style="font-size:12px;font-weight:800;color:#e2e8f0;">{html.escape(str(ipo.get("offer_price_str", "-")))}</div></div>'
-            f'<div><div style="font-size:9.5px;color:#fde047;">🚀 初値 (公募比)</div><div style="font-size:12px;font-weight:800;color:#fde047;">{html.escape(str(ipo.get("initial_price_str", "-")))}</div></div>'
-            f'<div><div style="font-size:9.5px;color:#38bdf8;">💰 現在値 (前日比 / 初値比)</div><div style="font-size:12px;font-weight:800;">{html.escape(str(ipo["price"]))} (<span style="color:{chg_col};">{ipo["chg_pct"]:+.2f}%</span> / 初値比 <b style="color:#6ee7b7;">{html.escape(str(ipo.get("curr_vs_init_str", "-")))}</b>)</div></div>'
-            f'</div>'
-            f'<div class="trade-plan-box" style="margin-top:6px;">'
-            f'<div><div style="font-size:9.5px;color:#94a3b8;">📊 当日RVOL</div><div style="font-size:12px;font-weight:800;color:#fde047;">{ipo["rvol"]}倍</div></div>'
-            f'<div><div style="font-size:9.5px;color:#94a3b8;">📏 1ヶ月高安レンジ (高値乖離)</div><div style="font-size:11.5px;font-weight:700;">{html.escape(ipo["period_range"])} ({ipo["from_high_pct"]}%)</div></div>'
-            f'<div><div style="font-size:9.5px;color:#94a3b8;">💴 直近売買代金 / 年率Vol</div><div style="font-size:11.5px;font-weight:700;">{ipo["turnover_m_yen"]:,.1f}{html.escape(t_unit)} / {ipo["ann_vol"]}%</div></div>'
-            f'</div>{meta_note_html}'
-            f'<div style="background:rgba(2,6,23,0.75);border:1px solid rgba(245,158,11,0.28);border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11.5px;color:#fef3c7;">📰 <b>最新ヘッドライン:</b> {html.escape(ipo["latest_headline"])}</div>'
-            f'<div style="margin-top:8px;"><a href="{html.escape(ipo["kabutan_url"])}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">{btn_lbl_1}</a><a href="{html.escape(ipo["yahoo_url"])}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">💹 Yahoo!ファイナンス</a><a href="{html.escape(ipo["jpx_ipo_url"])}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#10b981;color:#6ee7b7;">{btn_lbl_3}</a></div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-        if st.button(f"🔵 {ipo['name']} ({ipo['code']}) の実戦検証と売買戦略詳細を見る", key=f"ipo_diag_{ipo['code']}", use_container_width=True): st.session_state["custom_search_code"] = ipo["full_code"]; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
-elif sel_cat == "🏦 BVC-VPIN・CLV資金フロー":
-    for i, r in enumerate(sorted(surv, key=lambda x: x["inst_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
-elif sel_cat == "🔥 出来高サージ＆市場注目度":
-    for i, r in enumerate(sorted(surv, key=lambda x: x["surge_attention_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
-elif sel_cat == "📋 監視シート":
-    wl = st.session_state["watchlist"]
-    if len(wl) >= 2:
-        pf_diag = analyze_watchlist_portfolio_risk(wl)
-        if pf_diag.get("has_alert"):
-            if pf_diag.get("is_high_risk"):
+        with st.expander("⚔️ サバイバル入れ替え戦・詳細ログ", expanded=False):
+            if isinstance(disc_audit_top, dict) and disc_audit_top:
                 st.markdown(
-                    f'<div class="rank-card" style="border-left-color:#ef4444;background:linear-gradient(180deg,#2a0d16 0%,#090d16 100%)!important;padding:12px 14px;">'
-                    f'<div style="font-size:13px;font-weight:900;color:#fca5a5;">🛡️ AEGIS リスク監査官：セクター集中・相関過多リスク警告（監視 {pf_diag["count"]}銘柄）</div>'
-                    f'<div style="font-size:11.5px;color:#fecdd3;margin-top:4px;line-height:1.6;">'
-                    f'・<b>直近60日平均相関係数:</b> <b style="color:#fde047;">{pf_diag["avg_corr"]:.2f}</b>（閾値 0.70） ｜ '
-                    f'<b>最大集中セクター:</b> <b style="color:#fde047;">{html.escape(pf_diag["top_genre"])} ({pf_diag["max_sector_pct"]:.1f}%)</b>（閾値 60%）<br>'
-                    f'💡 <b>分散推奨メッセージ:</b> 監視銘柄の値動きが強く連動しており、セクター急落時に同時被弾するリスクが高い状態です。ディフェンシブ大型（電力・銀行・商社）や別テーマ銘柄を組み入れて相関分散を図ってください。'
-                    f'</div></div>',
-                    unsafe_allow_html=True
-                )
-            else:
-                st.markdown(
-                    f'<div class="rank-card" style="border-left-color:#10b981;padding:10px 14px;">'
-                    f'<div style="font-size:12px;font-weight:800;color:#6ee7b7;">🛡️ AEGIS ポートフォリオ分散診断：良好（監視 {pf_diag["count"]}銘柄）</div>'
-                    f'<div style="font-size:11px;color:#d1fae5;margin-top:2px;">直近60日平均相関係数: <b>{pf_diag["avg_corr"]:.2f}</b> ｜ 最大セクター比率: <b>{html.escape(pf_diag["top_genre"])} ({pf_diag["max_sector_pct"]:.1f}%)</b> — 適切なリスク分散が維持されています。</div>'
+                    f'<div style="background:rgba(56,189,248,0.14);border:1px solid rgba(56,189,248,0.38);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:11px;color:#e0f2fe;font-family:\'JetBrains Mono\',monospace;">'
+                    f'📡 <b>直近全市場スキャン実測 ({html.escape(str(disc_audit_top.get("time","-")))}):</b> '
+                    f'東証ランキング <b style="color:#6ee7b7;">{int(disc_audit_top.get("jp_rank_cnt",0))}件</b> / '
+                    f'米国スクリーナー <b style="color:#7dd3fc;">{int(disc_audit_top.get("us_screener_cnt",0))}件</b> / '
+                    f'日米ニュース <b style="color:#fde047;">{int(disc_audit_top.get("rss_cnt",0))}件</b> / '
+                    f'シード補完 <b style="color:#cbd5e1;">{int(disc_audit_top.get("seed_cnt",0))}件</b>'
                     f'</div>',
                     unsafe_allow_html=True
                 )
-    if st.button("⚡ 総合TOP3を一括登録", use_container_width=True):
-        for it in surv[:3]: wl[it["code"]] = _merge_dd_intel_into_lab_item(it)
-        cu = st.session_state.get("authenticated_user", "")
-        if cu: save_watchlist(cu, wl)
-        st.rerun()
-    for wc, wi in list(wl.items()): render_card(wi, kp=f"wl_{wc}")
-elif sel_cat == "📓 トレード日誌＆AI監査":
-    st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">📓 実戦トレード日誌 ＆ クオンツ監査官（AEGIS・SENTINEL）振り返り採点</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;">銘柄カードから記録したエントリープランの決済確定・損益集計・AI規律監査を実行します</div></div>', unsafe_allow_html=True)
-    cu_j = st.session_state.get("authenticated_user", "")
-    j_entries = load_trade_journal(cu_j)
-    if not j_entries:
-        st.info("まだトレード日誌に記録がありません。各銘柄カードの『🎯 日誌記録』ボタンから登録してください。")
-    else:
-        closed_j = [x for x in j_entries if x.get("status") == "CLOSED"]
-        tot_j_pnl = sum(float(x.get("pnl_yen", 0.0)) for x in closed_j)
-        win_j = sum(1 for x in closed_j if float(x.get("pnl_yen", 0.0)) > 0)
-        wr_j = round((win_j / len(closed_j)) * 100.0, 1) if closed_j else 0.0
-        st.markdown(f'<div class="forward-verify-bar" style="margin-bottom:10px;"><span>📊 <b>日誌通算成績:</b> 全{len(j_entries)}件（決済済 {len(closed_j)}件 / 保有中 {len(j_entries)-len(closed_j)}件）</span><span>勝率: <b style="color:#fde047;">{wr_j:.1f}%</b> ｜ 確定純損益: <b style="color:{"#10b981" if tot_j_pnl>=0 else "#ef4444"};">{tot_j_pnl:+,.0f}円</b></span></div>', unsafe_allow_html=True)
+            for sl in surv_logs_top[:12]:
+                st.markdown(f'<div style="font-size:11px;color:#cbd5e1;padding:3px 0;border-bottom:1px solid rgba(148,163,184,0.12);"><span style="color:#94a3b8;font-family:JetBrains Mono,monospace;">{html.escape(sl.get("time",""))}</span> {html.escape(sl.get("msg",""))}</div>', unsafe_allow_html=True)
 
-        for idx_j, je in enumerate(j_entries):
-            jid = je.get("id", str(idx_j))
-            fc_j = je.get("full_code", "")
-            is_jp_j = ".T" in fc_j
-            ep_j = float(je.get("entry_price", 0.0))
-            tp_j = float(je.get("tp_price", 0.0))
-            sl_j = float(je.get("sl_price", 0.0))
-            sh_j = int(je.get("shares", 100))
-            side_j = je.get("side", "LONG")
-            st_j = je.get("status", "OPEN")
-            border_c = "#38bdf8" if st_j == "OPEN" else ("#10b981" if float(je.get("pnl_yen", 0.0)) >= 0 else "#ef4444")
-            status_badge = '<span class="pill-badge" style="background:rgba(56,189,248,0.22);border-color:#38bdf8;color:#7dd3fc;font-weight:800;">⏳ 保有中 (OPEN)</span>' if st_j == "OPEN" else f'<span class="pill-badge" style="background:{"rgba(16,185,129,0.22)" if float(je.get("pnl_yen",0))>=0 else "rgba(239,68,68,0.22)"};border-color:{border_c};color:#f8fafc;font-weight:800;">✅ 決済済 ({float(je.get("pnl_pct",0)):+.2f}% / {float(je.get("pnl_yen",0)):+,.0f}円)</span>'
+    sec_rot_stats = compute_sector_rotation_stats(all_res)
+    if sec_rot_stats:
+        sec_ribbon = "".join([
+            f'<div class="lab-ribbon-chip" style="background:{"rgba(16,185,129,0.16)" if float(sr["flow_score"])>=0 else "rgba(239,68,68,0.16)"};border-color:{"rgba(16,185,129,0.42)" if float(sr["flow_score"])>=0 else "rgba(239,68,68,0.42)"};">'
+            f'<span style="color:#f8fafc;font-weight:800;">{html.escape(sr["genre"].split("・")[0])}</span>'
+            f'<span style="color:{"#6ee7b7" if float(sr["flow_score"])>=0 else "#fca5a5"};font-weight:800;">{sr["avg_rs30"]:+.2f}%</span>'
+            f'<span style="color:#94a3b8;">({sr["avg_rvol"]}x)</span></div>'
+            for sr in sec_rot_stats
+        ])
+        st.markdown(
+            f'<div class="lab-thin-ribbon">'
+            f'<span class="lab-ribbon-chip" style="border-color:rgba(168,85,247,0.45);color:#e9d5ff;font-weight:800;">🧭 セクター資金流</span>'
+            f'{sec_ribbon}</div>',
+            unsafe_allow_html=True
+        )
+        with st.expander("🧭 5大セクター資金ローテーション・詳細指標", expanded=False):
+            for sr in sec_rot_stats:
+                st.markdown(f'<div style="font-size:11px;color:#cbd5e1;padding:3px 0;border-bottom:1px solid rgba(148,163,184,0.12);"><b>{html.escape(sr["genre"])}</b>（{sr["count"]}銘柄）: 30mRS <b>{sr["avg_rs30"]:+.2f}%</b> ｜ RVOL <b>{sr["avg_rvol"]}x</b> ｜ CLV <b>{sr["avg_ofi"]:+.2f}</b> ｜ FlowScore <b>{sr["flow_score"]:+.1f}</b></div>', unsafe_allow_html=True)
 
+    def cut_stocks(slist, pct): return slist[:max(3, int(round(len(slist) * (pct / 100.0))))] if slist else []
+
+    def _top5_eligibility_key(item: dict) -> tuple:
+        ft_d = item.get("forward_test", {})
+        t_days = int(ft_d.get("total_days", 0))
+        pf_v = float(ft_d.get("profit_factor", 0.0))
+        eligible = 1 if (int(item.get("exec_score", 0)) >= 4 and (t_days < 3 or pf_v >= 1.0)) else 0
+        exp_val = float(item.get("fusion_expect_pct", item.get("expect_pct", 0.0)))
+        return (eligible, exp_val)
+
+    cats = ["🏆 総合TOP5", "⚛️ ボラティリティ突破TOP10", "🏛️ 5分足需給ミクロTOP10", "🚨 重大ニュース＆連動株", "🎟️ 直近IPO・グロース実測分析", "🏦 BVC-VPIN・CLV資金フロー", "🔥 出来高サージ＆市場注目度", "📋 監視シート", "📓 トレード日誌＆AI監査"] + [f"📂 {g}" for g in DYNAMIC_GENRES]
+    st.markdown(f'<div class="compact-bar-label"><span>📂 QUANTITATIVE STRATEGY ({investment_style.split(" ")[1]})</span></div>', unsafe_allow_html=True)
+    if st.session_state.get("active_category") not in cats: st.session_state["active_category"] = "🏆 総合TOP5"
+
+    def _on_cat_change():
+        nw = st.session_state.get("active_category_selector")
+        if nw and nw != st.session_state.get("last_cat"):
+            st.session_state["nav_history"].append(st.session_state["last_cat"])
+            st.session_state["last_cat"] = st.session_state["active_category"] = nw
+
+    cat_idx = cats.index(st.session_state["active_category"])
+    if hasattr(st, "pills"): st.pills("カテゴリ", cats, default=cats[cat_idx], selection_mode="single", label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
+    else: st.radio("カテゴリ", cats, index=cat_idx, horizontal=True, label_visibility="collapsed", key="active_category_selector", on_change=_on_cat_change)
+
+    sel_cat, surv = st.session_state.get("active_category"), cut_stocks(sorted(all_res, key=_top5_eligibility_key, reverse=True), survival_cut_pct)
+
+    if sel_cat == "🏆 総合TOP5":
+        top5_sorted = sorted(surv, key=_top5_eligibility_key, reverse=True)[:5]
+        for i, r in enumerate(top5_sorted, 1): render_card(r, rank=i, kp="top5")
+    elif sel_cat == "⚛️ ボラティリティ突破TOP10":
+        for i, r in enumerate(sorted(surv, key=lambda x: x["q_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="qtop")
+    elif sel_cat == "🏛️ 5分足需給ミクロTOP10":
+        for i, r in enumerate(sorted(surv, key=lambda x: x["ms_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mstop")
+    elif sel_cat == "🚨 重大ニュース＆連動株":
+        if not all_impact_news: st.info("現在、新規の重大ヘッドラインは検出されていません。")
+        else:
+            for n in all_impact_news:
+                cross_tag = '<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#10b981;color:#6ee7b7;font-weight:800;">✅ クロス検証済</span>' if n.get("cross_verified") else ""
+                st.markdown(f'<div class="rank-card" style="border-left-color:#ef4444;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;"><div><span style="font-size:11px;color:#f87171;font-weight:800;">🚨 {html.escape(n["cat"])}</span> {cross_tag}</div><div><span style="font-size:10.5px;color:#94a3b8;margin-right:6px;">{html.escape(n.get("source",""))} ({n.get("age_hours",0)}h前)</span><span class="pill-badge" style="color:#fde047;border-color:#fde047;">実測重要度: {n.get("impact_score", 70)}点</span></div></div><div style="font-size:14.5px;font-weight:800;color:#f8fafc;margin-top:4px;margin-bottom:4px;">{html.escape(n["title"])}</div></div>', unsafe_allow_html=True)
+                if st.button("🔥 詳細レポートを見る", key=f"tab_n_{n['id']}", use_container_width=True): st.session_state["selected_news_item"] = n; st.session_state["navigation_page"] = "NEWS_DETAIL"; st.session_state["scroll_top_trig"] = int(time.time()*1000); st.rerun()
+    elif sel_cat == "🎟️ 直近IPO・グロース実測分析":
+        st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">🎟️ 2階建てIPO・グロース市場 マルチソース実測サバイバルターミナル</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;">① 未上場・新規承認IPO監視候補 ＋ ② 既上場IPO・グロース実測サバイバルTOP10（取引所一次情報・実約定データ・金融ポータル・日英報道4系統クロス検証自動振り分け）</div><div style="margin-top:8px;"><a href="https://www.jpx.co.jp/listing/stocks/new/index.html" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">🏛️ 日本取引所グループ(JPX) 新規上場会社情報</a><a href="https://www.sec.gov/edgar/searchedgar/companysearch" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#a855f7;color:#e9d5ff;">🇺🇸 SEC EDGAR (S-1 / 424B4検索)</a></div></div>', unsafe_allow_html=True)
+        with st.spinner("📡 取引所一次情報(JPX/SEC)・実市場データ・金融ポータル・日英報道の4系統クロス検証を実行中..."): ipo_bundle = fetch_real_ipo_growth_analysis()
+
+        promoted_cnt = int(ipo_bundle.get("promoted_count", 0)) if isinstance(ipo_bundle, dict) else 0
+        if promoted_cnt > 0:
+            st.info(f"⚡ マルチソース実態検証により、監視候補のうち **{promoted_cnt}銘柄** の市場上場・実約定データを確認したため、自動的に「② 既上場IPO・グロース実測サバイバル」へ昇格移動しました。")
+
+        st.markdown("### ① 上場予定・新規承認IPO 監視候補一覧（未上場確認済）")
+        upcoming_ipos = ipo_bundle.get("upcoming_ipos", []) if isinstance(ipo_bundle, dict) else []
+        if not upcoming_ipos:
+            st.info("現在、未上場の監視候補はすべて上場済へ昇格したか、新規承認待機中です。")
+        for idx_u, u_ipo in enumerate(upcoming_ipos, 1):
+            c_raw_u = str(u_ipo.get("code", "未定")).strip()
+            code_badge_u = f"証券コード: {c_raw_u}" if c_raw_u != "未定" else "コード未定（未上場・承認待ち）"
+            ld_disp = str(u_ipo.get("listing_date_disp", "マルチソース上場検証中"))
+            v_badge_u = str(u_ipo.get("verify_badge_text", "🔍 複数ソース検証済"))
             st.markdown(
-                f'<div class="rank-card" style="border-left-color:{border_c};margin-bottom:10px;">'
-                f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">'
-                f'<div><b>{html.escape(je.get("name",""))} [{html.escape(je.get("code",""))}]</b> <span style="font-size:11px;color:#94a3b8;">({html.escape(je.get("style",""))} / {side_j} / {sh_j:,}株)</span></div>'
-                f'<div>{status_badge}</div></div>'
-                f'<div style="font-size:11px;color:#cbd5e1;margin-top:4px;">記録日時: {html.escape(str(je.get("created_at","")))} ｜ 約定値: <b>{fmt_px(ep_j, is_jp_j, fc_j)}</b> ｜ 計画TP: <b style="color:#10b981;">{fmt_px(tp_j, is_jp_j, fc_j)}</b> ｜ 計画SL: <b style="color:#f87171;">{fmt_px(sl_j, is_jp_j, fc_j)}</b></div>'
+                f'<div class="rank-card" style="border-left-color:#a855f7;background:linear-gradient(180deg,#160d2b 0%,#090d16 100%)!important;">'
+                f'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;max-width:100%;overflow:hidden;">'
+                f'<span class="ipo-status-pill" style="background:rgba(16,185,129,0.24);border:1px solid #10b981;color:#6ee7b7;font-weight:900;font-family:\'JetBrains Mono\',monospace;">📅 {html.escape(ld_disp)}</span>'
+                f'<span class="pill-badge" style="background:#a855f7;color:#fff;font-weight:800;">{html.escape(str(u_ipo.get("stage_label", "上場注目企業")))}</span>'
+                f'<span class="quantum-badge">報道熱量 {int(u_ipo.get("heat_score", 60))}点</span>'
+                f'</div>'
+                f'<div style="background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.35);border-radius:5px;padding:4px 8px;margin-bottom:6px;font-size:10.5px;color:#7dd3fc;font-family:\'JetBrains Mono\',monospace;">{html.escape(v_badge_u)}</div>'
+                f'<div style="font-size:17.5px;font-weight:800;color:#f8fafc;">🏷️ {html.escape(str(u_ipo.get("name", "")))} <span style="font-size:12px;color:#38bdf8;font-family:\'JetBrains Mono\',monospace;">[{html.escape(code_badge_u)}]</span></div>'
+                f'<div style="font-size:11.5px;color:#cbd5e1;margin-top:4px;">🏛️ <b>上場市場:</b> {html.escape(str(u_ipo.get("market", "-")))} ｜ 🏦 <b>主幹事証券:</b> {html.escape(str(u_ipo.get("lead_underwriter", "-")))}</div>'
+                f'<div class="winrate-bar" style="margin-top:8px;text-align:left;padding:8px 10px;">'
+                f'<div><div style="font-size:9.5px;color:#fde047;">💰 想定価格 / 公開価格（仮条件）</div><div style="font-size:11.5px;font-weight:800;color:#f8fafc;">{html.escape(str(u_ipo.get("offer_info", "未公表 / 観測中")))}</div></div>'
+                f'<div><div style="font-size:9.5px;color:#38bdf8;">🗓️ ブックビルディング(BB) / 登録書類</div><div style="font-size:11.5px;font-weight:800;color:#e0f2fe;">{html.escape(str(u_ipo.get("bb_info", "スケジュール確認中")))}</div></div>'
+                f'<div><div style="font-size:9.5px;color:#c084fc;">📦 吸収金額規模・需給タイプ</div><div style="font-size:11.5px;font-weight:800;color:#f3e8ff;">{html.escape(str(u_ipo.get("absorption_scale", "-")))}</div></div>'
+                f'</div>'
+                f'<div style="background:rgba(15,23,42,0.88);border:1px solid rgba(56,189,248,0.28);border-radius:7px;padding:8px 10px;margin-top:7px;font-size:11.5px;line-height:1.65;color:#e2e8f0;">'
+                f'<b>🎯 事業内容・強み・注目ポイント（{html.escape(str(u_ipo.get("theme", "")))}）:</b><br>{html.escape(str(u_ipo.get("business_desc", "")))}'
+                f'</div>'
+                f'<div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.38);border-radius:7px;padding:8px 10px;margin-top:6px;font-size:11.5px;line-height:1.65;color:#d1fae5;">'
+                f'<b>📊 初値・セカンダリー需給の見立て（クオンツ視点）:</b><br>{html.escape(str(u_ipo.get("supply_outlook", "")))}'
+                f'</div>'
+                f'<div style="background:rgba(2,6,23,0.75);border:1px solid rgba(168,85,247,0.3);border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11.5px;color:#e9d5ff;">📰 <b>最新関連ニュース見出し:</b> {html.escape(str(u_ipo.get("latest_headline", "")))}</div>'
+                f'<div style="margin-top:8px;">'
+                f'<a href="{html.escape(str(u_ipo.get("jpx_ipo_url", "https://www.jpx.co.jp/listing/stocks/new/index.html")))}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#10b981;color:#6ee7b7;">🏛️ JPX/SEC公式</a>'
+                f'<a href="{html.escape(str(u_ipo.get("yahoo_url", "https://finance.yahoo.co.jp/stocks/ipo")))}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">💹 Yahoo!ファイナンスIPO</a>'
+                f'<a href="{html.escape(str(u_ipo.get("kabutan_url", "https://kabutan.jp/")))}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📊 株探/EDGARリンク</a>'
+                f'</div></div>',
+                unsafe_allow_html=True
+            )
+            if re.match(r"^[1-9][0-9]{2}[0-9A-Z]$", c_raw_u):
+                if st.button(f"🔵 {u_ipo['name']} ({c_raw_u}) の3階層MTF＆売買戦略を診断する", key=f"up_ipo_diag_{idx_u}_{c_raw_u}", use_container_width=True):
+                    st.session_state["custom_search_code"] = f"{c_raw_u}.T"; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
+
+        st.markdown("### ② 既上場IPO・グロース実測サバイバルTOP10（上場確認済・日米統合）")
+        survivors_ipo = ipo_bundle.get("survivors", []) if isinstance(ipo_bundle, dict) else []
+        if not survivors_ipo:
+            st.info("📡 現在既上場IPO銘柄の相場データを再取得中です。数秒後に再度お試しください。")
+        for ipo in survivors_ipo:
+            chg_col = "#10b981" if ipo["chg_pct"] >= 0 else "#ef4444"
+            lockup_badge = f'<span class="pill-badge" style="background:rgba(245,158,11,0.25);border-color:#f59e0b;color:#fde047;font-weight:900;">{html.escape(ipo.get("lockup_note", ""))}</span>' if ipo.get("lockup_alert") else ""
+            meta_note_html = f'<div style="font-size:10px;color:#6ee7b7;margin-top:3px;">{html.escape(ipo.get("ipo_meta_note", ""))}</div>' if ipo.get("ipo_meta_note") else ""
+            v_badge_s = str(ipo.get("verify_badge_text", "🔍 複数ソース検証済"))
+            t_unit = str(ipo.get("turnover_unit", "百万円"))
+            is_jp_s = str(ipo.get("full_code", "")).endswith(".T")
+            btn_lbl_1 = "📊 株探詳細" if is_jp_s else "🏛️ SEC EDGAR"
+            btn_lbl_3 = "🏛️ JPX新規上場情報" if is_jp_s else "🇺🇸 SEC提出書類検索"
+            ld_s_txt = f"{str(ipo.get('listing_date') or '実測特定済')} ({int(ipo.get('days_since_listing', 0)):,}日)"
+            st.markdown(
+                f'<div class="rank-card" style="border-left-color:#f59e0b;">'
+                f'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;max-width:100%;overflow:hidden;">'
+                f'<span class="ipo-status-pill" style="background:rgba(16,185,129,0.24);border:1px solid #10b981;color:#6ee7b7;font-weight:900;font-family:\'JetBrains Mono\',monospace;">📅 {html.escape(ld_s_txt)}</span>'
+                f'{lockup_badge}'
+                f'</div>'
+                f'<div style="background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.32);border-radius:5px;padding:4px 8px;margin-bottom:6px;font-size:10.5px;color:#6ee7b7;font-family:\'JetBrains Mono\',monospace;">{html.escape(v_badge_s)}</div>'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px;">'
+                f'<div><span class="pill-badge" style="background:#f59e0b;color:#0f172a;font-weight:900;">🏆 生存 第{ipo["rank"]}位</span><span class="pill-badge" style="background:rgba(250,204,21,0.2);color:#fde047;border-color:#facc15;">スコア {ipo["score"]}点</span></div>'
+                f'<div style="font-size:11px;color:#38bdf8;font-weight:700;">{html.escape(ipo["tier"])}</div>'
+                f'</div>'
+                f'<div><span style="font-size:18px;font-weight:800;color:#f8fafc;">{html.escape(ipo["name"])}</span> <span style="font-size:12px;color:#94a3b8;">({html.escape(str(ipo["code"]))} / {html.escape(ipo["market"])})</span></div>'
+                f'<div style="font-size:11px;color:#cbd5e1;margin-top:3px;">🎯 {html.escape(ipo["theme"])} ｜ 🏦 主幹事: {html.escape(str(ipo.get("lead_underwriter", "-")))} ｜ 📦 吸収規模: {html.escape(str(ipo.get("absorption_scale", "-")))}</div>'
+                f'<div class="winrate-bar" style="margin-top:8px;">'
+                f'<div><div style="font-size:9.5px;color:#94a3b8;">🏷️ 公開価格</div><div style="font-size:12px;font-weight:800;color:#e2e8f0;">{html.escape(str(ipo.get("offer_price_str", "-")))}</div></div>'
+                f'<div><div style="font-size:9.5px;color:#fde047;">🚀 初値 (公募比)</div><div style="font-size:12px;font-weight:800;color:#fde047;">{html.escape(str(ipo.get("initial_price_str", "-")))}</div></div>'
+                f'<div><div style="font-size:9.5px;color:#38bdf8;">💰 現在値 (前日比 / 初値比)</div><div style="font-size:12px;font-weight:800;">{html.escape(str(ipo["price"]))} (<span style="color:{chg_col};">{ipo["chg_pct"]:+.2f}%</span> / 初値比 <b style="color:#6ee7b7;">{html.escape(str(ipo.get("curr_vs_init_str", "-")))}</b>)</div></div>'
+                f'</div>'
+                f'<div class="trade-plan-box" style="margin-top:6px;">'
+                f'<div><div style="font-size:9.5px;color:#94a3b8;">📊 当日RVOL</div><div style="font-size:12px;font-weight:800;color:#fde047;">{ipo["rvol"]}倍</div></div>'
+                f'<div><div style="font-size:9.5px;color:#94a3b8;">📏 1ヶ月高安レンジ (高値乖離)</div><div style="font-size:11.5px;font-weight:700;">{html.escape(ipo["period_range"])} ({ipo["from_high_pct"]}%)</div></div>'
+                f'<div><div style="font-size:9.5px;color:#94a3b8;">💴 直近売買代金 / 年率Vol</div><div style="font-size:11.5px;font-weight:700;">{ipo["turnover_m_yen"]:,.1f}{html.escape(t_unit)} / {ipo["ann_vol"]}%</div></div>'
+                f'</div>{meta_note_html}'
+                f'<div style="background:rgba(2,6,23,0.75);border:1px solid rgba(245,158,11,0.28);border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11.5px;color:#fef3c7;">📰 <b>最新ヘッドライン:</b> {html.escape(ipo["latest_headline"])}</div>'
+                f'<div style="margin-top:8px;"><a href="{html.escape(ipo["kabutan_url"])}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">{btn_lbl_1}</a><a href="{html.escape(ipo["yahoo_url"])}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#38bdf8;color:#7dd3fc;">💹 Yahoo!ファイナンス</a><a href="{html.escape(ipo["jpx_ipo_url"])}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn" style="border-color:#10b981;color:#6ee7b7;">{btn_lbl_3}</a></div>'
                 f'</div>',
                 unsafe_allow_html=True
             )
-            if st_j == "OPEN":
-                jc_a, jc_b, jc_c = st.columns([2.2, 1.3, 1.0])
-                exit_in = jc_a.number_input("決済価格", min_value=0.01, value=max(0.01, ep_j), step=1.0 if is_jp_j else 0.1, key=f"j_exit_px_{jid}", label_visibility="collapsed")
-                if jc_b.button("💰 決済確定＆AI監査", key=f"j_close_{jid}", use_container_width=True, type="primary"):
-                    pnl_rate = ((exit_in - ep_j) / max(ep_j, 1e-4)) if side_j == "LONG" else ((ep_j - exit_in) / max(ep_j, 1e-4))
-                    je["exit_price"] = float(exit_in)
-                    je["closed_at"] = now_jst().strftime("%Y-%m-%d %H:%M")
-                    je["status"] = "CLOSED"
-                    je["pnl_pct"] = round(pnl_rate * 100.0, 2)
-                    je["pnl_yen"] = round(ep_j * sh_j * pnl_rate, 2)
-                    with st.spinner("🛡️ AEGIS＆SENTINELがトレード規律を監査中..."):
-                        je["ai_feedback"] = evaluate_journal_trade_audit(je, all_res)
-                    j_entries[idx_j] = je
-                    save_trade_journal(cu_j, j_entries)
-                    st.rerun()
-                if jc_c.button("🗑️ 削除", key=f"j_del_{jid}", use_container_width=True):
-                    del j_entries[idx_j]
-                    save_trade_journal(cu_j, j_entries)
-                    st.rerun()
-            else:
-                fb_txt = str(je.get("ai_feedback", ""))
-                if fb_txt:
-                    st.markdown(f'<div class="beginner-action-box" style="margin-top:-4px;margin-bottom:12px;">{html.escape(fb_txt).replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
-                jb1, jb2 = st.columns([3, 1])
-                if jb1.button("🔄 AI監査を再実行", key=f"j_reaudit_{jid}", use_container_width=True):
-                    with st.spinner("🛡️ クオンツ監査官が再採点中..."):
-                        je["ai_feedback"] = evaluate_journal_trade_audit(je, all_res)
-                    j_entries[idx_j] = je
-                    save_trade_journal(cu_j, j_entries)
-                    st.rerun()
-                if jb2.button("🗑️ 削除", key=f"j_del_c_{jid}", use_container_width=True):
-                    del j_entries[idx_j]
-                    save_trade_journal(cu_j, j_entries)
-                    st.rerun()
-elif sel_cat.startswith("📂 "):
-    for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), survival_cut_pct), 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
+            if st.button(f"🔵 {ipo['name']} ({ipo['code']}) の実戦検証と売買戦略詳細を見る", key=f"ipo_diag_{ipo['code']}", use_container_width=True): st.session_state["custom_search_code"] = ipo["full_code"]; st.session_state["scroll_top_trig"] = int(time.time() * 1000); st.rerun()
+    elif sel_cat == "🏦 BVC-VPIN・CLV資金フロー":
+        for i, r in enumerate(sorted(surv, key=lambda x: x["inst_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="inst")
+    elif sel_cat == "🔥 出来高サージ＆市場注目度":
+        for i, r in enumerate(sorted(surv, key=lambda x: x["surge_attention_score"], reverse=True)[:10], 1): render_card(r, rank=i, kp="mom")
+    elif sel_cat == "📋 監視シート":
+        wl = st.session_state["watchlist"]
+        if len(wl) >= 2:
+            pf_diag = analyze_watchlist_portfolio_risk(wl)
+            if pf_diag.get("has_alert"):
+                if pf_diag.get("is_high_risk"):
+                    st.markdown(
+                        f'<div class="rank-card" style="border-left-color:#ef4444;background:linear-gradient(180deg,#2a0d16 0%,#090d16 100%)!important;padding:12px 14px;">'
+                        f'<div style="font-size:13px;font-weight:900;color:#fca5a5;">🛡️ AEGIS リスク監査官：セクター集中・相関過多リスク警告（監視 {pf_diag["count"]}銘柄）</div>'
+                        f'<div style="font-size:11.5px;color:#fecdd3;margin-top:4px;line-height:1.6;">'
+                        f'・<b>直近60日平均相関係数:</b> <b style="color:#fde047;">{pf_diag["avg_corr"]:.2f}</b>（閾値 0.70） ｜ '
+                        f'<b>最大集中セクター:</b> <b style="color:#fde047;">{html.escape(pf_diag["top_genre"])} ({pf_diag["max_sector_pct"]:.1f}%)</b>（閾値 60%）<br>'
+                        f'💡 <b>分散推奨メッセージ:</b> 監視銘柄の値動きが強く連動しており、セクター急落時に同時被弾するリスクが高い状態です。ディフェンシブ大型（電力・銀行・商社）や別テーマ銘柄を組み入れて相関分散を図ってください。'
+                        f'</div></div>',
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.markdown(
+                        f'<div class="rank-card" style="border-left-color:#10b981;padding:10px 14px;">'
+                        f'<div style="font-size:12px;font-weight:800;color:#6ee7b7;">🛡️ AEGIS ポートフォリオ分散診断：良好（監視 {pf_diag["count"]}銘柄）</div>'
+                        f'<div style="font-size:11px;color:#d1fae5;margin-top:2px;">直近60日平均相関係数: <b>{pf_diag["avg_corr"]:.2f}</b> ｜ 最大セクター比率: <b>{html.escape(pf_diag["top_genre"])} ({pf_diag["max_sector_pct"]:.1f}%)</b> — 適切なリスク分散が維持されています。</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+        if st.button("⚡ 総合TOP3を一括登録", use_container_width=True):
+            for it in surv[:3]: wl[it["code"]] = _merge_dd_intel_into_lab_item(it)
+            cu = st.session_state.get("authenticated_user", "")
+            if cu: save_watchlist(cu, wl)
+            st.rerun()
+        for wc, wi in list(wl.items()): render_card(wi, kp=f"wl_{wc}")
+    elif sel_cat == "📓 トレード日誌＆AI監査":
+        st.markdown('<div class="glass-header"><div style="font-size:16px;font-weight:800;color:#f8fafc;">📓 実戦トレード日誌 ＆ クオンツ監査官（AEGIS・SENTINEL）振り返り採点</div><div style="font-size:11px;color:#94a3b8;margin-top:3px;">銘柄カードから記録したエントリープランの決済確定・損益集計・AI規律監査を実行します</div></div>', unsafe_allow_html=True)
+        cu_j = st.session_state.get("authenticated_user", "")
+        j_entries = load_trade_journal(cu_j)
+        if not j_entries:
+            st.info("まだトレード日誌に記録がありません。各銘柄カードの『🎯 日誌記録』ボタンから登録してください。")
+        else:
+            closed_j = [x for x in j_entries if x.get("status") == "CLOSED"]
+            tot_j_pnl = sum(float(x.get("pnl_yen", 0.0)) for x in closed_j)
+            win_j = sum(1 for x in closed_j if float(x.get("pnl_yen", 0.0)) > 0)
+            wr_j = round((win_j / len(closed_j)) * 100.0, 1) if closed_j else 0.0
+            st.markdown(f'<div class="forward-verify-bar" style="margin-bottom:10px;"><span>📊 <b>日誌通算成績:</b> 全{len(j_entries)}件（決済済 {len(closed_j)}件 / 保有中 {len(j_entries)-len(closed_j)}件）</span><span>勝率: <b style="color:#fde047;">{wr_j:.1f}%</b> ｜ 確定純損益: <b style="color:{"#10b981" if tot_j_pnl>=0 else "#ef4444"};">{tot_j_pnl:+,.0f}円</b></span></div>', unsafe_allow_html=True)
 
-st.markdown('<div class="disclaimer-banner"><b>⚖️ 重要免責事項・法的表示</b><br>本システム「YAMASHISHI LAB」が提供するすべての指標（ボラティリティ突破指数・WKB統計近似モデル、5分足60日OHLCV需給ミクロ構造近似、日足2年中期トレンド・MAパーフェクトオーダー・MACD・52週位置・日足ATR14・価格帯別出来高Volume Profile(LVN上値真空/HVNしこり壁)・対ベンチマークRSα・30分イントラデイRS先行度、過去10年週足大局アルゴリズム・10年POC価格帯別出来高解析、BVC-VPIN・Kyle-λ統計近似、WRVヒゲ拒絶ベクトル、OR15分初動レンジ判定・時間帯補正RVOL・3階層MTF5条件執行品質ゲート、VWAP±1σ/2σ動的バンド過熱判定・PDH/PDL前日高値安値・機関オーダーブロック(OB)支持帯検出・東証値幅制限(ストップ高/ストップ安)自動キャップ、決算跨ぎリスク遮断ゲート、監視ポートフォリオ相関＆セクター集中リスク診断、5大セクター資金ローテーション・ヒートマップ、当日実測寄付きギャップ／理論寄付き試算値、期待度パーセンテージ、LAB×DEEP DIVE双方向統合予測・同期判定、リークフリー検証統計(勝率/PF/SQN/平均R/最大DD/エクイティカーブ/時間帯別勝率)、スマホ即発注用OCOオーダーチケットBOX、Geminiクオンツ監査合議ログ、トレード日誌AI監査、および買い・空売り双方の売買プラン）は、過去の5分足・日足・週足四本値および出来高(OHLCV)データと数理アルゴリズムに基づく研究シミュレーション・情報提供を目的としたものであり、実際の板情報（Tick）やPTS実勢値に基づくものではなく、特定の有価証券の売買推奨や投資助言（投資助言・代理業等）を行うものではありません。株式投資（特に信用取引・空売り）には元本割れや元本超過損・市場変動のリスクが伴います。最終的な投資判断および資金配分は、必ず利用者ご自身の自己責任にて行っていただけますようお願い申し上げます。</div>', unsafe_allow_html=True)
+            for idx_j, je in enumerate(j_entries):
+                jid = je.get("id", str(idx_j))
+                fc_j = je.get("full_code", "")
+                is_jp_j = ".T" in fc_j
+                ep_j = float(je.get("entry_price", 0.0))
+                tp_j = float(je.get("tp_price", 0.0))
+                sl_j = float(je.get("sl_price", 0.0))
+                sh_j = int(je.get("shares", 100))
+                side_j = je.get("side", "LONG")
+                st_j = je.get("status", "OPEN")
+                border_c = "#38bdf8" if st_j == "OPEN" else ("#10b981" if float(je.get("pnl_yen", 0.0)) >= 0 else "#ef4444")
+                status_badge = '<span class="pill-badge" style="background:rgba(56,189,248,0.22);border-color:#38bdf8;color:#7dd3fc;font-weight:800;">⏳ 保有中 (OPEN)</span>' if st_j == "OPEN" else f'<span class="pill-badge" style="background:{"rgba(16,185,129,0.22)" if float(je.get("pnl_yen",0))>=0 else "rgba(239,68,68,0.22)"};border-color:{border_c};color:#f8fafc;font-weight:800;">✅ 決済済 ({float(je.get("pnl_pct",0)):+.2f}% / {float(je.get("pnl_yen",0)):+,.0f}円)</span>'
+
+                st.markdown(
+                    f'<div class="rank-card" style="border-left-color:{border_c};margin-bottom:10px;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">'
+                    f'<div><b>{html.escape(je.get("name",""))} [{html.escape(je.get("code",""))}]</b> <span style="font-size:11px;color:#94a3b8;">({html.escape(je.get("style",""))} / {side_j} / {sh_j:,}株)</span></div>'
+                    f'<div>{status_badge}</div></div>'
+                    f'<div style="font-size:11px;color:#cbd5e1;margin-top:4px;">記録日時: {html.escape(str(je.get("created_at","")))} ｜ 約定値: <b>{fmt_px(ep_j, is_jp_j, fc_j)}</b> ｜ 計画TP: <b style="color:#10b981;">{fmt_px(tp_j, is_jp_j, fc_j)}</b> ｜ 計画SL: <b style="color:#f87171;">{fmt_px(sl_j, is_jp_j, fc_j)}</b></div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+                if st_j == "OPEN":
+                    jc_a, jc_b, jc_c = st.columns([2.2, 1.3, 1.0])
+                    exit_in = jc_a.number_input("決済価格", min_value=0.01, value=max(0.01, ep_j), step=1.0 if is_jp_j else 0.1, key=f"j_exit_px_{jid}", label_visibility="collapsed")
+                    if jc_b.button("💰 決済確定＆AI監査", key=f"j_close_{jid}", use_container_width=True, type="primary"):
+                        pnl_rate = ((exit_in - ep_j) / max(ep_j, 1e-4)) if side_j == "LONG" else ((ep_j - exit_in) / max(ep_j, 1e-4))
+                        je["exit_price"] = float(exit_in)
+                        je["closed_at"] = now_jst().strftime("%Y-%m-%d %H:%M")
+                        je["status"] = "CLOSED"
+                        je["pnl_pct"] = round(pnl_rate * 100.0, 2)
+                        je["pnl_yen"] = round(ep_j * sh_j * pnl_rate, 2)
+                        with st.spinner("🛡️ AEGIS＆SENTINELがトレード規律を監査中..."):
+                            je["ai_feedback"] = evaluate_journal_trade_audit(je, all_res)
+                        j_entries[idx_j] = je
+                        save_trade_journal(cu_j, j_entries)
+                        st.rerun()
+                    if jc_c.button("🗑️ 削除", key=f"j_del_{jid}", use_container_width=True):
+                        del j_entries[idx_j]
+                        save_trade_journal(cu_j, j_entries)
+                        st.rerun()
+                else:
+                    fb_txt = str(je.get("ai_feedback", ""))
+                    if fb_txt:
+                        st.markdown(f'<div class="beginner-action-box" style="margin-top:-4px;margin-bottom:12px;">{html.escape(fb_txt).replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+                    jb1, jb2 = st.columns([3, 1])
+                    if jb1.button("🔄 AI監査を再実行", key=f"j_reaudit_{jid}", use_container_width=True):
+                        with st.spinner("🛡️ クオンツ監査官が再採点中..."):
+                            je["ai_feedback"] = evaluate_journal_trade_audit(je, all_res)
+                        j_entries[idx_j] = je
+                        save_trade_journal(cu_j, j_entries)
+                        st.rerun()
+                    if jb2.button("🗑️ 削除", key=f"j_del_c_{jid}", use_container_width=True):
+                        del j_entries[idx_j]
+                        save_trade_journal(cu_j, j_entries)
+                        st.rerun()
+    elif sel_cat.startswith("📂 "):
+        for i, r in enumerate(cut_stocks(g_res.get(sel_cat.replace("📂 ", ""), []), survival_cut_pct), 1): render_card(r, rank=i, kp=f"g_{sel_cat}")
+
+    st.markdown('<div class="disclaimer-banner"><b>⚖️ 重要免責事項・法的表示</b><br>本システム「YAMASHISHI LAB」が提供するすべての指標（ボラティリティ突破指数・WKB統計近似モデル、5分足60日OHLCV需給ミクロ構造近似、日足2年中期トレンド・MAパーフェクトオーダー・MACD・52週位置・日足ATR14・価格帯別出来高Volume Profile(LVN上値真空/HVNしこり壁)・対ベンチマークRSα・30分イントラデイRS先行度、過去10年週足大局アルゴリズム・10年POC価格帯別出来高解析、BVC-VPIN・Kyle-λ統計近似、WRVヒゲ拒絶ベクトル、OR15分初動レンジ判定・時間帯補正RVOL・3階層MTF5条件執行品質ゲート、VWAP±1σ/2σ動的バンド過熱判定・PDH/PDL前日高値安値・機関オーダーブロック(OB)支持帯検出・東証値幅制限(ストップ高/ストップ安)自動キャップ、決算跨ぎリスク遮断ゲート、監視ポートフォリオ相関＆セクター集中リスク診断、5大セクター資金ローテーション・ヒートマップ、当日実測寄付きギャップ／理論寄付き試算値、期待度パーセンテージ、LAB×DEEP DIVE双方向統合予測・同期判定、リークフリー検証統計(勝率/PF/SQN/平均R/最大DD/エクイティカーブ/時間帯別勝率)、スマホ即発注用OCOオーダーチケットBOX、Geminiクオンツ監査合議ログ、トレード日誌AI監査、および買い・空売り双方の売買プラン）は、過去の5分足・日足・週足四本値および出来高(OHLCV)データと数理アルゴリズムに基づく研究シミュレーション・情報提供を目的としたものであり、実際の板情報（Tick）やPTS実勢値に基づくものではなく、特定の有価証券の売買推奨や投資助言（投資助言・代理業等）を行うものではありません。株式投資（特に信用取引・空売り）には元本割れや元本超過損・市場変動のリスクが伴います。最終的な投資判断および資金配分は、必ず利用者ご自身の自己責任にて行っていただけますようお願い申し上げます。</div>', unsafe_allow_html=True)
 # === PART 5/5 END ===
