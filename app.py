@@ -256,7 +256,7 @@ UPCOMING_IPO_WATCHLIST = [
         "stage_label": "🟠 上場準備・承認監視候補（大型フィンテック）",
         "name": "PayPay（ペイペイ）",
         "market": "東証プライム / 米国NASDAQ（マルチソース上場検証中）",
-        "listing_date_disp": "マルチソース上場検証中",
+        "listing_date_disp": "マルチソース上場実態検証中",
         "offer_info": "JPX/SEC/市場データ照合中",
         "bb_info": "JPX・Yahoo!ファイナンスIPO照合中",
         "lead_underwriter": "野村證券 / 三菱UFJモルガン・スタンレー / ゴールドマン・サックス（観測）",
@@ -273,7 +273,7 @@ UPCOMING_IPO_WATCHLIST = [
         "stage_label": "🟣 米国メガIPO監視候補（宇宙・衛星通信）",
         "name": "SpaceX / Starlink（スペースX・スターリンク）",
         "market": "米国NASDAQ / NYSE（マルチソース上場検証中）",
-        "listing_date_disp": "マルチソース上場検証中",
+        "listing_date_disp": "マルチソース上場実態検証中",
         "offer_info": "市場データ・SEC登録情報照合中",
         "bb_info": "SEC EDGAR / 市場取引ステータス照合中",
         "lead_underwriter": "モルガン・スタンレー / ゴールドマン・サックス（観測）",
@@ -1622,7 +1622,7 @@ TICKER_ALIAS_MAP = {
     "レーザー": "6920.T", "レーザーテック": "6920.T",
     "ディスコ": "6146.T", "ルネサス": "6723.T", "SCREEN": "7735.T", "スクリーン": "7735.T",
     "三菱重": "7011.T", "三菱重工": "7011.T",
-    "川重": "7012.T", "川崎重": "7012.T", "川崎重工": "7012.T",
+    "川重": "7012.T", "川崎重工": "7012.T", "川崎重工業": "7012.T",
     "IHI": "7013.T",
     "SBG": "9984.T", "ソフバン": "9984.T", "ソフトバンクG": "9984.T", "ソフトバンクグループ": "9984.T",
     "さくらネット": "3778.T", "さくらインターネット": "3778.T",
@@ -3721,7 +3721,7 @@ def generate_humanlike_2ch_debate(r: dict, uq: str = "", hist: list = None) -> t
     turns.extend(llm_turns if llm_turns else _build_natural_fallback_dialogue(uq, r_m, st_style, web_hits, ig, tc, sn, nx, ae, dd_summary=dd_summary_txt))
     turns = sanitize_and_verify_dialogue(turns, r_m, uq=uq)
     news_pool = get_cached_impact_news()
-    rel_news_for_sync = [n for n in news_pool if r_m.get("full_code") in n.get("detail", {}).get("related_codes", [])]
+    rel_news_for_sync = [n for n in news_pool if fc_u in (n.get("detail", {}).get("extracted_codes") or n.get("extracted_codes") or [])]
     sync_lab_intel_to_shared(r_m, council_turns=turns, rel_news_list=rel_news_for_sync, persist=True)
     return turns, engine_status
 
@@ -3873,10 +3873,13 @@ def _render_council_sec_impl(r, uk, auto_open=False):
     pill_style = "" if "Gemini AI生成" in eng_st else ' style="background:rgba(245,158,11,0.14);border-color:rgba(245,158,11,0.45);color:#fde047;"'
     st.markdown(f'<div class="ai-council-box" id="box_{uk}"><div class="ai-engine-status-pill"{pill_style}>{html.escape(eng_st)}</div><div class="council-scroll-window" id="scroll_window_{uk}">{"".join(_fmt_turn(t, i) for i, t in enumerate(turns))}</div></div>', unsafe_allow_html=True)
 
+    has_gemini_connected = bool(load_gemini_cfg().get("api_key"))
+    if not has_gemini_connected:
+        st.caption("※個別質問への対話応答には管理者設定でGemini APIキーの接続が必要です（現在は統計ルール自動推論モード）")
     with st.form(f"form_q_{uk}", clear_on_submit=True):
         jc1, jc2 = st.columns([3.2, 1])
-        uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』への質問・相談・追加の視点リクエスト", label_visibility="collapsed")
-        if jc2.form_submit_button("💬 質問投下", use_container_width=True) and uop.strip():
+        uop = jc1.text_input("質問・発言", placeholder=f"『{r['name']}』への質問・相談・追加の視点リクエスト" if has_gemini_connected else "Gemini APIキー接続後に個別質問が利用可能です", label_visibility="collapsed", disabled=not has_gemini_connected)
+        if jc2.form_submit_button("💬 質問投下", use_container_width=True, disabled=not has_gemini_connected) and has_gemini_connected and uop.strip():
             ut, nid = uop.strip(), f"user_q_anchor_{uk}_{int(time.time()*1000)}"
             cur_t = list(st.session_state["council_threads"][ck])
             st.session_state["council_threads"][ck].append({"is_user": True, "text": ut, "dom_id": nid})
@@ -3903,7 +3906,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     if isinstance(news_by_code_map, dict):
         rel_news_list = news_by_code_map.get(fc_card, [])
     else:
-        rel_news_list = [n for n in get_cached_impact_news() if fc_card in n.get("detail", {}).get("related_codes", [])]
+        rel_news_list = [n for n in get_cached_impact_news() if fc_card in (n.get("detail", {}).get("extracted_codes") or n.get("extracted_codes") or [])]
     rel_news = rel_news_list[0] if rel_news_list else None
     is_jp = ".T" in fc_card
 
@@ -4618,12 +4621,39 @@ def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cv
     m10_lbl, m10_poc_s, m10_cagr = str(m10.get("regime_10y_label", "10年大局中立")), str(m10.get("poc_10y_str", "-")), float(m10.get("cagr_10y", 0.0))
     d2y_lbl, d2y_ma5_s, d2y_ma25_s, d2y_ma75_s, d2y_ma200_s = str(d2y.get("regime_1d_label", "日足中立")), str(d2y.get("ma5_str", "-")), str(d2y.get("ma25_str", "-")), str(d2y.get("ma75_str", "-")), str(d2y.get("ma200_str", "-"))
     fc_eval = full_code or (f"{code}.T" if re.match(r"^[0-9]{3}[0-9A-Z]$", str(code)) else str(code))
+    is_jp_s = ".T" in str(fc_eval).upper()
     tactic_type = determine_tactic_classification(fc_eval, genre, ofi_z, vpin, rsi, pgap, expect_pct, prev_trend_weak, qm, ms, rel_news_title=rel_news_title, style=style, upper_wick_pressure=upper_wick_pressure, lower_wick_support=lower_wick_support, cv=cv, vwap_today=vwap_today, rs_alpha=rs_alpha, daily_ctx=d2y, macro_10y=m10)
+
+    def _adapt_market_session_terms(res_d: dict) -> dict:
+        if is_jp_s:
+            return res_d
+        repls = [
+            ("9:05〜11:00 前場集中・次バー始値約定 → 当日大引け完結", "寄付き15分後〜前場中盤・次バー始値約定 → 米国市場大引け完結"),
+            ("9:05〜13:30 確定後次バー始値約定 → 14:30手仕舞い", "寄付き15分後〜引け1時間前 確定後次バー始値約定 → 引け前手仕舞い"),
+            ("9:05〜11:00の前場トレンド時間帯", "寄付き15分後〜前場中盤のトレンド時間帯"),
+            ("9:05〜11:00", "寄付き15分後〜前場中盤"),
+            ("9:05〜13:30", "寄付き15分後〜引け1時間前"),
+            ("14:30手仕舞い", "引け前手仕舞い"),
+            ("14:30の手仕舞い時間", "引け前の手仕舞い時間"),
+            ("14:30までに", "米国市場引け前までに"),
+            ("大引け前14:50の引け成行/指値", "米国市場大引け前の引け成行/指値"),
+            ("大引け直前（14:50）", "米国市場大引け前"),
+            ("大引け前14:50", "米国市場大引け前"),
+            ("前場", "米国市場前半"),
+            ("信用新規売り", "ショート新規売り"),
+        ]
+        for k_f in ("entry_mode", "algo_name", "risk_posture", "core_logic", "trade_duration", "step_plan", "beginner_html"):
+            if k_f in res_d and isinstance(res_d[k_f], str):
+                s_val = res_d[k_f]
+                for old_s, new_s in repls:
+                    s_val = s_val.replace(old_s, new_s)
+                res_d[k_f] = s_val
+        return res_d
 
     if tactic_type in ("Type-S1", "Type-S2") and spec["allow_short"]:
         is_s2 = (tactic_type == "Type-S2")
         s_tag = "過熱・上ヒゲ拒絶VWAP割れ" if is_s2 else "資金流出VWAP割れ順張り"
-        return {
+        return _adapt_market_session_terms({
             "style_name": pfx, "tf": spec["tf"], "side": "SHORT", "tactic_type": tactic_type,
             "entry_mode": f"【空売り】{s_tag}次バー始値＋50%利確",
             "algo_name": f"{'🟣' if is_s2 else '🔴'} [{pfx} / {tactic_type} 空売り] {s_tag}次バー始値空売り ＋ +1.0R 50%買い戻し型",
@@ -4638,7 +4668,7 @@ def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cv
                 f"利益が損切り幅と同額（+1.0R）になったら、まず半分（<b>{part_sh:,}株</b>）を買い戻して利益を確定し、心の余裕を作ってから残り<b>{rem_sh:,}株</b>で目標<b>{tp_str}</b>を狙います。",
                 f"予想と逆に上がってしまった場合に備え、注文と同時に<b>{sl_str}</b>に買い戻しの逆指値（損切り予約）を入れ、損失拡大を確実に防ぎます。"
             )
-        }
+        })
 
     if pfx == "スキャルピング":
         entry_mode = "【買い】前場OR15維持・5分足VWAP/5EMA押し目ブレイク"
@@ -4671,7 +4701,7 @@ def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cv
         q3 = f"数日〜2週間かけて目標<b>{tp_str}</b>を目指します。途中で損切り幅と同じ利益（+1.0R）が出たら半分（<b>{part_sh:,}株</b>）を先に利確しておくと、残りは「負けない状態」でゆったり大きな値幅を狙えます。"
         q4 = f"寝ている間のニュース等で急落しても資産を守れるよう、買ったら必ず<b>{sl_str}</b>（25日線や直近5日安値割れ水準）に逆指値（損切り予約）を入れておき、塩漬けを絶対に防ぎます。"
     else:
-        tranche1_sh = max(1, (part_sh // 100) * 100) if (".T" in fc_eval and sh >= 200) else part_sh
+        tranche1_sh = max(1, (part_sh // 100) * 100) if (is_jp_s and sh >= 200) else part_sh
         tranche2_sh = max(0, sh - tranche1_sh)
         entry_mode = "【買い】週足10年POC・日足75/200日線基準 2回分割時間分散買い"
         algo_name = f"💎 [バイ＆ホールド / {tactic_type} 買い] 週足10年POC×日足75/200日線サポート・2回分割時間分散中長期保有型"
@@ -4683,12 +4713,12 @@ def select_dynamic_strategy(code: str, style: str, ofi_z: float, vpin: float, cv
         q3 = f"中長期の大きな波で目標<b>{tp_str}</b>を狙います。株価が大きく伸びて損切り幅と同額（+1.0R）の含み益になったら半分（<b>{part_sh:,}株</b>）を利確し、残りは買値に逆指値を移して安心して長期保有を続けます。"
         q4 = f"日々の小さな上下動で慌てて売らないよう、通常より広めの<b>{sl_str}</b>（直近20日安値や200日線割れ水準）に逆指値（資産防衛の保険）を設定し、大局トレンドが崩れた場合のみ一度撤退します。"
 
-    return {
+    return _adapt_market_session_terms({
         "style_name": pfx, "tf": spec["tf"], "side": "LONG", "tactic_type": tactic_type,
         "entry_mode": entry_mode, "algo_name": algo_name, "risk_posture": risk_posture,
         "core_logic": core_logic, "adj_shares": sh, "trade_duration": spec["dur"], "step_plan": step_plan,
         "beginner_html": _build_beginner_guide_html(disp_name, spec["beg_title"], q1, q2, q3, q4)
-    }
+    })
 
 def _parse_hhmm_to_minutes(hm_str: str):
     if not hm_str or ":" not in str(hm_str):
@@ -4703,7 +4733,7 @@ def _parse_hhmm_to_minutes(hm_str: str):
     return None
 
 def _build_historical_daily_slice_ctx(df_daily_clean: pd.DataFrame, prev_d: str, fallback_close: float, full_code: str = "", df_weekly_clean: pd.DataFrame = None) -> dict:
-    default_ctx = {"ma5": fallback_close, "ma25": fallback_close, "ma75": fallback_close, "ma200": fallback_close, "ma25_slope_up": True, "bull_po": False, "bear_po": False, "macd_hist": 0.0, "pos_52w_pct": 50.0, "daily_atr14": fallback_close * 0.015, "prev_trend_weak": False, "poc_10y_price": 0.0, "pos_10y_pct": 50.0, "ma200w_dev_pct": 0.0, "has_data": False}
+    default_ctx = {"ma5": fallback_close, "ma25": fallback_close, "ma75": fallback_close, "ma200": fallback_close, "ma25_slope_up": True, "bull_po": False, "bear_po": False, "macd_hist": 0.0, "pos_52w_pct": 50.0, "daily_atr14": fallback_close * 0.015, "prev_trend_weak": False, "poc_10y_price": 0.0, "pos_10y_pct": 50.0, "ma200w_dev_pct": 0.0, "hvn_wall_price": 0.0, "has_data": False}
     if df_daily_clean is None or df_daily_clean.empty: return default_ctx
     sub = df_daily_clean[df_daily_clean["_d_str"] <= prev_d]
     if sub.empty: return default_ctx
@@ -4718,11 +4748,31 @@ def _build_historical_daily_slice_ctx(df_daily_clean: pd.DataFrame, prev_d: str,
     macd_hist = float((macd_s - macd_s.ewm(span=9, adjust=False).mean()).iloc[-1])
     n_52w = min(252, len(c)); hi_52w, lo_52w = float(np.max(h[-n_52w:])), float(np.min(l[-n_52w:]))
     pos_52w_pct = float(np.clip(((px - lo_52w) / max(hi_52w - lo_52w, 1e-4)) * 100.0, 0.0, 100.0))
+
+    h_vp, l_vp, c_vp, v_vp = h[-n_52w:], l[-n_52w:], c[-n_52w:], np.maximum(v[-n_52w:], 1.0)
+    vp_bins = np.linspace(lo_52w, hi_52w + 1e-4, 21)
+    vp_typ = (h_vp + l_vp + c_vp) / 3.0
+    vp_hist = np.bincount(np.clip(np.digitize(vp_typ, vp_bins) - 1, 0, 19), weights=v_vp, minlength=20)
+    vp_mean_vol = max(float(np.mean(vp_hist)), 1e-8)
+    zone_lo, zone_hi = px * 1.01, px * 1.06
+    above_bin_indices = [bi for bi in range(20) if vp_bins[bi + 1] >= zone_lo and vp_bins[bi] <= zone_hi]
+    hvn_wall_price = 0.0
+    if above_bin_indices:
+        hvn_candidates = [bi for bi in above_bin_indices if float(vp_hist[bi]) >= vp_mean_vol * 1.8]
+        if hvn_candidates:
+            first_hvn_bin = min(hvn_candidates)
+            raw_wall = max(float(vp_bins[first_hvn_bin]), px * 1.005)
+            hvn_wall_price = round_to_tse_tick(raw_wall, full_code, "nearest") if full_code else raw_wall
+
     prev_c = np.roll(c, 1); prev_c[0] = c[0]; tr = np.maximum(h - l, np.maximum(np.abs(h - prev_c), np.abs(l - prev_c)))
     daily_atr14 = max(float(np.mean(tr[-min(14, len(tr)):])), px * 0.0115)
     prev_trend_weak = bool(px < ma25 * 0.992) if len(c) >= 5 else False
 
-    w_sub = df_weekly_clean[df_weekly_clean["_w_str"] <= prev_d] if (df_weekly_clean is not None and not df_weekly_clean.empty and "_w_str" in df_weekly_clean.columns) else None
+    try:
+        prev_d_minus_7 = (datetime.strptime(prev_d[:10], "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
+    except Exception:
+        prev_d_minus_7 = prev_d
+    w_sub = df_weekly_clean[df_weekly_clean["_w_str"] <= prev_d_minus_7] if (df_weekly_clean is not None and not df_weekly_clean.empty and "_w_str" in df_weekly_clean.columns) else None
     if w_sub is not None and len(w_sub) >= 4:
         wh, wl, wc = [np.asarray(w_sub[col].values, dtype=float).reshape(-1) for col in ["High", "Low", "Close"]]
         wv = np.asarray(w_sub["Volume"].values, dtype=float).reshape(-1) if "Volume" in w_sub.columns else np.ones_like(wc)
@@ -4737,7 +4787,7 @@ def _build_historical_daily_slice_ctx(df_daily_clean: pd.DataFrame, prev_d: str,
         poc_bin = int(np.argmax(vol_profile)); poc_raw = float((bins[poc_bin] + bins[poc_bin + 1]) * 0.5)
         poc_10y_price = round_to_tse_tick(poc_raw, full_code, "nearest") if full_code else poc_raw
         ma200w_dev_pct = float(((px - ma200) / max(ma200, 1e-4)) * 100.0)
-    return {"ma5": ma5, "ma25": ma25, "ma75": ma75, "ma200": ma200, "ma25_slope_up": ma25_slope_up, "bull_po": bull_po, "bear_po": bear_po, "macd_hist": macd_hist, "pos_52w_pct": pos_52w_pct, "daily_atr14": daily_atr14, "prev_trend_weak": prev_trend_weak, "poc_10y_price": poc_10y_price, "pos_10y_pct": pos_10y_pct, "ma200w_dev_pct": ma200w_dev_pct, "has_data": True}
+    return {"ma5": ma5, "ma25": ma25, "ma75": ma75, "ma200": ma200, "ma25_slope_up": ma25_slope_up, "bull_po": bull_po, "bear_po": bear_po, "macd_hist": macd_hist, "pos_52w_pct": pos_52w_pct, "daily_atr14": daily_atr14, "prev_trend_weak": prev_trend_weak, "poc_10y_price": poc_10y_price, "pos_10y_pct": pos_10y_pct, "ma200w_dev_pct": ma200w_dev_pct, "hvn_wall_price": hvn_wall_price, "has_data": True}
 
 def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat: dict, pest: float, vwap20: float, tpv: float, slv: float, shares: int, style: str, total_capital: float = 1000000.0, risk_tolerance_pct: float = 2.0, shared_ledger: dict = None, save_db: bool = True, genre: str = "", daily_2y: dict = None, macro_10y: dict = None, active_boosts: tuple = ("core_inst", "core_mom", "core_vol")) -> dict:
     is_jp = ".T" in full_code; now_dt = now_jst(); today_str = now_dt.strftime("%Y-%m-%d"); today_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%d"); is_market_open = _is_market_open_now(is_jp)
@@ -4750,7 +4800,10 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
 
     d2y, m10 = daily_2y or {}, macro_10y or {}
     df_daily_clean, df_weekly_clean, daily_rs_alpha_map = d2y.get("df_daily_clean"), m10.get("df_weekly_clean"), d2y.get("daily_rs_alpha_map", {})
-    boosts_key = "_".join(sorted([str(b) for b in (active_boosts or ())]))
+    active_set = set(active_boosts or ("core_vol", "core_inst", "core_mom"))
+    if not active_set:
+        active_set = {"core_vol", "core_inst", "core_mom"}
+    boosts_key = "_".join(sorted([str(b) for b in active_set]))
     ledger_key = f"{full_code}__{st_p}__{boosts_key}"
     ledger = shared_ledger if shared_ledger is not None else db_get("daily_forward_ledger", {})
     if not isinstance(ledger, dict): ledger = {}
@@ -4758,7 +4811,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
         existing_sl = ledger.get(ledger_key)
         stock_ledger = {"signals": dict(existing_sl.get("signals", {})), "verified": dict(existing_sl.get("verified", {})), "algo_ver": existing_sl.get("algo_ver", "")} if isinstance(existing_sl, dict) else {"signals": {}, "verified": {}, "algo_ver": ""}
 
-    ALGO_VERSION_TAG = "QWM29_TRAIL_SLOPE_2GATE_BAYES"
+    ALGO_VERSION_TAG = "QWM30_NO_LEAK_CLEAN_AUDIT"
     if stock_ledger.get("algo_ver") != ALGO_VERSION_TAG:
         stock_ledger["verified"], stock_ledger["algo_ver"] = {}, ALGO_VERSION_TAG
 
@@ -4782,7 +4835,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 p_close, p_open, p_low = float(sub_prev["Close"].iloc[-1]), float(sub_prev["Open"].iloc[-1]), float(sub_prev["Low"].iloc[-1])
                 hist_ctx = _build_historical_daily_slice_ctx(df_daily_clean, prev_d, p_close, full_code=full_code, df_weekly_clean=df_weekly_clean)
                 ma5_p, ma25_p, ma75_p, ma200_p = hist_ctx["ma5"], hist_ctx["ma25"], hist_ctx["ma75"], hist_ctx["ma200"]
-                poc_10y_p, p_atr = hist_ctx["poc_10y_price"], hist_ctx["daily_atr14"]
+                poc_10y_p, p_atr, hvn_wall_1d = hist_ctx["poc_10y_price"], hist_ctx["daily_atr14"], float(hist_ctx.get("hvn_wall_price", 0.0))
 
                 if st_p == "スイングトレード":
                     trend_ok = bool((hist_ctx["ma25_slope_up"] and p_close >= ma25_p * 0.985) or (p_close >= ma75_p))
@@ -4808,6 +4861,8 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 entry_px = apply_unfavorable_tick_slip(float(span_d["Open"].iloc[0]), full_code, is_long_entry_or_short_exit=True)
                 sl_d, tp_d = compute_style_tp_sl_deltas(entry_px, p_atr, False, style, combat_prof, full_code, recent_lows=rec_lows)
                 eff_tp = round_to_tse_tick(entry_px + tp_d, full_code, "ceil")
+                if hvn_wall_1d > entry_px and eff_tp > hvn_wall_1d:
+                    eff_tp = round_to_tse_tick(max(hvn_wall_1d * 0.995, entry_px + sl_d * 1.35), full_code, "floor")
                 if is_jp and p_close > 0:
                     lim_up_1d = p_close + get_tse_price_limit(p_close)
                     tick_1d = get_tse_tick_step(lim_up_1d, full_code)
@@ -4894,6 +4949,11 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                 for pos_idx, td_val in enumerate(t_dates_arr):
                     date_end_pos[str(td_val)] = pos_idx + 1
 
+                w_vol, w_inst, w_mom, w_1d, w_10y = spec["w"]
+                use_vol = ("core_vol" in active_set)
+                use_inst = ("core_inst" in active_set)
+                use_mom = ("core_mom" in active_set)
+
                 start_idx = max(0, len(unique_dates) - 35)
                 for idx_prev in range(start_idx, len(unique_dates) - 1):
                     try:
@@ -4910,19 +4970,36 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                         hist_daily_5m = all_daily_5m.loc[:prev_d]
                         hist_daily_ctx = _build_historical_daily_slice_ctx(df_daily_clean, prev_d, p_close, full_code=full_code, df_weekly_clean=df_weekly_clean)
                         hist_macro_slice = {"poc_10y_price": hist_daily_ctx["poc_10y_price"], "pos_10y_pct": hist_daily_ctx["pos_10y_pct"], "ma200w_dev_pct": hist_daily_ctx["ma200w_dev_pct"], "has_data": hist_daily_ctx["has_data"]}
-                        poc_hist_p, pos_hist_p, p_atr = float(hist_daily_ctx["poc_10y_price"]), float(hist_daily_ctx["pos_10y_pct"]), float(hist_daily_ctx["daily_atr14"])
+                        poc_hist_p, pos_hist_p, p_atr, hvn_wall_p = float(hist_daily_ctx["poc_10y_price"]), float(hist_daily_ctx["pos_10y_pct"]), float(hist_daily_ctx["daily_atr14"]), float(hist_daily_ctx.get("hvn_wall_price", 0.0))
                         rs_alpha_p, is_prev_trend_weak = float(daily_rs_alpha_map.get(prev_d, 0.0)), bool(hist_daily_ctx["prev_trend_weak"])
 
                         hc, ho, hh, hl, hv = all_c[:end_p], all_o[:end_p], all_h[:end_p], all_l[:end_p], all_v[:end_p]
                         hist_df_slice = df.iloc[:end_p]
                         ofi_p = compute_smoothed_clv_z(hc, hh, hl, hv, day_bars_count=len(prev_bars))
-                        qa_p = compute_advanced_quant_indicators(hc, ho, hh, hl, hv, daily_df=hist_daily_5m, df=hist_df_slice) if len(hc) >= 20 else {"rsi": 50.0, "vpin": 0.50, "eff_pct": 50, "surge_attention_score": 50, "rvol": 1.0, "upper_wick_pressure": 0.0, "lower_wick_support": 0.0}
+                        qa_p = compute_advanced_quant_indicators(hc, ho, hh, hl, hv, daily_df=hist_daily_5m, df=hist_df_slice) if len(hc) >= 20 else {"rsi": 50.0, "vpin": 0.50, "eff_pct": 50, "surge_attention_score": 50, "rvol": 1.0, "upper_wick_pressure": 0.0, "lower_wick_support": 0.0, "bb_exp_ratio": 1.0, "vol_spike_bull_pct": 0.0}
                         qm_p = compute_quantum_wave_metrics(hc, hh, hl, hv, o=ho, rsi_val=qa_p.get("rsi", 50.0), upper_wick_val=qa_p.get("upper_wick_pressure", 0.0)) if len(hc) >= 20 else {"q_tunnel": 50.0, "q_score": 50}
                         ms_p = compute_inst_microstructure(hc, hh, hl, hv) if len(hc) >= 20 else {"kyle_stealth": 50.0, "hurst": 0.50, "ms_score": 50}
                         r20_p = int(np.sum(np.diff(hc[-21:]) > 0)) if len(hc) >= 21 else 10
                         base_tech_p = float(np.clip((r20_p / 20.0) * 100.0 * 0.65 + (qa_p.get("eff_pct", 50) * 0.35), 10.0, 95.0))
                         inst_flow_p = float(np.clip(50.0 + ofi_p * 14.0 + (0.5 - qa_p.get("vpin", 0.50)) * 35.0, 10.0, 98.0))
-                        tot_win_p = float(np.clip((base_tech_p + qm_p.get("q_score", 50) * 0.85 + ms_p.get("ms_score", 50) * 0.80 + inst_flow_p * 0.75 + qa_p.get("surge_attention_score", 50) * 0.65) / 4.05, 5.0, 97.8))
+                        bb_exp_p = float(np.clip(35.0 + (float(qa_p.get("bb_exp_ratio", 1.0)) - 0.8) * 32.0, 10.0, 98.0))
+                        vol_spike_p = float(np.clip(30.0 + float(qa_p.get("vol_spike_bull_pct", 0.0)) * 2.5, 10.0, 98.0))
+                        core_vol_p = float(qm_p.get("q_score", 50)) * 0.60 + bb_exp_p * 0.40
+                        core_inst_p = float(ms_p.get("ms_score", 50)) * 0.52 + inst_flow_p * 0.48
+                        core_mom_p = float(qa_p.get("surge_attention_score", 50)) * 0.55 + vol_spike_p * 0.45
+
+                        w_sum_p = base_tech_p * 1.0
+                        w_tot_p = 1.0
+                        if use_vol:
+                            w_sum_p += core_vol_p * w_vol
+                            w_tot_p += w_vol
+                        if use_inst:
+                            w_sum_p += core_inst_p * w_inst
+                            w_tot_p += w_inst
+                        if use_mom:
+                            w_sum_p += core_mom_p * w_mom
+                            w_tot_p += w_mom
+                        tot_win_p = float(np.clip(w_sum_p / w_tot_p, 5.0, 97.8))
                         expect_pct_p = float(np.clip(tot_win_p * 0.85 + ofi_p * 3.8 + 6.0, 5.0, 99.5))
                         pgap_p = round(float(np.clip(ofi_p * 0.65, -2.5, 3.8)), 2); pest_p = round_to_tse_tick(p_close * (1.0 + pgap_p / 100.0), full_code, "nearest")
                         rsi_p, vpin_p, u_wick_p, l_wick_p = float(qa_p.get("rsi", 50.0)), float(qa_p.get("vpin", 0.50)), float(qa_p.get("upper_wick_pressure", 0.0)), float(qa_p.get("lower_wick_support", 0.0))
@@ -4945,6 +5022,8 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
                                 return (tp_px, sl_px, max(entry_px - tp_px, entry_px * 0.004), max(sl_px - entry_px, entry_px * 0.004))
                             tp_px = round_to_tse_tick(entry_px + tp_d, full_code, "ceil")
                             sl_px = round_to_tse_tick(max(entry_px - sl_d, entry_px * 0.5), full_code, "floor")
+                            if hvn_wall_p > entry_px and tp_px > hvn_wall_p:
+                                tp_px = round_to_tse_tick(max(hvn_wall_p * 0.995, entry_px + sl_d * 1.35), full_code, "floor")
                             if is_jp and p_close > 0:
                                 lim_up_5m = p_close + get_tse_price_limit(p_close)
                                 tk_5m = get_tse_tick_step(lim_up_5m, full_code)
@@ -5579,8 +5658,10 @@ def compute_sector_rotation_stats(all_stocks: list) -> list:
 def _build_news_by_code_map(news_list: list) -> dict:
     by_code = {}
     for n in (news_list or []):
-        rel_codes = n.get("detail", {}).get("related_codes", [])
-        for rc in rel_codes:
+        ext_codes = n.get("detail", {}).get("extracted_codes")
+        if not isinstance(ext_codes, list):
+            ext_codes = n.get("extracted_codes") or []
+        for rc in dict.fromkeys(ext_codes):
             by_code.setdefault(str(rc).strip().upper(), []).append(n)
     return by_code
 
@@ -5857,6 +5938,8 @@ def analyze_watchlist_portfolio_risk(wl_dict: dict) -> dict:
 
 def evaluate_journal_trade_audit(entry: dict, all_stocks: list) -> str:
     code = entry.get("code", "")
+    full_code_j = str(entry.get("full_code", code)).strip().upper()
+    is_jp_j = (".T" in full_code_j) or bool(re.match(r"^[0-9]{3}[0-9A-Z]$", full_code_j))
     name = entry.get("name", "")
     side = entry.get("side", "LONG")
     ep = float(entry.get("entry_price", 0.0))
@@ -5864,12 +5947,17 @@ def evaluate_journal_trade_audit(entry: dict, all_stocks: list) -> str:
     tp = float(entry.get("tp_price", ep))
     sl = float(entry.get("sl_price", ep))
     pnl_pct = float(entry.get("pnl_pct", 0.0))
-    pnl_yen = float(entry.get("pnl_yen", 0.0))
+    pnl_val = float(entry.get("pnl_yen", 0.0))
+    pnl_disp = f"{pnl_val:+,.0f}円" if is_jp_j else f"{'+' if pnl_val >= 0 else '-'}${abs(pnl_val):,.2f}"
+    ep_disp = fmt_px(ep, is_jp_j, full_code_j)
+    xp_disp = fmt_px(xp, is_jp_j, full_code_j)
+    tp_disp = fmt_px(tp, is_jp_j, full_code_j)
+    sl_disp = fmt_px(sl, is_jp_j, full_code_j)
     exec_g = str(entry.get("exec_grade", ""))
 
     if load_gemini_cfg().get("api_key"):
         sys_p = "あなたはプロクオンツ監査委員会のリスク管理官AEGISとリスク監査官SENTINELです。ユーザーのトレード記録を採点（100点満点）し、エントリー根拠・損切り規律・利確執行の良かった点と改善点を300〜450文字で具体的に講評してください。"
-        u_p = f"銘柄: {name}({code}) / 方向: {side} / 執行グレード: {exec_g} / 約定値: {ep} / 決済値: {xp} / 計画TP: {tp} / 計画SL: {sl} / 損益: {pnl_pct:+.2f}% ({pnl_yen:+,.0f}円)"
+        u_p = f"銘柄: {name}({code}) / 市場: {'日本株(JPY)' if is_jp_j else '米国株(USD)'} / 方向: {side} / 執行グレード: {exec_g} / 約定値: {ep_disp} / 決済値: {xp_disp} / 計画TP: {tp_disp} / 計画SL: {sl_disp} / 損益: {pnl_pct:+.2f}% ({pnl_disp})"
         res, _ = call_real_llm_api(sys_p, u_p, expect_json=False)
         if res and len(res.strip()) > 25:
             return re.sub(r'```[a-zA-Z]*|```', '', res).strip()
@@ -5882,7 +5970,7 @@ def evaluate_journal_trade_audit(entry: dict, all_stocks: list) -> str:
     score = int(np.clip(score, 20, 98))
     sl_comment = "⚠️ 計画逆指値（SL）を超えて損失が拡大しています。次回はエントリーと同時に自動逆指値注文を必ず設定してください。" if sl_breached else "✅ 計画逆指値（SL）の規律範囲内でリスクコントロールが機能しています。"
     tp_comment = "🎯 計画通りの利確執行で期待値通りのトレードです。+1.0Rでの半分利確習慣を継続しましょう。" if pnl_pct >= 1.0 else ("⚖️ 微損・微損撤退です。方向感が崩れた際の早期撤退は資金防衛として有効です。" if pnl_pct > -1.0 else "🛡️ 損切り後のドテンやリベンジ売買を控え、次のGrade-A銘柄を待ちましょう。")
-    return f"【AEGIS＆SENTINEL 規律監査スコア: {score}点】\n・損益結果: {pnl_pct:+.2f}%（{pnl_yen:+,.0f}円）｜執行グレード: {exec_g}\n・リスク監査(SENTINEL): {sl_comment}\n・資金管理講評(AEGIS): {tp_comment}"
+    return f"【AEGIS＆SENTINEL 規律監査スコア: {score}点】\n・損益結果: {pnl_pct:+.2f}%（{pnl_disp}）｜執行グレード: {exec_g}\n・リスク監査(SENTINEL): {sl_comment}\n・資金管理講評(AEGIS): {tp_comment}"
 
 def _cb_back_from_news_detail():
     prev_f = st.session_state.get("prev_focused_stock_item")
@@ -6052,12 +6140,12 @@ if active_nav_page == "NEWS_DETAIL":
         if txt_val:
             ai_slot.markdown(f'<div class="rank-card" style="border-left-color:#10b981;background:linear-gradient(180deg,#06281e 0%,#090d16 100%)!important;"><div style="font-size:14px;font-weight:800;color:#10b981;margin-bottom:6px;">🧠 Gemini AI生成・個別記事深掘り解析</div><div style="font-size:12.5px;line-height:1.75;color:#ecfdf5;">{html.escape(txt_val).replace(chr(10), "<br>")}</div></div>', unsafe_allow_html=True)
         else:
-            ai_slot.markdown('<div class="rank-card" style="border-left-color:#f59e0b;background:linear-gradient(180deg,#1e180b 0%,#090d16 100%)!important;"><div style="font-size:13px;font-weight:800;color:#fde047;margin-bottom:4px;">⚙️ やさしいセクター＆立ち回り解説モード（Gemini API未接続時）</div><div style="font-size:12px;line-height:1.65;color:#fef3c7;">現在Gemini APIキーが未接続のため、報道要点と初心者にもわかりやすい立ち回りガイドを表示しています。</div></div>', unsafe_allow_html=True)
+            ai_slot.markdown('<div class="rank-card" style="border-left-color:#f59e0b;background:linear-gradient(180deg,#1e180b 0%,#090d16 100%)!important;"><div style="font-size:13px;font-weight:800;color:#fde047;margin-bottom:4px;">⚙️ やさしいセクター＆立ち回り解説モード（Gemini API未接続時）</div><div style="font-size:12px;line-height:1.65;color:#fef3c7;">現在Gemini APIキーが未接続のため、報道要点と初心者にもわかりやすい立ち回りガイド（セクター共通フレームワーク）を表示しています。</div></div>', unsafe_allow_html=True)
 
     if cached_ai_txt or not has_gem_key:
         _render_ai_deep_slot(cached_ai_txt)
 
-    st.markdown(f'<div class="rank-card" style="border-left-color:#38bdf8;"><div style="font-size:14px;font-weight:800;color:#38bdf8;margin-bottom:6px;">📰 1. ニュース要点 ＆ やさしいテーマ背景</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{body_html}</div></div><div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;font-weight:800;color:#e9d5ff;margin-bottom:6px;">🧠 2. 資金が動く仕組み（セクター波及の流れ）</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{mech_html}</div><hr style="border-color:rgba(168,85,247,0.25);margin:12px 0;"><div style="font-size:13.5px;font-weight:800;color:#fde047;margin-bottom:6px;">⏱️ 3. 時間帯別の値動きイメージ</div><div style="font-size:12px;line-height:1.75;color:#cbd5e1;">{time_html}</div><hr style="border-color:rgba(239,68,68,0.25);margin:12px 0;"><div style="font-size:13px;font-weight:800;color:#f87171;margin-bottom:4px;">⚠️ 4. 高値掴み・ダマシ警戒リスク ＆ 撤退基準</div><div style="font-size:12px;line-height:1.7;color:#fca5a5;">{risk_html}</div><div class="beginner-action-box" style="margin-top:12px;"><b>⚡ 5. 【{st_short}】初心者向け・失敗しない注文と利確・損切りガイド</b><br>{act_html}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="rank-card" style="border-left-color:#38bdf8;"><div style="font-size:14px;font-weight:800;color:#38bdf8;margin-bottom:6px;">📰 1. ニュース要点 ＆ やさしいテーマ背景</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{body_html}</div></div><div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;font-weight:800;color:#e9d5ff;margin-bottom:6px;">🧠 2. 資金が動く仕組み（セクター波及の流れ）（セクター共通フレームワーク）</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{mech_html}</div><hr style="border-color:rgba(168,85,247,0.25);margin:12px 0;"><div style="font-size:13.5px;font-weight:800;color:#fde047;margin-bottom:6px;">⏱️ 3. 時間帯別の値動きイメージ（セクター共通フレームワーク）</div><div style="font-size:12px;line-height:1.75;color:#cbd5e1;">{time_html}</div><hr style="border-color:rgba(239,68,68,0.25);margin:12px 0;"><div style="font-size:13px;font-weight:800;color:#f87171;margin-bottom:4px;">⚠️ 4. 高値掴み・ダマシ警戒リスク ＆ 撤退基準（セクター共通フレームワーク）</div><div style="font-size:12px;line-height:1.7;color:#fca5a5;">{risk_html}</div><div class="beginner-action-box" style="margin-top:12px;"><b>⚡ 5. 【{st_short}】初心者向け・失敗しない注文と利確・損切りガイド（セクター共通フレームワーク）</b><br>{act_html}</div></div>', unsafe_allow_html=True)
     st.button("⬅️ 戻る", key="news_detail_back_bottom", use_container_width=True, type="primary", on_click=_cb_back_from_news_detail)
 
     if (not cached_ai_txt) and has_gem_key:
@@ -6387,23 +6475,38 @@ elif sel_cat == "📓 トレード日誌＆AI監査":
         st.info("まだトレード日誌に記録がありません。各銘柄カードの『📓 日誌』ボタンから登録してください。")
     else:
         closed_j = [x for x in j_entries if x.get("status") == "CLOSED"]
-        tot_j_pnl = sum(float(x.get("pnl_yen", 0.0)) for x in closed_j)
+        def _is_entry_jp(it_j: dict) -> bool:
+            fc_val = str(it_j.get("full_code") or it_j.get("code") or "").strip().upper()
+            return (".T" in fc_val) or bool(re.match(r"^[0-9]{3}[0-9A-Z]$", fc_val))
+        closed_jp = [x for x in closed_j if _is_entry_jp(x)]
+        closed_us = [x for x in closed_j if not _is_entry_jp(x)]
+        tot_jp_pnl = sum(float(x.get("pnl_yen", 0.0)) for x in closed_jp)
+        tot_us_pnl = sum(float(x.get("pnl_yen", 0.0)) for x in closed_us)
         win_j = sum(1 for x in closed_j if float(x.get("pnl_yen", 0.0)) > 0)
         wr_j = round((win_j / len(closed_j)) * 100.0, 1) if closed_j else 0.0
-        st.markdown(f'<div class="forward-verify-bar" style="margin-bottom:10px;"><span>📊 <b>日誌通算成績:</b> 全{len(j_entries)}件（決済済 {len(closed_j)}件 / 保有中 {len(j_entries)-len(closed_j)}件）</span><span>勝率: <b style="color:#fde047;">{wr_j:.1f}%</b> ｜ 確定純損益: <b style="color:{"#10b981" if tot_j_pnl>=0 else "#ef4444"};">{tot_j_pnl:+,.0f}円</b></span></div>', unsafe_allow_html=True)
+        us_pnl_fmt = f"{'+' if tot_us_pnl >= 0 else '-'}${abs(tot_us_pnl):,.2f}"
+        pnl_parts = []
+        if closed_jp or not closed_us:
+            pnl_parts.append(f'日本株 <b style="color:{"#10b981" if tot_jp_pnl>=0 else "#ef4444"};">{tot_jp_pnl:+,.0f}円</b>')
+        if closed_us or not closed_jp:
+            pnl_parts.append(f'米国株 <b style="color:{"#10b981" if tot_us_pnl>=0 else "#ef4444"};">{us_pnl_fmt}</b>')
+        pnl_summary_html = " ｜ ".join(pnl_parts)
+        st.markdown(f'<div class="forward-verify-bar" style="margin-bottom:10px;"><span>📊 <b>日誌通算成績:</b> 全{len(j_entries)}件（決済済 {len(closed_j)}件 / 保有中 {len(j_entries)-len(closed_j)}件）</span><span>勝率: <b style="color:#fde047;">{wr_j:.1f}%</b> ｜ 確定純損益: {pnl_summary_html}</span></div>', unsafe_allow_html=True)
 
         for idx_j, je in enumerate(j_entries):
             jid = je.get("id", str(idx_j))
-            fc_j = je.get("full_code", "")
-            is_jp_j = ".T" in fc_j
+            fc_j = str(je.get("full_code") or je.get("code") or "").strip().upper()
+            is_jp_j = _is_entry_jp(je)
             ep_j = float(je.get("entry_price", 0.0))
             tp_j = float(je.get("tp_price", 0.0))
             sl_j = float(je.get("sl_price", 0.0))
             sh_j = int(je.get("shares", 100))
             side_j = je.get("side", "LONG")
             st_j = je.get("status", "OPEN")
-            border_c = "#38bdf8" if st_j == "OPEN" else ("#10b981" if float(je.get("pnl_yen", 0.0)) >= 0 else "#ef4444")
-            status_badge = '<span class="pill-badge" style="background:rgba(56,189,248,0.22);border-color:#38bdf8;color:#7dd3fc;font-weight:800;">⏳ 保有中 (OPEN)</span>' if st_j == "OPEN" else f'<span class="pill-badge" style="background:{"rgba(16,185,129,0.22)" if float(je.get("pnl_yen",0))>=0 else "rgba(239,68,68,0.22)"};border-color:{border_c};color:#f8fafc;font-weight:800;">✅ 決済済 ({float(je.get("pnl_pct",0)):+.2f}% / {float(je.get("pnl_yen",0)):+,.0f}円)</span>'
+            pnl_v_j = float(je.get("pnl_yen", 0.0))
+            pnl_amt_disp = f"{pnl_v_j:+,.0f}円" if is_jp_j else f"{'+' if pnl_v_j >= 0 else '-'}${abs(pnl_v_j):,.2f}"
+            border_c = "#38bdf8" if st_j == "OPEN" else ("#10b981" if pnl_v_j >= 0 else "#ef4444")
+            status_badge = '<span class="pill-badge" style="background:rgba(56,189,248,0.22);border-color:#38bdf8;color:#7dd3fc;font-weight:800;">⏳ 保有中 (OPEN)</span>' if st_j == "OPEN" else f'<span class="pill-badge" style="background:{"rgba(16,185,129,0.22)" if pnl_v_j>=0 else "rgba(239,68,68,0.22)"};border-color:{border_c};color:#f8fafc;font-weight:800;">✅ 決済済 ({float(je.get("pnl_pct",0)):+.2f}% / {pnl_amt_disp})</span>'
 
             st.markdown(
                 f'<div class="rank-card" style="border-left-color:{border_c};margin-bottom:10px;">'
