@@ -273,7 +273,7 @@ UPCOMING_IPO_WATCHLIST = [
         "stage_label": "🟣 米国メガIPO監視候補（宇宙・衛星通信）",
         "name": "SpaceX / Starlink（スペースX・スターリンク）",
         "market": "米国NASDAQ / NYSE（マルチソース上場検証中）",
-        "listing_date_disp": "マルチソース上場実態検証中",
+        "listing_date_disp": "マルチソース上場検証中",
         "offer_info": "市場データ・SEC登録情報照合中",
         "bb_info": "SEC EDGAR / 市場取引ステータス照合中",
         "lead_underwriter": "モルガン・スタンレー / ゴールドマン・サックス（観測）",
@@ -485,7 +485,7 @@ def normalize_ohlcv_df(df_raw: pd.DataFrame, min_rows: int = 5):
     df["_trade_date"] = idx.strftime("%Y-%m-%d"); df["_bar_hm"] = idx.strftime("%H:%M")
     return df
 
-_DB_LOCK, _MEM_CACHE = threading.RLock(), {}
+_DB_LOCK, _MEM_CACHE, _MEM_HASH_CACHE = threading.RLock(), {}, {}
 if "client_uuid" not in st.session_state: st.session_state["client_uuid"] = str(uuid.uuid4())
 
 @contextmanager
@@ -513,8 +513,10 @@ def db_get(key: str, default_val):
         if sb_ok:
             _MEM_CACHE[key] = copy.deepcopy(sb_val)
             try:
+                serialized_sb = json.dumps(sb_val, ensure_ascii=False)
+                _MEM_HASH_CACHE[key] = hashlib.md5(serialized_sb.encode("utf-8")).hexdigest()
                 with get_db_cursor() as cur:
-                    cur.execute("INSERT INTO kv_store (key, val, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated_at=CURRENT_TIMESTAMP;", (key, json.dumps(sb_val, ensure_ascii=False)))
+                    cur.execute("INSERT INTO kv_store (key, val, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated_at=CURRENT_TIMESTAMP;", (key, serialized_sb))
             except Exception: pass
             return copy.deepcopy(sb_val)
         try:
@@ -524,6 +526,7 @@ def db_get(key: str, default_val):
                 if row:
                     val = json.loads(row[0])
                     _MEM_CACHE[key] = copy.deepcopy(val)
+                    _MEM_HASH_CACHE[key] = hashlib.md5(str(row[0]).encode("utf-8")).hexdigest()
                     if _get_supabase_config()[0]:
                         threading.Thread(target=_supabase_rest_upsert, args=(key, val), daemon=True).start()
                     return copy.deepcopy(val)
@@ -533,14 +536,26 @@ def db_get(key: str, default_val):
 
 def db_set(key: str, val):
     with _DB_LOCK:
-        _MEM_CACHE[key] = copy.deepcopy(val)
         try:
+            serialized = json.dumps(val, ensure_ascii=False)
+            new_hash = hashlib.md5(serialized.encode("utf-8")).hexdigest()
+        except Exception:
+            serialized = None
+            new_hash = ""
+        if new_hash and _MEM_HASH_CACHE.get(key) == new_hash:
+            _MEM_CACHE[key] = copy.deepcopy(val)
+            return
+        _MEM_CACHE[key] = copy.deepcopy(val)
+        if new_hash:
+            _MEM_HASH_CACHE[key] = new_hash
+        try:
+            payload_str = serialized if serialized is not None else json.dumps(val, ensure_ascii=False)
             with get_db_cursor() as cur:
-                cur.execute("INSERT INTO kv_store (key, val, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated_at=CURRENT_TIMESTAMP;", (key, json.dumps(val, ensure_ascii=False)))
+                cur.execute("INSERT INTO kv_store (key, val, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated_at=CURRENT_TIMESTAMP;", (key, payload_str))
         except Exception as e: record_system_error(f"db_set:{key}", e)
         try:
             if _get_supabase_config()[0]:
-                threading.Thread(target=_supabase_rest_upsert, args=(key, val), daemon=True).start()
+                threading.Thread(target=_supabase_rest_upsert, args=(key, copy.deepcopy(val)), daemon=True).start()
         except Exception: pass
 
 def _derive_crypto_key(salt: bytes) -> bytes: return hashlib.pbkdf2_hmac("sha256", SECRET_KEY.encode(), salt, 60000, 32)
@@ -881,7 +896,10 @@ def call_real_llm_api(sys_p: str, user_p: str, expect_json: bool = False) -> tup
             try:
                 with urllib.request.urlopen(req, context=ctx, timeout=12.0) as r:
                     out_txt = _extract_gemini_response_text(json.loads(r.read().decode("utf-8")))
-                    if out_txt: st.session_state["last_working_gemini_model"] = cand; return out_txt, cand
+                    if out_txt:
+                        try: st.session_state["last_working_gemini_model"] = cand
+                        except Exception: pass
+                        return out_txt, cand
             except urllib.error.HTTPError as he:
                 record_system_error("call_real_llm_api:http", he, f"Model: {cand}, Auth: {auth_label}, Code: {he.code}")
                 if he.code == 404: break
@@ -959,8 +977,9 @@ div[data-testid="stElementContainer"]:has(div.top-nav-marker),div.element-contai
 .fixed-top-nav-bar button:hover{background:rgba(15,23,42,0.98)!important;border-color:#38bdf8!important;color:#ffffff!important;box-shadow:0 4px 16px rgba(56,189,248,0.35)!important;}
 .fixed-top-nav-bar button:active{background:rgba(56,189,248,0.22)!important;border-color:#fde047!important;color:#fde047!important;transform:scale(0.96)!important;}
 div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker),div.element-container:has(div.top-breaking-news-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;}
-div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:1fr auto auto!important;gap:4px!important;margin-top:2px!important;margin-bottom:6px!important;align-items:stretch!important;}
-div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child button{
+div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stElementContainer"] button,
+div.element-container:has(div.top-breaking-news-marker) + div.element-container button{
+    width:100%!important;
     background:linear-gradient(90deg,rgba(127,29,29,0.95) 0%,rgba(185,28,28,0.95) 55%,rgba(127,29,29,0.95) 100%)!important;
     color:#ffffff!important;
     font-weight:800!important;
@@ -968,9 +987,11 @@ div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[da
     border:1px solid rgba(252,165,165,0.75)!important;
     border-left:4px solid #fde047!important;
     border-radius:7px!important;
-    padding:4px 8px!important;
+    padding:4px 10px!important;
     min-height:30px!important;
     height:30px!important;
+    margin-top:2px!important;
+    margin-bottom:6px!important;
     box-shadow:0 3px 12px rgba(220,38,38,0.35)!important;
     text-align:left!important;
     justify-content:flex-start!important;
@@ -978,28 +999,10 @@ div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[da
     white-space:nowrap!important;
     text-overflow:ellipsis!important;
 }
-div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child button:hover{
+div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stElementContainer"] button:hover,
+div.element-container:has(div.top-breaking-news-marker) + div.element-container button:hover{
     border-color:#ffffff!important;
     filter:brightness(1.1)!important;
-}
-div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) button,
-div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(3) button{
-    background:rgba(15,23,42,0.94)!important;
-    color:#fca5a5!important;
-    font-weight:800!important;
-    font-size:10.5px!important;
-    border:1px solid rgba(239,68,68,0.52)!important;
-    border-radius:7px!important;
-    padding:4px 8px!important;
-    min-height:30px!important;
-    height:30px!important;
-    white-space:nowrap!important;
-}
-div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) button:hover,
-div[data-testid="stElementContainer"]:has(div.top-breaking-news-marker) + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(3) button:hover{
-    border-color:#f87171!important;
-    color:#ffffff!important;
-    background:rgba(127,29,29,0.45)!important;
 }
 div[data-testid="stElementContainer"]:has(div.news-banner-btn-marker),div.element-container:has(div.news-banner-btn-marker){display:none!important;height:0!important;margin:0!important;padding:0!important;}
 div[data-testid="stElementContainer"]:has(div.news-banner-btn-marker) + div[data-testid="stElementContainer"] button,
@@ -2019,13 +2022,55 @@ def analyze_news_impact_and_links(title: str, cat: str, summary_text: str = "") 
     sector_ref_codes = [c for c in base_codes if c not in dynamic_codes]
     return {"sector_focus": sf, "news_body": bg_body, "mechanism": mech, "timeline": timeline, "risk_note": risk_note, "extracted_codes": dynamic_codes, "sector_ref_codes": sector_ref_codes, "related_codes": list(dict.fromkeys(dynamic_codes + base_codes))[:8], "action_guide": action_guide}
 
+_BG_NEWS_AI_LOCK = threading.RLock()
+_BG_NEWS_AI_CACHE = {}
+
+def get_cached_ai_news_deep_report(news_item: dict, style_name: str) -> str:
+    if not isinstance(news_item, dict):
+        return ""
+    ck = f"{news_item.get('id', '')}_{style_name}"
+    with _BG_NEWS_AI_LOCK:
+        if ck in _BG_NEWS_AI_CACHE:
+            return _BG_NEWS_AI_CACHE[ck]
+    try:
+        sc = st.session_state.get("news_ai_deep_cache")
+        if isinstance(sc, dict) and ck in sc:
+            return sc[ck]
+    except Exception:
+        pass
+    return ""
+
 def generate_ai_news_deep_report(news_item: dict, style_name: str) -> str:
-    ck = f"{news_item.get('id', '')}_{style_name}"; cache = st.session_state.setdefault("news_ai_deep_cache", {})
-    if ck in cache: return cache[ck]
+    if not isinstance(news_item, dict):
+        return ""
+    ck = f"{news_item.get('id', '')}_{style_name}"
+    with _BG_NEWS_AI_LOCK:
+        if ck in _BG_NEWS_AI_CACHE:
+            return _BG_NEWS_AI_CACHE[ck]
+    try:
+        cache = st.session_state.setdefault("news_ai_deep_cache", {})
+        if ck in cache:
+            with _BG_NEWS_AI_LOCK:
+                _BG_NEWS_AI_CACHE[ck] = cache[ck]
+            return cache[ck]
+    except Exception:
+        cache = None
     if not load_gemini_cfg().get("api_key"): return ""
     sys_p = "あなたは初心者にもわかりやすく丁寧に教える投資ストラテジストです。速報ニュースについて『ニュースの背景』『注目銘柄への影響』『失敗しない買い方・利確・損切りの注意点』を400〜600文字の優しい日本語で出力してください（難解な専門略語は使わないこと）。"
     res, _ = call_real_llm_api(sys_p, f"見出し: {news_item.get('title','')}\n概要: {re.sub(r'<[^>]+>', '', news_item.get('summary','')).strip()}\nスタイル: {style_name}", expect_json=False)
-    if res and len(res.strip()) > 30: cache[ck] = re.sub(r'```[a-zA-Z]*|```', '', res).strip(); return cache[ck]
+    if res and len(res.strip()) > 30:
+        clean_out = re.sub(r'```[a-zA-Z]*|```', '', res).strip()
+        with _BG_NEWS_AI_LOCK:
+            _BG_NEWS_AI_CACHE[ck] = clean_out
+            if len(_BG_NEWS_AI_CACHE) > 80:
+                oldest_k = next(iter(_BG_NEWS_AI_CACHE))
+                del _BG_NEWS_AI_CACHE[oldest_k]
+        if isinstance(cache, dict):
+            try:
+                cache[ck] = clean_out
+            except Exception:
+                pass
+        return clean_out
     return ""
 
 NEWS_IMPACT_KEYWORDS = ["ストップ高", "上方修正", "最高益", "増配", "自社株買い", "TOB", "提携", "急騰", "防衛", "半導体", "NVIDIA", "AI", "SURGE", "BEAT", "ANTHROPIC", "OPENAI", "開示", "決算"]
@@ -2195,8 +2240,7 @@ def _collect_impact_news_with_horizon(max_age_hours: float) -> list:
             except Exception as e: record_system_error("fetch_global_impact_news:futures", e)
     return out_all
 
-@st.cache_data(ttl=45)
-def fetch_global_impact_news() -> list:
+def _build_global_impact_news_fresh() -> list:
     out_all = _collect_impact_news_with_horizon(18.0)
     if len(out_all) < 3:
         seen_titles = {re.sub(r"\s+", "", x["title"]) for x in out_all}
@@ -2219,6 +2263,70 @@ def fetch_global_impact_news() -> list:
         it["detail"] = analyze_news_impact_and_links(it["title"], it["cat"], it.get("summary", ""))
     out_all.sort(key=lambda x: (1 if float(x.get("age_hours", 99.0)) <= 1.0 else 0, x.get("impact_score", 60), -float(x.get("age_hours", 99.0))), reverse=True)
     return out_all[:12]
+
+def _compute_news_list_signature(items: list) -> str:
+    if not items:
+        return "empty"
+    sig_parts = [f"{x.get('id','')}:{x.get('impact_score',0)}:{int(bool(x.get('is_breaking')))}" for x in items[:12]]
+    return hashlib.md5("|".join(sig_parts).encode("utf-8")).hexdigest()[:12]
+
+@st.cache_resource
+def _get_bg_news_refresher():
+    state = {"lock": threading.RLock(), "items": None, "news_sig": "init", "updated_ts": 0.0, "updated_hm": "--:--", "started": False}
+    def _refresh_once():
+        fresh_items = _build_global_impact_news_fresh()
+        sig = _compute_news_list_signature(fresh_items)
+        now_ts = time.time()
+        now_hm = now_jst().strftime("%H:%M")
+        with state["lock"]:
+            state["items"] = fresh_items
+            state["news_sig"] = sig
+            state["updated_ts"] = now_ts
+            state["updated_hm"] = now_hm
+        if fresh_items and load_gemini_cfg().get("api_key"):
+            for top_it in fresh_items[:2]:
+                try:
+                    generate_ai_news_deep_report(top_it, "デイトレード")
+                except Exception:
+                    pass
+    def _news_daemon_loop():
+        while True:
+            time.sleep(45.0)
+            try:
+                _refresh_once()
+            except Exception as e:
+                record_system_error("_bg_news_refresher:loop", e)
+    with state["lock"]:
+        if not state["started"]:
+            t = threading.Thread(target=_news_daemon_loop, name="YamashishiBgNewsRefresher", daemon=True)
+            t.start()
+            state["started"] = True
+    return state
+
+def get_bg_news_snapshot(force_sync_if_empty: bool = True) -> dict:
+    bg = _get_bg_news_refresher()
+    now_ts = time.time()
+    with bg["lock"]:
+        items = bg.get("items")
+        upd_ts = float(bg.get("updated_ts", 0.0))
+        if isinstance(items, list) and (now_ts - upd_ts) <= 120.0:
+            return {"items": items, "news_sig": str(bg.get("news_sig", "init")), "updated_ts": upd_ts, "updated_hm": str(bg.get("updated_hm", "--:--"))}
+    if not force_sync_if_empty:
+        with bg["lock"]:
+            return {"items": list(bg.get("items") or []), "news_sig": str(bg.get("news_sig", "init")), "updated_ts": float(bg.get("updated_ts", 0.0)), "updated_hm": str(bg.get("updated_hm", "--:--"))}
+    fresh_items = _build_global_impact_news_fresh()
+    sig = _compute_news_list_signature(fresh_items)
+    upd_now = time.time()
+    upd_hm = now_jst().strftime("%H:%M")
+    with bg["lock"]:
+        bg["items"] = fresh_items
+        bg["news_sig"] = sig
+        bg["updated_ts"] = upd_now
+        bg["updated_hm"] = upd_hm
+    return {"items": fresh_items, "news_sig": sig, "updated_ts": upd_now, "updated_hm": upd_hm}
+
+def fetch_global_impact_news() -> list:
+    return get_bg_news_snapshot(force_sync_if_empty=True).get("items", [])
 
 def get_cached_impact_news() -> list:
     if st.session_state.get("navigation_page") in ("MANUAL", "ADMIN", "DEEP_DIVE"):
@@ -3813,6 +3921,13 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     orig_src_txt = str(r_m.get("origin_source", "")).strip()
     new_badge = f'<span class="pill-badge" style="background:rgba(16,185,129,0.2);border-color:#10b981;color:#6ee7b7;font-weight:800;">🆕 {html.escape(orig_src_txt) if orig_src_txt else "NEW"}</span>' if r_m.get("is_new_challenger") else ""
 
+    news_cat_adj = float(r_m.get("news_catalyst_adj", 0.0) or 0.0)
+    news_cat_badge = ""
+    if news_cat_adj > 0.0:
+        news_cat_badge = f'<span class="pill-badge" style="background:rgba(16,185,129,0.24);border-color:#34d399;color:#fde047;font-weight:900;">⚡速報反応 +{news_cat_adj:.1f}pt</span>'
+    elif news_cat_adj < 0.0:
+        news_cat_badge = f'<span class="pill-badge" style="background:rgba(239,68,68,0.26);border-color:#ef4444;color:#fca5a5;font-weight:900;">⚠️悪材料反応 {news_cat_adj:.1f}pt</span>'
+
     warn_badges = ""
     earnings_days = r_m.get("earnings_days_left")
     if earnings_days is not None and 0 <= int(earnings_days) <= 3:
@@ -3911,6 +4026,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     lim_up_s = fmt_px(float(r_m.get("limit_up_px", 0.0)), is_jp, fc_card) if (is_jp and float(r_m.get("limit_up_px", 0.0)) > 0) else "制限なし"
     ev_r_disp = float(r_m.get("ev_r", 0.0))
     cal_exp_disp = float(r_m.get("calibrated_expect_pct", r_m.get("expect_pct", 50.0)))
+    news_cat_lbl = str(r_m.get("news_catalyst_label", ""))
     session_reg = get_tse_session_regime()
     dd_drawer_html = ""
     if has_dd:
@@ -3921,6 +4037,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
             f'想定始値={fmt_px(float(dd_i.get("est_open_px",cv)), is_jp, fc_card)} ｜ 押目={html.escape(dd_i.get("dip_time","-"))}({fmt_px(float(dd_i.get("dip_px",cv)), is_jp, fc_card)}) ｜ 高値={html.escape(dd_i.get("peak_time","-"))}({fmt_px(float(dd_i.get("peak_px",cv)), is_jp, fc_card)}) ｜ 大引け予測={fmt_px(float(dd_i.get("est_close_px",cv)), is_jp, fc_card)} ({float(dd_i.get("est_close_chg",0)):+.2f}%) ｜ 30分3分岐=▲{s3.get("p_up",33)}%/▶{s3.get("p_flat",34)}%/▼{s3.get("p_down",33)}% ｜ CVD={html.escape(dd_i.get("cvd_label","-"))}'
             f'</div>'
         )
+    news_drawer_html = f'<div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);border-radius:6px;padding:5px 8px;margin-bottom:6px;color:#d1fae5;">📰 <b>速報カタリスト連動:</b> {html.escape(news_cat_lbl)}</div>' if news_cat_lbl else ""
 
     intraday_svg_block = build_intraday_svg_chart(intraday_df, r_m) if (is_focused or is_custom) and intraday_df is not None else ""
 
@@ -3931,7 +4048,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
     st.markdown(
         f'<div class="{card_cls}">'
         f'<div class="card-top-meta">'
-        f'<div>{rk_h}{side_badge}{exec_badge_html}{dd_badge_html}{extra_origin_badge}{new_badge}{warn_badges}</div>'
+        f'<div>{rk_h}{side_badge}{exec_badge_html}{dd_badge_html}{news_cat_badge}{extra_origin_badge}{new_badge}{warn_badges}</div>'
         f'<span style="font-size:10px;color:#94a3b8;font-family:\'JetBrains Mono\',monospace;">{html.escape(r_m["genre"])} ｜ {html.escape(st_info["tactic_type"])}</span>'
         f'</div>'
         f'<div class="card-hero-row">'
@@ -3962,7 +4079,7 @@ def render_card(r, is_custom=False, rank=None, kp="card", is_focused=False, extr
         f'</div>'
         f'<details class="quant-detail-drawer"><summary>📂 3階層MTF・東証プロファイル・全クオンツ指標を展開</summary>'
         f'<div style="font-size:11px;color:#cbd5e1;margin-top:6px;line-height:1.6;">'
-        f'{dd_drawer_html}'
+        f'{dd_drawer_html}{news_drawer_html}'
         f'<b>■ 10年週足大局:</b> {html.escape(str(m10.get("regime_10y_label", "")))} (スコア{int(m10.get("long_10y_score", 50))}点 / CAGR={m10.get("cagr_10y", 0.0):+.1f}% / 10年POC={html.escape(str(m10.get("poc_10y_str", "-")))})<br>'
         f'<b>■ 日足2年中期:</b> {html.escape(str(d2y.get("regime_1d_label", "")))} ({html.escape(str(d2y.get("ma_align_label", "")))} / {html.escape(vp_struct_lbl)} / MA25乖離={d2y.get("ma25_dev_pct", 0.0):+.1f}% / ATR14={html.escape(str(d2y.get("daily_atr14_str", "-")))})<br>'
         f'<b>■ 執行プロファイル:</b> {html.escape(exec_grade)} ｜ {html.escape(str(r_m.get("combat_tier","")))} (コスト{r_m.get("combat_cost_pct",0.08):.2f}%) ｜ {html.escape(session_reg["label"])}<br>'
@@ -4187,8 +4304,7 @@ def fetch_real_market_buzz(tickers_tuple: tuple) -> dict:
                 for it in tickers_tuple: buzz_map.setdefault(it[0], {"news_hits": 0, "headlines": []})
     return buzz_map
 
-@st.cache_data(ttl=120)
-def fetch_macro():
+def _fetch_macro_sync() -> dict:
     tks = {"sp500": ("^GSPC", "🇺🇸 S&P500"), "sox": ("^SOX", "💽 米SOX"), "usdjpy": ("JPY=X", "💴 ドル円"), "nk_fut": ("NIY=F", "🇯🇵 日経先物"), "vix": ("^VIX", "⚡ VIX")}
     res = {}
     try:
@@ -4202,6 +4318,39 @@ def fetch_macro():
         record_system_error("fetch_macro", e)
         for k, (_, lbl) in tks.items(): res[k] = {"price": 0.0, "diff": 0.0, "label": lbl}
     return res
+
+@st.cache_resource
+def _get_bg_macro_refresher():
+    state = {"lock": threading.RLock(), "data": None, "updated_ts": 0.0, "started": False}
+    def _macro_daemon_loop():
+        while True:
+            time.sleep(90.0)
+            try:
+                m_data = _fetch_macro_sync()
+                with state["lock"]:
+                    state["data"] = m_data
+                    state["updated_ts"] = time.time()
+            except Exception as e:
+                record_system_error("_bg_macro_refresher:loop", e)
+    with state["lock"]:
+        if not state["started"]:
+            t = threading.Thread(target=_macro_daemon_loop, name="YamashishiBgMacroRefresher", daemon=True)
+            t.start()
+            state["started"] = True
+    return state
+
+def fetch_macro() -> dict:
+    bg_m = _get_bg_macro_refresher()
+    now_ts = time.time()
+    with bg_m["lock"]:
+        d_cached = bg_m.get("data")
+        if isinstance(d_cached, dict) and d_cached and (now_ts - float(bg_m.get("updated_ts", 0.0))) <= 180.0:
+            return copy.deepcopy(d_cached)
+    fresh_m = _fetch_macro_sync()
+    with bg_m["lock"]:
+        bg_m["data"] = copy.deepcopy(fresh_m)
+        bg_m["updated_ts"] = time.time()
+    return fresh_m
 
 def compute_smoothed_clv_z(c: np.ndarray, h: np.ndarray, l: np.ndarray, v: np.ndarray, day_bars_count: int = 0) -> float:
     if len(c) < 10: return 0.0
@@ -5050,7 +5199,7 @@ def record_and_verify_daily_Forward_test(df: pd.DataFrame, full_code: str, strat
     latest_result = traded_rows[0] if traded_rows else (all_verified[0] if all_verified else {"date": today_str, "entry_hm": "-", "plan_short": f"{tactic_type}({entry_mode[:10]})", "entry_str": fmt_px(plan_entry_price, is_jp, full_code), "exit_str": "-", "outcome": "⏳ 保有中・確定決済待機", "result_category": "NOTRADE", "is_win": None, "return_pct": 0.0, "r_mult": 0.0, "profit_val": 0.0, "hold_days": 1})
     return {"win_count": win_count, "lose_count": lose_count, "scratch_count": scratch_count, "total_days": total_days, "notrade_count": notrade_count, "verified_span_days": len(all_verified), "actual_win_rate": actual_win_rate, "profit_factor": profit_factor, "sqn": sqn, "avg_r": avg_r, "avg_win_r": avg_win_r, "avg_lose_r": avg_lose_r, "max_dd_pct": max_dd_pct, "total_profit_yen": total_profit_yen, "latest_result": latest_result, "history_rows": all_verified}
 
-def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vol=True, core_inst=True, core_mom=True, total_capital=1000000, risk_tolerance_pct=2.0, shared_ledger=None, save_db=True, macro_10y_map=None, daily_2y_map=None, bench_30m_ret=None, earnings_days_left=None):
+def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vol=True, core_inst=True, core_mom=True, total_capital=1000000, risk_tolerance_pct=2.0, shared_ledger=None, save_db=True, macro_10y_map=None, daily_2y_map=None, bench_30m_ret=None, earnings_days_left=None, news_by_code: dict = None):
     try:
         df = normalize_ohlcv_df(df_raw, min_rows=25)
         if df is None: return None
@@ -5131,7 +5280,27 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
             rem_up_pct = ((limit_up_px - cv) / max(cv, 1e-4)) * 100.0
             limit_up_tight = bool(rem_up_pct < 1.5)
 
-        news_hits = int((buzz_map or {}).get(code, {}).get("news_hits", 0))
+        code_u = str(code).strip().upper()
+        matched_news_list = (news_by_code.get(code_u, []) if isinstance(news_by_code, dict) else [])
+        rel_news_obj = matched_news_list[0] if matched_news_list else None
+        rel_news_title = rel_news_obj["title"] if rel_news_obj else ""
+
+        news_catalyst_adj = 0.0
+        news_catalyst_label = ""
+        is_bearish_news = False
+        if rel_news_obj:
+            imp_sc = float(rel_news_obj.get("impact_score", 65))
+            is_brk_n = bool(rel_news_obj.get("is_breaking", False))
+            is_crs_n = bool(rel_news_obj.get("cross_verified", False))
+            is_bearish_news = any(bw in rel_news_title for bw in BEARISH_NEWS_KEYWORDS)
+            if is_bearish_news:
+                news_catalyst_adj = -min(12.0, 5.0 + max(0.0, imp_sc - 60.0) * 0.15 + (2.5 if is_brk_n else 0.0))
+                news_catalyst_label = f"⚠️ 悪材料速報反応 ({news_catalyst_adj:.1f}pt): {rel_news_title[:28]}"
+            else:
+                news_catalyst_adj = min(6.5, 1.5 + max(0.0, imp_sc - 65.0) * 0.10 + (2.0 if is_brk_n else 0.0) + (1.0 if is_crs_n else 0.0))
+                news_catalyst_label = f"⚡ 好材料速報反応 (+{news_catalyst_adj:.1f}pt): {rel_news_title[:28]}"
+
+        news_hits = max(int((buzz_map or {}).get(code, {}).get("news_hits", 0)), len(matched_news_list))
         q_adv = compute_advanced_quant_indicators(c, o, h, l, v, daily_df=daily_df_5m, news_hits=news_hits, df=df, real_daily_yz_vol=(float(daily_2y["daily_yz_vol"]) if daily_2y.get("has_data") else None))
         qm = compute_quantum_wave_metrics(c, h, l, v, o=o, rsi_val=q_adv["rsi"], upper_wick_val=q_adv["upper_wick_pressure"])
         ms = compute_inst_microstructure(c, h, l, v)
@@ -5181,7 +5350,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
         tot_win = float(np.clip((weighted_sum / total_weight) + style_fit_bonus * 0.65, 5.0, 97.8))
         kelly_pct = round(float(np.clip(max(0.0, (tot_win / 100.0) - ((1.0 - (tot_win / 100.0)) / max(q_adv["payoff"], 0.1))) * 100.0, 0.0, 35.0)), 1)
         rvol_penalty = -4.5 if q_adv["rvol"] < combat_prof["min_rvol_req"] else 0.0
-        raw_expect_pct = float(np.clip(tot_win * 0.85 + ofi_z * 3.8 + m_bias * 1.8 + style_fit_bonus * 0.45 + vwap_band_adj + rvol_penalty + 6.0, 5.0, 99.5))
+        raw_expect_pct = float(np.clip(tot_win * 0.85 + ofi_z * 3.8 + m_bias * 1.8 + style_fit_bonus * 0.45 + vwap_band_adj + rvol_penalty + news_catalyst_adj + 6.0, 5.0, 99.5))
 
         if core_vol and q_adv["bb_exp_ratio"] >= 1.35 and not (q_adv["rsi"] > 75.0 and q_adv["upper_wick_pressure"] > 45.0): qm["q_state"] = f"🧠 BBスクイーズ拡大初動 ({q_adv['bb_exp_ratio']}x)"
         if is_30m_rs_leader: ms["ms_regime"] = f"🏛️ 機関資金・30分RS逆行高リーダー ({intraday_rs_30m:+.2f}%)"
@@ -5194,7 +5363,8 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
             pest = round_to_tse_tick(today_open_px, code, "nearest")
             pts_label_title = "📊 当日確定始値(Open) ＆ 実測寄付きギャップ率（※場中実測値）"
         else:
-            pgap = round(float(np.clip(m_bias * 0.75 + ofi_z * 0.25, -3.5, 4.5)), 2)
+            news_gap_bias = float(np.clip(news_catalyst_adj * 0.12, -1.2, 0.8))
+            pgap = round(float(np.clip(m_bias * 0.75 + ofi_z * 0.25 + news_gap_bias, -3.5, 4.5)), 2)
             pest = round_to_tse_tick(prev_day_close * (1.0 + pgap / 100.0), code, "nearest")
             pts_label_title = "📊 理論寄付き試算値（前日終値×マクロ・資金フロー推計）"
         vwap_rounded = round_to_tse_tick(vwap_today, code, "nearest")
@@ -5206,8 +5376,6 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
 
         ma25_now, ma75_now = float(daily_2y.get("ma25", 0.0)), float(daily_2y.get("ma75", 0.0))
         prev_trend_weak = (cv < ma25_now * 0.992) if ma25_now > 0 else ((cv < float(np.mean(daily_df_5m["Close"].values[-5:].astype(float))) * 0.992) if len(daily_df_5m) >= 5 else False)
-        rel_news_obj = next((n for n in get_cached_impact_news() if code in n.get("detail", {}).get("related_codes", [])), None)
-        rel_news_title = rel_news_obj["title"] if rel_news_obj else ""
 
         u_wick_now, l_wick_now = float(q_adv.get("upper_wick_pressure", 0.0)), float(q_adv.get("lower_wick_support", 0.0))
         bull_edge, bear_edge = compute_directional_edges(ofi_z, q_adv["rsi"], prev_trend_weak, float(ms.get("hurst", 0.50)), u_wick_now, l_wick_now, rel_news_title=rel_news_title, rs_alpha=rs_alpha, below_vwap=(cv < vwap_today), daily_ctx=daily_2y, macro_10y=macro_10y, cv=cv)
@@ -5294,7 +5462,8 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
             short_base_tech = float(np.clip(((20 - r20) / 20.0) * 100.0 * 0.65 + (q_adv["eff_pct"] * 0.35), 10.0, 95.0))
             short_inst_flow = float(np.clip(50.0 + (-ofi_z) * 14.0 + (q_adv["vpin"] - 0.5) * 35.0, 10.0, 98.0))
             short_tot_win = float(np.clip((short_base_tech + qm["q_score"] * 0.80 + ms["ms_score"] * 0.80 + short_inst_flow * 0.80 + q_adv["surge_attention_score"] * 0.65) / 4.05, 10.0, 97.8))
-            pre_bayes_expect = float(np.clip(short_tot_win * 0.82 + bear_edge * 0.42 + u_wick_now * 0.12 + (-m_bias) * 1.8 + style_fit_bonus * 0.40 + rvol_penalty + 4.0 + ft_bonus, 5.0, 98.5))
+            short_news_adj = abs(news_catalyst_adj) * 0.65 if is_bearish_news else (-news_catalyst_adj * 0.50)
+            pre_bayes_expect = float(np.clip(short_tot_win * 0.82 + bear_edge * 0.42 + u_wick_now * 0.12 + (-m_bias) * 1.8 + style_fit_bonus * 0.40 + rvol_penalty + short_news_adj + 4.0 + ft_bonus, 5.0, 98.5))
         else:
             pre_bayes_expect = float(np.clip(raw_expect_pct + ft_bonus, 5.0, 98.5))
 
@@ -5310,7 +5479,7 @@ def analyze_df(df_raw, code, name, theme, genre, macro, buzz_map, style, core_vo
 
         macro_10y_serializable = {k: v for k, v in macro_10y.items() if k != "df_weekly_clean"}
         daily_2y_serializable = {k: v for k, v in daily_2y.items() if k not in ("df_daily_clean", "daily_rs_alpha_map")}
-        return {"full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, "combat_tier": combat_prof["tier_class"], "combat_cost_pct": round(combat_prof["cost_rate"] * 100, 2), "exec_grade": exec_grade, "exec_score": exec_score, "exec_detail": exec_detail, "earnings_days_left": earnings_days_left, "rs_alpha": rs_alpha, "intraday_rs_30m": intraday_rs_30m, "or15_low": or15_low_today, "or15_high": or15_high_today, "pdh": pdh_val, "pdl": pdl_val, "ob_support_px": ob_support_px, "ob_high_px": ob_high_px, "limit_up_px": limit_up_px, "limit_down_px": limit_down_px, "limit_up_tight": limit_up_tight, "vwap_p1": vwap_p1, "vwap_p2": vwap_p2, "vwap_m1": vwap_m1, "vwap_m2": vwap_m2, "vwap_over_2sigma": vwap_over_2sigma, "vwap_slope_up": vwap_slope_up, "last_bar_vol_spike": last_bar_vol_spike, "ev_r": ev_r, "calibrated_expect_pct": calibrated_expect_pct, "style_fit_bonus": round(style_fit_bonus, 1), "macro_10y": macro_10y_serializable, "daily_2y": daily_2y_serializable, "price": fmt_px(cv, is_jp, code), "raw_close": cv, "raw_tp": tpv, "raw_sl": slv, "raw_vwap": vwap_rounded, "tp_price": fmt_px(tpv, is_jp, code), "tp_pct": tp_pct_disp, "sl_price": fmt_px(slv, is_jp, code), "sl_pct": sl_pct_disp, "vwap_price": fmt_px(vwap_rounded, is_jp, code), "inst_score": int(np.clip(round((ms["ms_score"] + inst_flow_score) * 0.5), 10, 99)), "vpin": q_adv["vpin"], "ofi_z": round(ofi_z, 2), "yz_vol": q_adv["yz_vol"], "cvar95": q_adv["cvar95"], "eff_pct": q_adv["eff_pct"], "kelly_pct": kelly_pct, "bb_exp_ratio": q_adv["bb_exp_ratio"], "vol_spike_bull_pct": q_adv["vol_spike_bull_pct"], "upper_wick_pressure": u_wick_now, "lower_wick_support": l_wick_now, "bull_edge": bull_edge, "bear_edge": bear_edge, "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"], "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_lambda": ms["kyle_lambda"], "kyle_stealth": ms["kyle_stealth"], "ms_regime": ms["ms_regime"], "expect_pct": round(expect_pct, 1), "surge_attention_score": q_adv["surge_attention_score"], "rvol": q_adv["rvol"], "news_hits": news_hits, "pts_est_price": fmt_px(pest, is_jp, code), "pts_gap_pct": pgap, "pts_label_title": pts_label_title, "diff": round(day_ret, 2), "prob": gu_prob_pct, "intraday_win_rate": intraday_bull_pct, "total_win_rate": round(tot_win, 1), "rsi": q_adv["rsi"], "payoff": q_adv["payoff"], "edge": edge, "ai_score": int(np.clip(round(expect_pct * 0.92 + 4), 10, 99)), "tier_num": t_num, "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg, "lot_info": lot_info, "strat": strat, "forward_test": forward_test}
+        return {"full_code": code, "code": code.replace(".T", ""), "name": name, "genre": genre, "theme": theme, "combat_tier": combat_prof["tier_class"], "combat_cost_pct": round(combat_prof["cost_rate"] * 100, 2), "exec_grade": exec_grade, "exec_score": exec_score, "exec_detail": exec_detail, "earnings_days_left": earnings_days_left, "news_catalyst_adj": round(news_catalyst_adj, 1), "news_catalyst_label": news_catalyst_label, "rs_alpha": rs_alpha, "intraday_rs_30m": intraday_rs_30m, "or15_low": or15_low_today, "or15_high": or15_high_today, "pdh": pdh_val, "pdl": pdl_val, "ob_support_px": ob_support_px, "ob_high_px": ob_high_px, "limit_up_px": limit_up_px, "limit_down_px": limit_down_px, "limit_up_tight": limit_up_tight, "vwap_p1": vwap_p1, "vwap_p2": vwap_p2, "vwap_m1": vwap_m1, "vwap_m2": vwap_m2, "vwap_over_2sigma": vwap_over_2sigma, "vwap_slope_up": vwap_slope_up, "last_bar_vol_spike": last_bar_vol_spike, "ev_r": ev_r, "calibrated_expect_pct": calibrated_expect_pct, "style_fit_bonus": round(style_fit_bonus, 1), "macro_10y": macro_10y_serializable, "daily_2y": daily_2y_serializable, "price": fmt_px(cv, is_jp, code), "raw_close": cv, "raw_tp": tpv, "raw_sl": slv, "raw_vwap": vwap_rounded, "tp_price": fmt_px(tpv, is_jp, code), "tp_pct": tp_pct_disp, "sl_price": fmt_px(slv, is_jp, code), "sl_pct": sl_pct_disp, "vwap_price": fmt_px(vwap_rounded, is_jp, code), "inst_score": int(np.clip(round((ms["ms_score"] + inst_flow_score) * 0.5), 10, 99)), "vpin": q_adv["vpin"], "ofi_z": round(ofi_z, 2), "yz_vol": q_adv["yz_vol"], "cvar95": q_adv["cvar95"], "eff_pct": q_adv["eff_pct"], "kelly_pct": kelly_pct, "bb_exp_ratio": q_adv["bb_exp_ratio"], "vol_spike_bull_pct": q_adv["vol_spike_bull_pct"], "upper_wick_pressure": u_wick_now, "lower_wick_support": l_wick_now, "bull_edge": bull_edge, "bear_edge": bear_edge, "q_score": qm["q_score"], "q_tunnel": qm["q_tunnel"], "q_coherence": qm["q_coherence"], "q_entropy": qm["q_entropy"], "q_state": qm["q_state"], "ms_score": ms["ms_score"], "hurst": ms["hurst"], "kyle_lambda": ms["kyle_lambda"], "kyle_stealth": ms["kyle_stealth"], "ms_regime": ms["ms_regime"], "expect_pct": round(expect_pct, 1), "surge_attention_score": q_adv["surge_attention_score"], "rvol": q_adv["rvol"], "news_hits": news_hits, "pts_est_price": fmt_px(pest, is_jp, code), "pts_gap_pct": pgap, "pts_label_title": pts_label_title, "diff": round(day_ret, 2), "prob": gu_prob_pct, "intraday_win_rate": intraday_bull_pct, "total_win_rate": round(tot_win, 1), "rsi": q_adv["rsi"], "payoff": q_adv["payoff"], "edge": edge, "ai_score": int(np.clip(round(expect_pct * 0.92 + 4), 10, 99)), "tier_num": t_num, "tier_label": t_lbl, "tier_color": t_col, "tier_bg": t_bg, "lot_info": lot_info, "strat": strat, "forward_test": forward_test}
     except Exception as e: record_system_error("analyze_df", e, f"Code: {code}"); return None
 # === PART 4/5 END ===
 # === PART 5/5 START ===
@@ -5373,7 +5542,8 @@ def _get_bg_market_refresher():
     state = {"lock": threading.RLock(), "snapshot": None, "universe": None, "started": False}
     def _daemon_loop():
         while True:
-            time.sleep(100.0)
+            is_any_open = _is_market_open_now(True) or _is_market_open_now(False)
+            time.sleep(100.0 if is_any_open else 300.0)
             with state["lock"]:
                 u_tup = state.get("universe")
             if not u_tup:
@@ -5406,8 +5576,16 @@ def compute_sector_rotation_stats(all_stocks: list) -> list:
     out.sort(key=lambda x: x["flow_score"], reverse=True)
     return out
 
+def _build_news_by_code_map(news_list: list) -> dict:
+    by_code = {}
+    for n in (news_list or []):
+        rel_codes = n.get("detail", {}).get("related_codes", [])
+        for rc in rel_codes:
+            by_code.setdefault(str(rc).strip().upper(), []).append(n)
+    return by_code
+
 @st.cache_data(ttl=90)
-def _fetch_pool_batch_core(macro_sig: tuple, style: str, core_vol: bool, core_inst: bool, core_mom: bool):
+def _fetch_pool_batch_core(macro_sig: tuple, style: str, core_vol: bool, core_inst: bool, core_mom: bool, snap_ver: int = 0, news_sig: str = "init"):
     macro = {k: {"price": p, "diff": d, "label": l} for k, p, d, l in macro_sig}
     base_roster = load_active_market_roster(); existing_codes = tuple(sorted([it[0] for it in base_roster]))
     challengers = discover_challenger_tickers(existing_codes)
@@ -5433,7 +5611,7 @@ def _fetch_pool_batch_core(macro_sig: tuple, style: str, core_vol: bool, core_in
     with bg_state["lock"]:
         bg_state["universe"] = universe_tuple
         snap = bg_state.get("snapshot")
-        if isinstance(snap, dict) and (time.time() - float(snap.get("fetched_ts", 0.0))) <= 150.0:
+        if isinstance(snap, dict) and (time.time() - float(snap.get("fetched_ts", 0.0))) <= 320.0:
             bundle = snap
     if bundle is None:
         bundle = _fetch_raw_market_bundle(universe_tuple)
@@ -5445,6 +5623,8 @@ def _fetch_pool_batch_core(macro_sig: tuple, style: str, core_vol: bool, core_in
     daily_2y_map = bundle.get("daily_2y_map", {})
     earnings_map = bundle.get("earnings_map", {})
     raw = bundle.get("raw_5m", {})
+    news_snap = get_bg_news_snapshot(force_sync_if_empty=True)
+    news_by_code = _build_news_by_code_map(news_snap.get("items", []))
 
     ret_30m_list = []
     for c in codes:
@@ -5457,10 +5637,11 @@ def _fetch_pool_batch_core(macro_sig: tuple, style: str, core_vol: bool, core_in
 
     shared_ledger = db_get("daily_forward_ledger", {})
     if not isinstance(shared_ledger, dict): shared_ledger = {}
+    ledger_before_hash = hashlib.md5(json.dumps(shared_ledger, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
     evaluated_all = []
     def _w(c, n, g, t):
         df = _extract_ticker_df(raw, c, len(codes))
-        r = analyze_df(df, c, n, t, g, macro, buzz_map, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_capital=1000000, risk_tolerance_pct=2.0, shared_ledger=shared_ledger, save_db=False, macro_10y_map=macro_10y_map, daily_2y_map=daily_2y_map, bench_30m_ret=market_median_30m_ret, earnings_days_left=earnings_map.get(c))
+        r = analyze_df(df, c, n, t, g, macro, buzz_map, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_capital=1000000, risk_tolerance_pct=2.0, shared_ledger=shared_ledger, save_db=False, macro_10y_map=macro_10y_map, daily_2y_map=daily_2y_map, bench_30m_ret=market_median_30m_ret, earnings_days_left=earnings_map.get(c), news_by_code=news_by_code)
         if r:
             r["is_new_challenger"] = (c in challenger_codes_set)
             r["origin_source"] = challenger_origin_map.get(c, "")
@@ -5472,7 +5653,9 @@ def _fetch_pool_batch_core(macro_sig: tuple, style: str, core_vol: bool, core_in
                 r = f.result()
                 if r: evaluated_all.append(r)
             except Exception as e: record_system_error("_fetch_pool_batch_core:future", e)
-    db_set("daily_forward_ledger", shared_ledger)
+    ledger_after_hash = hashlib.md5(json.dumps(shared_ledger, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+    if ledger_after_hash != ledger_before_hash:
+        db_set("daily_forward_ledger", shared_ledger)
 
     sec_stats_ranked = compute_sector_rotation_stats(evaluated_all)
     active_secs = [s["genre"] for s in sec_stats_ranked if int(s.get("count", 0)) > 0]
@@ -5590,17 +5773,9 @@ def _scale_stock_item_for_user(item: dict, style: str, total_cap: float, risk_pc
         r["forward_test"] = ft_copy
     return r
 
-def _build_news_by_code_map(news_list: list) -> dict:
-    by_code = {}
-    for n in (news_list or []):
-        rel_codes = n.get("detail", {}).get("related_codes", [])
-        for rc in rel_codes:
-            by_code.setdefault(str(rc).strip().upper(), []).append(n)
-    return by_code
-
-def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
+def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0, snap_ver: int = 0, news_sig: str = "init"):
     macro_sig = tuple(sorted((k, round(float(v.get("price", 0.0)), 4), round(float(v.get("diff", 0.0)), 2), str(v.get("label", ""))) for k, v in (macro or {}).items()))
-    core_gmap, core_all = _fetch_pool_batch_core(macro_sig, style, bool(core_vol), bool(core_inst), bool(core_mom))
+    core_gmap, core_all = _fetch_pool_batch_core(macro_sig, style, bool(core_vol), bool(core_inst), bool(core_mom), snap_ver=int(snap_ver), news_sig=str(news_sig))
     intel_hub = load_shared_ticker_intel()
     news_by_code = _build_news_by_code_map(get_cached_impact_news())
     scaled_map = {}
@@ -5621,7 +5796,7 @@ def fetch_pool_batch(macro, style, core_vol=True, core_inst=True, core_mom=True,
     return scaled_gmap, scaled_all
 
 @st.cache_data(ttl=120)
-def fetch_one_with_df(code, macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
+def fetch_one_with_df(code, macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0, news_sig: str = "init"):
     try:
         code = code.strip().upper()
         if re.match(r"^[0-9]{3}[0-9A-Z]$", code): code = f"{code}.T"
@@ -5636,7 +5811,8 @@ def fetch_one_with_df(code, macro, style, core_vol=True, core_inst=True, core_mo
             hist_df = tkr.history(period=p_str, interval="5m")
             if hist_df is not None and not hist_df.empty: break
         norm_df = normalize_ohlcv_df(hist_df, min_rows=25)
-        res = analyze_df(hist_df, code, inf["name"], inf["theme"], inf["genre"], macro, local_buzz, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_capital=total_cap, risk_tolerance_pct=risk_pct, macro_10y_map=macro_10y_map, daily_2y_map=daily_2y_map, bench_30m_ret=None, earnings_days_left=e_days)
+        news_by_code = _build_news_by_code_map(get_bg_news_snapshot(force_sync_if_empty=False).get("items", []))
+        res = analyze_df(hist_df, code, inf["name"], inf["theme"], inf["genre"], macro, local_buzz, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_capital=total_cap, risk_tolerance_pct=risk_pct, macro_10y_map=macro_10y_map, daily_2y_map=daily_2y_map, bench_30m_ret=None, earnings_days_left=e_days, news_by_code=news_by_code)
         if res:
             res = _merge_dd_intel_into_lab_item(res)
         return res, norm_df
@@ -5645,7 +5821,8 @@ def fetch_one_with_df(code, macro, style, core_vol=True, core_inst=True, core_mo
         return None, None
 
 def fetch_one(code, macro, style, core_vol=True, core_inst=True, core_mom=True, total_cap=1000000, risk_pct=2.0):
-    res, _ = fetch_one_with_df(code, macro, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_cap=total_cap, risk_pct=risk_pct)
+    n_sig = get_bg_news_snapshot(force_sync_if_empty=False).get("news_sig", "init")
+    res, _ = fetch_one_with_df(code, macro, style, core_vol=core_vol, core_inst=core_inst, core_mom=core_mom, total_cap=total_cap, risk_pct=risk_pct, news_sig=n_sig)
     return res
 
 def analyze_watchlist_portfolio_risk(wl_dict: dict) -> dict:
@@ -5727,7 +5904,7 @@ def _cb_open_ipo_diag(full_c: str):
 
 def _render_news_cards_only(news_items: list, key_prefix: str = "nl"):
     if not news_items:
-        st.info("現在、直近18〜24時間以内の新規重大ヘッドラインは検出されていません。右上の『🔄 更新』で再スキャンできます。")
+        st.info("現在、直近18〜24時間以内の新規重大ヘッドラインは検出されていません（バックグラウンドで自動監視中です）。")
         return
     for n in news_items:
         age_lbl = n.get("age_label") or _format_news_age_label(float(n.get("age_hours", 1.0)))
@@ -5740,44 +5917,40 @@ def _render_news_cards_only(news_items: list, key_prefix: str = "nl"):
 def _render_top_breaking_news_bar_impl():
     if st.session_state.get("navigation_page") != "TOP":
         return
-    news_items = fetch_global_impact_news()
+    snap_n = get_bg_news_snapshot(force_sync_if_empty=True)
+    news_items = snap_n.get("items", [])
     if not news_items:
         return
     top_n = news_items[0]
     brk_tag = "⚡超速報 " if top_n.get("is_breaking") else ""
     age_s = top_n.get("age_label") or _format_news_age_label(float(top_n.get("age_hours", 1.0)))
-    headline_lbl = f"🚨 {brk_tag}[{age_s}] {top_n['title'][:40]}… ▶ 解説"
+    upd_hm = str(snap_n.get("updated_hm") or now_jst().strftime("%H:%M"))
+    headline_lbl = f"🚨 {brk_tag}[{age_s}] {top_n['title'][:36]}… ▶ 解説 ｜ ● LIVE {upd_hm}"
     st.markdown('<div class="top-breaking-news-marker"></div>', unsafe_allow_html=True)
-    nc1, nc2, nc3 = st.columns([3.8, 1.05, 0.72])
-    with nc1:
-        if st.button(headline_lbl, key=f"top_brk_btn_{top_n.get('id', '0')}", use_container_width=True):
-            _navigate_to_news_detail(top_n)
-    with nc2:
-        if st.button(f"🚨 全{len(news_items)}件", key="top_brk_all_btn", use_container_width=True):
-            st.session_state["navigation_page"] = "NEWS_LIST"
-            st.session_state["focused_stock_item"] = None
-            st.session_state["custom_search_code"] = ""
-            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-            _app_rerun()
-    with nc3:
-        if st.button("🔄 更新", key="top_brk_refresh_btn", use_container_width=True):
-            fetch_global_impact_news.clear()
-            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-            _app_rerun()
+    if st.button(headline_lbl, key=f"top_brk_btn_{top_n.get('id', '0')}", use_container_width=True):
+        _navigate_to_news_detail(top_n)
 
 if hasattr(st, "fragment"):
-    render_top_breaking_news_bar = st.fragment(_render_top_breaking_news_bar_impl)
+    try:
+        render_top_breaking_news_bar = st.fragment(run_every=30)(_render_top_breaking_news_bar_impl)
+    except TypeError:
+        render_top_breaking_news_bar = st.fragment(_render_top_breaking_news_bar_impl)
 else:
     render_top_breaking_news_bar = _render_top_breaking_news_bar_impl
 
 def _render_news_category_list_impl():
     if st.session_state.get("navigation_page") != "TOP":
         return
-    news_items = fetch_global_impact_news()
+    snap_n = get_bg_news_snapshot(force_sync_if_empty=True)
+    news_items = snap_n.get("items", [])
+    st.caption(f"📡 バックグラウンド自動監視中（最終同期: {snap_n.get('updated_hm', '--:--')} JST / 45秒間隔シームレス自動更新）")
     _render_news_cards_only(news_items, key_prefix="tab_n")
 
 if hasattr(st, "fragment"):
-    render_news_category_list = st.fragment(_render_news_category_list_impl)
+    try:
+        render_news_category_list = st.fragment(run_every=45)(_render_news_category_list_impl)
+    except TypeError:
+        render_news_category_list = st.fragment(_render_news_category_list_impl)
 else:
     render_news_category_list = _render_news_category_list_impl
 
@@ -5835,53 +6008,75 @@ if active_nav_page == "ADMIN" and adm_c_page and cu == adm_c_page:
     st.stop()
 
 if active_nav_page == "NEWS_LIST":
-    news_items_page = fetch_global_impact_news()
+    snap_nl = get_bg_news_snapshot(force_sync_if_empty=True)
+    news_items_page = snap_nl.get("items", [])
     st.markdown(
         f'<div class="glass-header" style="border-left:4px solid #ef4444;">'
         f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'
         f'<div style="font-size:17px;font-weight:800;color:#f8fafc;">🚨 重大マーケットニュース＆適時開示 リアルタイム速報一覧（全{len(news_items_page)}件）</div>'
-        f'<span style="font-size:10.5px;color:#fde047;font-family:\'JetBrains Mono\',monospace;">直近18時間鮮度フィルタ稼働中</span>'
+        f'<span style="font-size:10.5px;color:#fde047;font-family:\'JetBrains Mono\',monospace;">● LIVE 自動監視中 ({html.escape(str(snap_nl.get("updated_hm","--:--")))})</span>'
         f'</div></div>',
         unsafe_allow_html=True
     )
-    nl_c1, nl_c2 = st.columns([3.2, 1.0])
-    with nl_c1:
-        st.button("⬅️ トップ画面に戻る", key="news_list_back_top", use_container_width=True, type="primary", on_click=_cb_reset_to_top)
-    with nl_c2:
-        if st.button("🔄 最新取得", key="news_list_refresh", use_container_width=True):
-            fetch_global_impact_news.clear()
-            st.session_state["scroll_top_trig"] = int(time.time() * 1000)
-            _app_rerun()
+    st.button("⬅️ トップ画面に戻る", key="news_list_back_top", use_container_width=True, type="primary", on_click=_cb_reset_to_top)
     _render_news_cards_only(news_items_page, key_prefix="nl_page")
     st.button("⬅️ トップ画面に戻る", key="news_list_back_bottom", use_container_width=True, type="primary", on_click=_cb_reset_to_top)
     st.stop()
 
 if active_nav_page == "NEWS_DETAIL":
-    all_impact_news_det = fetch_global_impact_news()
-    tn = st.session_state.get("selected_news_item") or (all_impact_news_det[0] if all_impact_news_det else None)
+    tn = st.session_state.get("selected_news_item")
+    if not tn:
+        bg_items_fallback = get_bg_news_snapshot(force_sync_if_empty=True).get("items", [])
+        tn = bg_items_fallback[0] if bg_items_fallback else None
     if not tn:
         st.info("現在、新規の重大ヘッドラインは検出されていません。")
         st.button("⬅️ 戻る", use_container_width=True, type="primary", on_click=_cb_back_from_news_detail)
         st.stop()
     det = tn.get("detail") or analyze_news_impact_and_links(tn.get("title", ""), tn.get("cat", ""), tn.get("summary", ""))
     st_short = investment_style.split(" ")[1] if " " in investment_style else "デイトレード"
-    ai_deep_txt = generate_ai_news_deep_report(tn, st_short)
     body_html, mech_html, time_html, risk_html, act_html = [html.escape(det.get(k, "")).replace("\n", "<br>") for k in ("news_body", "mechanism", "timeline", "risk_note", "action_guide")]
     src_link = tn.get("link", "")
     link_btn = f'<div style="margin-top:10px;"><a href="{html.escape(src_link)}" target="_blank" rel="noopener noreferrer" class="ipo-link-btn">📰 報道元オリジナル記事を開く ({html.escape(tn.get("source", "News"))})</a></div>' if src_link else ""
     breaking_badge = '<span class="pill-badge" style="background:#f59e0b;color:#0f172a;border-color:#fde047;font-weight:900;">⚡超速報</span>' if tn.get("is_breaking") else ""
     cross_badge = '<span class="pill-badge" style="background:rgba(16,185,129,0.25);border-color:#10b981;color:#6ee7b7;font-weight:800;">✅ 複数メディア・クロス検証済</span>' if tn.get("cross_verified") else ""
     age_disp_det = tn.get("age_label") or _format_news_age_label(float(tn.get("age_hours", 1.0)))
-    ai_deep_block = f'<div class="rank-card" style="border-left-color:#10b981;background:linear-gradient(180deg,#06281e 0%,#090d16 100%)!important;"><div style="font-size:14px;font-weight:800;color:#10b981;margin-bottom:6px;">🧠 Gemini AI生成・個別記事深掘り解析</div><div style="font-size:12.5px;line-height:1.75;color:#ecfdf5;">{html.escape(ai_deep_txt).replace(chr(10), "<br>")}</div></div>' if ai_deep_txt else '<div class="rank-card" style="border-left-color:#f59e0b;background:linear-gradient(180deg,#1e180b 0%,#090d16 100%)!important;"><div style="font-size:13px;font-weight:800;color:#fde047;margin-bottom:4px;">⚙️ やさしいセクター＆立ち回り解説モード（Gemini API未接続時）</div><div style="font-size:12px;line-height:1.65;color:#fef3c7;">現在Gemini APIキーが未接続のため、報道要点と初心者にもわかりやすい立ち回りガイドを表示しています。</div></div>'
 
     st.button("⬅️ 戻る", key="news_detail_back_top", use_container_width=True, type="primary", on_click=_cb_back_from_news_detail)
-    st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;"><div><span class="pill-badge" style="background:#ef4444;color:#fff;font-weight:800;">🚨 重大ニュース解説レポート ｜ {html.escape(tn.get("cat", "速報"))} (重要度: {tn.get("impact_score", 70)}点)</span>{breaking_badge}{cross_badge}</div><span style="font-size:11px;color:#94a3b8;">配信元: {html.escape(tn.get("source", "Market Wire"))} ｜ {html.escape(tn.get("pub_date", ""))} ({html.escape(age_disp_det)})</span></div><div style="font-size:17.5px;font-weight:800;color:#f8fafc;margin-top:8px;line-height:1.4;">{html.escape(tn["title"])}</div><div style="font-size:11.5px;color:#fde047;margin-top:6px;font-weight:700;">🎯 直撃テーマ領域: {html.escape(det.get("sector_focus", ""))}</div>{link_btn}</div>{ai_deep_block}<div class="rank-card" style="border-left-color:#38bdf8;"><div style="font-size:14px;font-weight:800;color:#38bdf8;margin-bottom:6px;">📰 1. ニュース要点 ＆ やさしいテーマ背景</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{body_html}</div></div><div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;font-weight:800;color:#e9d5ff;margin-bottom:6px;">🧠 2. 資金が動く仕組み（セクター波及の流れ）</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{mech_html}</div><hr style="border-color:rgba(168,85,247,0.25);margin:12px 0;"><div style="font-size:13.5px;font-weight:800;color:#fde047;margin-bottom:6px;">⏱️ 3. 時間帯別の値動きイメージ</div><div style="font-size:12px;line-height:1.75;color:#cbd5e1;">{time_html}</div><hr style="border-color:rgba(239,68,68,0.25);margin:12px 0;"><div style="font-size:13px;font-weight:800;color:#f87171;margin-bottom:4px;">⚠️ 4. 高値掴み・ダマシ警戒リスク ＆ 撤退基準</div><div style="font-size:12px;line-height:1.7;color:#fca5a5;">{risk_html}</div><div class="beginner-action-box" style="margin-top:12px;"><b>⚡ 5. 【{st_short}】初心者向け・失敗しない注文と利確・損切りガイド</b><br>{act_html}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="glass-header" style="border-left:4px solid #ef4444;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;"><div><span class="pill-badge" style="background:#ef4444;color:#fff;font-weight:800;">🚨 重大ニュース解説レポート ｜ {html.escape(tn.get("cat", "速報"))} (重要度: {tn.get("impact_score", 70)}点)</span>{breaking_badge}{cross_badge}</div><span style="font-size:11px;color:#94a3b8;">配信元: {html.escape(tn.get("source", "Market Wire"))} ｜ {html.escape(tn.get("pub_date", ""))} ({html.escape(age_disp_det)})</span></div><div style="font-size:17.5px;font-weight:800;color:#f8fafc;margin-top:8px;line-height:1.4;">{html.escape(tn["title"])}</div><div style="font-size:11.5px;color:#fde047;margin-top:6px;font-weight:700;">🎯 直撃テーマ領域: {html.escape(det.get("sector_focus", ""))}</div>{link_btn}</div>', unsafe_allow_html=True)
+
+    ai_slot = st.empty()
+    cached_ai_txt = get_cached_ai_news_deep_report(tn, st_short)
+    has_gem_key = bool(load_gemini_cfg().get("api_key"))
+
+    def _render_ai_deep_slot(txt_val: str):
+        if txt_val:
+            ai_slot.markdown(f'<div class="rank-card" style="border-left-color:#10b981;background:linear-gradient(180deg,#06281e 0%,#090d16 100%)!important;"><div style="font-size:14px;font-weight:800;color:#10b981;margin-bottom:6px;">🧠 Gemini AI生成・個別記事深掘り解析</div><div style="font-size:12.5px;line-height:1.75;color:#ecfdf5;">{html.escape(txt_val).replace(chr(10), "<br>")}</div></div>', unsafe_allow_html=True)
+        else:
+            ai_slot.markdown('<div class="rank-card" style="border-left-color:#f59e0b;background:linear-gradient(180deg,#1e180b 0%,#090d16 100%)!important;"><div style="font-size:13px;font-weight:800;color:#fde047;margin-bottom:4px;">⚙️ やさしいセクター＆立ち回り解説モード（Gemini API未接続時）</div><div style="font-size:12px;line-height:1.65;color:#fef3c7;">現在Gemini APIキーが未接続のため、報道要点と初心者にもわかりやすい立ち回りガイドを表示しています。</div></div>', unsafe_allow_html=True)
+
+    if cached_ai_txt or not has_gem_key:
+        _render_ai_deep_slot(cached_ai_txt)
+
+    st.markdown(f'<div class="rank-card" style="border-left-color:#38bdf8;"><div style="font-size:14px;font-weight:800;color:#38bdf8;margin-bottom:6px;">📰 1. ニュース要点 ＆ やさしいテーマ背景</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{body_html}</div></div><div class="rank-card" style="border-left-color:#a855f7;"><div style="font-size:14px;font-weight:800;color:#e9d5ff;margin-bottom:6px;">🧠 2. 資金が動く仕組み（セクター波及の流れ）</div><div style="font-size:12.5px;line-height:1.75;color:#e2e8f0;">{mech_html}</div><hr style="border-color:rgba(168,85,247,0.25);margin:12px 0;"><div style="font-size:13.5px;font-weight:800;color:#fde047;margin-bottom:6px;">⏱️ 3. 時間帯別の値動きイメージ</div><div style="font-size:12px;line-height:1.75;color:#cbd5e1;">{time_html}</div><hr style="border-color:rgba(239,68,68,0.25);margin:12px 0;"><div style="font-size:13px;font-weight:800;color:#f87171;margin-bottom:4px;">⚠️ 4. 高値掴み・ダマシ警戒リスク ＆ 撤退基準</div><div style="font-size:12px;line-height:1.7;color:#fca5a5;">{risk_html}</div><div class="beginner-action-box" style="margin-top:12px;"><b>⚡ 5. 【{st_short}】初心者向け・失敗しない注文と利確・損切りガイド</b><br>{act_html}</div></div>', unsafe_allow_html=True)
     st.button("⬅️ 戻る", key="news_detail_back_bottom", use_container_width=True, type="primary", on_click=_cb_back_from_news_detail)
+
+    if (not cached_ai_txt) and has_gem_key:
+        with ai_slot.container():
+            with st.spinner("🧠 Gemini AIが個別記事を深掘り解析中..."):
+                fresh_ai_txt = generate_ai_news_deep_report(tn, st_short)
+        _render_ai_deep_slot(fresh_ai_txt)
     st.stop()
 
-all_impact_news = get_cached_impact_news()
+news_snap_main = get_bg_news_snapshot(force_sync_if_empty=True)
+all_impact_news = news_snap_main.get("items", [])
+current_news_sig = str(news_snap_main.get("news_sig", "init"))
 shared_intel_snapshot = load_shared_ticker_intel()
 news_by_code_snapshot = _build_news_by_code_map(all_impact_news)
+
+bg_mkt_main = _get_bg_market_refresher()
+with bg_mkt_main["lock"]:
+    snap_main_obj = bg_mkt_main.get("snapshot")
+    current_snap_ver = int(float(snap_main_obj.get("fetched_ts", 0.0))) if isinstance(snap_main_obj, dict) else 0
 
 macro_info = fetch_macro()
 ribbon_chips = "".join([
@@ -5905,10 +6100,12 @@ st.markdown(
 if active_nav_page == "TOP":
     render_top_breaking_news_bar()
 
-_cache_pool_key = f"pool_v28_full_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}"
+_cache_pool_key = f"pool_v28_full_{investment_style}_{sorted(list(ac_b))}_{total_capital}_{risk_tolerance_pct}_{current_snap_ver}_{current_news_sig}"
 if _cache_pool_key not in st.session_state:
-    with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】週足10年×日足2年×5分足60日 3階層MTFスコアリングを実行中..."):
-        g_res, all_res = fetch_pool_batch(macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+    for old_k in [k for k in list(st.session_state.keys()) if str(k).startswith("pool_v28_full_")]:
+        del st.session_state[old_k]
+    with st.spinner(f"⚛️ 【{investment_style.split(' ')[1]}】週足10年×日足2年×5分足60日 3階層MTF＋速報連動スコアリングを実行中..."):
+        g_res, all_res = fetch_pool_batch(macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct, snap_ver=current_snap_ver, news_sig=current_news_sig)
         st.session_state[_cache_pool_key] = (g_res, all_res)
 else:
     g_res, all_res = st.session_state[_cache_pool_key]
@@ -5935,20 +6132,22 @@ if st.session_state.get("last_synced_style") != investment_style:
 
 focused_item = st.session_state.get("focused_stock_item")
 if focused_item:
+    res_by_fc_live = {it["full_code"]: it for it in all_res}
+    foc_fc = str(focused_item.get("full_code", "")).strip().upper()
+    if foc_fc in res_by_fc_live:
+        focused_item = res_by_fc_live[foc_fc]
     focused_item = _merge_dd_intel_into_lab_item(focused_item, intel_map_override=shared_intel_snapshot)
     st.markdown("### 🔵 銘柄詳細・売買合議フォーカスモード")
-    foc_fc = str(focused_item.get("full_code", "")).strip().upper()
     foc_df = None
-    bg_state_f = _get_bg_market_refresher()
-    with bg_state_f["lock"]:
-        snap_f = bg_state_f.get("snapshot")
+    with bg_mkt_main["lock"]:
+        snap_f = bg_mkt_main.get("snapshot")
     if isinstance(snap_f, dict) and isinstance(snap_f.get("raw_5m"), (pd.DataFrame, dict)):
         raw_5m_snap = snap_f["raw_5m"]
         tot_codes_snap = int(snap_f.get("total_codes") or (len(snap_f.get("universe") or ()) or 50))
         df_cand_f = _extract_ticker_df(raw_5m_snap, foc_fc, tot_codes_snap)
         foc_df = normalize_ohlcv_df(df_cand_f, min_rows=25)
     if foc_df is None:
-        _, foc_df = fetch_one_with_df(foc_fc, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+        _, foc_df = fetch_one_with_df(foc_fc, macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct, news_sig=current_news_sig)
     render_card(focused_item, is_custom=False, kp=f"foc_{focused_item['code']}", is_focused=True, intraday_df=foc_df, shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot); st.stop()
 
 c1, c2 = st.columns([3.8, 1.0])
@@ -5959,7 +6158,7 @@ if c2.button("🔍 診断", use_container_width=True) and cin:
 if st.session_state.get("custom_search_code"):
     st.markdown("### 🎯 個別銘柄・精密3階層MTFクオンツ診断モード")
     with st.spinner("📡 銘柄正式名称・週足10年・日足2年・5分足60日波形を解析中..."):
-        cr, cr_df = fetch_one_with_df(st.session_state["custom_search_code"], macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct)
+        cr, cr_df = fetch_one_with_df(st.session_state["custom_search_code"], macro_info, investment_style, core_vol=("core_vol" in ac_b), core_inst=("core_inst" in ac_b), core_mom=("core_mom" in ac_b), total_cap=total_capital, risk_pct=risk_tolerance_pct, news_sig=current_news_sig)
     if cr: render_card(cr, is_custom=True, kp="custom", intraday_df=cr_df, shared_intel_map=shared_intel_snapshot, news_by_code_map=news_by_code_snapshot)
     else: st.warning("⚠️ 指定された銘柄コードのデータが取得できないか、上場廃止・無効な銘柄です。")
     st.button("⬅️ トップ画面（ランキング一覧）に戻る", key="btn_back_from_custom_diag", use_container_width=True, type="primary", on_click=_cb_clear_custom_search)
